@@ -47,6 +47,9 @@ const kind = readOption('--kind') ?? (args.includes('--aab') ? 'aab' : args.incl
 const target = readOption('--target')
 const voiceLiveTest = args.includes('--voice-live-test')
 const buildMode = args.includes('--release') ? 'release' : 'debug'
+if (voiceLiveTest && buildMode !== 'debug') {
+  throw new Error('--voice-live-test requires a debug build')
+}
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
 }
@@ -93,6 +96,7 @@ try {
 
   const buildArgs = ['tauri', 'android', 'build']
   if (buildMode === 'debug') buildArgs.push('--debug')
+  if (voiceLiveTest) buildArgs.push('--features', 'android-voice-live-test')
   if (kind === 'apk') buildArgs.push('--apk')
   else buildArgs.push('--aab')
   buildArgs.push('--target', ...targets)

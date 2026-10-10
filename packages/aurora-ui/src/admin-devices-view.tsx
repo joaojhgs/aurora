@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Activity, CheckCircle2, Laptop, Link2, Lock, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCircle2, Laptop, Link2, Lock, RefreshCw, ShieldCheck, Trash2, XCircle } from 'lucide-react'
 import {
   AUTH_METHODS,
   AuroraError,
@@ -24,8 +25,10 @@ import { Badge } from '#components/ui/badge'
 import { Label } from '#components/ui/label'
 import { Textarea } from '#components/ui/textarea'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
-import { PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
+import { AURORA_QUERY_STALE_TIMES, AuroraQueryProvider, useAuroraQueryScope } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 import { adminCapabilityReason, adminErrorTitle, adminModuleLabel, adminReasonText, productAdminErrorCopy, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
 
 export type AdminDevicesLoadState =
@@ -168,30 +171,37 @@ const loadingSnapshot: AdminDevicesSnapshot = {
   evidenceSource: 'pending Aurora service calls'
 }
 
-export function AdminDevicesResource({ client }: AdminDevicesResourceProps) {
-  const [snapshot, setSnapshot] = useState<AdminDevicesSnapshot>(loadingSnapshot)
+export function AdminDevicesResource(props: AdminDevicesResourceProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <AdminDevicesResourceQuery {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <AdminDevicesResourceQuery {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function AdminDevicesResourceQuery({ client }: AdminDevicesResourceProps) {
   const [adminReason, setAdminReason] = useState('Remove device and revoke its local session access')
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
   const [pendingDeviceId, setPendingDeviceId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [optimisticDeviceId, setOptimisticDeviceId] = useState<string | null>(null)
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const devicesQueryKey = useMemo(() => queryKeys.admin('devices'), [queryKeys])
+  const devicesQuery = useQuery<AdminDevicesSnapshot, AuroraError>({
+    queryKey: devicesQueryKey,
+    queryFn: () => buildAdminDevicesSnapshot(client),
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
+  const snapshot = devicesQuery.data ?? loadingSnapshot
 
   const loadDevices = useCallback(async () => {
-    setSnapshot(loadingSnapshot)
-    const next = await buildAdminDevicesSnapshot(client)
-    setSnapshot(next)
-  }, [client])
-
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingSnapshot)
-    void buildAdminDevicesSnapshot(client).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client])
+    await queryClient.refetchQueries({ queryKey: devicesQueryKey, type: 'active' })
+  }, [devicesQueryKey, queryClient])
 
   const runAdminAction = useCallback(
     async (action: AdminDeviceAction, optimisticId: string) => {
@@ -390,7 +400,7 @@ export function AdminDevicesView({
         ]}
       />
 
-      <DevicePlatformSecurityPanel snapshot={snapshot} reauthConfirmed={reauthConfirmed} onRunAdminAction={onRunAdminAction} />
+      <DevicePlatformSecurityPanel snapshot={snapshot} reauthConfirmed={reauthConfirmed} pendingDeviceId={pendingDeviceId} onRunAdminAction={onRunAdminAction} />
 
       <Card title="Protected device changes" description="Device, pairing, and trust changes require admin confirmation and audit logging.">
         <div className="flex flex-col gap-3">
@@ -571,12 +581,12 @@ function DevicesDataTable({
       columns={columns}
       rows={devices}
       getRowKey={(device) => device.id}
-      empty={loadState === 'loading' ? null : <p className="p-6 text-sm text-muted-foreground">No registered devices were returned by Aurora.</p>}
+      empty={loadState === 'loading' ? null : <EmptyState title="No registered devices" message="No registered devices were returned by Aurora." />}
     />
   )
 }
 
-function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminAction }: { snapshot: AdminDevicesSnapshot; reauthConfirmed: boolean; onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined }) {
+function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, pendingDeviceId = null, onRunAdminAction }: { snapshot: AdminDevicesSnapshot; reauthConfirmed: boolean; pendingDeviceId?: string | null; onRunAdminAction?: ((action: AdminDeviceAction, optimisticId: string) => void) | undefined }) {
   return (
     <section aria-labelledby="device-platform-title" className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
@@ -595,7 +605,7 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
           <div className="flex flex-col gap-3">
             <h3 className="text-sm font-semibold">Pending pairing requests</h3>
             {snapshot.pendingPairings.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No pending pairings were returned by Aurora.</p>
+              <EmptyState title="No pending pairings" message="No pending pairings were returned by Aurora." />
             ) : (
               <ul className="flex flex-col gap-3">
                 {snapshot.pendingPairings.map((pairing) => (
@@ -616,10 +626,22 @@ function DevicePlatformSecurityPanel({ snapshot, reauthConfirmed, onRunAdminActi
                         Approval is protected; pairing secret is redacted.
                       </div>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        <Button variant="outline" icon={<CheckCircle2 size={16} aria-hidden />} disabled={!reauthConfirmed || !pairing.approveAction} onClick={() => (pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined)}>
+                        <Button
+                          variant="outline"
+                          icon={<CheckCircle2 size={16} aria-hidden />}
+                          disabled={!reauthConfirmed || !pairing.approveAction || Boolean(pendingDeviceId)}
+                          disabledReason={pendingDeviceId ? 'Finish the current device action before changing another pairing.' : undefined}
+                          onClick={() => (pairing.approveAction ? onRunAdminAction?.(pairing.approveAction, pairing.requestId) : undefined)}
+                        >
                           Approve and trust
                         </Button>
-                        <Button variant="danger" icon={<XCircle size={16} aria-hidden />} disabled={!reauthConfirmed || !pairing.denyAction} onClick={() => (pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined)}>
+                        <Button
+                          variant="danger"
+                          icon={<XCircle size={16} aria-hidden />}
+                          disabled={!reauthConfirmed || !pairing.denyAction || Boolean(pendingDeviceId)}
+                          disabledReason={pendingDeviceId ? 'Finish the current device action before changing another pairing.' : undefined}
+                          onClick={() => (pairing.denyAction ? onRunAdminAction?.(pairing.denyAction, pairing.requestId) : undefined)}
+                        >
                           Deny request
                         </Button>
                       </div>
@@ -924,26 +946,29 @@ function DeviceStatusPanel({
   }
   if (snapshot.loadState === 'loading') {
     return (
-      <Alert aria-live="polite">
-        <Activity />
-        <AlertDescription>Loading devices, active sessions, and platform features through Aurora.</AlertDescription>
-      </Alert>
+      <RouteStateNotice
+        title="Loading devices"
+        state="loading"
+        message="Loading devices, active sessions, and platform features through Aurora."
+      />
     )
   }
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <Alert role="status">
-        <Laptop />
-        <AlertDescription>No registered devices were returned by Aurora.</AlertDescription>
-      </Alert>
+      <RouteStateNotice
+        title="No registered devices"
+        state="empty"
+        message="No registered devices were returned by Aurora."
+      />
     )
   }
   return (
-    <Alert variant="destructive" role="alert">
-      <Lock />
-      <AlertDescription>{productAdminReasonCopy(snapshot.error, 'Device/session status is degraded. Not ready or denied controls remain disabled.')}</AlertDescription>
-    </Alert>
+    <RouteStateNotice
+      title="Device status needs attention"
+      state={snapshot.loadState === 'denied' ? 'permission' : snapshot.loadState === 'degraded' ? 'offline' : 'error'}
+      message={productAdminReasonCopy(snapshot.error, 'Device/session status is degraded. Not ready or denied controls remain disabled.')}
+    />
   )
 }
 

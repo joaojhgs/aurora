@@ -21,6 +21,7 @@ mod gateway_stt;
 mod gateway_tts;
 mod ios_session;
 mod model_store;
+mod native_event_observer;
 mod speech_pack_manager;
 mod transport;
 mod trust;
@@ -72,6 +73,12 @@ pub use ios_session::{
     IosVoiceSessionStatus, IosVoiceStartMode, MAX_IOS_PACK_BINDINGS,
 };
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
+pub use native_event_observer::{
+    begin_native_voice_observation_producer, clear_native_voice_observation_sink,
+    emit_native_voice_observation, emit_native_voice_observation_from_wire,
+    install_native_voice_observation_sink, NativeVoiceObservation, NativeVoiceObservationSink,
+    NativeVoiceObservationToken, NativeVoiceTurnIds, NativeVoiceTurnSnapshot,
+};
 pub use speech_pack_manager::{
     InstalledSpeechModel, InstalledSpeechPack, SpeechModelBindings, SpeechPackBindings,
     SpeechPackError, SpeechPackInstallPhase, SpeechPackInstallProgress, SpeechPackManager,
@@ -83,7 +90,8 @@ pub use transport::{
     NativeGatewayEndpointClass, NativeGatewayMicrophoneAudioProfile, NativeGatewayTransport,
     NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, NativeMeshAssistantTransport,
     NativeMeshAssistantTransportFactory, NativeMeshAssistantTransportOptions,
-    NativeMeshExternalUserInput, NativeMeshInterruptRequest, NativeRequestOptions, SseSubscription,
-    TransportError, TransportLimits,
+    NativeMeshAssistantTurnLink, NativeMeshExternalUserInput, NativeMeshExternalUserInputStream,
+    NativeMeshInterruptRequest, NativeRequestOptions, SseSubscription, TransportError,
+    TransportLimits,
 };
 pub use trust::Ed25519TrustStore;

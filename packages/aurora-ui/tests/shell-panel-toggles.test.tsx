@@ -3,12 +3,14 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AppShell } from '../src/shell'
+import { useConnectionStore } from '../src/state/connection-store'
 import { errorShellSnapshot } from '../src/shell-data'
 
 const snapshot = errorShellSnapshot('test', new Error('offline'))
 
 describe('AppShell side-panel toggles', () => {
   afterEach(() => {
+    useConnectionStore.getState().reset()
     document.body.innerHTML = ''
   })
 
@@ -218,6 +220,158 @@ describe('AppShell side-panel toggles', () => {
       )
     })
     expect(container.textContent).toContain('This device is available')
+
+    await act(async () => root.unmount())
+  })
+
+  it('updates the visible connection badge from peer state for the current scope only', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={{ ...snapshot, loadState: 'ready', error: null, connectionState: 'connected', capabilityFreshness: 'fresh' }}>
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    const runtimeChip = () => container.querySelector('[aria-label="Aurora version and connection state"]')?.textContent ?? ''
+
+    expect(runtimeChip()).toContain('connected')
+
+    await act(async () => {
+      useConnectionStore.getState().setPeerState('disconnected', { peerConnectionScopeId: 'unscoped', lastEventId: 'native:1' })
+    })
+    expect(runtimeChip()).toContain('offline')
+
+    await act(async () => {
+      useConnectionStore.getState().setPeerState('disconnected', { peerConnectionScopeId: 'other-scope', lastEventId: 'native:2' })
+    })
+    expect(runtimeChip()).toContain('connected')
+
+    await act(async () => root.unmount())
+  })
+
+  it('does not let a connected peer hide local capability attention', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const degradedSnapshot = {
+      ...snapshot,
+      loadState: 'ready' as const,
+      error: null,
+      connectionState: 'connected' as const,
+      capabilityFreshness: 'stale' as const,
+    }
+
+    useConnectionStore.getState().setPeerState('connected', { peerConnectionScopeId: 'unscoped', lastEventId: 'native:1' })
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={degradedSnapshot}>
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    expect(container.querySelector('[aria-label="Aurora shell status"]')?.textContent).toContain('Needs attention')
+    expect(container.querySelector('[aria-label="Aurora version and connection state"]')?.textContent).toContain('attention')
+
+    await act(async () => root.unmount())
+  })
+
+  it('shows scoped health and config stream disconnects even when peer state is connected', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const readySnapshot = {
+      ...snapshot,
+      loadState: 'ready' as const,
+      error: null,
+      connectionState: 'connected' as const,
+      capabilityFreshness: 'fresh' as const,
+    }
+
+    useConnectionStore.getState().setPeerState('connected', { peerConnectionScopeId: 'unscoped', lastEventId: 'native:1' })
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={readySnapshot}>
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    const statusRow = () => container.querySelector('[aria-label="Aurora shell status"]')?.textContent ?? ''
+    const runtimeChip = () => container.querySelector('[aria-label="Aurora version and connection state"]')?.textContent ?? ''
+
+    expect(statusRow()).toContain('Healthy')
+    expect(runtimeChip()).toContain('connected')
+
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'connected', { scopeId: 'other-scope', lastEventId: 'health-other' })
+      useConnectionStore.getState().setStreamState('config', 'disconnected', { scopeId: 'other-scope' })
+    })
+    expect(statusRow()).toContain('Healthy')
+    expect(runtimeChip()).toContain('connected')
+
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'connected', { scopeId: 'unscoped', lastEventId: 'health-1' })
+      useConnectionStore.getState().setStreamState('config', 'disconnected', { scopeId: 'unscoped' })
+    })
+    expect(statusRow()).toContain('Needs attention')
+    expect(statusRow()).not.toContain('Offline')
+    expect(runtimeChip()).toContain('attention')
+
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'error', { scopeId: 'unscoped', error: 'unsupported_feature' })
+      useConnectionStore.getState().setStreamState('config', 'error', { scopeId: 'unscoped', error: 'unsupported_feature' })
+    })
+    expect(statusRow()).toContain('Needs attention')
+    expect(statusRow()).not.toContain('Offline')
+
+    await act(async () => {
+      useConnectionStore.getState().setPeerState('disconnected', { peerConnectionScopeId: 'unscoped' })
+    })
+    expect(statusRow()).toContain('Offline')
+    expect(runtimeChip()).toContain('offline')
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('shows authoritative stale health as offline even when event channels are connected', async () => {
+    const container = document.createElement('div')
+    document.body.append(container)
+    const root = createRoot(container)
+    const staleHealthSnapshot = {
+      ...snapshot,
+      loadState: 'ready' as const,
+      error: null,
+      connectionState: 'offline' as const,
+      capabilityFreshness: 'stale' as const,
+    }
+
+    useConnectionStore.getState().setPeerState('connected', { peerConnectionScopeId: 'unscoped', lastEventId: 'native:1' })
+    useConnectionStore.getState().setStreamState('health', 'connected', { scopeId: 'unscoped', lastEventId: 'health-stale' })
+    useConnectionStore.getState().setStreamState('config', 'connected', { scopeId: 'unscoped', lastEventId: 'config-current' })
+
+    await act(async () => {
+      root.render(
+        <AppShell snapshot={staleHealthSnapshot} runtimeMode="web" nodeMode="remote-console">
+          <div>Content</div>
+        </AppShell>,
+      )
+    })
+
+    const status = container.querySelector('[aria-label="Aurora shell status"]')?.textContent
+    const runtime = container.querySelector('[aria-label="Aurora version and connection state"]')?.textContent
+    expect(status).toContain('Offline')
+    expect(status).not.toContain('Healthy')
+    expect(runtime).toContain('offline')
 
     await act(async () => root.unmount())
   })

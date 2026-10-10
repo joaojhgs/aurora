@@ -73,9 +73,8 @@ describe('development preview picker', () => {
     expect(badge).not.toBeNull()
     expect(badge?.classList.contains('aurora-debug-ui-badge')).toBe(true)
     expect(badge?.textContent?.trim()).toBe('A')
-    expect(badge?.style.position).toBe('fixed')
-    expect(badge?.style.right).toBe('16px')
-    expect(badge?.style.bottom).toBe('16px')
+    // The visual browser suite checks positioning with the generated stylesheet.
+    expect(badge?.getAttribute('aria-expanded')).toBe('false')
     expect(badge?.getAttribute('aria-label')).toBe('Development preview: Android · Make available · Phone · Admin')
     expect(host).not.toBeNull()
     expect(host?.className).toBe('aurora-debug-ui-host')

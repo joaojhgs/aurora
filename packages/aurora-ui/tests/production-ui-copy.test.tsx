@@ -794,6 +794,7 @@ describe('production UI copy', () => {
         status: 'stale',
         namespace: 'home',
         ownership: 'local-owned',
+        ownerPeerId: 'local-peer',
         ownerLabel: 'local-peer/local-principal',
         targetLabel: 'local node',
         approvalLabel: 'approval is saved; no delegated permissions; approval record not reported',
@@ -861,6 +862,15 @@ function client(kind: string = 'http'): AuroraClient {
   return {
     transport: { kind },
     auth: {
+      snapshot: () => ({
+        state: 'anonymous',
+        isAuthenticated: false,
+        isTerminal: false,
+        isMeshPeer: false,
+        principalId: null,
+        principalName: null,
+        permissions: [],
+      }),
       refreshClock: () => ({
         state: 'anonymous',
         isAuthenticated: false,

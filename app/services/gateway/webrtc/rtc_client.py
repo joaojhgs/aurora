@@ -46,6 +46,7 @@ from app.services.gateway.mesh.tooling_projection_transport import (
 )
 from app.shared.contracts.models.auth import AuthMethods, build_mesh_reconnect_proof_message
 from app.shared.contracts.models.gateway import (
+    GatewayMethods,
     WebRTCDiagnosticError,
     WebRTCDiagnosticsResponse,
     WebRTCPeerDiagnostic,
@@ -69,7 +70,9 @@ from .pairing_sas import (
 from .peer_protocol import (
     CAP_BACKPRESSURE_V1,
     CAP_FRAGMENTATION_V1,
+    CAP_GATEWAY_STATUS_EVENTS_V1,
     CAP_PROVIDER_LEASE_V1,
+    CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
     DEFAULT_PEER_CAPABILITIES,
     FRAGMENT_FRAME_TYPE,
     MESH_PEER_STANDBY_TYPE,
@@ -622,6 +625,42 @@ class RTCClient:
         session_peer_id = self._session_for_peer_id(peer_id)
         protocol = self._peer_protocols.get(session_peer_id)
         return bool(protocol and protocol.supports(capability))
+
+    def peer_can_receive_gateway_status(self, peer_id: str) -> bool:
+        """Return current authorization for projected Gateway status events."""
+        session_peer_id = self._session_for_peer_id(peer_id)
+        stable_peer_id = self._stable_peer_id_for_session(session_peer_id)
+        if self._stable_peer_sessions.get(stable_peer_id) != session_peer_id:
+            return False
+        protocol = self._peer_protocols.get(session_peer_id)
+        mesh_config = self._current_mesh_config()
+        if (
+            not self._mesh_enabled
+            or not getattr(mesh_config, "enabled", False)
+            or protocol is None
+            or not protocol.supports(CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1)
+            or not protocol.supports(CAP_GATEWAY_STATUS_EVENTS_V1)
+            or not self._is_peer_session_active(session_peer_id)
+            or not self._has_authenticated_stable_peer(stable_peer_id)
+        ):
+            return False
+        identity = self._peer_acl.get(stable_peer_id, ANONYMOUS)
+        return identity != ANONYMOUS and identity.can("Gateway.use", method_type="use")
+
+    def gateway_status_event_recipient_ids(self) -> list[str]:
+        """Return current RTC sessions with an exact Gateway status interest."""
+        recipients: list[str] = []
+        for stable_peer_id, _session_peer_id in tuple(self._stable_peer_sessions.items()):
+            if not self.peer_can_receive_gateway_status(stable_peer_id):
+                continue
+            if self._event_subscriptions.is_interested(
+                stable_peer_id,
+                GatewayMethods.STATUS_CHANGED,
+                None,
+                sensitive=False,
+            ):
+                recipients.append(stable_peer_id)
+        return recipients
 
     def peer_protocol_role(self, peer_id: str) -> str:
         """Return the negotiated peer role, defaulting legacy peers to hybrid."""
@@ -1335,7 +1374,9 @@ class RTCClient:
             stable_peer_id = self._stable_peer_id_for_session(peer)
             asyncio.create_task(self._send_manifest(stable_peer_id, force_send=True))
         elif msg_type == "manifest_ack":
-            asyncio.create_task(self._on_manifest_ack(self._stable_peer_id_for_session(peer), obj))
+            # Preserve the authenticated data-channel session. ACK readiness
+            # is bound to the exact session that produced the expectation.
+            asyncio.create_task(self._on_manifest_ack(peer, obj))
         elif msg_type == "capacity_update":
             asyncio.create_task(
                 self._on_capacity_update(self._stable_peer_id_for_session(peer), obj)
@@ -4293,6 +4334,11 @@ class RTCClient:
         expected = self._manifest_ack_expectations.get(stable_peer_id)
         readiness_expectation = None
         if ack.services:
+            if expected is not None and expected.session_peer_id != peer_id:
+                log_warning(
+                    f"RTCClient: Ignored manifest ACK from replaced session for {stable_peer_id}"
+                )
+                return
             current_structured_ack = self._manifest_ack_matches_current_expectation(
                 stable_peer_id, ack, expected
             )
@@ -4300,6 +4346,9 @@ class RTCClient:
                 log_warning(
                     f"RTCClient: Ignored stale structured manifest ACK from {stable_peer_id}"
                 )
+                # Coalesce repeated stale ACKs per authenticated peer; the
+                # retry task rechecks the current session before sending.
+                self._schedule_manifest_reannounce_retry(stable_peer_id)
                 return
             if current_structured_ack:
                 readiness_expectation = self._readiness_expectation_from_ack(
@@ -5826,6 +5875,7 @@ class RTCClient:
             provider_binding_state_provider=lambda peer=peer: (
                 self._local_provider_binding_state_for_session(peer)
             ),
+            status_event_authorizer=lambda peer=peer: self.peer_can_receive_gateway_status(peer),
         )
         self._rpc_handlers[peer] = handler
 
@@ -6678,6 +6728,7 @@ class RTCClient:
                 "answerer_signaling_id": peer,
                 "offer_sdp": offer_sdp,
                 "answer_sdp": "",
+                "answer_lock": asyncio.Lock(),
                 "remote_stable_peer_id": self._claimed_stable_peer_id_for_session(peer),
                 "remote_node_name": self._peer_claimed_names.get(peer, ""),
             }
@@ -6773,6 +6824,7 @@ class RTCClient:
                 "answerer_signaling_id": self._peer_id,
                 "offer_sdp": offer_sdp,
                 "answer_sdp": "",
+                "answer_lock": asyncio.Lock(),
                 "remote_stable_peer_id": remote_stable_peer_id,
                 "remote_node_name": remote_node_name,
             }
@@ -6824,8 +6876,6 @@ class RTCClient:
 
         remote_stable_peer_id = str(msg.get("stable_peer_id") or "")
         remote_node_name = str(msg.get("node_name") or "")
-        if remote_stable_peer_id:
-            self._remember_claimed_peer_identity(peer, remote_stable_peer_id, remote_node_name)
 
         log_debug(f"Received answer from {peer}")
         if peer in self._pcs:
@@ -6841,12 +6891,41 @@ class RTCClient:
                 self._reconnect_suppressed_pcs.add(pc)
                 await self._close_peer_connection(pc)
                 return
-            transport["answer_sdp"] = answer_sdp
-            transport["remote_stable_peer_id"] = remote_stable_peer_id
-            transport["remote_node_name"] = remote_node_name
-            await pc.setRemoteDescription(RTCSessionDescription(sdp=answer_sdp, type="answer"))
-            await self._drain_pending_ice_candidates(peer, pc)
-            self._cancel_negotiation_watchdog(peer, pc)
+            # Answers can arrive concurrently on the signaling adapter. Serialize
+            # the exact transport and fence both sides of the awaited aiortc call;
+            # a replacement transport must never inherit an old answer transcript,
+            # claimed identity, or queued ICE drain.
+            answer_lock = transport.setdefault("answer_lock", asyncio.Lock())
+            async with answer_lock:
+                if (
+                    self._pcs.get(peer) is not pc
+                    or self._pairing_transports.get(peer) is not transport
+                ):
+                    return
+                recorded_answer = str(transport.get("answer_sdp") or "")
+                if recorded_answer:
+                    if recorded_answer == answer_sdp:
+                        return
+                    self._record_diagnostic_error(
+                        "pairing_transcript_conflict",
+                        "Ignored a conflicting answer for the active WebRTC offer",
+                        peer,
+                    )
+                    return
+                await pc.setRemoteDescription(RTCSessionDescription(sdp=answer_sdp, type="answer"))
+                if (
+                    self._pcs.get(peer) is not pc
+                    or self._pairing_transports.get(peer) is not transport
+                ):
+                    return
+                transport["answer_sdp"] = answer_sdp
+                transport["remote_stable_peer_id"] = remote_stable_peer_id
+                transport["remote_node_name"] = remote_node_name
+                if remote_stable_peer_id:
+                    self._remember_claimed_peer_identity(
+                        peer, remote_stable_peer_id, remote_node_name
+                    )
+                await self._drain_pending_ice_candidates(peer, pc)
 
     def _discard_pending_ice_candidates(
         self,

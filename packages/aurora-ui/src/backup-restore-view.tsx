@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Archive } from 'lucide-react'
 import type {
   AuroraClient,
@@ -16,8 +17,11 @@ import type {
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { ToneBadge, type BadgeTone } from './status-badges'
+import { EmptyState, RouteStateNotice } from './state-surface'
 import { ConfirmDialog } from './shared-components'
 import { Button, Card, DataTable, useToast, type DataColumn } from './primitives'
+import { AuroraQueryProvider, useAuroraQueryScope } from './query'
+import { useAuroraQueryKeys, useBackups } from './query-hooks'
 import { adminErrorTitle, adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy } from './admin-product-copy'
 
 export interface BackupRestoreViewProps {
@@ -58,40 +62,56 @@ const operationCopy: Record<BackupOperationKind, { title: string; confirmLabel: 
   }
 }
 
-export function BackupRestoreView({ client, route, initialList = null, initialError = null }: BackupRestoreViewProps) {
+export function BackupRestoreView(props: BackupRestoreViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <BackupRestoreViewQuery {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <BackupRestoreViewQuery {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function BackupRestoreViewQuery({ client, route, initialList = null, initialError = null }: BackupRestoreViewProps) {
   const { toast } = useToast()
-  const [list, setList] = useState<BackupListResponse | null>(initialList)
-  const [loadState, setLoadState] = useState<BackupLoadState>(() => initialLoadState(route, initialList, initialError))
-  const [loadError, setLoadError] = useState<string | null>(initialError)
   const [pending, setPending] = useState<PendingOperation | null>(null)
   const [busy, setBusy] = useState(false)
-
-  useEffect(() => {
-    let active = true
-    if (route.disabled) return
-    setLoadState((current) => (current === 'ready' || current === 'empty' ? current : 'loading'))
-    client.backups.list({ limit: 50, include_failed: true }).then((result) => {
-      if (!active) return
-      if (!result.ok) {
-        setLoadState(loadStateFromError(result.error))
-        setLoadError(productAdminErrorCopy(result.error, 'Backup list could not be loaded.'))
-        return
-      }
-      setList(result.data)
-      setLoadState(result.data.backups.length === 0 ? 'empty' : route.state === 'degraded' ? 'degraded' : 'ready')
-      setLoadError(null)
-    })
-    return () => {
-      active = false
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const backupQueryRequest = useMemo(() => ({ limit: 50, include_failed: true }), [])
+  const backupQueryKey = useMemo(() => queryKeys.backups(backupQueryRequest), [backupQueryRequest, queryKeys])
+  const backupQuery = useBackups<BackupListResponse, typeof backupQueryRequest>(
+    backupQueryRequest,
+    async (queryClient, request, signal) => {
+      const result = await queryClient.backups.list(request, { signal })
+      if (!result.ok) throw result.error
+      return result.data
+    },
+    {
+      enabled: !route.disabled,
+      ...(initialList ? { initialData: initialList } : {}),
     }
-  }, [client, route.disabled, route.state])
+  )
 
+  const list = backupQuery.data ?? null
+  const loadError = backupQuery.error
+    ? productAdminErrorCopy(backupQuery.error, 'Backup list could not be loaded.')
+    : route.disabled ? initialError : null
+  const loadState = backupQuery.error
+    ? loadStateFromError(backupQuery.error)
+    : resolveBackupLoadState(route, list, loadError, backupQuery.isPending)
   const backups = list?.backups ?? []
   const mutationRouteReady = !route.disabled && route.routeable
   const disabledReason = backupDisabledReason(route, loadError)
+  const actionDisabledReason = busy
+    ? 'Backup action is still running.'
+    : pending
+      ? 'Finish the current backup choice first.'
+      : disabledReason
+  const actionDisabled = !mutationRouteReady || busy || pending !== null
 
   async function confirmPending() {
-    if (!pending) return
+    if (!pending || busy) return
     const kind = pending.kind
     setBusy(true)
     try {
@@ -102,12 +122,13 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         )
         applyResult(result, (created) => {
           if (created.backup) {
-            setList((current) => ({
+            queryClient.setQueryData<BackupListResponse>(backupQueryKey, (current) => ({
               backups: [created.backup!, ...(current?.backups ?? [])],
               total: (current?.total ?? 0) + 1,
               secrets_redacted: created.backup!.secrets_redacted
             }))
           }
+          void queryClient.invalidateQueries({ queryKey: backupQueryKey })
           return created.message ?? 'Backup created.'
         })
       } else if (kind === 'verify' && pending.backup) {
@@ -117,7 +138,10 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           'Backup checked from Aurora admin cockpit.',
           { reauthConfirmed: true }
         )
-        applyResult(result, (verified) => verified.message ?? (verified.verified ? 'Backup checked.' : 'Backup needs attention.'))
+        applyResult(result, (verified) => {
+          void queryClient.invalidateQueries({ queryKey: backupQueryKey })
+          return verified.message ?? (verified.verified ? 'Backup checked.' : 'Backup needs attention.')
+        })
       } else if (kind === 'restore' && pending.backup) {
         const backup = pending.backup
         const result = await client.backups.restore(
@@ -131,7 +155,10 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
           },
           { reauthConfirmed: true }
         )
-        applyResult(result, (restored) => restored.message ?? 'Restore preview complete. No data was overwritten.')
+        applyResult(result, (restored) => {
+          void queryClient.invalidateQueries({ queryKey: backupQueryKey })
+          return restored.message ?? 'Restore preview complete. No data was overwritten.'
+        })
       }
     } catch (error) {
       toast({
@@ -175,16 +202,16 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         <div className="flex items-center justify-end gap-1.5" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
           <Button
             variant="outline"
-            disabled={!mutationRouteReady}
-            disabledReason={productAdminReasonCopy(disabledReason)}
+            disabled={actionDisabled}
+            disabledReason={productAdminReasonCopy(actionDisabledReason)}
             onClick={() => setPending({ kind: 'verify', backup })}
           >
             Verify
           </Button>
           <Button
             variant="danger"
-            disabled={!mutationRouteReady}
-            disabledReason={productAdminReasonCopy(disabledReason)}
+            disabled={actionDisabled}
+            disabledReason={productAdminReasonCopy(actionDisabledReason)}
             onClick={() => setPending({ kind: 'restore', backup })}
           >
             Preview restore
@@ -206,8 +233,8 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         <Button
           variant="primary"
           icon={<Archive size={14} aria-hidden />}
-          disabled={!mutationRouteReady}
-          disabledReason={productAdminReasonCopy(disabledReason)}
+          disabled={actionDisabled}
+          disabledReason={productAdminReasonCopy(actionDisabledReason)}
           onClick={() => setPending({ kind: 'create', backup: null })}
         >
           Create backup now
@@ -222,7 +249,7 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
             columns={columns}
             rows={backups}
             getRowKey={(backup) => backup.backup_id}
-            empty={<p className="text-sm text-muted-foreground">No backups were returned by Aurora.</p>}
+            empty={<EmptyState title="No backups" message="No backups were returned by Aurora." />}
           />
         </Card>
       </div>
@@ -234,7 +261,9 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
         confirmLabel={dialogCopy?.confirmLabel ?? 'Confirm'}
         destructive={Boolean(dialogCopy?.destructive)}
         busy={busy}
-        onCancel={() => setPending(null)}
+        onCancel={() => {
+          if (!busy) setPending(null)
+        }}
         onConfirm={() => void confirmPending()}
       />
     </div>
@@ -243,27 +272,26 @@ export function BackupRestoreView({ client, route, initialList = null, initialEr
 
 function BackupStatusNotice({ loadState, route, loadError }: { loadState: BackupLoadState; route: RouteAvailability; loadError: string | null }) {
   if (loadState === 'loading') {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
-        Loading backups from Aurora...
-      </div>
-    )
+    return <RouteStateNotice title="Loading backups" state="loading" message="Loading backups from Aurora." />
   }
   if (loadState === 'ready') return null
   if (route.disabled) {
     return (
-      <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
-        Backup operations are disabled until Aurora reports backup actions are ready.
-        {route.blockers.length > 0 ? ` ${adminRouteCopy(route)}` : null}
-      </div>
+      <RouteStateNotice
+        title="Backup actions unavailable"
+        state="permission"
+        message={`Backup operations are disabled until Aurora reports backup actions are ready.${route.blockers.length > 0 ? ` ${adminRouteCopy(route)}` : ''}`}
+      />
     )
   }
   if (loadState === 'empty') return null
   if (loadError) {
     return (
-      <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive" role="alert">
-        {loadError}
-      </div>
+      <RouteStateNotice
+        title="Backup status needs attention"
+        state={loadState === 'denied' ? 'permission' : loadState === 'degraded' ? 'offline' : 'error'}
+        message={loadError}
+      />
     )
   }
   return null
@@ -307,15 +335,20 @@ function titleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1)
 }
 
-function initialLoadState(route: RouteAvailability, initialList: BackupListResponse | null, initialError: string | null): BackupLoadState {
+function resolveBackupLoadState(
+  route: RouteAvailability,
+  list: BackupListResponse | null,
+  loadError: string | null,
+  loading: boolean
+): BackupLoadState {
   if (route.disabled) {
     if (route.state === 'denied') return 'denied'
     if (route.state === 'degraded') return 'degraded'
     return 'unavailable'
   }
-  if (initialError) return 'error'
-  if (!initialList) return 'loading'
-  if (initialList.backups.length === 0) return 'empty'
+  if (loadError) return 'error'
+  if (loading && !list) return 'loading'
+  if (!list || list.backups.length === 0) return 'empty'
   return route.state === 'degraded' ? 'degraded' : 'ready'
 }
 

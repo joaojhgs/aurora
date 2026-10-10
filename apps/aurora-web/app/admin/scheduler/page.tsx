@@ -12,8 +12,6 @@ export default async function Page() {
       {!route ? (
         <AuroraRoutePage
           routeId="scheduler"
-          title="Scheduler"
-          description="Scheduled jobs and automation controls appear when Aurora confirms they are available for this device."
         />
       ) : null}
     </>

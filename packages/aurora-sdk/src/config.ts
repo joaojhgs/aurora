@@ -163,12 +163,12 @@ export interface ConfigControllerClient {
   request<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options?: { path?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string> }
+    options?: { path?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal }
   ): Promise<TData>
   requestResult<TData = unknown, TPayload = unknown>(
     method: string,
     payload?: TPayload,
-    options?: { path?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string> }
+    options?: { path?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal }
   ): Promise<AuroraResponse<TData>>
   readonly admin: AdminActionClient
 }
@@ -192,11 +192,11 @@ export class ConfigClient {
     )
   }
 
-  getSchemaMetadata(request: ConfigSchemaMetadataRequest = {}): Promise<AuroraResponse<ConfigSchemaMetadataResponse>> {
+  getSchemaMetadata(request: ConfigSchemaMetadataRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<ConfigSchemaMetadataResponse>> {
     return this.client.requestResult<ConfigSchemaMetadataResponse, ConfigSchemaMetadataRequest>(
       CONFIG_METHODS.getSchemaMetadata,
       request,
-      { path: routePath('Config', 'GetSchemaMetadata') }
+      { path: routePath('Config', 'GetSchemaMetadata'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 

@@ -60,7 +60,11 @@ describe('Assistant persisted sessions', () => {
     expect(conversationTitles(container)).toEqual(['First thread', 'Second thread'])
     expect(transport.calls).toContainEqual({
       method: DB_METHODS.getSession,
-      payload: { session_id: 'chat-a-2', activate: true }
+      payload: { session_id: 'chat-a-2', activate: false }
+    })
+    expect(transport.calls).toContainEqual({
+      method: DB_METHODS.setActiveSession,
+      payload: { session_id: 'chat-a-2' }
     })
 
     const newConversation = findButtonContaining(container, 'New conversation')
@@ -122,7 +126,7 @@ describe('Assistant persisted sessions', () => {
     expect(sheet?.textContent).toContain('Second thread')
     expect(sheet?.querySelector('[data-slot="sheet-title"]')).not.toBeNull()
 
-    const secondThread = [...(sheet?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+    const secondThread = [...(sheet?.querySelectorAll<HTMLButtonElement>('[aria-label="Assistant conversation list"] button') ?? [])]
       .find((button) => button.textContent?.includes('Second thread'))
     expect(secondThread).toBeDefined()
     await act(async () => {
@@ -227,6 +231,13 @@ class SessionTransport implements AuroraTransport {
           session,
           messages: [persistedMessage(session.id)]
         }
+        break
+      }
+      case DB_METHODS.setActiveSession: {
+        const sessionId = (request.payload as { session_id: string }).session_id
+        const session = principalSessions.find((candidate) => candidate.id === sessionId)
+        if (!session) throw new Error('session not found for principal')
+        data = { session }
         break
       }
       case DB_METHODS.createSession: {
@@ -374,7 +385,7 @@ function findButtonContaining(container: HTMLElement, text: string): HTMLButtonE
 
 function conversationTitles(container: HTMLElement): string[] {
   return Array.from(
-    container.querySelectorAll<HTMLElement>('[aria-label="Assistant conversation list"] .aui-thread-row-button strong')
+    container.querySelectorAll<HTMLElement>('[aria-label="Assistant conversation list"] button strong')
   ).map((title) => title.textContent ?? '')
 }
 

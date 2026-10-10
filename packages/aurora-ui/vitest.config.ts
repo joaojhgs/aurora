@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 import { coverageConfig } from '../../vitest.coverage.mjs'
 
 // Deterministic unified version for tests: the plain repo-root VERSION value,
@@ -16,6 +16,8 @@ export default defineConfig({
     __AURORA_VERSION_LABEL__: JSON.stringify(auroraVersion),
   },
   test: {
+    // Style guardrails use Node's test runner through test:styles.
+    exclude: [...configDefaults.exclude, 'scripts/**', 'dist/**'],
     setupFiles: ['./tests/setup-web-storage.ts'],
     testTimeout: 10_000,
     hookTimeout: 20_000,

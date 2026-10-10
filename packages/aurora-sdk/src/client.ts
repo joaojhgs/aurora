@@ -10,7 +10,7 @@ import {
   type AuroraResponse,
   type AuroraTransport
 } from './transport.js'
-import { EventStreamClient, type AuroraEventSubscription, type AuroraSubscribeOptions } from './events.js'
+import { EventStreamClient, type AuroraEventStreamTransport, type AuroraEventSubscription, type AuroraNativeResumeSubscriber, type AuroraSubscribeOptions } from './events.js'
 import { AdminActionClient, ApprovalClient } from './admin.js'
 import type { AdminActionClient as AdminActionClientType } from './admin.js'
 import { MemoryClient } from './memory.js'
@@ -230,6 +230,8 @@ import type {
 
 export interface AuroraClientOptions {
   transport: AuroraTransport
+  nativeEventTransport?: AuroraEventStreamTransport
+  subscribeNativeResume?: AuroraNativeResumeSubscriber
   defaultTimeoutMs?: number
 }
 
@@ -291,7 +293,16 @@ export class AuroraClient {
     this.adminAction = this.admin
     this.approvals = new ApprovalClient(this)
     this.native = new NativeClient(this)
-    this.events = new EventStreamClient(this.transport, (error) => this.auth.applyError(error))
+    this.events = new EventStreamClient(
+      this.transport,
+      (error) => this.auth.applyError(error),
+      options.nativeEventTransport,
+      options.subscribeNativeResume
+    )
+    this.auth.subscribe(() => {
+      this.capabilities.invalidateCache()
+      this.routes.invalidateCache()
+    })
   }
 
   async request<TData = unknown, TPayload = unknown>(
@@ -299,6 +310,7 @@ export class AuroraClient {
     payload?: TPayload,
     options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal } = {}
   ): Promise<TData> {
+    throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
     try {
       const response = await this.transport.request<TData, TPayload>({
         method,
@@ -310,8 +322,10 @@ export class AuroraClient {
         signal: options.signal,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
+      throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
       return response.data
     } catch (error) {
+      throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
       this.auth.applyError(normalizeError(error))
       throw error
     }
@@ -326,6 +340,7 @@ export class AuroraClient {
     if (!isPeerBoundTransport(this.transport)) {
       throw unsupportedTransport(this.transport.kind, 'Exact-peer mesh dispatch', 'unsupported_feature')
     }
+    throwClientAbortIfRequested(options.signal, 'Aurora peer request was cancelled')
     const busTopic = options.busTopic ?? method
     try {
       const response = await this.transport.requestPeer<TData, TPayload>(peerId, {
@@ -336,8 +351,10 @@ export class AuroraClient {
         signal: options.signal,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
+      throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
       return response.data
     } catch (error) {
+      throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
       const normalized = normalizeError(error)
       this.auth.applyError(normalized)
       throw normalized
@@ -349,6 +366,7 @@ export class AuroraClient {
     payload?: TPayload,
     options: { path?: string; busTopic?: string; httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; timeoutMs?: number; headers?: Record<string, string>; signal?: AbortSignal } = {}
   ): Promise<AuroraResponse<TData>> {
+    throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
     const busTopic = options.busTopic ?? method
     try {
       const response = await this.transport.request<TData, TPayload>({
@@ -361,6 +379,7 @@ export class AuroraClient {
         signal: options.signal,
         timeoutMs: options.timeoutMs ?? this.defaultTimeoutMs
       })
+      throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
       return {
         ok: true,
         data: response.data,
@@ -373,6 +392,7 @@ export class AuroraClient {
         })
       }
     } catch (error) {
+      throwClientAbortIfRequested(options.signal, 'Aurora request was cancelled')
       const normalized = normalizeError(error)
       this.auth.applyError(normalized)
       return {
@@ -494,11 +514,11 @@ export class AuthApiClient {
     )
   }
 
-  listPrincipals(payload: PrincipalListRequest = {}): Promise<AuroraResponse<PrincipalListResponse>> {
+  listPrincipals(payload: PrincipalListRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<PrincipalListResponse>> {
     return this.client.requestResult<PrincipalListResponse, PrincipalListRequest>(
       AUTH_METHODS.listPrincipals,
       payload,
-      { path: routePath('Auth', 'ListPrincipals') }
+      { path: routePath('Auth', 'ListPrincipals'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
@@ -582,11 +602,11 @@ export class AuthApiClient {
     )
   }
 
-  auditLog(payload: AuditLogRequest = {}): Promise<AuroraResponse<AuditLogResponse>> {
+  auditLog(payload: AuditLogRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<AuditLogResponse>> {
     return this.client.requestResult<AuditLogResponse, AuditLogRequest>(
       AUTH_METHODS.auditLog,
       payload,
-      { path: routePath('Auth', 'AuditLog') }
+      { path: routePath('Auth', 'AuditLog'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 }
@@ -594,11 +614,11 @@ export class AuthApiClient {
 export class AuthTokenClient {
   constructor(private readonly client: AuroraClient) {}
 
-  list(payload: AuthTokenListRequest = {}): Promise<AuroraResponse<AuthTokenListResponse>> {
+  list(payload: AuthTokenListRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<AuthTokenListResponse>> {
     return this.client.requestResult<AuthTokenListResponse, AuthTokenListRequest>(
       AUTH_METHODS.listTokens,
       payload,
-      { path: routePath('Auth', 'ListTokens') }
+      { path: routePath('Auth', 'ListTokens'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
@@ -686,19 +706,19 @@ function jsonPayload<T extends object>(payload: T): JsonObject {
 export class MeshClient {
   constructor(private readonly client: AuroraClient) {}
 
-  getStatus(): Promise<AuroraResponse<MeshStatusResponse>> {
+  getStatus(options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<MeshStatusResponse>> {
     return this.client.requestResult<MeshStatusResponse, Record<string, never>>(
       GATEWAY_METHODS.getMeshStatus,
       {},
-      { path: routePath('Gateway', 'GetMeshStatus') }
+      { path: routePath('Gateway', 'GetMeshStatus'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  listPeers(payload: MeshPeerListRequest = {}): Promise<AuroraResponse<MeshPeerListResponse>> {
+  listPeers(payload: MeshPeerListRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<MeshPeerListResponse>> {
     return this.client.requestResult<MeshPeerListResponse, MeshPeerListRequest>(
       AUTH_METHODS.meshListPeers,
       payload,
-      { path: routePath('Auth', 'MeshListPeers') }
+      { path: routePath('Auth', 'MeshListPeers'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
@@ -747,33 +767,37 @@ export class MeshClient {
 export class RegistryClient {
   constructor(private readonly client: AuroraClient) {}
 
-  getRegistry(): Promise<GetRegistryResponse> {
+  getRegistry(options: { signal?: AbortSignal } = {}): Promise<GetRegistryResponse> {
     return this.client.request<GetRegistryResponse>(GATEWAY_METHODS.getRegistry, undefined, {
       path: '/api/registry',
-      httpMethod: 'GET'
+      httpMethod: 'GET',
+      ...(options.signal ? { signal: options.signal } : {}),
     })
   }
 
-  async listMethods(): Promise<MethodDescriptor[]> {
-    return describeRegistry(await this.getRegistry())
+  async listMethods(options: { signal?: AbortSignal } = {}): Promise<MethodDescriptor[]> {
+    return describeRegistry(await this.getRegistry(options))
   }
 
-  listServices(): Promise<GetServicesResponse> {
+  listServices(options: { signal?: AbortSignal } = {}): Promise<GetServicesResponse> {
     return this.client.request<GetServicesResponse>(GATEWAY_METHODS.getServices, undefined, {
       path: '/api/services',
-      httpMethod: 'GET'
+      httpMethod: 'GET',
+      ...(options.signal ? { signal: options.signal } : {}),
     })
   }
 
-  getDeploymentTopology(): Promise<DeploymentTopologyResponse> {
+  getDeploymentTopology(options: { signal?: AbortSignal } = {}): Promise<DeploymentTopologyResponse> {
     return this.client.request<DeploymentTopologyResponse, Record<string, never>>(GATEWAY_METHODS.getDeploymentTopology, {}, {
-      path: routePath('Gateway', 'GetDeploymentTopology')
+      path: routePath('Gateway', 'GetDeploymentTopology'),
+      ...(options.signal ? { signal: options.signal } : {}),
     })
   }
 
-  getWebRTCDiagnostics(): Promise<WebRTCDiagnosticsResponse> {
+  getWebRTCDiagnostics(options: { signal?: AbortSignal } = {}): Promise<WebRTCDiagnosticsResponse> {
     return this.client.request<WebRTCDiagnosticsResponse, Record<string, never>>(GATEWAY_METHODS.getWebRTCDiagnostics, {}, {
-      path: routePath('Gateway', 'GetWebRTCDiagnostics')
+      path: routePath('Gateway', 'GetWebRTCDiagnostics'),
+      ...(options.signal ? { signal: options.signal } : {}),
     })
   }
 }
@@ -790,17 +814,19 @@ export class CapabilityClient {
 
   constructor(private readonly client: AuroraClient) {}
 
-  listCatalog(request: CapabilityCatalogRequest = {}): Promise<CapabilityCatalogResponse> {
+  listCatalog(request: CapabilityCatalogRequest = {}, options: { signal?: AbortSignal } = {}): Promise<CapabilityCatalogResponse> {
     const cacheKey = stableRequestKey(request)
-    const cached = freshCacheEntry(this.catalogCache, cacheKey)
-    if (cached) return cached.promise
+    if (!options.signal) {
+      const cached = freshCacheEntry(this.catalogCache, cacheKey)
+      if (cached) return cached.promise
+    }
 
     const promise = this.client.request<CapabilityCatalogResponse, CapabilityCatalogRequest>(
       GATEWAY_METHODS.getCapabilityCatalog,
       request,
-      { path: routePath('Gateway', 'GetCapabilityCatalog') }
+      { path: routePath('Gateway', 'GetCapabilityCatalog'), ...(options.signal ? { signal: options.signal } : {}) }
     )
-    rememberRead(this.catalogCache, cacheKey, promise)
+    if (!options.signal) rememberRead(this.catalogCache, cacheKey, promise)
     return promise
   }
 
@@ -813,11 +839,12 @@ export class CapabilityClient {
   }
 
   async getGraph(
-    request: CapabilityCatalogRequest = { include_unavailable: true, include_internal: true }
+    request: CapabilityCatalogRequest = { include_unavailable: true, include_internal: true },
+    options: { signal?: AbortSignal } = {},
   ): Promise<CapabilityGraph> {
     const [catalog, registry] = await Promise.all([
-      this.listCatalog(request),
-      this.client.registry.getRegistry()
+      this.listCatalog(request, options),
+      this.client.registry.getRegistry(options)
     ])
     return buildCapabilityGraph({
       catalog,
@@ -880,6 +907,7 @@ function routeExplainRequest(route: string | RouteExplainRequest): RouteExplainR
 
 export interface PermissionCatalogOptions {
   gatewayBuiltins?: GatewayBuiltinRouteDescriptor[]
+  signal?: AbortSignal | undefined
 }
 
 export class PermissionClient {
@@ -887,7 +915,7 @@ export class PermissionClient {
 
   async listCatalog(options: PermissionCatalogOptions = {}): Promise<PermissionCatalogEntry[]> {
     const input: PermissionCatalogInput = {
-      methods: await this.client.registry.listMethods(),
+      methods: await this.client.registry.listMethods(options.signal ? { signal: options.signal } : {}),
       source: 'registry'
     }
     if (options.gatewayBuiltins !== undefined) input.gatewayBuiltins = options.gatewayBuiltins
@@ -912,17 +940,19 @@ export class RouteClient {
 
   constructor(private readonly client: AuroraClient) {}
 
-  explain(request: RouteExplainRequest): Promise<RouteExplainResponse> {
+  explain(request: RouteExplainRequest, options: { signal?: AbortSignal } = {}): Promise<RouteExplainResponse> {
     const cacheKey = stableRequestKey(request)
-    const cached = freshCacheEntry(this.explainCache, cacheKey)
-    if (cached) return cached.promise
+    if (!options.signal) {
+      const cached = freshCacheEntry(this.explainCache, cacheKey)
+      if (cached) return cached.promise
+    }
 
     const promise = this.client.request<RouteExplainResponse, RouteExplainRequest>(
       GATEWAY_METHODS.explainRoute,
       request,
-      { path: routePath('Gateway', 'ExplainRoute') }
+      { path: routePath('Gateway', 'ExplainRoute'), ...(options.signal ? { signal: options.signal } : {}) }
     )
-    rememberRead(this.explainCache, cacheKey, promise)
+    if (!options.signal) rememberRead(this.explainCache, cacheKey, promise)
     return promise
   }
 
@@ -934,13 +964,13 @@ export class RouteClient {
     route?: RouteExplainResponse
     catalog?: RoutePolicyInput['catalog']
     routeRequest?: RouteExplainRequest
-  }): Promise<RoutePolicyEvaluation> {
+  }, options: { signal?: AbortSignal } = {}): Promise<RoutePolicyEvaluation> {
     const fallbackRouteRequest: RouteExplainRequest = {}
     if (input.topic !== undefined) fallbackRouteRequest.topic = input.topic
     if (input.method !== undefined) fallbackRouteRequest.method = input.method
     if (input.selector !== undefined) fallbackRouteRequest.selector = input.selector
-    const route = input.route ?? await this.explain(input.routeRequest ?? fallbackRouteRequest)
-    const catalog = input.catalog ?? await this.client.capabilities.listCatalog({ include_unavailable: true })
+    const route = input.route ?? await this.explain(input.routeRequest ?? fallbackRouteRequest, options)
+    const catalog = input.catalog ?? await this.client.capabilities.listCatalog({ include_unavailable: true }, options.signal ? { signal: options.signal } : {})
     return evaluateRoutePolicy({
       ...input,
       route,
@@ -1070,6 +1100,65 @@ export class AssistantClient {
     let iterator: AsyncIterator<AuroraEvent<Record<string, unknown>>> | null = null
     let awaitingTtsDrain = false
     let finalTtsSeen = false
+    let completedSeen = false
+    let completedAwaitingTtsDrain: AssistantStreamUpdate | null = null
+    let expectedTtsStreamId: string | null = null
+    let earlyTtsAudioBytes = 0
+    let earlyTtsAudioOverflowAmbiguous = false
+    const earlyTtsAudioOverflowStreamIds = new Set<string>()
+    const earlyTtsAudio: AssistantStreamUpdate[] = []
+    const acceptTtsAudio = (update: AssistantStreamUpdate): AssistantStreamUpdate[] => {
+      if (update.kind !== 'tts_audio_chunk') {
+        const advertisedStreamId = metadataString(update.metadata, 'tts_stream_id')
+        if (expectedTtsStreamId === null && advertisedStreamId !== null) {
+          expectedTtsStreamId = advertisedStreamId
+        }
+      }
+      if (update.kind !== 'tts_audio_chunk') {
+        if (expectedTtsStreamId === null || earlyTtsAudio.length === 0) return []
+        if (earlyOverflowAffectsExpectedStream()) {
+          earlyTtsAudio.splice(0)
+          earlyTtsAudioBytes = 0
+          return []
+        }
+        const buffered = earlyTtsAudio.splice(0)
+        earlyTtsAudioBytes = 0
+        return buffered.filter((audio) => audio.ttsAudio?.streamId === expectedTtsStreamId)
+      }
+      if (expectedTtsStreamId === null) {
+        const streamId = update.ttsAudio?.streamId ?? null
+        if (streamId === null) return []
+        if (earlyTtsAudioOverflowAmbiguous || earlyTtsAudioOverflowStreamIds.has(streamId)) return []
+        const encodedBytes = update.ttsAudio?.audioData?.length ?? 0
+        if (earlyTtsAudio.length >= 8 || earlyTtsAudioBytes + encodedBytes > 256 * 1024) {
+          for (const buffered of earlyTtsAudio) {
+            const bufferedStreamId = buffered.ttsAudio?.streamId
+            if (bufferedStreamId && earlyTtsAudioOverflowStreamIds.size < 8) {
+              earlyTtsAudioOverflowStreamIds.add(bufferedStreamId)
+            }
+          }
+          earlyTtsAudio.splice(0)
+          earlyTtsAudioBytes = 0
+          if (earlyTtsAudioOverflowStreamIds.size < 8) earlyTtsAudioOverflowStreamIds.add(streamId)
+          else earlyTtsAudioOverflowAmbiguous = true
+          return []
+        }
+        earlyTtsAudio.push(update)
+        earlyTtsAudioBytes += encodedBytes
+        return []
+      }
+      if (earlyOverflowAffectsExpectedStream()) return []
+      return update.ttsAudio?.streamId === expectedTtsStreamId ? [update] : []
+    }
+    const markAcceptedFinalAudio = (updates: AssistantStreamUpdate[]): void => {
+      for (const update of updates) {
+        if (isFinalTtsAudioUpdate(update, expectedTtsStreamId)) finalTtsSeen = true
+      }
+    }
+    const earlyOverflowAffectsExpectedStream = (): boolean => (
+      expectedTtsStreamId !== null
+      && (earlyTtsAudioOverflowAmbiguous || earlyTtsAudioOverflowStreamIds.has(expectedTtsStreamId))
+    )
     try {
       const correlationId = requestId
       const assistantTopics = this.client.transport.kind === 'mesh'
@@ -1117,6 +1206,9 @@ export class AssistantClient {
         requestOptions
       ).then((response) => {
         requestState.response = response
+        if (expectedTtsStreamId === null && response.ok) {
+          expectedTtsStreamId = metadataString(response.data.metadata, 'tts_stream_id')
+        }
         return response
       })
       // The assistant stream is the product surface. Do not block token/tool/TTS
@@ -1141,7 +1233,14 @@ export class AssistantClient {
         iterator = opened.iterator
         firstEvent = readFirstIteratorEvent(iterator)
       }
-      const firstRace = await raceAssistantFirstEventOrRequest(firstEvent, requestPromise, preopenStream ? 5_000 : 30_000)
+      let firstRace = await raceAssistantFirstEventOrRequest(firstEvent, requestPromise, 1_000)
+      if (firstRace.status === 'timeout') {
+        // Keep the foreground turn visibly alive while the correlated stream
+        // catches up. The replay/last-event hints remain on the open stream;
+        // this update is UI state, not a fallback response.
+        yield streamConnectingUpdate(requestId, this.client.transport.kind)
+        firstRace = await raceAssistantFirstEventOrRequest(firstEvent, requestPromise, 30_000)
+      }
       if (firstRace.status === 'request') {
         const request = firstRace.response
         if (!request.ok) {
@@ -1155,11 +1254,22 @@ export class AssistantClient {
         }
         sawEvent = true
         const firstUpdate = assistantStreamUpdateFromEvent(lateFirst.value.value, request.data)
-        yield firstUpdate
-        if (isFinalTtsAudioUpdate(firstUpdate)) finalTtsSeen = true
+        if (firstUpdate.kind === 'completed') {
+          completedSeen = true
+          if (expectedTtsStreamId === null) expectedTtsStreamId = metadataString(firstUpdate.metadata, 'tts_stream_id')
+        }
+        const acceptedFirstAudio = acceptTtsAudio(firstUpdate)
+        markAcceptedFinalAudio(acceptedFirstAudio)
+        for (const bufferedAudio of acceptedFirstAudio) yield bufferedAudio
+        if (firstUpdate.kind !== 'tts_audio_chunk') yield firstUpdate
+        if (earlyOverflowAffectsExpectedStream() && firstUpdate.kind === 'completed' && assistantCompletionAwaitsTtsDrain(firstUpdate)) {
+          yield assistantPlaybackFailureUpdate(firstUpdate)
+          return
+        }
         if (assistantCompletionAwaitsTtsDrain(firstUpdate)) {
           if (finalTtsSeen) return
           awaitingTtsDrain = true
+          completedAwaitingTtsDrain = firstUpdate
         } else if (isTerminalAssistantStreamUpdate(firstUpdate)) {
           return
         }
@@ -1177,11 +1287,22 @@ export class AssistantClient {
           firstRace.result.value.value,
           requestState.response?.ok ? requestState.response.data : undefined
         )
-        yield firstUpdate
-        if (isFinalTtsAudioUpdate(firstUpdate)) finalTtsSeen = true
+        if (firstUpdate.kind === 'completed') {
+          completedSeen = true
+          if (expectedTtsStreamId === null) expectedTtsStreamId = metadataString(firstUpdate.metadata, 'tts_stream_id')
+        }
+        const acceptedFirstAudio = acceptTtsAudio(firstUpdate)
+        markAcceptedFinalAudio(acceptedFirstAudio)
+        for (const bufferedAudio of acceptedFirstAudio) yield bufferedAudio
+        if (firstUpdate.kind !== 'tts_audio_chunk') yield firstUpdate
+        if (earlyOverflowAffectsExpectedStream() && firstUpdate.kind === 'completed' && assistantCompletionAwaitsTtsDrain(firstUpdate)) {
+          yield assistantPlaybackFailureUpdate(firstUpdate)
+          return
+        }
         if (assistantCompletionAwaitsTtsDrain(firstUpdate)) {
           if (finalTtsSeen) return
           awaitingTtsDrain = true
+          completedAwaitingTtsDrain = firstUpdate
         } else if (isTerminalAssistantStreamUpdate(firstUpdate)) {
           return
         }
@@ -1193,7 +1314,10 @@ export class AssistantClient {
       while (!input.signal?.aborted) {
         const result = await raceEventIterator(activeIterator.next(), eventIdleTimeoutMs)
         if (result === 'timeout') {
-          if (awaitingTtsDrain) return
+          if (awaitingTtsDrain) {
+            if (completedAwaitingTtsDrain) yield assistantPlaybackFailureUpdate(completedAwaitingTtsDrain)
+            return
+          }
           if (requestState.response?.ok) {
             yield fallbackUpdateFromResponse(requestState.response, input, requestId)
             return
@@ -1207,20 +1331,47 @@ export class AssistantClient {
           }), this.client.transport.kind, sawEvent ? 'transport_lost' : 'failed')
           return
         }
-        if (result.done) return
+        if (result.done) {
+          if (awaitingTtsDrain && completedAwaitingTtsDrain) {
+            yield assistantPlaybackFailureUpdate(completedAwaitingTtsDrain)
+          }
+          return
+        }
         sawEvent = true
         const update = assistantStreamUpdateFromEvent(
           result.value,
           requestState.response?.ok ? requestState.response.data : undefined
         )
-        yield update
-        if (isFinalTtsAudioUpdate(update)) {
-          finalTtsSeen = true
+        if (completedSeen && update.kind === 'completed') continue
+        if (update.kind === 'completed') {
+          completedSeen = true
+          if (expectedTtsStreamId === null) expectedTtsStreamId = metadataString(update.metadata, 'tts_stream_id')
+        }
+        if (
+          awaitingTtsDrain
+          && update.kind === 'tts_audio_chunk'
+          && expectedTtsStreamId !== null
+          && update.ttsAudio?.streamId !== expectedTtsStreamId
+        ) continue
+        if (completedSeen && (update.kind === 'failed' || update.kind === 'transport_lost')) {
+          if (completedAwaitingTtsDrain) yield assistantPlaybackFailureUpdate(completedAwaitingTtsDrain)
+          return
+        }
+        const acceptedAudio = acceptTtsAudio(update)
+        markAcceptedFinalAudio(acceptedAudio)
+        for (const bufferedAudio of acceptedAudio) yield bufferedAudio
+        if (update.kind !== 'tts_audio_chunk') yield update
+        if (earlyOverflowAffectsExpectedStream() && update.kind === 'completed' && assistantCompletionAwaitsTtsDrain(update)) {
+          yield assistantPlaybackFailureUpdate(update)
+          return
+        }
+        if (isFinalTtsAudioUpdate(update, expectedTtsStreamId)) {
           if (awaitingTtsDrain) return
         }
         if (assistantCompletionAwaitsTtsDrain(update)) {
           if (finalTtsSeen) return
           awaitingTtsDrain = true
+          completedAwaitingTtsDrain = update
           continue
         }
         if (isTerminalAssistantStreamUpdate(update)) return
@@ -1229,6 +1380,10 @@ export class AssistantClient {
       const normalized = normalizeError(error)
       this.client.auth.applyError(normalized)
       if (input.signal?.aborted) return
+      if (completedSeen) {
+        if (completedAwaitingTtsDrain) yield assistantPlaybackFailureUpdate(completedAwaitingTtsDrain)
+        return
+      }
       if (sawEvent) {
         yield streamFailure(normalized, this.client.transport.kind, 'transport_lost')
         return
@@ -1646,8 +1801,27 @@ function assistantCompletionAwaitsTtsDrain(update: AssistantStreamUpdate): boole
   )
 }
 
-function isFinalTtsAudioUpdate(update: AssistantStreamUpdate): boolean {
-  return update.kind === 'tts_audio_chunk' && update.ttsAudio?.final === true
+function assistantPlaybackFailureUpdate(completed: AssistantStreamUpdate): AssistantStreamUpdate {
+  return {
+    ...completed,
+    kind: 'tts_playback_error',
+    text: '',
+    textDelta: '',
+    error: null,
+    metadata: {
+      ...completed.metadata,
+      tts_status: 'unavailable',
+      tts_reason: 'playback_incomplete'
+    },
+    ttsAudio: null
+  }
+}
+
+function isFinalTtsAudioUpdate(update: AssistantStreamUpdate, expectedStreamId: string | null = null): boolean {
+  return update.kind === 'tts_audio_chunk'
+    && update.ttsAudio?.final === true
+    && expectedStreamId !== null
+    && update.ttsAudio.streamId === expectedStreamId
 }
 
 
@@ -1808,6 +1982,31 @@ function streamFailure(
   }
 }
 
+function streamConnectingUpdate(requestId: string, transport: string): AssistantStreamUpdate {
+  const audit = createAuditReceipt(null, {
+    correlationId: requestId,
+    method: ORCHESTRATOR_METHODS.externalUserInput,
+    busTopic: ORCHESTRATOR_METHODS.externalUserInput,
+    status: 'connecting',
+    transport
+  })
+  return {
+    kind: 'connecting',
+    eventId: null,
+    messageId: requestId,
+    sessionId: null,
+    text: 'Connecting to Aurora…',
+    textDelta: '',
+    modelLabel: null,
+    requestId,
+    error: null,
+    audit,
+    metadata: {},
+    tool: null,
+    ttsAudio: null
+  }
+}
+
 function streamText(payload: Record<string, unknown>): string {
   return streamString(payload, 'text', 'content', 'message', 'delta', 'text_delta', 'textDelta') ?? ''
 }
@@ -1868,6 +2067,7 @@ function assistantToolStreamEventFromPayload(
 function assistantTtsAudioChunkFromPayload(payload: Record<string, unknown>): AssistantTtsAudioChunkEvent {
   return {
     chunkId: streamString(payload, 'chunk_id', 'chunkId', 'id') ?? null,
+    streamId: streamString(payload, 'stream_id', 'streamId') ?? null,
     sequence: streamNumber(payload, 'sequence', 'seq', 'index'),
     audioData: streamString(payload, 'audio_data', 'audioData', 'chunk', 'data', 'base64') ?? null,
     encoding: streamString(payload, 'encoding', 'format', 'codec') ?? null,
@@ -2008,19 +2208,20 @@ export class AdminOverviewClient {
 export class ToolClient {
   constructor(private readonly client: AuroraClient) {}
 
-  listCatalog<TResponse = ToolCatalogResponse>(request: Record<string, unknown> = {}): Promise<TResponse> {
+  listCatalog<TResponse = ToolCatalogResponse>(request: Record<string, unknown> = {}, options: { signal?: AbortSignal } = {}): Promise<TResponse> {
     return this.client.request<TResponse>(TOOLING_METHODS.listCatalog, request, {
-      path: routePath('Tooling', 'GetToolCatalog')
+      path: routePath('Tooling', 'GetToolCatalog'),
+      ...(options.signal ? { signal: options.signal } : {}),
     })
   }
 
-  async listApprovalCards(request: Record<string, unknown> = {}): Promise<ToolApprovalCardModel[]> {
-    const catalog = await this.listCatalog<ToolCatalogResponse>(request)
+  async listApprovalCards(request: Record<string, unknown> = {}, options: { signal?: AbortSignal } = {}): Promise<ToolApprovalCardModel[]> {
+    const catalog = await this.listCatalog<ToolCatalogResponse>(request, options)
     return normalizeToolCatalog(catalog, { transportKind: this.client.transport.kind })
   }
 
-  loadApprovalCards(): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
-    return loadToolApprovalCards(this.client)
+  loadApprovalCards(options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
+    return loadToolApprovalCards(this.client, options)
   }
 
   getStats(): Promise<ToolingStatsResponse> {
@@ -2029,9 +2230,10 @@ export class ToolClient {
     })
   }
 
-  getMcpStatus(): Promise<ToolingGetMcpStatusResponse> {
+  getMcpStatus(options: { signal?: AbortSignal } = {}): Promise<ToolingGetMcpStatusResponse> {
     return this.client.request<ToolingGetMcpStatusResponse, Record<string, never>>(TOOLING_METHODS.getMcpStatus, {}, {
-      path: routePath('Tooling', 'GetMCPStatus')
+      path: routePath('Tooling', 'GetMCPStatus'),
+      ...(options.signal ? { signal: options.signal } : {}),
     })
   }
 
@@ -2041,11 +2243,11 @@ export class ToolClient {
     })
   }
 
-  async getSharingPolicy(): Promise<ToolingSharingPolicy> {
+  async getSharingPolicy(options: { signal?: AbortSignal } = {}): Promise<ToolingSharingPolicy> {
     const response = await this.client.request<ToolingGetSharingPolicyResponse, Record<string, never>>(
       TOOLING_METHODS.getSharingPolicy,
       {},
-      { path: routePath('Tooling', 'GetSharingPolicy') }
+      { path: routePath('Tooling', 'GetSharingPolicy'), ...(options.signal ? { signal: options.signal } : {}) }
     )
     return response.policy
   }
@@ -2089,20 +2291,22 @@ export class ToolClient {
   }
 
   getToolExportPolicy(
-    request: ToolingGetToolExportPolicyRequest = {}
+    request: ToolingGetToolExportPolicyRequest = {},
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolingGetToolExportPolicyResponse> {
     return this.client.request<ToolingGetToolExportPolicyResponse, ToolingGetToolExportPolicyRequest>(
       TOOLING_METHODS.getToolExportPolicy,
       request,
-      { path: routePath('Tooling', 'GetToolExportPolicy') }
+      { path: routePath('Tooling', 'GetToolExportPolicy'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
   async getToolExportPolicyModel(
     request: ToolingGetToolExportPolicyRequest = {},
-    presentation: { label?: string; stale?: boolean } = {}
+    presentation: { label?: string; stale?: boolean } = {},
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolExportPolicyModel> {
-    const response = await this.getToolExportPolicy(request)
+    const response = await this.getToolExportPolicy(request, options)
     return normalizeToolExportPolicy(response, {
       peerId: request.peer_id ?? null,
       ...(presentation.label === undefined ? {} : { label: presentation.label }),
@@ -2111,66 +2315,76 @@ export class ToolClient {
   }
 
   setToolExportDefault(
-    request: ToolingSetToolExportDefaultRequest
+    request: ToolingSetToolExportDefaultRequest,
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolingSetToolExportDefaultResponse> {
     return this.executeExportMutation(
       TOOLING_METHODS.setToolExportDefault,
       request,
       ['tool-export-policy:default'],
-      'SetToolExportDefault'
+      'SetToolExportDefault',
+      options
     )
   }
 
   upsertToolGroupExportPolicy(
-    request: ToolingUpsertToolGroupExportPolicyRequest
+    request: ToolingUpsertToolGroupExportPolicyRequest,
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolingUpsertToolGroupExportPolicyResponse> {
     const peerScope = request.peer_id ? `:peer:${request.peer_id}` : ''
     return this.executeExportMutation(
       TOOLING_METHODS.upsertToolGroupExportPolicy,
       request,
       [`tool-export-group:${request.share_group_id}${peerScope}`],
-      'UpsertToolGroupExportPolicy'
+      'UpsertToolGroupExportPolicy',
+      options
     )
   }
 
   upsertToolExportOverride(
-    request: ToolingUpsertToolExportOverrideRequest
+    request: ToolingUpsertToolExportOverrideRequest,
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolingUpsertToolExportOverrideResponse> {
     const peerScope = request.peer_id ? `:peer:${request.peer_id}` : ''
     return this.executeExportMutation(
       TOOLING_METHODS.upsertToolExportOverride,
       request,
       [`tool-export:${request.global_tool_id}${peerScope}`],
-      'UpsertToolExportOverride'
+      'UpsertToolExportOverride',
+      options
     )
   }
 
   clearToolExportOverride(
-    request: ToolingClearToolExportOverrideRequest
+    request: ToolingClearToolExportOverrideRequest,
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolingClearToolExportOverrideResponse> {
     const peerScope = request.peer_id ? `:peer:${request.peer_id}` : ''
     return this.executeExportMutation(
       TOOLING_METHODS.clearToolExportOverride,
       request,
       [`tool-export-${request.scope_type}:${request.scope_id}${peerScope}`],
-      'ClearToolExportOverride'
+      'ClearToolExportOverride',
+      options
     )
   }
 
   previewToolExportDecision(
-    request: ToolingPreviewToolExportDecisionRequest
+    request: ToolingPreviewToolExportDecisionRequest,
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolingPreviewToolExportDecisionResponse> {
     return this.client.request<ToolingPreviewToolExportDecisionResponse, ToolingPreviewToolExportDecisionRequest>(
       TOOLING_METHODS.previewToolExportDecision,
       request,
-      { path: routePath('Tooling', 'PreviewToolExportDecision') }
+      { path: routePath('Tooling', 'PreviewToolExportDecision'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
   async previewToolExportDecisionModel(
-    request: ToolingPreviewToolExportDecisionRequest
+    request: ToolingPreviewToolExportDecisionRequest,
+    options: { signal?: AbortSignal } = {}
   ): Promise<ToolExportDecisionModel> {
-    const response = await this.previewToolExportDecision(request)
+    const response = await this.previewToolExportDecision(request, options)
     return normalizeToolExportDecision(response.decision)
   }
 
@@ -2178,40 +2392,44 @@ export class ToolClient {
     methodId: string,
     request: TRequest,
     affectedResources: string[],
-    methodName: string
+    methodName: string,
+    options: { signal?: AbortSignal } = {}
   ): Promise<TResponse> {
+    throwClientAbortIfRequested(options.signal, 'Tool export mutation was cancelled')
     const result = await this.client.admin.execute<TResponse>({
       methodId,
       payload: { ...request },
       reason: request.reason,
       reauthConfirmed: true,
       affectedResources,
-      path: routePath('Tooling', methodName)
+      path: routePath('Tooling', methodName),
+      ...(options.signal ? { signal: options.signal } : {})
     })
+    throwClientAbortIfRequested(options.signal, 'Tool export mutation was cancelled')
     return result.data
   }
 
-  listGrants(request: ToolingListApprovalGrantsRequest = {}): Promise<ToolingListApprovalGrantsResponse> {
+  listGrants(request: ToolingListApprovalGrantsRequest = {}, options: { signal?: AbortSignal } = {}): Promise<ToolingListApprovalGrantsResponse> {
     return this.client.request<ToolingListApprovalGrantsResponse, ToolingListApprovalGrantsRequest>(
       TOOLING_METHODS.listApprovalGrants,
       request,
-      { path: routePath('Tooling', 'ListApprovalGrants') }
+      { path: routePath('Tooling', 'ListApprovalGrants'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  createGrant(request: ToolingCreateApprovalGrantRequest): Promise<ToolingCreateApprovalGrantResponse> {
+  createGrant(request: ToolingCreateApprovalGrantRequest, options: { signal?: AbortSignal } = {}): Promise<ToolingCreateApprovalGrantResponse> {
     return this.client.request<ToolingCreateApprovalGrantResponse, ToolingCreateApprovalGrantRequest>(
       TOOLING_METHODS.createApprovalGrant,
       request,
-      { path: routePath('Tooling', 'CreateApprovalGrant') }
+      { path: routePath('Tooling', 'CreateApprovalGrant'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  revokeGrant(request: ToolingRevokeApprovalGrantRequest): Promise<ToolingRevokeApprovalGrantResponse> {
+  revokeGrant(request: ToolingRevokeApprovalGrantRequest, options: { signal?: AbortSignal } = {}): Promise<ToolingRevokeApprovalGrantResponse> {
     return this.client.request<ToolingRevokeApprovalGrantResponse, ToolingRevokeApprovalGrantRequest>(
       TOOLING_METHODS.revokeApprovalGrant,
       request,
-      { path: routePath('Tooling', 'RevokeApprovalGrant') }
+      { path: routePath('Tooling', 'RevokeApprovalGrant'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
@@ -2223,16 +2441,16 @@ export class ToolClient {
     )
   }
 
-  async listNormalizedGrants(request: ToolingListApprovalGrantsRequest = {}) {
-    const response = await this.listGrants(request)
+  async listNormalizedGrants(request: ToolingListApprovalGrantsRequest = {}, options: { signal?: AbortSignal } = {}) {
+    const response = await this.listGrants(request, options)
     return normalizeToolGrants(response.grants)
   }
 
-  async listPendingApprovals(request: Record<string, unknown> = {}): Promise<ToolPendingApprovalModel[]> {
+  async listPendingApprovals(request: Record<string, unknown> = {}, options: { signal?: AbortSignal } = {}): Promise<ToolPendingApprovalModel[]> {
     const response = await this.client.request<{ approvals?: unknown[]; count?: number; secrets_redacted?: boolean }, Record<string, unknown>>(
       TOOLING_METHODS.listPendingApprovals,
       request,
-      { path: routePath('Tooling', 'ListPendingApprovals') }
+      { path: routePath('Tooling', 'ListPendingApprovals'), ...(options.signal ? { signal: options.signal } : {}) }
     )
     return (response.approvals ?? []).map(normalizeToolingPendingApproval)
   }
@@ -2246,38 +2464,38 @@ export class ToolClient {
     return normalizePendingApprovals(response.approvals)
   }
 
-  async listPolicyAuditEvents(request: Record<string, unknown> = {}): Promise<ToolPolicyAuditEventModel[]> {
+  async listPolicyAuditEvents(request: Record<string, unknown> = {}, options: { signal?: AbortSignal } = {}): Promise<ToolPolicyAuditEventModel[]> {
     const response = await this.client.request<{ events?: unknown[]; total?: number; secrets_redacted?: boolean }, Record<string, unknown>>(
       TOOLING_METHODS.listPolicyAuditEvents,
       request,
-      { path: routePath('Tooling', 'ListPolicyAuditEvents') }
+      { path: routePath('Tooling', 'ListPolicyAuditEvents'), ...(options.signal ? { signal: options.signal } : {}) }
     )
     return (response.events ?? []).map(normalizeToolingAuditEvent)
   }
 
-  async getPolicySummary(): Promise<ToolingPageViewModel['policy']> {
+  async getPolicySummary(options: { signal?: AbortSignal } = {}): Promise<ToolingPageViewModel['policy']> {
     const response = await this.client.request<Record<string, unknown>, Record<string, unknown>>(
       TOOLING_METHODS.getPolicySummary,
       { include_counts: true },
-      { path: routePath('Tooling', 'GetPolicySummary') }
+      { path: routePath('Tooling', 'GetPolicySummary'), ...(options.signal ? { signal: options.signal } : {}) }
     )
     return normalizeToolingPolicySummaryResponse(response)
   }
 
-  async listSources(): Promise<ToolSourceSummaryModel[]> {
+  async listSources(options: { signal?: AbortSignal } = {}): Promise<ToolSourceSummaryModel[]> {
     const response = await this.client.request<{ sources?: unknown[]; secrets_redacted?: boolean }, Record<string, unknown>>(
       TOOLING_METHODS.listToolSources,
       { include_blocked_tools: true, include_counts: true },
-      { path: routePath('Tooling', 'ListToolSources') }
+      { path: routePath('Tooling', 'ListToolSources'), ...(options.signal ? { signal: options.signal } : {}) }
     )
     return (response.sources ?? []).map((source) => normalizeToolingSourceSummary(source, response.secrets_redacted !== false))
   }
 
-  async getSourceDetail(sourceId: string): Promise<ToolSourceDetailModel | null> {
+  async getSourceDetail(sourceId: string, options: { signal?: AbortSignal } = {}): Promise<ToolSourceDetailModel | null> {
     const response = await this.client.request<Record<string, unknown>, Record<string, unknown>>(
       TOOLING_METHODS.getToolSourceDetail,
       { source_id: sourceId, include_tools: true, include_grants: true, include_pending_approvals: true, include_blocked_tools: true },
-      { path: routePath('Tooling', 'GetToolSourceDetail') }
+      { path: routePath('Tooling', 'GetToolSourceDetail'), ...(options.signal ? { signal: options.signal } : {}) }
     )
     if (response.found === false || !response.source) return null
     const source = normalizeToolingSourceSummary(response.source, response.secrets_redacted !== false)
@@ -2329,19 +2547,21 @@ export class ToolClient {
     }
   }
 
-  async getPageView(catalogOverride?: ToolCatalogResponse): Promise<ToolingPageViewModel> {
+  async getPageView(catalogOverride?: ToolCatalogResponse, options: { signal?: AbortSignal } = {}): Promise<ToolingPageViewModel> {
+    throwClientAbortIfRequested(options.signal, 'Tooling page view request was cancelled')
     const [catalogResult, policyResult, grantsResult, pendingResult, auditResult, mcpResult] = await Promise.allSettled([
-      catalogOverride ? Promise.resolve(catalogOverride) : this.listCatalog<ToolCatalogResponse>(),
-      this.getSharingPolicy(),
-      this.listGrants({ include_revoked: true }),
+      catalogOverride ? Promise.resolve(catalogOverride) : this.listCatalog<ToolCatalogResponse>({}, options),
+      this.getSharingPolicy(options),
+      this.listGrants({ include_revoked: true }, options),
       this.client.request<OrchestratorListPendingToolApprovalsResponse, OrchestratorListPendingToolApprovalsRequest>(
         ORCHESTRATOR_METHODS.listPendingToolApprovals,
         {},
-        { path: routePath('Orchestrator', 'ListPendingToolApprovals') }
+        { path: routePath('Orchestrator', 'ListPendingToolApprovals'), ...(options.signal ? { signal: options.signal } : {}) }
       ),
-      this.client.authApi.auditLog({ limit: 100 }),
-      this.getMcpStatus()
+      this.client.authApi.auditLog({ limit: 100 }, options),
+      this.getMcpStatus(options)
     ])
+    throwClientAbortIfRequested(options.signal, 'Tooling page view request was cancelled')
     const failures = settledFailureAuditEvents([
       ['Tooling.GetToolCatalog', catalogResult],
       ['Tooling.GetSharingPolicy', policyResult],
@@ -2373,6 +2593,7 @@ export class ToolClient {
     reason?: string | null
     actorPrincipalId?: string | null
     correlationId?: string | null
+    signal?: AbortSignal | undefined
   }): Promise<unknown> {
     return this.client.request<unknown, Record<string, unknown>>(TOOLING_METHODS.setPolicyMode, {
       policy_mode: input.policyMode,
@@ -2380,7 +2601,7 @@ export class ToolClient {
       reason: input.reason ?? `Updated Tooling policy mode to ${input.policyMode}`,
       confirmation_text: input.confirmationText ?? null,
       correlation_id: input.correlationId ?? null
-    }, { path: routePath('Tooling', 'SetPolicyMode') })
+    }, { path: routePath('Tooling', 'SetPolicyMode'), ...(input.signal ? { signal: input.signal } : {}) })
   }
 
   async upsertSourcePolicy(input: {
@@ -2393,6 +2614,7 @@ export class ToolClient {
     reason?: string | null
     actorPrincipalId?: string | null
     correlationId?: string | null
+    signal?: AbortSignal | undefined
   }): Promise<unknown> {
     // Mutating policy write: goes through the AdminAction draft/confirm ceremony
     // like Config.Set, since the gateway fails these closed with 428 otherwise.
@@ -2412,7 +2634,8 @@ export class ToolClient {
       reason,
       reauthConfirmed: true,
       affectedResources: [`tool-source:${input.sourceId}`],
-      path: routePath('Tooling', 'UpsertSourcePolicy')
+      path: routePath('Tooling', 'UpsertSourcePolicy'),
+      ...(input.signal ? { signal: input.signal } : {})
     })
     return result.data
   }
@@ -2422,6 +2645,7 @@ export class ToolClient {
     reason?: string | null
     actorPrincipalId?: string | null
     correlationId?: string | null
+    signal?: AbortSignal | undefined
   }): Promise<unknown> {
     const reason = input.reason ?? `Cleared source policy for ${input.sourceId} to inherit`
     const result = await this.client.admin.execute<unknown>({
@@ -2435,7 +2659,8 @@ export class ToolClient {
       reason,
       reauthConfirmed: true,
       affectedResources: [`tool-source:${input.sourceId}`],
-      path: routePath('Tooling', 'ClearSourcePolicy')
+      path: routePath('Tooling', 'ClearSourcePolicy'),
+      ...(input.signal ? { signal: input.signal } : {})
     })
     return result.data
   }
@@ -2451,6 +2676,7 @@ export class ToolClient {
     reason?: string | null
     actorPrincipalId?: string | null
     correlationId?: string | null
+    signal?: AbortSignal | undefined
   }): Promise<unknown> {
     // Mutating policy write: AdminAction ceremony required (see upsertSourcePolicy).
     const reason = input.reason ?? `Updated tool override for ${input.toolId}`
@@ -2471,7 +2697,8 @@ export class ToolClient {
       reason,
       reauthConfirmed: true,
       affectedResources: [`tool:${input.toolId}`],
-      path: routePath('Tooling', 'UpsertToolPolicyOverride')
+      path: routePath('Tooling', 'UpsertToolPolicyOverride'),
+      ...(input.signal ? { signal: input.signal } : {})
     })
     return result.data
   }
@@ -2482,6 +2709,7 @@ export class ToolClient {
     reason?: string | null
     actorPrincipalId?: string | null
     correlationId?: string | null
+    signal?: AbortSignal | undefined
   }): Promise<unknown> {
     const identity = input.toolId ?? input.localToolName ?? 'unknown-tool'
     const reason = input.reason ?? `Cleared tool override for ${identity} to inherit`
@@ -2497,7 +2725,8 @@ export class ToolClient {
       reason,
       reauthConfirmed: true,
       affectedResources: [`tool:${identity}`],
-      path: routePath('Tooling', 'ClearToolPolicyOverride')
+      path: routePath('Tooling', 'ClearToolPolicyOverride'),
+      ...(input.signal ? { signal: input.signal } : {})
     })
     return result.data
   }
@@ -2566,35 +2795,39 @@ export class ToolClient {
     }
   }
 
-  submitApprovalDecision(input: ToolApprovalDecisionInput): Promise<ToolApprovalDecisionResult> {
-    return submitToolApprovalDecision(this.client, input)
+  submitApprovalDecision(input: ToolApprovalDecisionInput, options: { signal?: AbortSignal } = {}): Promise<ToolApprovalDecisionResult> {
+    return submitToolApprovalDecision(this.client, options.signal ? { ...input, signal: options.signal } : input)
   }
 
-  submitDenialDecision(input: ToolApprovalDenialInput): Promise<ToolApprovalDecisionResult> {
-    return submitToolDenialDecision(this.client, input)
+  submitDenialDecision(input: ToolApprovalDenialInput, options: { signal?: AbortSignal } = {}): Promise<ToolApprovalDecisionResult> {
+    return submitToolDenialDecision(this.client, options.signal ? { ...input, signal: options.signal } : input)
   }
 
-  prepareExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
+  prepareExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload, options: { signal?: AbortSignal } = {}): Promise<TResponse> {
     return this.client.request<TResponse, TPayload>(TOOLING_METHODS.prepareExecution, payload, {
-      path: routePath('Tooling', 'PrepareExecution')
+      path: routePath('Tooling', 'PrepareExecution'),
+      ...(options.signal ? { signal: options.signal } : {})
     })
   }
 
-  requestApproval<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
+  requestApproval<TResponse = unknown, TPayload = unknown>(payload: TPayload, options: { signal?: AbortSignal } = {}): Promise<TResponse> {
     return this.client.request<TResponse, TPayload>(TOOLING_METHODS.requestApproval, payload, {
-      path: routePath('Tooling', 'RequestApproval')
+      path: routePath('Tooling', 'RequestApproval'),
+      ...(options.signal ? { signal: options.signal } : {})
     })
   }
 
-  confirmExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
+  confirmExecution<TResponse = unknown, TPayload = unknown>(payload: TPayload, options: { signal?: AbortSignal } = {}): Promise<TResponse> {
     return this.client.request<TResponse, TPayload>(TOOLING_METHODS.confirmExecution, payload, {
-      path: routePath('Tooling', 'ConfirmExecution')
+      path: routePath('Tooling', 'ConfirmExecution'),
+      ...(options.signal ? { signal: options.signal } : {})
     })
   }
 
-  execute<TResponse = unknown, TPayload = unknown>(payload: TPayload): Promise<TResponse> {
+  execute<TResponse = unknown, TPayload = unknown>(payload: TPayload, options: { signal?: AbortSignal } = {}): Promise<TResponse> {
     return this.client.request<TResponse, TPayload>(TOOLING_METHODS.executeTool, payload, {
-      path: routePath('Tooling', 'ExecuteTool')
+      path: routePath('Tooling', 'ExecuteTool'),
+      ...(options.signal ? { signal: options.signal } : {})
     })
   }
 }
@@ -2893,6 +3126,13 @@ function booleanValue(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null
 }
 
+
+function throwClientAbortIfRequested(signal: AbortSignal | undefined, message: string): void {
+  if (signal?.aborted) {
+    throw new DOMException(message, 'AbortError')
+  }
+}
+
 function settledValue<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === 'fulfilled' ? result.value : null
 }
@@ -2952,12 +3192,18 @@ function serializeModelRuntimeCatalogRequest(
 export class ModelRuntimeClient {
   constructor(private readonly client: AuroraClient) {}
 
-  listCatalog(request: ModelRuntimeCatalogRequest = {}): Promise<ModelRuntimeCatalogResponse> {
+  listCatalog(
+    request: ModelRuntimeCatalogRequest = {},
+    options: { signal?: AbortSignal } = {}
+  ): Promise<ModelRuntimeCatalogResponse> {
     const payload = serializeModelRuntimeCatalogRequest(request)
     return this.client.request<ModelRuntimeCatalogResponse, Record<string, unknown>>(
       ORCHESTRATOR_MODEL_METHODS.getCatalog,
       payload,
-      { path: routePath('Orchestrator', 'GetModelCatalog') }
+      {
+        path: routePath('Orchestrator', 'GetModelCatalog'),
+        ...(options.signal ? { signal: options.signal } : {})
+      }
     )
   }
 
@@ -3008,12 +3254,13 @@ export class DiagnosticsClient {
   constructor(private readonly client: AuroraClient) {}
 
   getSupportBundle(
-    request: GatewaySupportBundleRequest = {}
+    request: GatewaySupportBundleRequest = {},
+    options: { signal?: AbortSignal } = {}
   ): Promise<AuroraResponse<GatewaySupportBundleResponse>> {
     return this.client.requestResult<GatewaySupportBundleResponse, GatewaySupportBundleRequest>(
       GATEWAY_METHODS.getSupportBundle,
       request,
-      { path: routePath('Gateway', 'GetSupportBundle') }
+      { path: routePath('Gateway', 'GetSupportBundle'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 

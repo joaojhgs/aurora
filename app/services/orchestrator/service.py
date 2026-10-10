@@ -87,6 +87,8 @@ from app.shared.contracts.models.orchestrator import (
 from app.shared.contracts.models.stt import STTMethods
 from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
 from app.shared.contracts.models.tts import (
+    TTSGetCapabilitiesRequest,
+    TTSGetCapabilitiesResponse,
     TTSMethods,
     TTSRequest,
     TTSStopRequest,
@@ -249,11 +251,14 @@ class OrchestratorService(BaseService):
         self._model_catalog_cache: dict[str, dict[str, Any]] = {}
         self._generation_tasks: dict[asyncio.Task, str | None] = {}
         self._generation_lock = asyncio.Lock()
+        self._stopping = False
         self._ui_automatic_tts_readback = False
 
     async def on_start(self) -> None:
         """Start the orchestrator service and subscribe to inputs."""
         log_info("Starting Orchestrator service...")
+        async with self._generation_lock:
+            self._stopping = False
         await self._load_ui_assistant_config()
 
         # Initialize graph orchestrator with bus dependency injection
@@ -272,8 +277,14 @@ class OrchestratorService(BaseService):
     async def on_stop(self) -> None:
         """Stop the orchestrator service."""
         log_info("Stopping Orchestrator service...")
+        async with self._generation_lock:
+            self._stopping = True
         self.bus.unsubscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
         await self._cancel_generation_tasks(session_id=None)
+        chatbot_module = importlib.import_module("app.services.orchestrator.agents.chatbot")
+        detached_llm = await chatbot_module.fence_llm()
+        if detached_llm is not None:
+            await chatbot_module.dispose_llm(detached_llm)
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -648,18 +659,27 @@ class OrchestratorService(BaseService):
         envelope: Envelope | None = None,
     ) -> OrchestratorInferChatResponse:
         """Run a local LLM inference for mesh callers without executing tools."""
-        explicit_selection = bool(data.provider_id or data.model_id)
-        self._authorize_direct_inference_request(
-            data, envelope, explicit_selection=explicit_selection
-        )
-        data = await self._validated_inference_request(
-            data,
-            include_cloud_models=self._can_expand_cloud_catalog(
-                envelope, explicit_selection=explicit_selection
-            ),
-        )
-        response_message = await self._invoke_inference_llm(data)
-        return self._infer_response_from_message(data, response_message)
+        current_task = asyncio.current_task()
+        if current_task is not None and not await self._track_generation_task(
+            current_task, data.session_id
+        ):
+            raise RuntimeError("orchestrator is stopping")
+        try:
+            explicit_selection = bool(data.provider_id or data.model_id)
+            self._authorize_direct_inference_request(
+                data, envelope, explicit_selection=explicit_selection
+            )
+            data = await self._validated_inference_request(
+                data,
+                include_cloud_models=self._can_expand_cloud_catalog(
+                    envelope, explicit_selection=explicit_selection
+                ),
+            )
+            response_message = await self._invoke_inference_llm(data)
+            return self._infer_response_from_message(data, response_message)
+        finally:
+            if current_task is not None:
+                await self._untrack_generation_task(current_task)
 
     @method_contract(
         method_id=OrchestratorMethods.STREAM_INFER_CHAT,
@@ -677,6 +697,7 @@ class OrchestratorService(BaseService):
         envelope: Envelope | None = None,
     ) -> AsyncIterator[OrchestratorInferChatChunk]:
         """Stream local LLM chunks for mesh callers without executing tools."""
+        await self._ensure_accepting_inference()
         explicit_selection = bool(data.provider_id or data.model_id)
         self._authorize_direct_inference_request(
             data, envelope, explicit_selection=explicit_selection
@@ -688,6 +709,11 @@ class OrchestratorService(BaseService):
             ),
         )
         return self._stream_inference_llm(data)
+
+    async def _ensure_accepting_inference(self) -> None:
+        async with self._generation_lock:
+            if self._stopping:
+                raise RuntimeError("orchestrator is stopping")
 
     @method_contract(
         method_id=OrchestratorMethods.INGEST_CONTEXT,
@@ -1383,8 +1409,10 @@ class OrchestratorService(BaseService):
             Response text if return_response is True, else None
         """
         current_task = asyncio.current_task()
-        if current_task is not None:
-            await self._track_generation_task(current_task, session_id)
+        if current_task is not None and not await self._track_generation_task(
+            current_task, session_id
+        ):
+            raise RuntimeError("orchestrator is stopping")
         metadata = response_metadata if response_metadata is not None else {}
         metadata.setdefault("source", source)
         metadata.setdefault("stream", stream)
@@ -1434,8 +1462,10 @@ class OrchestratorService(BaseService):
                 caller_peer_id=caller_peer_id,
                 caller_identity_source=caller_identity_source,
             )
-            if current_task is not None:
-                await self._track_generation_task(current_task, session_id)
+            if current_task is not None and not await self._track_generation_task(
+                current_task, session_id
+            ):
+                raise RuntimeError("orchestrator is stopping")
             if session_id:
                 metadata["session_id"] = session_id
             metadata.update(await self._assistant_response_metadata())
@@ -1686,7 +1716,15 @@ class OrchestratorService(BaseService):
             source in {"ui", "external"}
             and (self._ui_automatic_tts_readback or client_tts_playback)
         )
-        if should_stream_tts and get_contract(TTSMethods.STREAM_START) is not None:
+        if (
+            should_stream_tts
+            and get_contract(TTSMethods.STREAM_START) is not None
+            and await self._tts_stream_is_ready(
+                correlation_id=correlation_id,
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
+            )
+        ):
             tts_stream_id = f"tts-{request_id or correlation_id or uuid4().hex}"
             await self.bus.publish(
                 TTSMethods.STREAM_START,
@@ -1705,6 +1743,9 @@ class OrchestratorService(BaseService):
             )
             metadata["tts_status"] = "streaming"
             metadata["tts_stream_id"] = tts_stream_id
+        elif should_stream_tts:
+            metadata["tts_status"] = "unavailable"
+            metadata["tts_reason"] = "TTS streaming provider is not ready."
 
         async for event in self.orchestrator.stream_graph_events(
             text,
@@ -1876,6 +1917,44 @@ class OrchestratorService(BaseService):
             next_sequence += 1
         return remainder, next_sequence
 
+    async def _tts_stream_is_ready(
+        self,
+        *,
+        correlation_id: str | None,
+        principal_id: str | None,
+        caller_peer_id: str | None,
+    ) -> bool:
+        """Check the selected TTS runtime before publishing stream commands."""
+        if get_contract(TTSMethods.GET_CAPABILITIES) is None:
+            return False
+        try:
+            result = await self.bus.request(
+                TTSMethods.GET_CAPABILITIES,
+                TTSGetCapabilitiesRequest(correlation_id=correlation_id),
+                timeout=5.0,
+                priority=get_interactive_priority(),
+                origin="internal",
+                principal_id=principal_id,
+                caller_peer_id=caller_peer_id,
+                correlation_id=correlation_id,
+            )
+            if not result.ok:
+                log_info("TTS capability request was rejected; automatic speech skipped")
+                return False
+            try:
+                capabilities_response = TTSGetCapabilitiesResponse.model_validate(result.data)
+            except Exception:
+                log_info(
+                    "TTS capability response was malformed; automatic speech skipped (type=%s)",
+                    type(result.data).__name__,
+                )
+                return False
+            capabilities = capabilities_response.capabilities
+            return bool(capabilities.ready and capabilities.streaming)
+        except Exception:
+            log_info("TTS capability lookup failed; automatic speech skipped")
+            return False
+
     async def _publish_assistant_stream_event(
         self,
         event: AssistantStreamEvent,
@@ -1948,6 +2027,8 @@ class OrchestratorService(BaseService):
         )
         if skip_tts:
             return
+        if metadata.get("tts_status") in {"unavailable", "skipped"}:
+            return
         if not should_request_tts:
             metadata["tts_status"] = "skipped"
             metadata["tts_reason"] = (
@@ -2001,9 +2082,12 @@ class OrchestratorService(BaseService):
         self,
         task: asyncio.Task,
         session_id: str | None,
-    ) -> None:
+    ) -> bool:
         async with self._generation_lock:
+            if self._stopping:
+                return False
             self._generation_tasks[task] = session_id
+            return True
 
     async def _untrack_generation_task(self, task: asyncio.Task) -> None:
         async with self._generation_lock:
@@ -2025,6 +2109,9 @@ class OrchestratorService(BaseService):
 
         if candidates:
             await asyncio.gather(*candidates, return_exceptions=True)
+            async with self._generation_lock:
+                for task in candidates:
+                    self._generation_tasks.pop(task, None)
         return len(candidates)
 
     async def _resolve_inference_override(
@@ -2475,10 +2562,29 @@ class OrchestratorService(BaseService):
                 return await maybe_response
             return maybe_response
         if hasattr(llm, "invoke"):
-            return await asyncio.to_thread(llm.invoke, messages)
+            chatbot_module = importlib.import_module("app.services.orchestrator.agents.chatbot")
+            return await chatbot_module.run_native(llm, llm.invoke, messages)
         raise RuntimeError("configured LLM does not support invoke")
 
     async def _stream_inference_llm(
+        self, data: OrchestratorInferChatRequest
+    ) -> AsyncIterator[OrchestratorInferChatChunk]:
+        current_task = asyncio.current_task()
+        if current_task is not None and not await self._track_generation_task(
+            current_task, data.session_id
+        ):
+            raise RuntimeError("orchestrator is stopping")
+        try:
+            async for chunk in self._stream_inference_llm_impl(data):
+                async with self._generation_lock:
+                    if self._stopping:
+                        raise asyncio.CancelledError
+                yield chunk
+        finally:
+            if current_task is not None:
+                await self._untrack_generation_task(current_task)
+
+    async def _stream_inference_llm_impl(
         self, data: OrchestratorInferChatRequest
     ) -> AsyncIterator[OrchestratorInferChatChunk]:
         """Stream the configured chat model and normalize chunks."""

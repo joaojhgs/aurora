@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Database, Search, Trash2 } from 'lucide-react'
 import type {
   AuroraClient,
@@ -14,9 +15,11 @@ import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/
 import type { RouteAvailability } from './shell-data'
 import { PrivacyBadge, presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
-import { PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice } from './state-surface'
 import { Button, Card, MetaGrid } from './primitives'
 import { LocalDataMemoryPanel } from './local-data/storage-health-view'
+import { AURORA_QUERY_STALE_TIMES, AuroraQueryProvider, useAuroraQueryScope, useAuroraQueryScopeKey } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 import { Input } from '#components/ui/input'
 import { Badge } from '#components/ui/badge'
 import { cn } from '#lib/utils'
@@ -80,6 +83,7 @@ export interface BuildMemoryViewModelOptions {
   namespace?: string | null
   query?: string
   limit?: number
+  signal?: AbortSignal | undefined
 }
 
 export async function buildMemoryViewModel(
@@ -89,8 +93,8 @@ export async function buildMemoryViewModel(
 ): Promise<MemoryViewModel> {
   const query = options.query?.trim() ?? ''
   const [messagesResult, namespacesResult] = await Promise.all([
-    client.memory.listMessages({ limit: 8 }),
-    client.memory.listNamespaces({ include_remote: true, include_unavailable: true })
+    client.memory.listMessages({ limit: 8 }, requestSignalOptions(options.signal)),
+    client.memory.listNamespaces({ include_remote: true, include_unavailable: true }, requestSignalOptions(options.signal))
   ])
 
   if (!messagesResult.ok) return errorModel(route, query, memoryErrorMessage(messagesResult.error))
@@ -118,7 +122,7 @@ export async function buildMemoryViewModel(
             resource_namespace: selectedNamespace.info.namespace
           }
         : null
-    })
+    }, requestSignalOptions(options.signal))
     if (result.ok) {
       searchDecision = result.data.decision
       searchItems = result.data.items
@@ -166,32 +170,110 @@ export function emptyMemoryViewModel(route: RouteAvailability, query = ''): Memo
   }
 }
 
-export function MemoryView({ client, route, initialModel, initialQuery = '' }: MemoryViewProps) {
-  const [model, setModel] = useState<MemoryViewModel>(() => initialModel ?? emptyMemoryViewModel(route, initialQuery))
-  const [query, setQuery] = useState(initialModel?.query ?? initialQuery)
-  const [namespace, setNamespace] = useState(initialModel?.selectedNamespace?.info.namespace ?? '')
-  const canSearch = model.actions.search.supported && !model.actions.search.disabled
+export function MemoryView(props: MemoryViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <MemoryQueryView {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <MemoryQueryView {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function MemoryQueryView({ client, route, initialModel, initialQuery = '' }: MemoryViewProps) {
+  const queryKeys = useAuroraQueryKeys()
+  const queryScopeKey = useAuroraQueryScopeKey()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const routeKey = memoryRouteKey(route)
+  const stableRoute = useMemo(() => route, [routeKey])
+  const routeReadable = routeAllowsServerRead(stableRoute)
+  const initialSearchQuery = initialModel?.query ?? initialQuery
+  const initialSearchNamespace = initialModel?.selectedNamespace?.info.namespace ?? null
+  const localScopeKey = memoryLocalScopeKey(queryScopeKey, routeKey)
+  const currentScopeKey = JSON.stringify(queryScopeKey)
+  const initialScopeKey = useRef(currentScopeKey)
+  const [queryState, setQueryState] = useState(() => ({ localScopeKey, value: initialSearchQuery }))
+  const [namespaceState, setNamespaceState] = useState(() => ({ localScopeKey, value: initialSearchNamespace ?? '' }))
+  const [submittedSearchState, setSubmittedSearchState] = useState(() => ({ localScopeKey, namespace: initialSearchNamespace, query: initialSearchQuery }))
+  const query = queryState.localScopeKey === localScopeKey ? queryState.value : initialSearchQuery
+  const namespace = namespaceState.localScopeKey === localScopeKey ? namespaceState.value : initialSearchNamespace ?? ''
+  const submittedSearch = submittedSearchState.localScopeKey === localScopeKey
+    ? submittedSearchState
+    : { localScopeKey, namespace: initialSearchNamespace, query: initialSearchQuery }
+  const pendingModel = routeReadable
+    ? emptyMemoryViewModel(stableRoute, submittedSearch.query)
+    : unavailableMemoryViewModel(stableRoute, submittedSearch.query)
+  const canSeedInitialModel = Boolean(
+    initialModel
+    && initialModel.loadState !== 'loading'
+    && routeReadable
+    && currentScopeKey === initialScopeKey.current
+    && memoryRouteKey(initialModel.route) === routeKey
+    && initialModel.query === submittedSearch.query
+    && (initialModel.selectedNamespace?.info.namespace ?? null) === submittedSearch.namespace
+  )
+  const memoryQuery = useQuery({
+    queryKey: queryKeys.admin('memory', { routeKey, namespace: submittedSearch.namespace, query: submittedSearch.query.trim() }),
+    queryFn: ({ signal }) => buildMemoryViewModel(client, stableRoute, {
+      namespace: submittedSearch.namespace,
+      query: submittedSearch.query,
+      signal
+    }),
+    enabled: routeReadable,
+    placeholderData: pendingModel,
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval,
+    ...(canSeedInitialModel ? { initialData: initialModel } : {})
+  })
+  const model = memoryQuery.data ?? pendingModel
 
   useEffect(() => {
-    if (initialModel) return
-    void refresh({ namespace: null, query: initialQuery })
-  }, [initialModel, initialQuery, route])
+    setNamespaceState({ localScopeKey, value: model.selectedNamespace?.info.namespace ?? '' })
+  }, [localScopeKey, model.selectedNamespace?.info.namespace])
 
-  async function refresh(options: BuildMemoryViewModelOptions = {}) {
-    setModel((current) => ({ ...current, loadState: 'loading' }))
-    const next = await buildMemoryViewModel(client, route, {
-      namespace: options.namespace ?? (namespace || null),
-      query: options.query ?? query
-    })
-    setModel(next)
-    setNamespace(next.selectedNamespace?.info.namespace ?? '')
-    setQuery(next.query)
+  function onSubmitSearch(next: { namespace: string; query: string }) {
+    setSubmittedSearchState({ localScopeKey, namespace: next.namespace || null, query: next.query })
   }
+
+  function onSelectNamespace(candidate: MemoryNamespaceView) {
+    setNamespaceState({ localScopeKey, value: candidate.info.namespace })
+    setSubmittedSearchState({ localScopeKey, namespace: candidate.info.namespace, query })
+  }
+
+  return (
+    <MemoryViewContent
+      model={model}
+      query={query}
+      namespace={namespace}
+      onQueryChange={(value) => setQueryState({ localScopeKey, value })}
+      onSubmitSearch={onSubmitSearch}
+      onSelectNamespace={onSelectNamespace}
+    />
+  )
+}
+
+function MemoryViewContent({
+  model,
+  query,
+  namespace,
+  onQueryChange,
+  onSubmitSearch,
+  onSelectNamespace,
+}: {
+  model: MemoryViewModel
+  query: string
+  namespace: string
+  onQueryChange: (value: string) => void
+  onSubmitSearch: (next: { namespace: string; query: string }) => void
+  onSelectNamespace: (candidate: MemoryNamespaceView) => void
+}) {
+  const selectedNamespace = namespace || model.selectedNamespace?.info.namespace || ''
+  const canSearch = model.actions.search.supported && !model.actions.search.disabled
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!canSearch) return
-    void refresh({ namespace, query })
+    onSubmitSearch({ namespace: selectedNamespace, query })
   }
 
   return (
@@ -224,10 +306,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
                 type="button"
                 role="radio"
                 aria-checked={active}
-                onClick={() => {
-                  setNamespace(candidate.info.namespace)
-                  void refresh({ namespace: candidate.info.namespace, query })
-                }}
+                onClick={() => onSelectNamespace(candidate)}
                 className={cn(
                   'flex flex-col gap-3 rounded-xl border bg-card p-4 text-left ring-1 ring-foreground/10 transition-colors',
                   active ? 'border-primary' : 'border-border hover:border-foreground/30'
@@ -256,7 +335,7 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
           <Input
             id="memory-query"
             value={query}
-            onChange={(event) => setQuery(event.currentTarget.value)}
+            onChange={(event) => onQueryChange(event.currentTarget.value)}
             disabled={!canSearch || model.loadState === 'loading'}
             aria-label="Search conversations"
             placeholder="Search conversations…"
@@ -268,14 +347,14 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
         </form>
 
         {model.error ? (
-          <p className="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
-            {productMemoryErrorCopy(model.error)}
-          </p>
+          <div className="border-b border-border p-4">
+            <RouteStateNotice state="error" title="Memory needs attention" message={productMemoryErrorCopy(model.error)} />
+          </div>
         ) : null}
         {model.denialReason ? (
-          <p className="border-b border-border px-4 py-3 text-sm text-destructive" role="alert">
-            {productMemoryErrorCopy(model.denialReason)}
-          </p>
+          <div className="border-b border-border p-4">
+            <RouteStateNotice state="permission" title="Memory permission needed" message={productMemoryErrorCopy(model.denialReason)} />
+          </div>
         ) : null}
 
         {model.searchItems.length > 0 ? (
@@ -289,9 +368,8 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
             ))}
           </div>
         ) : model.conversations.length === 0 ? (
-          <div className="flex flex-col gap-1 px-4 py-6 text-sm">
-            <strong className="font-medium">No conversations yet</strong>
-            <span className="text-muted-foreground">Saved conversations will appear here.</span>
+          <div className="px-4 py-6">
+            <EmptyState title="No conversations yet" message="Saved conversations will appear here." />
           </div>
         ) : (
           <div className="flex flex-col divide-y divide-border">
@@ -316,6 +394,34 @@ export function MemoryView({ client, route, initialModel, initialQuery = '' }: M
       <p className="text-xs text-muted-foreground">Deleting a memory previews affected saved records before removal.</p>
     </section>
   )
+}
+
+function requestSignalOptions(signal: AbortSignal | undefined): { signal?: AbortSignal } {
+  return signal ? { signal } : {}
+}
+
+function routeAllowsServerRead(route: RouteAvailability): boolean {
+  return !route.disabled && route.state !== 'denied' && route.state !== 'privacy-blocked'
+}
+
+function unavailableMemoryViewModel(route: RouteAvailability, query = ''): MemoryViewModel {
+  return {
+    ...emptyMemoryViewModel(route, query),
+    loadState: 'ready'
+  }
+}
+
+function memoryLocalScopeKey(queryScopeKey: readonly string[], routeKey: string): string {
+  return `${queryScopeKey.join('|')}::${routeKey}`
+}
+
+function memoryRouteKey(route: RouteAvailability): string {
+  return [
+    route.item.id,
+    route.state,
+    route.disabled ? 'disabled' : 'enabled',
+    route.requiresAdminAction ? 'admin' : 'user'
+  ].join('|')
 }
 
 function MemoryResultCard({ item, namespace }: { item: DBRAGProvenanceItem; namespace: MemoryNamespaceView | null }) {

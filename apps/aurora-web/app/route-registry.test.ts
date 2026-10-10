@@ -1,7 +1,14 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { auroraEmbeddedNavItems, auroraNavSections } from '@aurora/ui'
+import {
+  allAuroraRouteNavItems,
+  auroraEmbeddedNavItems,
+  auroraFeatureDefinitions,
+  auroraNavSections,
+  navItemSnapshot,
+  type AuroraFeatureDefinition,
+} from '@aurora/ui'
 import { getProductionRouteOracle } from '@aurora/ui/testing'
 import { describe, expect, it } from 'vitest'
 import {
@@ -9,6 +16,7 @@ import {
   auroraWebRouteRegistry,
   auroraWebRouteRegistryHrefs,
   auroraWebRouteRegistryRouteIds,
+  projectAuroraWebRouteRegistry,
 } from './route-registry'
 
 const appDir = dirname(fileURLToPath(import.meta.url))
@@ -25,6 +33,39 @@ const PLACEHOLDER_COPY_MARKERS = [
   'debug-dashboard',
   'route is unregistered',
 ] as const
+
+
+function dummyWebFeatureDefinition(options: { webHidden?: boolean } = {}): AuroraFeatureDefinition {
+  return {
+    id: 'dummy-route',
+    nav: {
+      section: 'configure',
+      label: 'Dummy route',
+      href: '/dummy-route',
+      icon: auroraFeatureDefinitions[0].nav.icon,
+      mobileLabel: 'Dummy',
+      adminGated: false,
+    },
+    capabilityFeatureId: 'method:Dummy.Open',
+    routePolicy: {
+      capabilityModule: 'Dummy',
+      capabilityMethod: 'Open',
+      methodType: 'use',
+      privacyClass: 'personal',
+      fallbackState: 'unsupported',
+      expectedTask: 'service contract',
+    },
+    productCopy: {
+      title: 'Dummy route',
+      description: 'This feature is available through Aurora.',
+    },
+    component: {
+      exportName: 'DummyRoute',
+      load: async () => ({ DummyRoute: () => null }),
+    },
+    ...(options.webHidden === undefined ? {} : { hostHints: { webHidden: options.webHidden } }),
+  }
+}
 
 const WEB_ROUTE_PRODUCTION_MOUNTS: Record<string, readonly string[]> = {
   assistant: ['AssistantClientPage'],
@@ -63,19 +104,8 @@ function productionMountSourceForRoute(route: { id: string; href: string }): str
   return `${pageSource}\n${readFileSync(join(appDir, 'diagnostics', 'diagnostics-client.tsx'), 'utf8')}`
 }
 
-function tauriRouteIdsFromSource(): string[] {
-  const source = readFileSync(join(repoRoot, 'apps/aurora-tauri/src/tauri-app.tsx'), 'utf8')
-  const tupleIds = (name: string): string[] => {
-    const match = source.match(new RegExp(`const ${name} = \\[([\\s\\S]*?)\\] as const`))
-    if (!match) return []
-    return [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((candidate) => candidate[1])
-  }
-  const routeIds = [...tupleIds('primaryTauriRouteIds'), ...tupleIds('embeddedTauriRouteIds')]
-  if (routeIds.length > 0) return routeIds
-
-  const match = source.match(/const tauriRouteIds = \[([\s\S]*?)\] as const/)
-  if (!match) throw new Error('Unable to locate tauri route id tuples in apps/aurora-tauri/src/tauri-app.tsx')
-  return [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map((candidate) => candidate[1])
+function tauriRouteProjectionSource(): string {
+  return readFileSync(join(repoRoot, 'apps/aurora-tauri/src/tauri-app.tsx'), 'utf8')
 }
 
 describe('Aurora web route registry', () => {
@@ -85,10 +115,17 @@ describe('Aurora web route registry', () => {
     const expectedHrefs = navItems.filter((item) => !hidden.has(item.id)).map((item) => item.href)
 
     expect(auroraWebHiddenRouteIds).toEqual([])
+    expect(auroraWebRouteRegistry.map((route) => navItemSnapshot(route.item))).toEqual(
+      allAuroraRouteNavItems.map(navItemSnapshot),
+    )
     expect(auroraWebRouteRegistryRouteIds).toEqual(expectedRouteIds)
     expect(auroraWebRouteRegistryHrefs).toEqual(expectedHrefs)
-    expect(new Set(tauriRouteIdsFromSource())).toEqual(new Set(navItems.map((item) => item.id)))
-    expect(new Set(auroraWebRouteRegistryRouteIds)).toEqual(new Set(tauriRouteIdsFromSource()))
+    const tauriSource = tauriRouteProjectionSource()
+    expect(tauriSource).toContain('projectTauriRouteDefinitions(')
+    expect(tauriSource).toContain('auroraRoutedFeatureDefinitions')
+    expect(tauriSource).not.toContain('const primaryTauriRouteIds = [')
+    expect(tauriSource).not.toContain('const embeddedTauriRouteIds = [')
+    expect(new Set(auroraWebRouteRegistryRouteIds)).toEqual(new Set(navItems.map((item) => item.id)))
   })
 
   it('has a Next page file for every visible shared nav route', () => {
@@ -97,6 +134,42 @@ describe('Aurora web route registry', () => {
     }
   })
 
+  it('adds, hides, and removes web routes from injected manifest entries without a manual route list', async () => {
+    const dummy = dummyWebFeatureDefinition()
+    const withDummy = projectAuroraWebRouteRegistry([...auroraFeatureDefinitions, dummy])
+    const hiddenDummy = projectAuroraWebRouteRegistry([
+      ...auroraFeatureDefinitions,
+      dummyWebFeatureDefinition({ webHidden: true }),
+    ])
+    const withoutDummy = projectAuroraWebRouteRegistry(auroraFeatureDefinitions)
+    const dummyRoute = withDummy.routes.find((route) => route.id === 'dummy-route')
+
+    expect(withDummy.routeIds).toContain('dummy-route')
+    expect(withDummy.hrefs).toContain('/dummy-route')
+    expect(dummyRoute).toMatchObject({
+      id: 'dummy-route',
+      href: '/dummy-route',
+      item: {
+        id: 'dummy-route',
+        label: 'Dummy route',
+        capabilityFeatureId: 'method:Dummy.Open',
+        capabilityModule: 'Dummy',
+        capabilityMethod: 'Open',
+      },
+      component: { exportName: 'DummyRoute' },
+    })
+    expect(withDummy.routeById.get('dummy-route')).toBe(dummyRoute?.item)
+    expect(dummyRoute?.component?.load).toBeDefined()
+    await expect(dummyRoute!.component!.load()).resolves.toHaveProperty('DummyRoute')
+
+    expect(hiddenDummy.hiddenRouteIds).toContain('dummy-route')
+    expect(hiddenDummy.routeIds).not.toContain('dummy-route')
+    expect(hiddenDummy.routeById.has('dummy-route')).toBe(false)
+
+    expect(withoutDummy.routeIds).not.toContain('dummy-route')
+    expect(withoutDummy.hrefs).not.toContain('/dummy-route')
+    expect(withoutDummy.routeById.has('dummy-route')).toBe(false)
+  })
 
   it('source-crawls all 23 web routes with production mounts and route oracle evidence', () => {
     expect(auroraWebRouteRegistry).toHaveLength(23)

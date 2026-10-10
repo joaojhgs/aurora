@@ -18,7 +18,7 @@ import {
   type PermissionPatchRequest,
   type PrincipalResponse
 } from '@aurora/client'
-import { PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice } from './state-surface'
 import { Card, DataTable, Button, type DataColumn } from './primitives'
 import { ConfirmDialog, PermissionEditorTable, ROLE_TEMPLATES, matchRoleTemplate } from './shared-components'
 import { adminCapabilityReason, adminErrorTitle, productAdminReasonCopy } from './admin-product-copy'
@@ -34,6 +34,8 @@ import {
 } from '#components/ui/dropdown-menu'
 import { buttonVariants } from '#components/ui/button'
 import { cn } from '#lib/utils'
+import { useAdminList } from './query-hooks'
+import { AuroraQueryProvider, useAuroraQueryScope } from './query'
 
 export type AdminRbacLoadState =
   | 'loading'
@@ -165,19 +167,25 @@ const loadingSnapshot: AdminRbacSnapshot = {
   evidenceSource: 'pending Aurora service calls'
 }
 
-export function AdminRbacResource({ client, onPreviewAdminAction, onPreviewAdminActions }: AdminRbacResourceProps) {
-  const [snapshot, setSnapshot] = useState<AdminRbacSnapshot>(loadingSnapshot)
+export function AdminRbacResource(props: AdminRbacResourceProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (!hasQueryScope) {
+    return (
+      <AuroraQueryProvider client={props.client}>
+        <AdminRbacQueryResource {...props} />
+      </AuroraQueryProvider>
+    )
+  }
+  return <AdminRbacQueryResource {...props} />
+}
 
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingSnapshot)
-    void buildAdminRbacSnapshot(client).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client])
+function AdminRbacQueryResource({ client: _client, onPreviewAdminAction, onPreviewAdminActions }: AdminRbacResourceProps) {
+  const rbacQuery = useAdminList({
+    resource: 'rbac',
+    request: { auditLimit: 25 },
+    queryFn: (client, _request, signal) => buildAdminRbacSnapshot(client, { signal }),
+  })
+  const snapshot = rbacQuery.data ?? (rbacQuery.error ? adminRbacQueryErrorSnapshot(rbacQuery.error) : loadingSnapshot)
 
   return (
     <AdminRbacView
@@ -188,12 +196,25 @@ export function AdminRbacResource({ client, onPreviewAdminAction, onPreviewAdmin
   )
 }
 
-export async function buildAdminRbacSnapshot(client: AuroraClient): Promise<AdminRbacSnapshot> {
+function adminRbacQueryErrorSnapshot(error: unknown): AdminRbacSnapshot {
+  const message = adminErrorTitle(error, 'Access controls are unavailable. Try again.')
+  return {
+    ...loadingSnapshot,
+    loadState: 'error',
+    mutationState: 'unsupported',
+    error: message,
+    warnings: [message],
+    evidenceSource: 'Aurora request error'
+  }
+}
+
+export async function buildAdminRbacSnapshot(client: AuroraClient, options: { signal?: AbortSignal } = {}): Promise<AdminRbacSnapshot> {
+  const signalOptions = options.signal ? { signal: options.signal } : {}
   const [principalsResult, permissionsResult, catalogResult, auditResult] = await Promise.allSettled([
-    client.authApi.listPrincipals(),
-    client.permissions.listCatalog(),
-    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true, include_schemas: true }),
-    client.authApi.auditLog({ limit: 25, event: null })
+    client.authApi.listPrincipals({}, signalOptions),
+    client.permissions.listCatalog(signalOptions),
+    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true, include_schemas: true }, signalOptions),
+    client.authApi.auditLog({ limit: 25, event: null }, signalOptions)
   ])
 
   const principalResponse = resultDataOrNull(principalsResult)
@@ -309,9 +330,11 @@ export function AdminRbacView({ snapshot, onPreviewAdminAction, onPreviewAdminAc
       />
 
       {snapshot.loadState !== 'ready' && snapshot.loadState !== 'empty' ? (
-        <p role="alert" className="text-sm text-destructive">
-          {productAdminReasonCopy(snapshot.error, 'RBAC status needs attention. Controls remain disabled until Aurora marks them ready.')}
-        </p>
+        <RouteStateNotice
+          state={snapshot.loadState === 'loading' ? 'loading' : snapshot.loadState === 'denied' ? 'permission' : 'error'}
+          title={snapshot.loadState === 'loading' ? 'Loading access controls' : 'Access controls need attention'}
+          message={productAdminReasonCopy(snapshot.error, 'RBAC status needs attention. Controls remain disabled until Aurora marks them ready.')}
+        />
       ) : null}
 
       <RolesGrid roles={snapshot.roles} onEdit={setEditingRole} />
@@ -455,7 +478,7 @@ function PrincipalsTable({
 
   return (
     <Card title="Principals" ariaLabel="RBAC principals" flush>
-      <DataTable columns={columns} rows={principals} getRowKey={(principal) => principal.id} empty="No principals to grant or manage yet." />
+      <DataTable columns={columns} rows={principals} getRowKey={(principal) => principal.id} empty={<EmptyState title="No people or devices yet" message="People and devices with access will appear here." />} />
     </Card>
   )
 }

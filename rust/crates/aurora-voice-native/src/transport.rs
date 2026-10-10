@@ -1,7 +1,14 @@
 //! Generated-contract HTTP and SSE transport for a native-owned voice turn.
 
+use crate::native_event_observer::{
+    begin_native_voice_observation_producer, bound_observed_text, observe_native_voice,
+    NativeVoiceObservation, NativeVoiceObservationToken, NativeVoiceTurnIds,
+    NativeVoiceTurnSnapshot,
+};
 use std::collections::BTreeSet;
 use std::fmt;
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -17,6 +24,7 @@ use aurora_voice_core::{
 use reqwest::header::{HeaderMap, ACCEPT, AUTHORIZATION, CONTENT_TYPE};
 use serde_json::Value;
 use thiserror::Error;
+use tokio::sync::mpsc;
 use url::Url;
 
 const EVENT_STREAM_PATH: &str = "api/events/stream";
@@ -356,6 +364,16 @@ pub struct NativeMeshExternalUserInput {
     request_id: String,
     idempotency_key: String,
     timeout: Duration,
+    turn: Option<NativeMeshAssistantTurnLink>,
+}
+
+/// Non-secret voice turn identifiers carried to native mesh observation.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeMeshAssistantTurnLink {
+    generation: u64,
+    session_id: String,
+    request_id: String,
+    correlation_id: String,
 }
 
 impl NativeMeshExternalUserInput {
@@ -373,6 +391,98 @@ impl NativeMeshExternalUserInput {
 
     pub fn timeout(&self) -> Duration {
         self.timeout
+    }
+
+    pub fn turn(&self) -> Option<&NativeMeshAssistantTurnLink> {
+        self.turn.as_ref()
+    }
+}
+
+impl NativeMeshAssistantTurnLink {
+    pub fn new(
+        generation: u64,
+        session_id: impl Into<String>,
+        request_id: impl Into<String>,
+        correlation_id: impl Into<String>,
+    ) -> Self {
+        Self {
+            generation,
+            session_id: session_id.into(),
+            request_id: request_id.into(),
+            correlation_id: correlation_id.into(),
+        }
+    }
+
+    pub fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    pub fn session_id(&self) -> &str {
+        &self.session_id
+    }
+
+    pub fn request_id(&self) -> &str {
+        &self.request_id
+    }
+
+    pub fn correlation_id(&self) -> &str {
+        &self.correlation_id
+    }
+}
+
+pub type NativeMeshTerminalFuture = Pin<Box<dyn Future<Output = Result<Value, TransportError>>>>;
+
+/// Real mesh assistant stream: data-channel assistant events plus the
+/// authoritative terminal response from `Orchestrator.ExternalUserInput`.
+pub struct NativeMeshExternalUserInputStream {
+    events: mpsc::Receiver<Result<Value, TransportError>>,
+    terminal: NativeMeshTerminalFuture,
+    cleanup: Option<Box<dyn FnOnce() + Send + 'static>>,
+}
+
+impl NativeMeshExternalUserInputStream {
+    pub fn new(
+        events: mpsc::Receiver<Result<Value, TransportError>>,
+        terminal: NativeMeshTerminalFuture,
+    ) -> Self {
+        Self::new_with_cleanup(events, terminal, Box::new(|| {}))
+    }
+
+    pub fn new_with_cleanup(
+        events: mpsc::Receiver<Result<Value, TransportError>>,
+        terminal: NativeMeshTerminalFuture,
+        cleanup: Box<dyn FnOnce() + Send + 'static>,
+    ) -> Self {
+        Self {
+            events,
+            terminal,
+            cleanup: Some(cleanup),
+        }
+    }
+
+    pub async fn next_event(&mut self) -> Option<Result<Value, TransportError>> {
+        self.events.recv().await
+    }
+
+    pub async fn terminal_response(mut self) -> Result<Value, TransportError> {
+        (&mut self.terminal).await
+    }
+
+    fn ready(response: Value) -> Self {
+        let (_sender, events) = mpsc::channel(1);
+        Self {
+            events,
+            terminal: Box::pin(async move { Ok(response) }),
+            cleanup: None,
+        }
+    }
+}
+
+impl Drop for NativeMeshExternalUserInputStream {
+    fn drop(&mut self) {
+        if let Some(cleanup) = self.cleanup.take() {
+            cleanup();
+        }
     }
 }
 
@@ -411,6 +521,15 @@ pub trait NativeMeshAssistantTransport {
         request: NativeMeshExternalUserInput,
         cancellation: CancellationToken,
     ) -> Result<Value, TransportError>;
+
+    async fn external_user_input_stream(
+        &mut self,
+        request: NativeMeshExternalUserInput,
+        cancellation: CancellationToken,
+    ) -> Result<NativeMeshExternalUserInputStream, TransportError> {
+        let response = self.external_user_input(request, cancellation).await?;
+        Ok(NativeMeshExternalUserInputStream::ready(response))
+    }
 
     async fn interrupt(
         &mut self,
@@ -495,7 +614,7 @@ impl NativeMeshAssistantSpeechTransport {
         cancellation: CancellationToken,
     ) -> Result<AssistantTurnResponse, TransportError> {
         if request.stream {
-            return Err(TransportError::InvalidConfiguration);
+            return self.invoke_assistant_streaming(request, cancellation).await;
         }
         let generation = request.generation;
         let result = async {
@@ -513,6 +632,12 @@ impl NativeMeshAssistantSpeechTransport {
                 request_id: request.request_id.clone(),
                 idempotency_key: request.correlation_id.clone(),
                 timeout: self.limits.request_timeout,
+                turn: Some(NativeMeshAssistantTurnLink::new(
+                    request.generation.0,
+                    request.session_id.clone(),
+                    request.request_id.clone(),
+                    request.correlation_id.clone(),
+                )),
             };
             let response = self
                 .transport
@@ -536,6 +661,137 @@ impl NativeMeshAssistantSpeechTransport {
         }
         .await;
         if result.is_err() {
+            let _ = self.cancel_session(generation).await;
+        }
+        result
+    }
+
+    async fn invoke_assistant_streaming(
+        &mut self,
+        mut request: AssistantTurnRequest,
+        cancellation: CancellationToken,
+    ) -> Result<AssistantTurnResponse, TransportError> {
+        request.stream = true;
+        let generation = request.generation;
+        let turn_ids = turn_ids_from_request(&request);
+        let observation_token = begin_native_voice_observation_producer();
+        if let Some(token) = observation_token {
+            observe_turn_snapshot(
+                token,
+                NativeVoiceTurnSnapshot::new(turn_ids.clone(), "started"),
+            );
+        }
+        let result = async {
+            let request_payload = assistant_external_user_input(&request)?;
+            let interrupt_ids = assistant_interrupt_ids(&request)?;
+            self.active_assistant = Some(ActiveAssistantTurn {
+                generation,
+                session_id: request.session_id.clone(),
+                request_id: request.request_id.clone(),
+                interrupt_request_id: interrupt_ids.request_id,
+                interrupt_idempotency_key: interrupt_ids.idempotency_key,
+            });
+            let mesh_request = NativeMeshExternalUserInput {
+                payload: request_payload,
+                request_id: request.request_id.clone(),
+                idempotency_key: request.correlation_id.clone(),
+                timeout: self.limits.request_timeout,
+                turn: Some(NativeMeshAssistantTurnLink::new(
+                    request.generation.0,
+                    request.session_id.clone(),
+                    request.request_id.clone(),
+                    request.correlation_id.clone(),
+                )),
+            };
+            let mut stream = self
+                .transport
+                .external_user_input_stream(mesh_request, cancellation.clone())
+                .await?;
+            let mut text = String::new();
+            let mut completed_observed = false;
+            let mut events_open = true;
+            let mut assembler = AssistantStreamAssembler::new();
+            loop {
+                tokio::select! {
+                    terminal = &mut stream.terminal => {
+                        let response = assistant_response_value(terminal?)?;
+                        validate_optional_response_id(&response, "session_id", &request.session_id)?;
+                        validate_optional_response_id(&response, "request_id", &request.request_id)?;
+                        validate_optional_response_id(&response, "correlation_id", &request.correlation_id)?;
+                        let final_text = required_string(&response, "text").ok_or(TransportError::InvalidResponse)?;
+                        if final_text.is_empty() {
+                            return Err(TransportError::InvalidResponse);
+                        }
+                        if text.is_empty() || !completed_observed {
+                            replace_bounded(&mut text, final_text, self.limits.max_response_bytes)?;
+                        }
+                        if let Some(token) = observation_token {
+                            if !completed_observed {
+                                let sequence = assembler.next_sequence();
+                                observe_assistant_completed(token, &turn_ids, sequence, &text);
+                            }
+                            observe_turn_snapshot(
+                                token,
+                                NativeVoiceTurnSnapshot::new(turn_ids.clone(), "completed")
+                                    .with_text(&text)
+                                    .terminal(true),
+                            );
+                        }
+                        self.active_assistant = None;
+                        return Ok(AssistantTurnResponse {
+                            text,
+                            session_id: optional_string(&response, "session_id"),
+                            request_id: optional_string(&response, "request_id"),
+                            correlation_id: optional_string(&response, "correlation_id"),
+                        });
+                    }
+                    event = stream.events.recv(), if events_open => {
+                        let Some(event) = event else {
+                            events_open = false;
+                            continue;
+                        };
+                        match mesh_assistant_stream_event(event?, &request)? {
+                            AssistantStreamRead::Ignore => continue,
+                            AssistantStreamRead::Delta { sequence, delta } => {
+                                if !assembler.accept(sequence)? {
+                                    continue;
+                                }
+                                append_bounded(&mut text, &delta, self.limits.max_response_bytes)?;
+                                if let Some(token) = observation_token {
+                                    observe_assistant_delta(token, &turn_ids, sequence, &delta, &text);
+                                }
+                            }
+                            AssistantStreamRead::Completed { sequence, final_text } => {
+                                if !assembler.accept(sequence)? {
+                                    continue;
+                                }
+                                if !final_text.is_empty() {
+                                    replace_bounded(&mut text, final_text, self.limits.max_response_bytes)?;
+                                }
+                                if let Some(token) = observation_token {
+                                    observe_assistant_completed(token, &turn_ids, sequence, &text);
+                                }
+                                completed_observed = true;
+                            }
+                            AssistantStreamRead::Failed => {
+                                if let Some(token) = observation_token {
+                                    observe_assistant_failed(token, &turn_ids, "assistant_failed");
+                                }
+                                return Err(TransportError::InvalidResponse);
+                            }
+                        }
+                    }
+                    _ = tokio::time::sleep(CANCELLATION_POLL_INTERVAL) => {
+                        cancellation_check(&cancellation)?;
+                    }
+                }
+            }
+        }
+        .await;
+        if let Err(error) = &result {
+            if let Some(token) = observation_token {
+                observe_assistant_failed(token, &turn_ids, error.code());
+            }
             let _ = self.cancel_session(generation).await;
         }
         result
@@ -803,14 +1059,7 @@ impl NativeGatewayTransport {
             return Err(TransportError::InvalidConfiguration);
         }
         let generation = request.generation;
-        let result = async {
-            let response = self.invoke_assistant_request(request, cancellation).await?;
-            if response.text.is_empty() {
-                return Err(TransportError::InvalidResponse);
-            }
-            Ok(response)
-        }
-        .await;
+        let result = self.invoke_assistant_request(request, cancellation).await;
         if result.is_err() {
             let _ = self.cancel_session(generation).await;
         }
@@ -824,6 +1073,14 @@ impl NativeGatewayTransport {
     ) -> Result<AssistantTurnResponse, TransportError> {
         request.stream = true;
         let generation = request.generation;
+        let turn_ids = turn_ids_from_request(&request);
+        let observation_token = begin_native_voice_observation_producer();
+        if let Some(token) = observation_token {
+            observe_turn_snapshot(
+                token,
+                NativeVoiceTurnSnapshot::new(turn_ids.clone(), "started"),
+            );
+        }
         let subscription = SseSubscription::assistant_response(&request)?;
         let mut reconnect_count = 0;
         let mut stream = self
@@ -834,6 +1091,7 @@ impl NativeGatewayTransport {
             )
             .await?;
         let mut last_event_id = None;
+        let mut terminal_failure_observed = false;
         let result = async {
             let _ack = self
                 .invoke_assistant_request(request.clone(), cancellation.clone())
@@ -899,6 +1157,9 @@ impl NativeGatewayTransport {
                             continue;
                         }
                         append_bounded(&mut text, &delta, self.limits.max_response_bytes)?;
+                        if let Some(token) = observation_token {
+                            observe_assistant_delta(token, &turn_ids, sequence, &delta, &text);
+                        }
                     }
                     AssistantStreamRead::Completed {
                         sequence,
@@ -913,6 +1174,15 @@ impl NativeGatewayTransport {
                         if text.is_empty() {
                             return Err(TransportError::InvalidResponse);
                         }
+                        if let Some(token) = observation_token {
+                            observe_assistant_completed(token, &turn_ids, sequence, &text);
+                            observe_turn_snapshot(
+                                token,
+                                NativeVoiceTurnSnapshot::new(turn_ids.clone(), "completed")
+                                    .with_text(&text)
+                                    .terminal(true),
+                            );
+                        }
                         self.active_assistant = None;
                         return Ok(AssistantTurnResponse {
                             text,
@@ -921,12 +1191,23 @@ impl NativeGatewayTransport {
                             correlation_id: Some(request.correlation_id),
                         });
                     }
-                    AssistantStreamRead::Failed => return Err(TransportError::InvalidResponse),
+                    AssistantStreamRead::Failed => {
+                        terminal_failure_observed = true;
+                        if let Some(token) = observation_token {
+                            observe_assistant_failed(token, &turn_ids, "assistant_failed");
+                        }
+                        return Err(TransportError::InvalidResponse);
+                    }
                 }
             }
         }
         .await;
-        if result.is_err() {
+        if let Err(error) = &result {
+            if !terminal_failure_observed {
+                if let Some(token) = observation_token {
+                    observe_assistant_failed(token, &turn_ids, error.code());
+                }
+            }
             let _ = self.cancel_session(generation).await;
         }
         result
@@ -966,11 +1247,15 @@ impl NativeGatewayTransport {
         validate_optional_response_id(&response, "session_id", &request.session_id)?;
         validate_optional_response_id(&response, "request_id", &request.request_id)?;
         validate_optional_response_id(&response, "correlation_id", &request.correlation_id)?;
+        let text = required_string(&response, "text").ok_or(TransportError::InvalidResponse)?;
         if !request.stream {
+            if text.is_empty() {
+                return Err(TransportError::InvalidResponse);
+            }
             self.active_assistant = None;
         }
         Ok(AssistantTurnResponse {
-            text: required_string(&response, "text").ok_or(TransportError::InvalidResponse)?,
+            text,
             session_id: optional_string(&response, "session_id"),
             request_id: optional_string(&response, "request_id"),
             correlation_id: optional_string(&response, "correlation_id"),
@@ -985,7 +1270,7 @@ impl SpeechTransport for NativeGatewayTransport {
         request: AssistantTurnRequest,
         cancellation: CancellationToken,
     ) -> Result<AssistantTurnResponse, VoiceCoreError> {
-        self.invoke_assistant_turn(request, cancellation)
+        self.invoke_assistant_streaming(request, cancellation)
             .await
             .map_err(map_transport_error)
     }
@@ -1029,6 +1314,80 @@ impl SpeechTransport for NativeGatewayTransport {
         self.active_assistant = None;
         Ok(())
     }
+}
+
+fn turn_ids_from_request(request: &AssistantTurnRequest) -> NativeVoiceTurnIds {
+    NativeVoiceTurnIds::with_assistant_ids(
+        request.generation,
+        request.session_id.clone(),
+        request.request_id.clone(),
+        request.correlation_id.clone(),
+    )
+}
+
+fn observe_turn_snapshot(token: NativeVoiceObservationToken, snapshot: NativeVoiceTurnSnapshot) {
+    observe_native_voice(token, NativeVoiceObservation::TurnSnapshot { snapshot });
+}
+
+fn observe_assistant_delta(
+    token: NativeVoiceObservationToken,
+    ids: &NativeVoiceTurnIds,
+    sequence: u64,
+    delta: &str,
+    accumulated_text: &str,
+) {
+    let (delta, _) = bound_observed_text(delta);
+    let (accumulated_text, text_truncated) = bound_observed_text(accumulated_text);
+    observe_native_voice(
+        token,
+        NativeVoiceObservation::AssistantDelta {
+            ids: ids.clone(),
+            sequence,
+            delta,
+            accumulated_text: accumulated_text.clone(),
+            text_truncated,
+        },
+    );
+    observe_turn_snapshot(
+        token,
+        NativeVoiceTurnSnapshot::new(ids.clone(), "responding").with_text(&accumulated_text),
+    );
+}
+
+fn observe_assistant_completed(
+    token: NativeVoiceObservationToken,
+    ids: &NativeVoiceTurnIds,
+    sequence: u64,
+    final_text: &str,
+) {
+    let (final_text, text_truncated) = bound_observed_text(final_text);
+    observe_native_voice(
+        token,
+        NativeVoiceObservation::AssistantCompleted {
+            ids: ids.clone(),
+            sequence,
+            final_text,
+            text_truncated,
+        },
+    );
+}
+
+fn observe_assistant_failed(
+    token: NativeVoiceObservationToken,
+    ids: &NativeVoiceTurnIds,
+    reason_code: &str,
+) {
+    observe_native_voice(
+        token,
+        NativeVoiceObservation::AssistantFailed {
+            ids: ids.clone(),
+            reason_code: reason_code.to_owned(),
+        },
+    );
+    observe_turn_snapshot(
+        token,
+        NativeVoiceTurnSnapshot::new(ids.clone(), "failed").terminal(true),
+    );
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1502,6 +1861,10 @@ impl AssistantStreamAssembler {
         Self { next_sequence: 1 }
     }
 
+    fn next_sequence(&self) -> u64 {
+        self.next_sequence
+    }
+
     fn accept(&mut self, sequence: u64) -> Result<bool, TransportError> {
         if sequence == self.next_sequence {
             self.next_sequence = self
@@ -1514,6 +1877,57 @@ impl AssistantStreamAssembler {
             return Ok(false);
         }
         Err(TransportError::InvalidStream)
+    }
+}
+
+fn mesh_assistant_stream_event(
+    frame: Value,
+    request: &AssistantTurnRequest,
+) -> Result<AssistantStreamRead, TransportError> {
+    let frame_type = required_string(&frame, "type").ok_or(TransportError::InvalidPayload)?;
+    if frame_type != "event" {
+        return Ok(AssistantStreamRead::Ignore);
+    }
+    let topic = required_string(&frame, "topic").ok_or(TransportError::InvalidPayload)?;
+    if topic != ids::ORCHESTRATOR_RESPONSE {
+        return Ok(AssistantStreamRead::Ignore);
+    }
+    if optional_string(&frame, "correlation_id").as_deref() != Some(request.correlation_id.as_str())
+        && optional_string(&frame, "correlationId").as_deref()
+            != Some(request.correlation_id.as_str())
+    {
+        return Ok(AssistantStreamRead::Ignore);
+    }
+    let payload = frame
+        .get("params")
+        .or_else(|| frame.get("payload"))
+        .cloned()
+        .ok_or(TransportError::InvalidPayload)?;
+    let typed: models::AssistantStreamEvent =
+        serde_json::from_value(payload).map_err(|_| TransportError::InvalidPayload)?;
+    let typed = serde_json::to_value(typed).map_err(|_| TransportError::InvalidPayload)?;
+    let payload_kind = required_string(&typed, "kind").ok_or(TransportError::InvalidPayload)?;
+    if optional_string(&typed, "session_id").as_deref() != Some(request.session_id.as_str())
+        || optional_string(&typed, "request_id").as_deref() != Some(request.request_id.as_str())
+        || optional_string(&typed, "correlation_id").as_deref()
+            != Some(request.correlation_id.as_str())
+    {
+        return Ok(AssistantStreamRead::Ignore);
+    }
+    let sequence = required_u64(&typed, "sequence").ok_or(TransportError::InvalidPayload)?;
+    match payload_kind.as_str() {
+        "assistant.delta" => Ok(AssistantStreamRead::Delta {
+            sequence,
+            delta: optional_string(&typed, "delta").unwrap_or_default(),
+        }),
+        "assistant.completed" if bool_field(&typed, "is_final") => {
+            Ok(AssistantStreamRead::Completed {
+                sequence,
+                final_text: optional_string(&typed, "text").unwrap_or_default(),
+            })
+        }
+        "assistant.failed" if bool_field(&typed, "is_final") => Ok(AssistantStreamRead::Failed),
+        _ => Ok(AssistantStreamRead::Ignore),
     }
 }
 
@@ -1616,6 +2030,7 @@ mod tests {
         options: Vec<NativeMeshAssistantTransportOptions>,
         external_inputs: Vec<NativeMeshExternalUserInput>,
         interrupts: Vec<NativeMeshInterruptRequest>,
+        stream_events: Vec<Value>,
         response: Option<Value>,
         interrupt_response: Option<Value>,
         delay: Option<Duration>,
@@ -1662,6 +2077,26 @@ mod tests {
                 .response
                 .clone()
                 .ok_or(TransportError::RequestFailed)
+        }
+
+        async fn external_user_input_stream(
+            &mut self,
+            request: NativeMeshExternalUserInput,
+            _cancellation: CancellationToken,
+        ) -> Result<NativeMeshExternalUserInputStream, TransportError> {
+            let (sender, events) = tokio::sync::mpsc::channel(32);
+            let (stream_events, response) = {
+                let mut state = self.state.lock().expect("mesh state");
+                state.external_inputs.push(request.clone());
+                (state.stream_events.clone(), state.response.clone())
+            };
+            for event in stream_events {
+                let _ = sender.try_send(Ok(event));
+            }
+            drop(sender);
+            let terminal: NativeMeshTerminalFuture =
+                Box::pin(async move { response.ok_or(TransportError::RequestFailed) });
+            Ok(NativeMeshExternalUserInputStream::new(events, terminal))
         }
 
         async fn interrupt(
@@ -1915,6 +2350,57 @@ mod tests {
             required_string(request.payload(), "source").as_deref(),
             Some(ASSISTANT_SOURCE)
         );
+        assert_eq!(state.interrupts.len(), 0);
+        drop(state);
+        clear_native_mesh_assistant_transport_factory();
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn mesh_streaming_observer_close_preserves_native_main_result_without_interrupt() {
+        let _guard = MESH_TEST_GUARD.lock().await;
+        clear_native_mesh_assistant_transport_factory();
+        let turn = assistant_request(35, "hello streaming mesh");
+        let stream_events = (1..=33_u64)
+            .map(|sequence| {
+                serde_json::json!({
+                    "kind": "assistant.delta",
+                    "delta": "x",
+                    "text": "",
+                    "is_final": false,
+                    "sequence": sequence,
+                    "session_id": turn.session_id.clone(),
+                    "request_id": turn.request_id.clone(),
+                    "correlation_id": turn.correlation_id.clone(),
+                    "metadata": {},
+                })
+            })
+            .collect::<Vec<_>>();
+        let state = Arc::new(Mutex::new(MeshTestState {
+            stream_events,
+            response: Some(assistant_response_value_for(
+                &turn,
+                "terminal mesh response",
+            )),
+            interrupt_response: Some(interrupt_response_value_for(&turn)),
+            ..MeshTestState::default()
+        }));
+        install_native_mesh_assistant_transport_factory(Arc::new(RecordingMeshFactory {
+            state: Arc::clone(&state),
+        }));
+        let route = NativeMeshAssistantRoute::new(None).expect("mesh route");
+        let mut transport =
+            NativeMeshAssistantSpeechTransport::new(route, TransportLimits::default())
+                .expect("mesh transport");
+
+        let response =
+            SpeechTransport::assistant_turn(&mut transport, turn.clone(), CancellationToken::new())
+                .await
+                .expect("mesh assistant response");
+
+        assert_eq!(response.text, "terminal mesh response");
+        let state = state.lock().expect("mesh state");
+        assert_eq!(state.external_inputs.len(), 1);
+        assert_eq!(state.external_inputs[0].request_id(), turn.request_id);
         assert_eq!(state.interrupts.len(), 0);
         drop(state);
         clear_native_mesh_assistant_transport_factory();

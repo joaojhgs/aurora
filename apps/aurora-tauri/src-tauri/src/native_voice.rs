@@ -3,6 +3,9 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(desktop)]
+use crate::native_event_hub::{global_native_event_hub, voice_turn_event};
+
+#[cfg(desktop)]
 use {
     async_trait::async_trait,
     aurora_voice_core::{
@@ -876,6 +879,46 @@ impl NativeVoiceActor {
             status: self.status.clone(),
         };
         let _ = self.app.emit(STATUS_EVENT, event);
+        self.publish_native_event();
+    }
+
+    fn publish_native_event(&self) {
+        let Ok(status) = serde_json::to_value(&self.status) else {
+            return;
+        };
+        let draft = voice_turn_event(
+            voice_turn_kind_for_phase(self.status.phase),
+            self.status.generation,
+            status,
+            self.status.reason_code.clone(),
+        )
+        .status(voice_turn_status_for_phase(self.status.phase));
+        global_native_event_hub().publish_now(draft);
+    }
+}
+
+#[cfg(desktop)]
+fn voice_turn_kind_for_phase(phase: NativeVoicePhase) -> &'static str {
+    match phase {
+        NativeVoicePhase::Starting => "voice.turn.started",
+        NativeVoicePhase::Listening => "voice.turn.transcribing",
+        NativeVoicePhase::Processing => "voice.turn.requesting",
+        NativeVoicePhase::Speaking => "voice.turn.speaking",
+        NativeVoicePhase::Idle | NativeVoicePhase::Stopping => "voice.turn.finalized",
+        NativeVoicePhase::Unavailable | NativeVoicePhase::Faulted => "voice.turn.failed",
+    }
+}
+
+#[cfg(desktop)]
+fn voice_turn_status_for_phase(phase: NativeVoicePhase) -> &'static str {
+    match phase {
+        NativeVoicePhase::Starting
+        | NativeVoicePhase::Listening
+        | NativeVoicePhase::Processing
+        | NativeVoicePhase::Speaking
+        | NativeVoicePhase::Stopping => "active",
+        NativeVoicePhase::Idle => "ok",
+        NativeVoicePhase::Unavailable | NativeVoicePhase::Faulted => "error",
     }
 }
 

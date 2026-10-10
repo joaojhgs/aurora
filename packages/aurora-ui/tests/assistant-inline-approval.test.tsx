@@ -71,8 +71,9 @@ describe('Assistant inline tool approval', () => {
       await Promise.resolve()
     })
 
-    expect(container.querySelector('.aui-chat-tool [data-slot="tool-fallback-root"]')).not.toBeNull()
-    expect(container.querySelector('.aui-chat-tool .aui-chat-bubble-wrap')).toBeNull()
+    const toolOnlyRoot = container.querySelector('[data-slot="tool-fallback-root"]')
+    expect(toolOnlyRoot).not.toBeNull()
+    expect(toolOnlyRoot?.closest('[data-slot="message"]')?.querySelector('[data-slot="bubble"]')).toBeNull()
   })
 
   it('resumes the exact pending tool call through Orchestrator with the selected grant scope', async () => {
@@ -267,8 +268,9 @@ describe('Assistant inline tool approval', () => {
     })
     await waitUntil(() => container.textContent?.includes('Needs approval') === true)
 
-    expect(container.querySelector('.aui-chat-tool [data-slot="tool-fallback-root"]')).not.toBeNull()
-    expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).toBeNull()
+    const streamedToolOnlyRoot = container.querySelector('[data-slot="tool-fallback-root"]')
+    expect(streamedToolOnlyRoot).not.toBeNull()
+    expect(streamedToolOnlyRoot?.closest('[data-slot="message"]')?.querySelector('[data-slot="bubble"]')).toBeNull()
     expect(countText(container.textContent ?? '', 'Aurora paused for a tool approval decision.')).toBe(0)
     const approveButton = findButtonByText(container, 'Approve once')
     expect(approveButton).not.toBeNull()

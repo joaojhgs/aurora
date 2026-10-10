@@ -32,6 +32,7 @@ cpal.workspace = true
 
 [features]
 default = []
+android-voice-live-test = []
 native-sherpa = [
     "dep:aurora-voice-sherpa",
     "aurora-voice-sherpa/native-kws",

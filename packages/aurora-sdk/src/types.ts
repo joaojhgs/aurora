@@ -221,11 +221,13 @@ export interface AssistantSendMessageResult {
 }
 
 export type AssistantStreamUpdateKind =
+  | 'connecting'
   | 'delta'
   | 'completed'
   | 'failed'
   | 'tool'
   | 'tts_audio_chunk'
+  | 'tts_playback_error'
   | 'transport_lost'
   | 'fallback'
 
@@ -251,6 +253,7 @@ export interface AssistantToolStreamEvent {
 
 export interface AssistantTtsAudioChunkEvent {
   chunkId: string | null
+  streamId?: string | null
   sequence: number | null
   audioData: string | null
   encoding: string | null

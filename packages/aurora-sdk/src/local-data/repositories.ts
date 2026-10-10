@@ -11,15 +11,43 @@ import type { LocalDataScope } from './provenance.js'
 
 export interface ConversationRepository {
   upsertConversation(record: ConversationRecord): Promise<void>
+  /** Atomically inserts or updates a message; duplicate sequence uses `duplicate_message_sequence`, and cross-conversation ID reuse uses `duplicate_message_id`. */
   appendMessage(record: ConversationMessageRecord): Promise<void>
   deleteConversation(conversationId: string): Promise<DeleteConversationResult>
-  listConversations(): Promise<ConversationRecord[]>
+  getConversation(conversationId: string): Promise<ConversationRecord | null>
+  getMessage(conversationId: string, messageId: string): Promise<ConversationMessageRecord | null>
+  listConversations(options?: ConversationListQuery): Promise<ConversationRecord[]>
   /** Returns message counts keyed by conversation for the active local scope. */
-  listMessageCounts(): Promise<Record<string, number>>
+  listMessageCounts(conversationIds?: readonly string[]): Promise<Record<string, number>>
   /** Returns the earliest user message keyed by conversation for title previews. */
-  listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>>
-  listMessages(conversationId: string): Promise<ConversationMessageRecord[]>
+  listFirstUserMessages(conversationIds?: readonly string[]): Promise<Record<string, ConversationMessageRecord>>
+  listMessages(conversationId: string, options?: MessageListQuery): Promise<ConversationMessageRecord[]>
+  getLatestMessageSequence(conversationId: string): Promise<number | null>
 }
+
+export interface ConversationCursor {
+  readonly updatedAtMs: number
+  readonly id: string
+}
+
+export interface ConversationListQuery {
+  readonly limit?: number
+  readonly includeArchived?: boolean
+  readonly cursor?: ConversationCursor
+}
+
+export type MessageListDirection = 'asc' | 'desc'
+
+export interface MessageListQuery {
+  readonly limit?: number
+  readonly beforeSequence?: number
+  readonly afterSequence?: number
+  readonly direction?: MessageListDirection
+}
+
+export const LOCAL_DATA_CONVERSATION_QUERY_MAX = 501
+export const LOCAL_DATA_MESSAGE_QUERY_MAX = 2_001
+export const LOCAL_DATA_CONVERSATION_ID_SET_MAX = 500
 
 export interface LightweightMemoryRepository {
   upsertMemoryItem(record: LightweightMemoryRecord): Promise<void>

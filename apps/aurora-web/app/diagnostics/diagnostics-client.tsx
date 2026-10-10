@@ -1,7 +1,9 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
+import { useQuery, type QueryKey } from '@tanstack/react-query'
 import type {
+  AuroraClient,
   AvailabilityState,
   CapabilityCatalogResponse,
   DeploymentTopologyResponse,
@@ -11,6 +13,8 @@ import type {
   WebRTCDiagnosticsResponse
 } from '@aurora/client'
 import { MeshDiagnosticsView, meshDiagnosticsSnapshotFromResults, type RouteAvailability } from '@aurora/ui'
+import { AURORA_QUERY_STALE_TIMES, AuroraQueryProvider, useAuroraQueryScope } from '@aurora/ui/query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys, type AuroraQueryFallbackInterval } from '@aurora/ui/query-hooks'
 import {
   countText,
   productAvailabilityText,
@@ -53,40 +57,56 @@ const redactionPreview = [
   { label: 'Audio and session details', source: 'Kept out of the shared bundle.' }
 ]
 
-const emptyDiagnostics = (): DiagnosticsSnapshot => ({
-  services: emptyResult(),
-  topology: emptyResult(),
-  webrtc: emptyResult(),
-  mesh: emptyResult(),
-  catalog: emptyResult(),
-  route: emptyResult(),
-})
+const diagnosticsCatalogRequest = { include_unavailable: true, include_internal: true } as const
+const diagnosticsRouteRequest = {
+  topic: 'Tooling.ExecuteTool',
+  include_candidates: true,
+} as const
 
 export function DiagnosticsClientPage({ diagnosticsRoute }: { diagnosticsRoute: RouteAvailability }) {
   const runtime = useOptionalBrowserShellRuntime()
-  const [diagnostics, setDiagnostics] = useState<DiagnosticsSnapshot>(() => emptyDiagnostics())
+  const hasAuroraQueryScope = useAuroraQueryScope()
 
-  useEffect(() => {
-    if (!runtime) return
-    let cancelled = false
-    const client = runtime.client
-    void Promise.all([
-      capture(() => client.registry.listServices()),
-      capture(() => client.registry.getDeploymentTopology()),
-      capture(() => client.registry.getWebRTCDiagnostics()),
-      captureResult(() => client.mesh.getStatus()),
-      capture(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })),
-      capture(() => client.routes.explain({
-        topic: 'Tooling.ExecuteTool',
-        include_candidates: true
-      }))
-    ]).then(([services, topology, webrtc, mesh, catalog, route]) => {
-      if (!cancelled) setDiagnostics({ services, topology, webrtc, mesh, catalog, route })
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [runtime])
+  if (!runtime) {
+    return (
+      <DiagnosticsClientContent
+        diagnostics={emptyDiagnostics()}
+        diagnosticsRoute={diagnosticsRoute}
+        runtime={null}
+      />
+    )
+  }
+
+  const content = <DiagnosticsClientRuntimeContent diagnosticsRoute={diagnosticsRoute} runtime={runtime} />
+  if (hasAuroraQueryScope) return content
+
+  return (
+    <AuroraQueryProvider client={runtime.client} surfaceProfile={runtime.surface ?? null}>
+      {content}
+    </AuroraQueryProvider>
+  )
+}
+
+function DiagnosticsClientRuntimeContent({
+  diagnosticsRoute,
+  runtime,
+}: {
+  diagnosticsRoute: RouteAvailability
+  runtime: NonNullable<ReturnType<typeof useOptionalBrowserShellRuntime>>
+}) {
+  const diagnostics = useDiagnosticsSnapshot(runtime.client, diagnosticsRoute)
+  return <DiagnosticsClientContent diagnostics={diagnostics} diagnosticsRoute={diagnosticsRoute} runtime={runtime} />
+}
+
+function DiagnosticsClientContent({
+  diagnostics,
+  diagnosticsRoute,
+  runtime,
+}: {
+  diagnostics: DiagnosticsSnapshot
+  diagnosticsRoute: RouteAvailability
+  runtime: ReturnType<typeof useOptionalBrowserShellRuntime>
+}) {
 
   const probes = useMemo(() => buildProbes(diagnostics), [diagnostics])
   const correlationId = diagnostics.route.data?.blockers.find((blocker) => blocker.security_privacy)?.code ?? null
@@ -225,6 +245,115 @@ export function DiagnosticsClientPage({ diagnosticsRoute }: { diagnosticsRoute: 
   )
 }
 
+function useDiagnosticsSnapshot(client: AuroraClient, diagnosticsRoute: RouteAvailability): DiagnosticsSnapshot {
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const queriesEnabled = diagnosticsRoute.routeable
+    && !diagnosticsRoute.disabled
+    && diagnosticsRoute.state !== 'denied'
+    && diagnosticsRoute.state !== 'privacy-blocked'
+  const routeScope = useMemo(() => ({
+    routeId: diagnosticsRoute.item.id,
+    routeState: diagnosticsRoute.state,
+    routeDisabled: diagnosticsRoute.disabled,
+    routeable: diagnosticsRoute.routeable,
+  }), [diagnosticsRoute.disabled, diagnosticsRoute.item.id, diagnosticsRoute.routeable, diagnosticsRoute.state])
+  const meshGetStatus = client.mesh.getStatus as (options?: { signal?: AbortSignal }) => ReturnType<AuroraClient['mesh']['getStatus']>
+  const explainRoute = client.routes.explain as (request: typeof diagnosticsRouteRequest, options?: { signal?: AbortSignal }) => ReturnType<AuroraClient['routes']['explain']>
+
+  const services = useDiagnosticQuery<GetServicesResponse>({
+    key: queryKeys.admin('diagnostics-services', routeScope),
+    enabled: queriesEnabled,
+    fallbackInterval,
+    read: (signal) => client.registry.listServices({ signal }),
+  })
+  const topology = useDiagnosticQuery<DeploymentTopologyResponse>({
+    key: queryKeys.admin('diagnostics-topology', routeScope),
+    enabled: queriesEnabled,
+    fallbackInterval,
+    read: (signal) => client.registry.getDeploymentTopology({ signal }),
+  })
+  const webrtc = useDiagnosticQuery<WebRTCDiagnosticsResponse>({
+    key: queryKeys.admin('diagnostics-webrtc', routeScope),
+    enabled: queriesEnabled,
+    fallbackInterval,
+    read: (signal) => client.registry.getWebRTCDiagnostics({ signal }),
+  })
+  const mesh = useDiagnosticResultQuery<MeshStatusResponse>({
+    key: queryKeys.admin('diagnostics-mesh', routeScope),
+    enabled: queriesEnabled,
+    fallbackInterval,
+    read: (signal) => meshGetStatus({ signal }),
+  })
+  const catalog = useDiagnosticQuery<CapabilityCatalogResponse>({
+    key: queryKeys.admin('diagnostics-catalog', { ...routeScope, request: diagnosticsCatalogRequest }),
+    enabled: queriesEnabled,
+    fallbackInterval,
+    read: (signal) => client.capabilities.listCatalog(diagnosticsCatalogRequest, { signal }),
+  })
+  const route = useDiagnosticQuery<RouteExplainResponse>({
+    key: queryKeys.admin('diagnostics-route', { ...routeScope, request: diagnosticsRouteRequest }),
+    enabled: queriesEnabled,
+    fallbackInterval,
+    read: (signal) => explainRoute(diagnosticsRouteRequest, { signal }),
+  })
+
+  return useMemo(() => ({ services, topology, webrtc, mesh, catalog, route }), [catalog, mesh, route, services, topology, webrtc])
+}
+
+function useDiagnosticQuery<T>({
+  key,
+  enabled,
+  fallbackInterval,
+  read,
+}: {
+  key: QueryKey
+  enabled: boolean
+  fallbackInterval: AuroraQueryFallbackInterval
+  read: (signal: AbortSignal) => Promise<T>
+}): DiagnosticResult<T> {
+  const query = useQuery<DiagnosticResult<T>>({
+    queryKey: key,
+    enabled,
+    queryFn: ({ signal }) => capture(() => read(signal)),
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval,
+  })
+  return query.data ?? emptyResult()
+}
+
+function useDiagnosticResultQuery<T>({
+  key,
+  enabled,
+  fallbackInterval,
+  read,
+}: {
+  key: QueryKey
+  enabled: boolean
+  fallbackInterval: AuroraQueryFallbackInterval
+  read: (signal: AbortSignal) => Promise<{ ok: true; data: T } | { ok: false; error: Error }>
+}): DiagnosticResult<T> {
+  const query = useQuery<DiagnosticResult<T>>({
+    queryKey: key,
+    enabled,
+    queryFn: ({ signal }) => captureResult(() => read(signal)),
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval,
+  })
+  return query.data ?? emptyResult()
+}
+
+function emptyDiagnostics(): DiagnosticsSnapshot {
+  return {
+    services: emptyResult(),
+    topology: emptyResult(),
+    webrtc: emptyResult(),
+    mesh: emptyResult(),
+    catalog: emptyResult(),
+    route: emptyResult(),
+  }
+}
+
 async function capture<T>(operation: () => Promise<T>): Promise<DiagnosticResult<T>> {
   try {
     return { data: await operation(), error: null, errorState: 'available-local' }
@@ -323,7 +452,7 @@ function ErrorList({ results }: { results: Array<DiagnosticResult<unknown>> }) {
   const errors = results.map((result) => result.error).filter((error): error is string => Boolean(error))
   if (errors.length === 0) return null
   return (
-    <div className="adx-errors" role="status">
+    <div role="status">
       {errors.map((error, index) => <p key={`${error}-${index}`}>{error}</p>)}
     </div>
   )

@@ -301,43 +301,43 @@ export function normalizeRagPrivacyClass(value: RAGPrivacyClass): PrivacyClass {
 export class MemoryClient {
   constructor(private readonly client: AuroraClient) {}
 
-  createSession(request: DBCreateSessionRequest): Promise<AuroraResponse<DBSessionResponse>> {
+  createSession(request: DBCreateSessionRequest, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBSessionResponse>> {
     return this.client.requestResult<DBSessionResponse, DBCreateSessionRequest>(
       DB_METHODS.createSession,
       request,
-      { path: routePath('DB', 'CreateSession') }
+      { path: routePath('DB', 'CreateSession'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  listSessions(request: DBListSessionsRequest = {}): Promise<AuroraResponse<DBListSessionsResponse>> {
+  listSessions(request: DBListSessionsRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBListSessionsResponse>> {
     return this.client.requestResult<DBListSessionsResponse, DBListSessionsRequest>(
       DB_METHODS.listSessions,
       request,
-      { path: routePath('DB', 'ListSessions') }
+      { path: routePath('DB', 'ListSessions'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  getSession(request: DBGetSessionRequest): Promise<AuroraResponse<DBGetSessionResponse>> {
+  getSession(request: DBGetSessionRequest, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBGetSessionResponse>> {
     return this.client.requestResult<DBGetSessionResponse, DBGetSessionRequest>(
       DB_METHODS.getSession,
       request,
-      { path: routePath('DB', 'GetSession') }
+      { path: routePath('DB', 'GetSession'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  setActiveSession(request: DBSetActiveSessionRequest): Promise<AuroraResponse<DBSessionResponse>> {
+  setActiveSession(request: DBSetActiveSessionRequest, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBSessionResponse>> {
     return this.client.requestResult<DBSessionResponse, DBSetActiveSessionRequest>(
       DB_METHODS.setActiveSession,
       request,
-      { path: routePath('DB', 'SetActiveSession') }
+      { path: routePath('DB', 'SetActiveSession'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  listMessages(request: DBGetMessagesRequest = {}): Promise<AuroraResponse<DBGetMessagesResponse>> {
+  listMessages(request: DBGetMessagesRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBGetMessagesResponse>> {
     return this.client.requestResult<DBGetMessagesResponse, DBGetMessagesRequest>(
       DB_METHODS.getMessages,
       request,
-      { path: routePath('DB', 'GetMessages') }
+      { path: routePath('DB', 'GetMessages'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
@@ -349,19 +349,19 @@ export class MemoryClient {
     )
   }
 
-  listNamespaces(request: DBRAGListNamespacesRequest = {}): Promise<AuroraResponse<DBRAGListNamespacesResponse>> {
+  listNamespaces(request: DBRAGListNamespacesRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBRAGListNamespacesResponse>> {
     return this.client.requestResult<DBRAGListNamespacesResponse, DBRAGListNamespacesRequest>(
       DB_METHODS.ragListNamespaces,
       request,
-      { path: routePath('DB', 'RAGListNamespaces') }
+      { path: routePath('DB', 'RAGListNamespaces'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  search(request: DBRAGSearchRemoteRequest): Promise<AuroraResponse<DBRAGSearchRemoteResponse>> {
+  search(request: DBRAGSearchRemoteRequest, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<DBRAGSearchRemoteResponse>> {
     return this.client.requestResult<DBRAGSearchRemoteResponse, DBRAGSearchRemoteRequest>(
       DB_METHODS.ragSearchRemote,
       request,
-      { path: routePath('DB', 'RAGSearchRemote') }
+      { path: routePath('DB', 'RAGSearchRemote'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 

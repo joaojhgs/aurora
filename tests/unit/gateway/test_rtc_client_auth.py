@@ -2725,7 +2725,7 @@ async def test_glare_candidate_waits_for_winning_offer_remote_answer(mock_deps):
 
 @pytest.mark.asyncio
 async def test_bad_queued_candidate_does_not_abort_valid_answer(mock_deps):
-    """A bad deferred candidate cannot block SDP completion or its watchdog cleanup."""
+    """A bad deferred candidate cannot block SDP completion or its watchdog lifetime."""
     settings, bus, registry, auth_service = mock_deps
     client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
     client._peer_id = "local-offer-owner"
@@ -2766,7 +2766,149 @@ async def test_bad_queued_candidate_does_not_abort_valid_answer(mock_deps):
     pc.setRemoteDescription.assert_awaited_once()
     pc.addIceCandidate.assert_awaited_once_with(bad_candidate)
     assert peer not in client._pending_ice_candidates
-    client._cancel_negotiation_watchdog.assert_called_once_with(peer, pc)
+    client._cancel_negotiation_watchdog.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_conflicting_answer_cannot_mutate_active_pairing_transcript(mock_deps):
+    """A duplicate answer is harmless and a conflicting answer cannot poison the active PC."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-offer-owner"
+    peer = "remote-answerer"
+    pc = MockPeerConnectionWithEvents()
+    client._pcs[peer] = pc
+    client._pairing_transports[peer] = {
+        "pc": pc,
+        "offerer_signaling_id": client._peer_id,
+        "answerer_signaling_id": peer,
+        "offer_sdp": "local-offer",
+        "answer_sdp": "accepted-answer",
+        "remote_stable_peer_id": "stable-remote-peer",
+        "remote_node_name": "Remote Aurora",
+    }
+    conflicting = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "answer",
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": peer,
+            "to": client._peer_id,
+            "sdp": "conflicting-answer",
+            "stable_peer_id": "stable-remote-peer",
+            "node_name": "Remote Aurora",
+        },
+    )
+
+    await client._on_answer(conflicting)
+
+    assert client._pairing_transports[peer]["answer_sdp"] == "accepted-answer"
+    pc.setRemoteDescription.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_answers_serialize_and_reject_conflict_after_first_commit(mock_deps):
+    """Only the first answer may cross the remote-description await."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-offer-owner"
+    peer = "remote-answerer"
+    pc = MockPeerConnectionWithEvents()
+    client._pcs[peer] = pc
+    transport = {
+        "pc": pc,
+        "offer_sdp": "local-offer",
+        "answer_sdp": "",
+        "remote_stable_peer_id": "",
+        "remote_node_name": "",
+    }
+    client._pairing_transports[peer] = transport
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def set_remote_description(description: Any) -> None:
+        entered.set()
+        await release.wait()
+
+    pc.setRemoteDescription.side_effect = set_remote_description
+
+    def answer(sdp: str) -> bytes:
+        return aead_seal(
+            client._keys.k_sig,
+            {
+                "type": "answer",
+                "app_id": "test-app",
+                "room": "test-room",
+                "from": peer,
+                "to": client._peer_id,
+                "sdp": sdp,
+                "stable_peer_id": "stable-remote-peer",
+                "node_name": "Remote Aurora",
+            },
+        )
+
+    first = asyncio.create_task(client._on_answer(answer("first-answer")))
+    await entered.wait()
+    second = asyncio.create_task(client._on_answer(answer("conflicting-answer")))
+    await asyncio.sleep(0)
+    assert not second.done()
+    release.set()
+    await asyncio.gather(first, second)
+
+    assert transport["answer_sdp"] == "first-answer"
+    assert pc.setRemoteDescription.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_answer_replacement_during_remote_description_cannot_mutate_old_transport(mock_deps):
+    """A superseded PC cannot publish its late answer or identity claim."""
+    settings, bus, registry, auth_service = mock_deps
+    client = RTCClient(settings, bus, registry, auth_service, require_auth=True)
+    client._peer_id = "local-offer-owner"
+    peer = "remote-answerer"
+    old_pc = MockPeerConnectionWithEvents()
+    new_pc = MockPeerConnectionWithEvents()
+    client._pcs[peer] = old_pc
+    old_transport = {"pc": old_pc, "offer_sdp": "old-offer", "answer_sdp": ""}
+    new_transport = {"pc": new_pc, "offer_sdp": "new-offer", "answer_sdp": ""}
+    client._pairing_transports[peer] = old_transport
+    client._pending_ice_candidates[peer] = [
+        (old_pc, SimpleNamespace(sdpMid=None, sdpMLineIndex=None))
+    ]
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    async def set_remote_description(description: Any) -> None:
+        entered.set()
+        await release.wait()
+
+    old_pc.setRemoteDescription.side_effect = set_remote_description
+    answer = aead_seal(
+        client._keys.k_sig,
+        {
+            "type": "answer",
+            "app_id": "test-app",
+            "room": "test-room",
+            "from": peer,
+            "to": client._peer_id,
+            "sdp": "old-answer",
+            "stable_peer_id": "old-stable-peer",
+            "node_name": "Old Aurora",
+        },
+    )
+
+    task = asyncio.create_task(client._on_answer(answer))
+    await entered.wait()
+    client._pcs[peer] = new_pc
+    client._pairing_transports[peer] = new_transport
+    release.set()
+    await task
+
+    assert old_transport["answer_sdp"] == ""
+    assert new_transport["answer_sdp"] == ""
+    old_pc.addIceCandidate.assert_not_awaited()
+    assert peer not in client._peer_claimed_stable_ids
 
 
 @pytest.mark.asyncio

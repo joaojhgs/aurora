@@ -29,7 +29,10 @@ from app.services.gateway.webrtc.event_subscriptions import (
     RejectedSubscriptionTopic,
     SubscribeResult,
 )
-from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
+from app.services.gateway.webrtc.peer_protocol import (
+    CAP_GATEWAY_STATUS_EVENTS_V1,
+    CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+)
 from app.shared.auth.permissions import check_access
 from app.shared.contracts.models.auth import AuthMethods
 from app.shared.contracts.models.gateway import GatewayMethods
@@ -87,6 +90,7 @@ _SERVICE_REQUEST_ERROR_MESSAGE = "Service request failed"
 _SERVICE_REQUEST_ERROR_REASON_CODE = "service_request_failed"
 _STREAM_RESPONSE_ERROR_MESSAGE = "Response stream failed"
 _STREAM_RESPONSE_ERROR_REASON_CODE = "response_stream_failed"
+_STATUS_EVENT_TOPICS = frozenset({GatewayMethods.STATUS_CHANGED})
 _DOWNSTREAM_VALIDATED_TYPES = frozenset(
     {
         "auth",
@@ -572,6 +576,7 @@ class RPCHandler:
         event_topic_authorizer: Callable[[str, str, Identity], bool | Any] | None = None,
         provider_readiness_provider: Callable[[str], bool] | None = None,
         provider_binding_state_provider: Callable[[], tuple[Any, int] | None] | None = None,
+        status_event_authorizer: Callable[[str], bool] | None = None,
     ):
         self._bus = bus
         self._registry = registry
@@ -595,6 +600,7 @@ class RPCHandler:
         self._event_topic_authorizer = event_topic_authorizer
         self._provider_readiness_provider = provider_readiness_provider
         self._provider_binding_state_provider = provider_binding_state_provider
+        self._status_event_authorizer = status_event_authorizer
         # Track active remote calls per module for capacity limiting
         self._active_remote_calls: dict[str, int] = {}
         self._active_rpc_tasks: dict[str, asyncio.Task[Any]] = {}
@@ -849,6 +855,39 @@ class RPCHandler:
 
         allowed: set[str] = set()
         for topic in requested_topics:
+            if topic in _STATUS_EVENT_TOPICS:
+                if self._peer_supports_capability is None or not self._peer_supports_capability(
+                    CAP_GATEWAY_STATUS_EVENTS_V1
+                ):
+                    continue
+                stable_peer_id = self._stable_authenticated_peer_id()
+                if (
+                    not stable_peer_id
+                    or identity.principal_id == "anonymous"
+                    or getattr(identity, "source", None) != "webrtc_peer"
+                    or (
+                        self._authenticated_peer_validator is not None
+                        and not self._authenticated_peer_validator()
+                    )
+                    or not check_access(
+                        set(identity.effective_perms), ["Gateway.use"], method_type="use"
+                    )
+                ):
+                    continue
+                if self._status_event_authorizer is None:
+                    continue
+                try:
+                    if not self._status_event_authorizer(self._peer_id or ""):
+                        continue
+                except Exception:
+                    continue
+                mesh_config = self._current_mesh_config()
+                if mesh_config is None or not getattr(mesh_config, "enabled", False):
+                    continue
+                allowed.add(topic)
+                continue
+            if topic.startswith("Gateway."):
+                continue
             if self._event_topic_authorizer is not None:
                 verdict = self._event_topic_authorizer(
                     self._stable_authenticated_peer_id() or "", topic, identity

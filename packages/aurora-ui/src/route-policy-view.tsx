@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { RefreshCw, Route } from 'lucide-react'
 import type {
   AuroraClient,
@@ -14,6 +15,9 @@ import type {
 import { EvidenceBadge, PrivacyBadge, StatusBadge, presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 import type { RouteAvailability } from './shell-data'
+import { AURORA_QUERY_STALE_TIMES } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
+import { cn } from './shadcn-lib/utils'
 
 export type RoutePolicyLoadState = 'loading' | 'ready' | 'degraded' | 'denied' | 'unavailable' | 'error'
 export type RoutePolicyScenarioId =
@@ -91,6 +95,10 @@ export interface RoutePolicyViewProps {
   onRefresh?: () => void
 }
 
+export interface BuildRoutePolicySnapshotOptions {
+  signal?: AbortSignal | undefined
+}
+
 const loadingSnapshot: RoutePolicySnapshot = {
   loadState: 'loading',
   generatedAt: null,
@@ -116,32 +124,33 @@ const loadingSnapshot: RoutePolicySnapshot = {
 }
 
 export function RoutePolicyResource({ client, route }: RoutePolicyResourceProps) {
-  const [snapshot, setSnapshot] = useState<RoutePolicySnapshot>(loadingSnapshot)
   const [selectedScenarioId, setSelectedScenarioId] = useState<RoutePolicyScenarioId>('assistant_prompt')
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
 
   const routeKey = routePolicyRouteKey(route)
   const stableRoute = useMemo(() => route, [routeKey])
+  const routeReadable = routeAllowsServerRead(stableRoute)
+  const pendingSnapshot = routeReadable
+    ? { ...loadingSnapshot, selectedScenarioId }
+    : unavailableRoutePolicySnapshot(stableRoute, selectedScenarioId)
+  const policyQuery = useQuery({
+    queryKey: queryKeys.admin('route-policy', { routeKey, scenarioId: selectedScenarioId }),
+    queryFn: ({ signal }) => buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId, null, { signal }),
+    enabled: routeReadable,
+    placeholderData: pendingSnapshot,
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
 
-  const loadPolicy = useCallback(async () => {
-    setSnapshot({ ...loadingSnapshot, selectedScenarioId })
-    const next = await buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId)
-    setSnapshot(next)
-  }, [client, stableRoute, selectedScenarioId])
-
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot({ ...loadingSnapshot, selectedScenarioId })
-    void buildRoutePolicySnapshot(client, stableRoute, selectedScenarioId).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client, stableRoute, selectedScenarioId])
+  const loadPolicy = useCallback(() => {
+    if (!routeReadable) return
+    void policyQuery.refetch()
+  }, [policyQuery, routeReadable])
 
   return (
     <RoutePolicyView
-      snapshot={snapshot}
+      snapshot={policyQuery.data ?? pendingSnapshot}
       onSelectScenario={setSelectedScenarioId}
       onRefresh={loadPolicy}
     />
@@ -152,19 +161,20 @@ export async function buildRoutePolicySnapshot(
   client: AuroraClient,
   route: RouteAvailability,
   selectedScenarioId: RoutePolicyScenarioId = 'assistant_prompt',
-  persistedReceipt: string | null = null
+  persistedReceipt: string | null = null,
+  options: BuildRoutePolicySnapshotOptions = {}
 ): Promise<RoutePolicySnapshot> {
   const scenarioDefinitions = routePolicyScenarios()
   const catalogResult = await Promise.allSettled([
-    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })
+    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }, requestSignalOptions(options.signal))
   ]).then(([result]) => result!)
   const catalog = settledValue(catalogResult)
   const scenarioResults = catalog
     ? await Promise.allSettled(
-        scenarioDefinitions.map((scenario) => evaluateRoutePolicyScenario(client, scenario, catalog))
+        scenarioDefinitions.map((scenario) => evaluateRoutePolicyScenario(client, scenario, catalog, options))
       )
     : await Promise.allSettled(
-        scenarioDefinitions.map((scenario) => explainRoutePolicyScenarioFailure(client, scenario, catalogResult))
+        scenarioDefinitions.map((scenario) => explainRoutePolicyScenarioFailure(client, scenario, catalogResult, options))
       )
   const scenarios = scenarioDefinitions.map<RoutePolicyScenarioResult>((scenario, index) => {
     const result = scenarioResults[index]
@@ -227,10 +237,11 @@ export async function buildRoutePolicySnapshot(
 async function explainRoutePolicyScenarioFailure(
   client: AuroraClient,
   scenario: RoutePolicyScenario,
-  catalogResult: PromiseSettledResult<CapabilityCatalogResponse>
+  catalogResult: PromiseSettledResult<CapabilityCatalogResponse>,
+  options: BuildRoutePolicySnapshotOptions = {}
 ): Promise<RoutePolicyEvaluation> {
   try {
-    await client.routes.explain(scenario.request)
+    await client.routes.explain(scenario.request, requestSignalOptions(options.signal))
   } catch (error) {
     throw error
   }
@@ -242,7 +253,8 @@ async function explainRoutePolicyScenarioFailure(
 function evaluateRoutePolicyScenario(
   client: AuroraClient,
   scenario: RoutePolicyScenario,
-  catalog: CapabilityCatalogResponse
+  catalog: CapabilityCatalogResponse,
+  options: BuildRoutePolicySnapshotOptions = {}
 ): Promise<RoutePolicyEvaluation> {
   const request = {
     routeRequest: scenario.request,
@@ -258,7 +270,32 @@ function evaluateRoutePolicyScenario(
     ...(scenario.consentGranted === undefined ? {} : { consentGranted: scenario.consentGranted }),
     ...(scenario.privacyIndicatorShown === undefined ? {} : { privacyIndicatorShown: scenario.privacyIndicatorShown }),
     ...(scenario.allowCloudFallback === undefined ? {} : { allowCloudFallback: scenario.allowCloudFallback })
-  })
+  }, requestSignalOptions(options.signal))
+}
+
+function requestSignalOptions(signal: AbortSignal | undefined): { signal?: AbortSignal } {
+  return signal ? { signal } : {}
+}
+
+function routeAllowsServerRead(route: RouteAvailability): boolean {
+  return !route.disabled && route.state !== 'denied' && route.state !== 'privacy-blocked'
+}
+
+function unavailableRoutePolicySnapshot(route: RouteAvailability, selectedScenarioId: RoutePolicyScenarioId): RoutePolicySnapshot {
+  const state = route.state === 'denied' || route.state === 'privacy-blocked' ? 'denied' : 'unavailable'
+  return {
+    ...loadingSnapshot,
+    loadState: state,
+    selectedScenarioId,
+    routeState: route.state,
+    routeReason: presentableSignal(route.explanation || route.blockers.join(', ') || route.state),
+    policyCapabilityState: route.state,
+    policyCapabilityReason: 'Device choices are unavailable for this page right now.',
+    configCapabilityState: route.state,
+    configCapabilityReason: 'Policy editing is unavailable for this page right now.',
+    scenarios: routePolicyScenarios().map((scenario) => ({ scenario, state: route.state, evaluation: null, error: null })),
+    evidenceSource: 'Aurora route status'
+  }
 }
 
 function routePolicyRouteKey(route: RouteAvailability): string {
@@ -271,6 +308,12 @@ function routePolicyRouteKey(route: RouteAvailability): string {
   ].join('|')
 }
 
+const ROUTE_POLICY_CARD_SURFACE_CLASS = 'min-w-0 rounded-[var(--aui-card-radius)] border border-border bg-card shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]'
+const ROUTE_POLICY_SUMMARY_CLASS = 'm-0 grid grid-cols-4 gap-[0.55rem] [@media(max-width:1100px)]:grid-cols-2 [@media(max-width:720px)]:grid-cols-1'
+const ROUTE_POLICY_HEADER_COPY_CLASS = 'mt-[0.32rem] mb-0 max-w-[42rem] text-[0.78rem] leading-[1.38] text-muted-foreground [@media(max-width:720px)]:text-[0.74rem] [@media(max-width:720px)]:leading-[1.34]'
+const ROUTE_POLICY_FACT_CLASS = `${ROUTE_POLICY_CARD_SURFACE_CLASS} p-[var(--aui-card-pad)]`
+const ROUTE_POLICY_DANGER_MESSAGE_CLASS = 'm-0 rounded-[0.5rem] border border-[color-mix(in_srgb,var(--aui-danger)_30%,var(--aui-border))] bg-[color-mix(in_srgb,var(--aui-danger)_8%,var(--aui-bg))] p-[0.8rem] leading-[1.45] text-[var(--aui-danger)]'
+
 export function RoutePolicyView({
   snapshot,
   onSelectScenario,
@@ -281,43 +324,48 @@ export function RoutePolicyView({
     [snapshot.scenarios, snapshot.selectedScenarioId]
   )
   return (
-    <section className="aui-route-policy-view" aria-labelledby="route-policy-title">
-      <header className="aui-route-policy-header">
-        <div>
-          <p className="aui-kicker">Shared devices</p>
-          <h1 id="route-policy-title">How Aurora chooses a device</h1>
-          <p>See where each kind of task can run and what needs your attention before Aurora uses another device.</p>
+    <section className="mt-[1.2rem] grid gap-[var(--aui-grid-gap)]" aria-labelledby="route-policy-title">
+      <header className="mb-[0.1rem] flex items-start justify-between gap-[0.8rem] [@media(max-width:720px)]:grid [@media(max-width:720px)]:gap-2">
+        <div className="min-w-0">
+          <p className="mt-[0.32rem] mb-0 max-w-[42rem] text-[0.78rem] font-[750] leading-[1.38] tracking-[0.13em] text-muted-foreground uppercase opacity-90 [@media(max-width:720px)]:text-[0.74rem] [@media(max-width:720px)]:leading-[1.34]">Shared devices</p>
+          <h1 id="route-policy-title" className="mt-[0.08rem] mb-0 max-w-[38rem] text-[clamp(1.28rem,1.9vw,1.72rem)] leading-[1.02] font-[850] tracking-[-0.035em] text-foreground [@media(max-width:720px)]:text-[clamp(1.28rem,8vw,1.72rem)]">How Aurora chooses a device</h1>
+          <p className={ROUTE_POLICY_HEADER_COPY_CLASS}>See where each kind of task can run and what needs your attention before Aurora uses another device.</p>
         </div>
-        <div className="aui-mesh-badges" aria-label="Device choice status">
+        <div className="flex max-w-[30rem] flex-wrap content-start justify-end gap-[0.32rem] [@media(max-width:680px)]:justify-start [@media(max-width:720px)]:hidden" aria-label="Device choice status">
           <StatusBadge state={snapshot.loadState === 'loading' ? 'pending' : snapshot.routeState} />
           <EvidenceBadge label={snapshot.secretsRedacted ? 'sensitive values hidden' : 'status pending'} />
           <EvidenceBadge label="Aurora status" />
         </div>
       </header>
 
-      <dl className="aui-route-policy-summary">
+      <dl className={ROUTE_POLICY_SUMMARY_CLASS}>
         <PolicyFact label="Device choices" value={`${productAvailabilityCopy(snapshot.policyCapabilityState)}. ${productRouteReasonCopy(snapshot.policyCapabilityReason)}`} />
         <PolicyFact label="Current task" value={selected ? `${selected.scenario.label}: ${productAvailabilityCopy(selected.state)}` : 'Not loaded'} />
       </dl>
 
-      {snapshot.error ? <p className="aui-message aui-message-danger" role="alert">{productRoutePolicyErrorCopy(snapshot.error)}</p> : null}
+      {snapshot.error ? <p className={ROUTE_POLICY_DANGER_MESSAGE_CLASS} role="alert">{productRoutePolicyErrorCopy(snapshot.error)}</p> : null}
       {snapshot.warnings.length > 0 ? (
-        <ul className="aui-mesh-warnings" aria-label="Device choice warnings">
+        <ul className="m-0 grid gap-[0.4rem] pl-[1.1rem] leading-[1.4] text-muted-foreground" aria-label="Device choice warnings">
           {snapshot.warnings.map((warning) => <li key={warning}>{productRoutePolicyErrorCopy(warning)}</li>)}
         </ul>
       ) : null}
 
-      <div className="aui-route-policy-layout">
-        <section className="aui-route-policy-panel" aria-labelledby="route-dry-run-title">
-          <div className="aui-panel-heading">
+      <div className="grid grid-cols-[minmax(0,1fr)] items-start gap-[var(--aui-grid-gap)]">
+        <section className={ROUTE_POLICY_CARD_SURFACE_CLASS} aria-labelledby="route-dry-run-title">
+          <div className="flex items-center justify-between gap-[0.52rem] border-b border-border p-[var(--aui-card-pad)]">
             <div>
-              <h2 id="route-dry-run-title">Example tasks</h2>
+              <h2 id="route-dry-run-title" className="m-0 mt-[0.15rem] text-[0.88rem] font-[850] tracking-[-0.012em] text-foreground">Example tasks</h2>
             </div>
-            <button className="aui-button" type="button" onClick={onRefresh} disabled={snapshot.loadState === 'loading'}>
+            <button
+              className="min-h-[1.68rem] w-fit rounded-[0.42rem] border border-border bg-muted/60 px-[0.8rem] py-[0.6rem] !text-[0.68rem] !font-[inherit] tracking-[0.005em] text-foreground hover:border-[rgb(94_234_212_/_0.45)] hover:text-primary"
+              type="button"
+              onClick={onRefresh}
+              disabled={snapshot.loadState === 'loading'}
+            >
               <RefreshCw size={16} aria-hidden="true" /> Refresh
             </button>
           </div>
-          <div className="aui-route-scenarios" role="tablist" aria-label="Tasks to review">
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(11rem,1fr))] gap-2 border-b border-border p-[0.85rem] [@media(max-width:680px)]:grid-cols-[minmax(0,1fr)]" role="tablist" aria-label="Tasks to review">
             {snapshot.scenarios.map((result) => (
               <button
                 key={result.scenario.id}
@@ -325,10 +373,14 @@ export function RoutePolicyView({
                 role="tab"
                 aria-selected={result.scenario.id === snapshot.selectedScenarioId}
                 data-active={result.scenario.id === snapshot.selectedScenarioId}
+                className={cn(
+                  'grid min-h-[2.6rem] grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-[0.4rem] rounded-[0.45rem] border border-border bg-[var(--aui-surface)] px-[0.55rem] py-[0.45rem] text-left text-foreground [&_span]:min-w-0 [&_span]:[overflow-wrap:anywhere] [&_span]:font-[750]',
+                  result.scenario.id === snapshot.selectedScenarioId && 'border-[color-mix(in_srgb,var(--aui-primary)_45%,var(--aui-border))] bg-[color-mix(in_srgb,var(--aui-primary)_8%,var(--aui-bg))]'
+                )}
                 onClick={() => onSelectScenario?.(result.scenario.id)}
               >
                 <Route size={16} aria-hidden="true" />
-                <span>{result.scenario.label}</span>
+                <span className="min-w-0 [overflow-wrap:anywhere] font-[750]">{result.scenario.label}</span>
                 <StatusBadge state={result.state} />
               </button>
             ))}
@@ -343,21 +395,21 @@ export function RoutePolicyView({
 function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult }) {
   const evaluation = result.evaluation
   return (
-    <article className="aui-route-explain-card" data-state={result.state}>
-      <header>
+    <article className="grid gap-[0.8rem] p-[0.85rem]" data-state={result.state}>
+      <header className="flex items-start justify-between gap-3 [@media(max-width:680px)]:grid">
         <div>
-          <h3>{result.scenario.label}</h3>
-          <p>{result.scenario.description}</p>
+          <h3 className="m-0 text-[1.05rem]">{result.scenario.label}</h3>
+          <p className="mt-1 mb-0 leading-[1.45] text-muted-foreground">{result.scenario.description}</p>
         </div>
-        <div className="aui-route-explain-badges">
+        <div className="flex flex-wrap justify-end gap-[0.4rem] [@media(max-width:680px)]:justify-start">
           <StatusBadge state={result.state} />
           {evaluation ? <PrivacyBadge privacy={evaluation.privacyClass} /> : null}
         </div>
       </header>
-      {result.error ? <p className="aui-message aui-message-danger" role="alert">{productRoutePolicyErrorCopy(result.error)}</p> : null}
+      {result.error ? <p className={ROUTE_POLICY_DANGER_MESSAGE_CLASS} role="alert">{productRoutePolicyErrorCopy(result.error)}</p> : null}
       {evaluation ? (
         <>
-          <dl className="aui-route-policy-summary">
+          <dl className={ROUTE_POLICY_SUMMARY_CLASS}>
             <PolicyFact label="Result" value={productRouteReasonCopy(evaluation.allowed ? 'allowed' : evaluation.reasonCode)} />
             <PolicyFact label="Selected destination" value={previewTarget(evaluation)} />
             <PolicyFact label="Sharing behavior" value={productRoutePolicySharingCopy(evaluation.preview.fallbackBehavior)} />
@@ -365,23 +417,30 @@ function RouteScenarioDetails({ result }: { result: RoutePolicyScenarioResult })
             <PolicyFact label="Device choice" value={evaluation.explicitSelectorRequired ? 'Choose a device before continuing' : 'No additional choice needed'} />
             <PolicyFact label="Account history" value={evaluation.preview.auditReceiptTarget ? 'Will be updated' : 'Not reported'} />
           </dl>
-          <div className="aui-route-candidates">
+          <div className="grid gap-[0.65rem] [&_small]:col-span-full [&_small]:min-w-0 [&_small]:text-[0.78rem] [&_small]:text-muted-foreground [&_small]:[overflow-wrap:anywhere] [&_span]:min-w-0 [&_span]:text-[0.78rem] [&_span]:text-muted-foreground [&_span]:[overflow-wrap:anywhere] [&_strong]:min-w-0 [&_strong]:[overflow-wrap:anywhere]">
             {evaluation.route.candidates.map((candidate) => (
-              <article key={candidate.provider_id} className="aui-route-candidate" data-selected={candidate.selected}>
-                <header>
-                  <strong>{productCandidateTitle(candidate)}</strong>
+              <article
+                key={candidate.provider_id}
+                className={cn(
+                  'grid min-w-0 gap-[0.55rem] rounded-[0.45rem] border border-border bg-[color-mix(in_srgb,var(--aui-surface-2)_45%,var(--aui-bg))] p-[0.65rem]',
+                  candidate.selected && 'border-[color-mix(in_srgb,var(--aui-success)_38%,var(--aui-border))] bg-[color-mix(in_srgb,var(--aui-success)_8%,var(--aui-bg))]'
+                )}
+                data-selected={candidate.selected}
+              >
+                <header className="flex items-center justify-between gap-[0.55rem]">
+                  <strong className="min-w-0 [overflow-wrap:anywhere]">{productCandidateTitle(candidate)}</strong>
                   <StatusBadge state={candidate.selected ? 'available-remote' : candidate.included ? 'degraded' : 'denied'} />
                 </header>
-                <dl className="aui-route-policy-summary">
+                <dl className={ROUTE_POLICY_SUMMARY_CLASS}>
                   <PolicyFact label="Device" value={candidate.peer_id ? 'Shared device' : 'This device'} />
                   <PolicyFact label="Latency" value={candidate.latency_ms === null ? 'not reported' : `${candidate.latency_ms} ms`} />
                   <PolicyFact label="Capacity" value={`${candidate.active_calls}/${candidate.max_concurrent}; ${candidate.available_capacity ?? 'unknown'} available`} />
                   <PolicyFact label="Reason" value={productRouteReasonCopy(candidate.reason || candidate.reason_code)} />
                 </dl>
                 {candidate.blockers.length > 0 ? (
-                  <ul>
+                  <ul className="m-0 grid gap-[0.3rem] pl-4 text-muted-foreground [overflow-wrap:anywhere]">
                     {candidate.blockers.map((blocker) => (
-                      <li key={`${candidate.provider_id}-${blocker.code}`}>{productRouteReasonCopy(blocker.message || blocker.code)}</li>
+                      <li key={`${candidate.provider_id}-${blocker.code}`} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[0.45rem] gap-y-[0.2rem] rounded-[0.45rem] border border-border bg-[var(--aui-surface)] p-[0.55rem]">{productRouteReasonCopy(blocker.message || blocker.code)}</li>
                     ))}
                   </ul>
                 ) : null}
@@ -578,9 +637,9 @@ function productRouteReasonCopy(value: string): string {
 
 function PolicyFact({ label, value }: { label: string; value: string }) {
   return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value}</dd>
+    <div className={ROUTE_POLICY_FACT_CLASS}>
+      <dt className="text-[0.66rem] font-[750] uppercase tracking-[0.045em] text-muted-foreground">{label}</dt>
+      <dd className="mt-[0.2rem] mb-0 leading-[1.35] text-foreground [overflow-wrap:anywhere]">{value}</dd>
     </div>
   )
 }

@@ -2,6 +2,7 @@ import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 import {
   buildLocalDataExportV1,
   localDataMigrationManifest,
+  localDataIdSchema,
   LocalDataError,
   parseConversationMessageRecord,
   parseConversationRecord,
@@ -23,6 +24,7 @@ import {
   type LocalToolStateRecord,
   type LightweightMemoryRecord,
   type PeerGrantMetadataRecord
+  , type ConversationListQuery, type MessageListQuery
 } from '@aurora/client/local-data'
 
 import { sha256Hex, type BrowserSqliteStorageIdentity } from './browser-sqlite-opfs'
@@ -58,10 +60,13 @@ export type BrowserSqliteRepositoryOperation =
   | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
   | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
-  | { readonly kind: 'conversations.listConversations' }
-  | { readonly kind: 'conversations.listMessageCounts' }
-  | { readonly kind: 'conversations.listFirstUserMessages' }
-  | { readonly kind: 'conversations.listMessages'; readonly conversationId: string }
+  | { readonly kind: 'conversations.getConversation'; readonly conversationId: string }
+  | { readonly kind: 'conversations.getMessage'; readonly conversationId: string; readonly messageId: string }
+  | { readonly kind: 'conversations.getLatestMessageSequence'; readonly conversationId: string }
+  | { readonly kind: 'conversations.listConversations'; readonly options?: ConversationListQuery }
+  | { readonly kind: 'conversations.listMessageCounts'; readonly conversationIds?: readonly string[] }
+  | { readonly kind: 'conversations.listFirstUserMessages'; readonly conversationIds?: readonly string[] }
+  | { readonly kind: 'conversations.listMessages'; readonly conversationId: string; readonly options?: MessageListQuery }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
   | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly scope: LocalDataScope; readonly nowMs: number; readonly limit: number }
@@ -362,7 +367,7 @@ function validateForeignKeys(db: SqliteDatabase): void {
   }
 }
 
-function executeRepositoryOperation(workerState: WorkerState, operation: BrowserSqliteRepositoryOperation): unknown {
+export function executeRepositoryOperation(workerState: WorkerState, operation: BrowserSqliteRepositoryOperation): unknown {
   assertOpenState(workerState)
   const db = workerState.db
   switch (operation.kind) {
@@ -378,28 +383,67 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     case 'conversations.appendMessage': {
       const record = parseConversationMessageRecord(operation.record)
       requireConversationInScope(db, workerState, record.conversationId)
+      const duplicateSequence = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_messages WHERE conversation_id = ? AND sequence = ? AND id <> ? LIMIT 1;', [record.conversationId, record.sequence, record.id])
+      if (duplicateSequence.length > 0) throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
       assertNoSqliteMessageIdCollision(db, record, workerState)
       run(db, 'INSERT INTO aurora_messages (id, conversation_id, sequence, role, content_envelope_json, tool_envelope_json, status, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET conversation_id = excluded.conversation_id, sequence = excluded.sequence, role = excluded.role, content_envelope_json = excluded.content_envelope_json, tool_envelope_json = excluded.tool_envelope_json, status = excluded.status, created_at_ms = excluded.created_at_ms;', [
         record.id, record.conversationId, record.sequence, record.role, jsonOrNull(record.contentEnvelope), jsonOrNull(record.toolEnvelope), record.status, record.createdAtMs
       ])
       return undefined
     }
-    case 'conversations.listConversations':
-      return selectObjects<ConversationRow>(db, 'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? ORDER BY updated_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToConversation)
+    case 'conversations.getConversation':
+      validateQueryId(operation.conversationId, 'conversation.id')
+      return selectObjects<ConversationRow>(db, 'SELECT * FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToConversation)[0] ?? null
+    case 'conversations.getMessage':
+      validateQueryId(operation.conversationId, 'conversation.id'); validateQueryId(operation.messageId, 'message.id')
+      return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.id = ? AND messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? LIMIT 1;', [operation.messageId, operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)[0] ?? null
+    case 'conversations.getLatestMessageSequence':
+      validateQueryId(operation.conversationId, 'conversation.id')
+      return selectObjects<{ sequence: number }>(db, 'SELECT sequence FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY sequence DESC, id DESC LIMIT 1;', [operation.conversationId, workerState.profileId, workerState.localNodeId])[0]?.sequence ?? null
+    case 'conversations.listConversations': {
+      if (operation.options === undefined) return selectObjects<ConversationRow>(db, 'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? ORDER BY updated_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToConversation)
+      const query = operation.options
+      if (Object.values(query).every((value) => value === undefined)) return selectObjects<ConversationRow>(db, 'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? ORDER BY updated_at_ms DESC, id ASC;', [workerState.profileId, workerState.localNodeId]).map(rowToConversation)
+      validateConversationQuery(query)
+      const args: unknown[] = [workerState.profileId, workerState.localNodeId]
+      const archived = query.includeArchived === false ? ' AND archived_at_ms IS NULL' : ''
+      const cursor = query.cursor === undefined ? '' : ' AND (updated_at_ms < ? OR (updated_at_ms = ? AND id > ?))'
+      if (query.cursor) args.push(query.cursor.updatedAtMs, query.cursor.updatedAtMs, query.cursor.id)
+      const limit = query.limit === undefined ? '' : ' LIMIT ?'
+      if (query.limit !== undefined) args.push(query.limit)
+      return selectObjects<ConversationRow>(db, `SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?${archived}${cursor} ORDER BY updated_at_ms DESC, id ASC${limit};`, args).map(rowToConversation)
+    }
     case 'conversations.listMessageCounts':
+      validateConversationIds(operation.conversationIds)
+      if (operation.conversationIds !== undefined && operation.conversationIds.length === 0) return {}
       return Object.fromEntries(selectObjects<{ conversation_id: string; count: number }>(
         db,
-        'SELECT messages.conversation_id, COUNT(*) AS count FROM aurora_messages messages INNER JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ? GROUP BY messages.conversation_id;',
-        [workerState.profileId, workerState.localNodeId]
+        `SELECT messages.conversation_id, COUNT(*) AS count FROM aurora_messages messages INNER JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ?${operation.conversationIds === undefined ? '' : ` AND messages.conversation_id IN (${operation.conversationIds.map(() => '?').join(',')})`} GROUP BY messages.conversation_id;`,
+        [workerState.profileId, workerState.localNodeId, ...(operation.conversationIds ?? [])]
       ).map((row) => [row.conversation_id, Number(row.count)]))
     case 'conversations.listFirstUserMessages':
+      validateConversationIds(operation.conversationIds)
+      if (operation.conversationIds !== undefined && operation.conversationIds.length === 0) return {}
       return Object.fromEntries(selectObjects<MessageRow>(
         db,
-        'SELECT messages.* FROM aurora_messages messages INNER JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ? AND messages.role = ? AND NOT EXISTS (SELECT 1 FROM aurora_messages earlier WHERE earlier.conversation_id = messages.conversation_id AND earlier.role = ? AND (earlier.sequence < messages.sequence OR (earlier.sequence = messages.sequence AND earlier.id < messages.id))) ORDER BY messages.conversation_id ASC, messages.sequence ASC, messages.id ASC;',
-        [workerState.profileId, workerState.localNodeId, 'user', 'user']
+        `SELECT messages.* FROM aurora_messages messages INNER JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE conversations.profile_id = ? AND conversations.local_node_id = ? AND messages.role = ?${operation.conversationIds === undefined ? '' : ` AND messages.conversation_id IN (${operation.conversationIds.map(() => '?').join(',')})`} AND NOT EXISTS (SELECT 1 FROM aurora_messages earlier WHERE earlier.conversation_id = messages.conversation_id AND earlier.role = ? AND (earlier.sequence < messages.sequence OR (earlier.sequence = messages.sequence AND earlier.id < messages.id))) ORDER BY messages.conversation_id ASC, messages.sequence ASC, messages.id ASC;`,
+        [workerState.profileId, workerState.localNodeId, 'user', ...(operation.conversationIds ?? []), 'user']
       ).map((row) => [row.conversation_id, rowToMessage(row)]))
-    case 'conversations.listMessages':
-      return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.sequence ASC, messages.id ASC;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)
+    case 'conversations.listMessages': {
+      validateQueryId(operation.conversationId, 'conversation.id')
+      if (operation.options === undefined) return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.sequence ASC, messages.id ASC;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)
+      const query = operation.options
+      if (Object.values(query).every((value) => value === undefined)) return selectObjects<MessageRow>(db, 'SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE messages.conversation_id = ? AND conversations.profile_id = ? AND conversations.local_node_id = ? ORDER BY messages.sequence ASC, messages.id ASC;', [operation.conversationId, workerState.profileId, workerState.localNodeId]).map(rowToMessage)
+      validateMessageQuery(query)
+      const clauses = ['messages.conversation_id = ?', 'conversations.profile_id = ?', 'conversations.local_node_id = ?']
+      const args: unknown[] = [operation.conversationId, workerState.profileId, workerState.localNodeId]
+      if (query.beforeSequence !== undefined) { clauses.push('messages.sequence < ?'); args.push(query.beforeSequence) }
+      if (query.afterSequence !== undefined) { clauses.push('messages.sequence > ?'); args.push(query.afterSequence) }
+      const limit = query.limit === undefined ? '' : ' LIMIT ?'
+      if (query.limit !== undefined) args.push(query.limit)
+      const order = query.direction === 'desc' ? 'DESC' : 'ASC'
+      return selectObjects<MessageRow>(db, `SELECT messages.* FROM aurora_messages messages JOIN aurora_conversations conversations ON conversations.id = messages.conversation_id WHERE ${clauses.join(' AND ')} ORDER BY messages.sequence ${order}, messages.id ASC${limit};`, args).map(rowToMessage)
+    }
     case 'conversations.deleteConversation': {
       const rows = selectObjects<{ id: string }>(db, 'SELECT id FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ?;', [operation.conversationId, workerState.profileId, workerState.localNodeId])
       if (rows.length === 0) return { deleted: false, deletedMessages: 0 }
@@ -477,6 +521,32 @@ function executeRepositoryOperation(workerState: WorkerState, operation: Browser
     default:
       return assertNever(operation)
   }
+}
+
+function validateConversationQuery(query: ConversationListQuery): void {
+  if (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 501)) throw new LocalDataError('invalid_record', 'Invalid conversation query', { reason: 'conversation_limit' })
+  if (query.cursor && (!Number.isSafeInteger(query.cursor.updatedAtMs) || query.cursor.updatedAtMs < 0 || Object.is(query.cursor.updatedAtMs, -0))) throw new LocalDataError('invalid_record', 'Invalid conversation cursor timestamp', { reason: 'conversation_cursor_updated_at' })
+  if (query.cursor) validateCursorId(query.cursor.id)
+  if (query.includeArchived !== undefined && typeof query.includeArchived !== 'boolean') throw new LocalDataError('invalid_record', 'Invalid archive filter', { reason: 'include_archived' })
+}
+function validateMessageQuery(query: MessageListQuery): void {
+  if (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 2001)) throw new LocalDataError('invalid_record', 'Invalid message query', { reason: 'message_limit' })
+  if (query.beforeSequence !== undefined && query.afterSequence !== undefined) throw new LocalDataError('invalid_record', 'Ambiguous message bounds', { reason: 'ambiguous_message_cursor' })
+  if (query.direction !== undefined && query.direction !== 'asc' && query.direction !== 'desc') throw new LocalDataError('invalid_record', 'Invalid message direction', { reason: 'message_direction' })
+  if (query.beforeSequence !== undefined && (!Number.isSafeInteger(query.beforeSequence) || query.beforeSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_before_sequence' })
+  if (query.afterSequence !== undefined && (!Number.isSafeInteger(query.afterSequence) || query.afterSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_after_sequence' })
+}
+function validateConversationIds(ids: readonly string[] | undefined): void {
+  if (ids !== undefined && ids.length > 500) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set_limit' })
+  if (ids !== undefined) ids.forEach(validateConversationId)
+}
+function validateQueryId(value: string, boundaryId: string): void { parseQueryBoundaryId(value, boundaryId) }
+function validateConversationId(value: string): void { parseQueryBoundaryId(value, 'conversation.id') }
+function validateCursorId(value: string): void { parseQueryBoundaryId(value, 'conversation_cursor_id') }
+function parseQueryBoundaryId(value: unknown, boundaryId: string): string {
+  const parsed = localDataIdSchema.safeParse(value)
+  if (parsed.success) return parsed.data
+  throw new LocalDataError('invalid_record', `Invalid local data boundary: ${boundaryId}`, { boundaryId, validation: 'redacted', issues: parsed.error.issues.map((issue) => ({ code: issue.code, path: issue.path.map((item) => String(item)).join('.') })) })
 }
 
 function exportV1(workerState: WorkerState): LocalDataExportV1 {
@@ -659,7 +729,7 @@ function assertNoSqliteMessageIdCollision(
   if (existing.profile_id !== workerState.profileId || existing.local_node_id !== workerState.localNodeId) {
     throw scopedKeyCollision()
   }
-  throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+  throw new LocalDataError('invalid_record', 'Message IDs must be unique', { reason: 'duplicate_message_id' })
 }
 
 function assertDatabaseLocalNodeOwnership(db: SqliteDatabase | null, localNodeId: string): void {

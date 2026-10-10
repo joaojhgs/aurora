@@ -226,6 +226,27 @@ describe('production UI copy checker', () => {
     rmSync(dir, { recursive: true, force: true })
   })
 
+  it.each([
+    ['productAssistantErrorCopyRef.current(error)', true],
+    ['formatErrorRef.current(error)', false],
+    ['productAssistantErrorCopyRef.value(error)', false],
+  ])('checks product-copy references: %s', (expression, safe) => {
+    const dir = fixtureDir()
+    try {
+      const file = join(dir, 'referenced-error-copy.tsx')
+      writeFileSync(file, `
+        export function ReferencedErrorCopy({ error }) {
+          return <p role="alert">{${expression}}</p>
+        }
+      `)
+      const result = runChecker(file)
+      expect(result.ok).toBe(safe)
+      if (!safe) expect(result.stderr).toContain('raw-render-expression')
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('requires tooling error helpers to use an explicit product-copy boundary', () => {
     const dir = fixtureDir()
     const unsafe = join(dir, 'unsafe-tooling-message.tsx')

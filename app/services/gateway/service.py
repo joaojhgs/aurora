@@ -71,6 +71,7 @@ from app.shared.contracts.models.gateway import (
     GatewayMeshInferChatRequest,
     GatewayMeshInferChatResponse,
     GatewayMethods,
+    GatewayStatusChangedEvent,
     GatewayStreamMeshInferChatStartRequest,
     GatewayStreamMeshInferChatStartResponse,
     GatewaySupportBundleRequest,
@@ -95,6 +96,7 @@ from app.shared.contracts.models.gateway import (
     MeshServiceRoutingSummary,
     RouteExplainRequest,
     RouteExplainResponse,
+    ServiceAnnouncement,
     ServiceInfo,
     ServiceProcessTopology,
     SupportBundleDiagnosticItem,
@@ -135,6 +137,7 @@ from app.shared.mesh.tracing import get_payload_correlation_id
 from app.shared.services.base_service import BaseService
 
 _EVENT_STREAM_MAXLEN = 500
+_SERVICE_ANNOUNCEMENT_DIGEST_CACHE_MAX = 256
 _DIAGNOSTIC_REDACT_KEY_PARTS = (
     "api_key",
     "apikey",
@@ -1225,6 +1228,9 @@ class GatewayService(BaseService):
         self._audio_session_service = AudioSessionService()
         self._event_stream: deque[GatewayEventStreamEvent] = deque(maxlen=_EVENT_STREAM_MAXLEN)
         self._event_stream_subscription_topic = "*"
+        # Service announcements remain live registry input on every renewal, but
+        # the UI topology stream should only see a changed typed projection.
+        self._service_announcement_projection_digests: dict[str, str] = {}
         self._mesh_authority_lock = asyncio.Lock()
         self._mesh_authority_event_topic = MeshEvents.PEER_AUTHORITY_CHANGED
         self._tooling_projection_invalidation_topic = ToolingMethods.PROJECTION_INVALIDATED
@@ -2148,6 +2154,94 @@ class GatewayService(BaseService):
                 origin="internal",
                 correlation_id=event.correlation_id,
             )
+        status_event = self._status_event_for_payload(envelope.type, payload)
+        if status_event is not None:
+            try:
+                await self.bus.publish(
+                    GatewayMethods.STATUS_CHANGED,
+                    status_event,
+                    event=True,
+                    mesh=True,
+                    origin="internal",
+                )
+            except Exception as error:
+                log_warning(f"Failed to publish Gateway status event: {error}")
+
+    def _status_event_for_payload(
+        self, topic: str, payload: dict[str, Any]
+    ) -> GatewayStatusChangedEvent | None:
+        """Project status while suppressing unchanged service renewals.
+
+        The registry aggregator still receives every announcement and updates
+        its liveness lease.  Only the UI-facing topology event is deduplicated,
+        using the typed announcement fields and instance identity while
+        ignoring the renewal timestamp.
+        """
+        event = self._status_changed_event(topic, payload)
+        if topic == GatewayMethods.SERVICE_ANNOUNCE:
+            module = payload.get("module")
+            if not isinstance(module, str) or not module:
+                return event
+            try:
+                from app.services.gateway.registry_aggregator import (
+                    _announcement_contract_fingerprint,
+                )
+
+                announcement = ServiceAnnouncement.model_validate(payload)
+                projection = _announcement_contract_fingerprint(announcement)
+                projection["summary"] = announcement.summary
+                projection["instance_id"] = announcement.instance_id
+                digest = _payload_hash(projection)
+            except Exception:
+                # A malformed announcement must remain visible for existing
+                # validation/error handling rather than being hidden by a cache.
+                return event
+            previous = self._service_announcement_projection_digests.get(module)
+            if previous is None and len(self._service_announcement_projection_digests) >= (
+                _SERVICE_ANNOUNCEMENT_DIGEST_CACHE_MAX
+            ):
+                self._service_announcement_projection_digests.pop(
+                    next(iter(self._service_announcement_projection_digests))
+                )
+            self._service_announcement_projection_digests[module] = digest
+            return event if previous != digest else None
+        if topic == GatewayMethods.SERVICE_DEPART:
+            module = payload.get("module")
+            if isinstance(module, str):
+                self._service_announcement_projection_digests.pop(module, None)
+        return event
+
+    @staticmethod
+    def _status_changed_event(
+        topic: str, payload: dict[str, Any]
+    ) -> GatewayStatusChangedEvent | None:
+        """Project only typed lifecycle/config state into the mesh-safe event."""
+        if topic == GatewayMethods.SERVICE_ANNOUNCE:
+            kind, status, freshness = "service.announced", "connected", "current"
+        elif topic == GatewayMethods.SERVICE_HEARTBEAT:
+            return None
+        elif topic == GatewayMethods.SERVICE_DEPART:
+            kind, status, freshness = "service.stale", "disconnected", "stale"
+        elif topic == ConfigMethods.UPDATED:
+            kind, status, freshness = "config.updated", "updated", "current"
+        elif topic == ConfigMethods.ERROR:
+            kind, status, freshness = "config.validation_failed", "failed", "current"
+        else:
+            return None
+        service_id = payload.get("module") or payload.get("service_id")
+        if service_id is not None and (
+            not isinstance(service_id, str)
+            or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,128}", service_id)
+        ):
+            service_id = None
+        return GatewayStatusChangedEvent(
+            event_id=str(uuid.uuid4()),
+            timestamp=datetime.now(timezone.utc).isoformat(),
+            kind=kind,
+            status=status,
+            freshness=freshness,
+            service_id=service_id,
+        )
 
     @staticmethod
     def _strict_authority_permissions(raw_permissions: Any) -> tuple[str, ...]:
@@ -4179,6 +4273,7 @@ class GatewayService(BaseService):
                     "legacy_event_broadcast",
                     True,
                 ),
+                status_event_authorizer=self._rtc_client.peer_can_receive_gateway_status,
             )
 
             self._mesh_latency_monitor = LatencyMonitor(

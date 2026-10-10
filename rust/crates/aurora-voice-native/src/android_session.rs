@@ -4,6 +4,10 @@
 //! owns the platform capture/playback threads, but it never owns voice state,
 //! generations, transport calls, or cancellation semantics.
 
+use crate::native_event_observer::{
+    begin_native_voice_observation_producer, observe_native_voice, NativeVoiceObservation,
+    NativeVoiceObservationToken, NativeVoiceTurnIds, NativeVoiceTurnSnapshot,
+};
 #[cfg(feature = "native-sherpa")]
 use crate::{
     build_installed_kws_provider_from_phrases, build_installed_stt_provider,
@@ -46,6 +50,7 @@ use aurora_voice_sherpa::{
 #[cfg(feature = "native-sherpa-tts")]
 use aurora_voice_sherpa::{NativeTtsBackend, NativeTtsReferenceAudio, SherpaTtsProvider};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::path::PathBuf;
@@ -725,6 +730,7 @@ const MAX_BACKGROUND_TURN_RESULTS: usize = 8;
 #[serde(rename_all = "camelCase")]
 pub struct AndroidBackgroundVoiceTurnResult {
     pub generation: Generation,
+    pub observation_token: String,
     pub transcript: String,
     pub assistant_text: Option<String>,
     pub error_code: Option<String>,
@@ -757,9 +763,11 @@ impl AndroidVoiceSession {
         let focused_transcript = Arc::new(Mutex::new(None));
         let turn_transcript = Arc::new(Mutex::new(None));
         let background_results = Arc::new(Mutex::new(VecDeque::new()));
+        let observation_tokens = Arc::new(Mutex::new(HashMap::new()));
         let sink = AndroidSessionSink {
             status: Arc::clone(&status),
             turn_transcript: Arc::clone(&turn_transcript),
+            observation_tokens: Arc::clone(&observation_tokens),
         };
         let (commands, command_rx) = tokio_mpsc::unbounded_channel();
         let thread_state = AndroidSessionThreadState {
@@ -767,6 +775,7 @@ impl AndroidVoiceSession {
             focused_transcript: Arc::clone(&focused_transcript),
             turn_transcript: Arc::clone(&turn_transcript),
             background_results: Arc::clone(&background_results),
+            observation_tokens: Arc::clone(&observation_tokens),
             control: control.clone(),
         };
         let thread_output = output.clone();
@@ -1211,8 +1220,9 @@ fn background_eligible(mode: AndroidVoiceStartMode) -> bool {
 struct AndroidSessionThreadState {
     status: Arc<Mutex<AndroidVoiceSessionStatus>>,
     focused_transcript: Arc<Mutex<Option<String>>>,
-    turn_transcript: Arc<Mutex<Option<(Generation, String)>>>,
+    turn_transcript: Arc<Mutex<Option<(Generation, String, NativeVoiceObservationToken)>>>,
     background_results: Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
+    observation_tokens: Arc<Mutex<HashMap<Generation, NativeVoiceObservationToken>>>,
     control: AndroidCaptureControl,
 }
 
@@ -1275,6 +1285,13 @@ fn run_session_thread(
                         stop_deadline: None,
                     };
                     let cancellation = CancellationToken::new();
+                    let observation_token = begin_native_voice_observation_producer();
+                    if let Some(token) = observation_token {
+                        if let Ok(mut tokens) = state.observation_tokens.lock() {
+                            tokens.clear();
+                            tokens.insert(generation, token);
+                        }
+                    }
                     if matches!(mode, AndroidVoiceStartMode::PushToTalk) {
                         if let Ok(mut transcript) = state.focused_transcript.lock() {
                             *transcript = None;
@@ -1284,6 +1301,11 @@ fn run_session_thread(
                         *transcript = None;
                     }
                     set_active(&state.status, generation);
+                    if let Some(token) = observation_token {
+                        observe_android_turn_snapshot(
+                            token, generation, "started", None, None, false,
+                        );
+                    }
                     let _ = reply.send(Ok(generation));
                     let result = run_turn(
                         &mut voice_runtime,
@@ -1295,14 +1317,7 @@ fn run_session_thread(
                         state.control.clone(),
                     )
                     .await;
-                    finish_status(
-                        &state.status,
-                        &state.focused_transcript,
-                        &state.turn_transcript,
-                        &state.background_results,
-                        mode,
-                        result,
-                    );
+                    finish_status(&state, generation, mode, result);
                 }
                 Command::Shutdown => {
                     if let Some(generation) = active_generation(&state.status) {
@@ -1370,14 +1385,26 @@ async fn run_turn<'a>(
 #[derive(Clone)]
 struct AndroidSessionSink {
     status: Arc<Mutex<AndroidVoiceSessionStatus>>,
-    turn_transcript: Arc<Mutex<Option<(Generation, String)>>>,
+    turn_transcript: Arc<Mutex<Option<(Generation, String, NativeVoiceObservationToken)>>>,
+    observation_tokens: Arc<Mutex<HashMap<Generation, NativeVoiceObservationToken>>>,
 }
 
 #[async_trait(?Send)]
 impl RuntimeEventSink for AndroidSessionSink {
     async fn snapshot(&mut self, snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
+        let phase = phase_for_state(snapshot.state);
         if let Ok(mut status) = self.status.lock() {
             update_session_phase(&mut status, snapshot.state, snapshot.generation);
+        }
+        if let Some(token) = token_for_generation(&self.observation_tokens, snapshot.generation) {
+            observe_android_turn_snapshot(
+                token,
+                snapshot.generation,
+                observation_status_for_phase(phase),
+                None,
+                None,
+                false,
+            );
         }
         Ok(())
     }
@@ -1385,8 +1412,21 @@ impl RuntimeEventSink for AndroidSessionSink {
     async fn event(&mut self, event: RuntimeEvent) -> Result<(), VoiceCoreError> {
         match event {
             RuntimeEvent::State { transition } => {
+                let phase = phase_for_state(transition.to);
                 if let Ok(mut status) = self.status.lock() {
                     update_session_phase(&mut status, transition.to, transition.generation);
+                }
+                if let Some(token) =
+                    token_for_generation(&self.observation_tokens, transition.generation)
+                {
+                    observe_android_turn_snapshot(
+                        token,
+                        transition.generation,
+                        observation_status_for_phase(phase),
+                        None,
+                        None,
+                        false,
+                    );
                 }
             }
             RuntimeEvent::Transcript {
@@ -1397,14 +1437,74 @@ impl RuntimeEventSink for AndroidSessionSink {
             } => {
                 let text = text.trim();
                 if !text.is_empty() {
+                    let Some(token) = token_for_generation(&self.observation_tokens, generation)
+                    else {
+                        return Ok(());
+                    };
                     if let Ok(mut transcript) = self.turn_transcript.lock() {
-                        *transcript = Some((generation, text.to_owned()));
+                        *transcript = Some((generation, text.to_owned(), token));
                     }
+                    observe_android_turn_snapshot(
+                        token,
+                        generation,
+                        "transcribed",
+                        Some(text),
+                        None,
+                        false,
+                    );
                 }
             }
             _ => {}
         }
         Ok(())
+    }
+}
+
+fn token_for_generation(
+    observation_tokens: &Arc<Mutex<HashMap<Generation, NativeVoiceObservationToken>>>,
+    generation: Generation,
+) -> Option<NativeVoiceObservationToken> {
+    observation_tokens
+        .lock()
+        .ok()
+        .and_then(|tokens| tokens.get(&generation).copied())
+}
+
+fn observe_android_turn_snapshot(
+    token: NativeVoiceObservationToken,
+    generation: Generation,
+    status: &str,
+    transcript: Option<&str>,
+    accumulated_text: Option<&str>,
+    terminal: bool,
+) {
+    let mut snapshot = NativeVoiceTurnSnapshot::new(
+        NativeVoiceTurnIds::from_generation(generation),
+        status.to_owned(),
+    )
+    .terminal(terminal);
+    if let Some(transcript) = transcript {
+        snapshot = snapshot.with_transcript(transcript);
+    }
+    if let Some(text) = accumulated_text {
+        snapshot = snapshot.with_text(text);
+    }
+    observe_native_voice(token, NativeVoiceObservation::TurnSnapshot { snapshot });
+}
+
+fn observation_status_for_phase(phase: AndroidVoiceSessionPhase) -> &'static str {
+    match phase {
+        AndroidVoiceSessionPhase::Idle => "idle",
+        AndroidVoiceSessionPhase::Starting => "started",
+        AndroidVoiceSessionPhase::Listening
+        | AndroidVoiceSessionPhase::WaitingForWake
+        | AndroidVoiceSessionPhase::Transcribing => "listening",
+        AndroidVoiceSessionPhase::Processing
+        | AndroidVoiceSessionPhase::WaitingForResponse
+        | AndroidVoiceSessionPhase::PreparingSpeech => "processing",
+        AndroidVoiceSessionPhase::Speaking => "speaking",
+        AndroidVoiceSessionPhase::Stopping => "stopping",
+        AndroidVoiceSessionPhase::Faulted => "failed",
     }
 }
 
@@ -1464,17 +1564,26 @@ fn active_generation(status: &Arc<Mutex<AndroidVoiceSessionStatus>>) -> Option<G
 }
 
 fn finish_status(
-    status: &Arc<Mutex<AndroidVoiceSessionStatus>>,
-    focused_transcript: &Arc<Mutex<Option<String>>>,
-    turn_transcript: &Arc<Mutex<Option<(Generation, String)>>>,
-    background_results: &Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
+    state: &AndroidSessionThreadState,
+    active_generation: Generation,
     mode: AndroidVoiceStartMode,
     result: Result<String, VoiceCoreError>,
 ) {
+    let AndroidSessionThreadState {
+        status,
+        focused_transcript,
+        turn_transcript,
+        background_results,
+        observation_tokens,
+        ..
+    } = state;
     let captured_transcript = turn_transcript
         .lock()
         .ok()
         .and_then(|mut transcript| transcript.take());
+    if let Ok(mut tokens) = observation_tokens.lock() {
+        tokens.remove(&active_generation);
+    }
     if let Ok(mut status) = status.lock() {
         let terminal_phase = status.phase;
         status.active = false;
@@ -1491,15 +1600,24 @@ fn finish_status(
                     if let Ok(mut result) = focused_transcript.lock() {
                         *result = Some(transcript);
                     }
-                } else if let Some((generation, captured)) = captured_transcript {
+                } else if let Some((generation, captured, token)) = captured_transcript {
                     push_background_result(
                         background_results,
                         AndroidBackgroundVoiceTurnResult {
                             generation,
-                            transcript: captured,
-                            assistant_text: Some(transcript),
+                            observation_token: token.to_wire(),
+                            transcript: captured.clone(),
+                            assistant_text: Some(transcript.clone()),
                             error_code: None,
                         },
+                    );
+                    observe_android_turn_snapshot(
+                        token,
+                        generation,
+                        "background_completed",
+                        Some(&captured),
+                        Some(&transcript),
+                        true,
                     );
                 }
             }
@@ -1511,15 +1629,31 @@ fn finish_status(
                 );
                 status.last_error = Some(code.to_owned());
                 if matches!(mode, AndroidVoiceStartMode::BackgroundSession) {
-                    if let Some((generation, captured)) = captured_transcript {
+                    if let Some((generation, captured, token)) = captured_transcript {
                         push_background_result(
                             background_results,
                             AndroidBackgroundVoiceTurnResult {
                                 generation,
-                                transcript: captured,
+                                observation_token: token.to_wire(),
+                                transcript: captured.clone(),
                                 assistant_text: None,
                                 error_code: Some(code.to_owned()),
                             },
+                        );
+                        observe_native_voice(
+                            token,
+                            NativeVoiceObservation::AssistantFailed {
+                                ids: NativeVoiceTurnIds::from_generation(generation),
+                                reason_code: code.to_owned(),
+                            },
+                        );
+                        observe_android_turn_snapshot(
+                            token,
+                            generation,
+                            "background_failed",
+                            Some(&captured),
+                            None,
+                            true,
                         );
                     }
                 }
@@ -1825,12 +1959,19 @@ mod tests {
         let focused_transcript = Arc::new(Mutex::new(None));
         let turn_transcript = Arc::new(Mutex::new(None));
         let background_results = Arc::new(Mutex::new(VecDeque::new()));
+        let observation_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let state = AndroidSessionThreadState {
+            status: Arc::clone(&status),
+            focused_transcript: Arc::clone(&focused_transcript),
+            turn_transcript,
+            background_results: Arc::clone(&background_results),
+            observation_tokens,
+            control: AndroidAudioInput::new(AndroidPcmIngress::new(1, 1)).control(),
+        };
 
         finish_status(
-            &status,
-            &focused_transcript,
-            &turn_transcript,
-            &background_results,
+            &state,
+            Generation(0),
             AndroidVoiceStartMode::PushToTalk,
             Ok("focused transcript".to_owned()),
         );
@@ -1842,10 +1983,8 @@ mod tests {
         );
 
         finish_status(
-            &status,
-            &focused_transcript,
-            &turn_transcript,
-            &background_results,
+            &state,
+            Generation(0),
             AndroidVoiceStartMode::BackgroundSession,
             Ok("background response".to_owned()),
         );
@@ -1863,14 +2002,22 @@ mod tests {
         let turn_transcript = Arc::new(Mutex::new(Some((
             Generation(7),
             "what is the meaning of life".to_owned(),
+            NativeVoiceObservationToken::from_wire("1:1").expect("token"),
         ))));
         let background_results = Arc::new(Mutex::new(VecDeque::new()));
+        let observation_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let state = AndroidSessionThreadState {
+            status: Arc::clone(&status),
+            focused_transcript: Arc::clone(&focused_transcript),
+            turn_transcript,
+            background_results: Arc::clone(&background_results),
+            observation_tokens,
+            control: AndroidAudioInput::new(AndroidPcmIngress::new(1, 1)).control(),
+        };
 
         finish_status(
-            &status,
-            &focused_transcript,
-            &turn_transcript,
-            &background_results,
+            &state,
+            Generation(7),
             AndroidVoiceStartMode::BackgroundSession,
             Err(VoiceCoreError::TransportFault {
                 code: "assistant_unavailable".to_owned(),
@@ -1886,6 +2033,7 @@ mod tests {
             retained,
             Some(AndroidBackgroundVoiceTurnResult {
                 generation: Generation(7),
+                observation_token: "1:1".to_owned(),
                 transcript: "what is the meaning of life".to_owned(),
                 assistant_text: None,
                 error_code: Some("assistant_unavailable".to_owned()),

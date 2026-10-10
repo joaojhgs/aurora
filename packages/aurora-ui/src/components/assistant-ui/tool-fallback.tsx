@@ -28,6 +28,12 @@ import { Button } from "#components/ui/button";
 const ANIMATION_DURATION = 200;
 
 const pressable = "active:scale-[0.98]";
+const toolFallbackMetaLabel =
+  "[color:var(--aui-muted)] [font-size:0.68rem] [font-weight:900] tracking-[0.02em] uppercase";
+const toolFallbackMonoBlock =
+  "max-h-[12rem] overflow-auto rounded-[0.65rem] border [border-color:color-mix(in_srgb,var(--aui-border)_72%,transparent)] [background:color-mix(in_srgb,var(--aui-surface-2)_74%,transparent)] p-[0.65rem] [color:var(--aui-ink)] [font-family:var(--aui-mono)] [font-size:0.73rem] [line-height:1.45] whitespace-pre-wrap";
+const toolFallbackErrorReason =
+  "mt-[0.1rem] mb-0 [color:var(--aui-ink)] [font-family:var(--aui-mono)] [font-size:0.76rem] [overflow-wrap:anywhere]";
 
 export type ToolFallbackRootProps = Omit<
   React.ComponentProps<typeof Collapsible>,
@@ -71,7 +77,7 @@ function ToolFallbackRoot({
       open={isOpen}
       onOpenChange={handleOpenChange}
       className={cn(
-        "aui-tool-fallback-root group/tool-fallback-root w-full",
+        "group/tool-fallback-root w-full",
         className,
       )}
       style={
@@ -114,7 +120,7 @@ function ToolFallbackDuration({
     <span
       data-slot="tool-fallback-duration"
       className={cn(
-        "aui-tool-fallback-duration text-muted-foreground text-xs tabular-nums",
+        "text-muted-foreground text-xs tabular-nums",
         className,
       )}
       {...props}
@@ -145,7 +151,7 @@ function ToolFallbackTrigger({
     <CollapsibleTrigger
       data-slot="tool-fallback-trigger"
       className={cn(
-        "aui-tool-fallback-trigger group/trigger text-muted-foreground hover:text-foreground flex w-fit origin-left items-center gap-2 py-1.5 text-sm transition-[color,scale] active:scale-[0.98]",
+        "group/trigger text-muted-foreground hover:text-foreground flex w-fit origin-left items-center gap-2 py-1.5 text-sm transition-[color,scale] active:scale-[0.98]",
         className,
       )}
       {...props}
@@ -153,7 +159,7 @@ function ToolFallbackTrigger({
       <Icon
         data-slot="tool-fallback-trigger-icon"
         className={cn(
-          "aui-tool-fallback-trigger-icon size-4 shrink-0",
+          "size-4 shrink-0",
           isCancelled && "text-muted-foreground",
           isRunning && "animate-spin [animation-duration:0.6s]",
         )}
@@ -161,7 +167,7 @@ function ToolFallbackTrigger({
       <span
         data-slot="tool-fallback-trigger-label"
         className={cn(
-          "aui-tool-fallback-trigger-label-wrapper relative inline-block text-start leading-none",
+          "relative inline-block text-start leading-none",
           isCancelled && "text-muted-foreground line-through",
         )}
       >
@@ -172,7 +178,7 @@ function ToolFallbackTrigger({
           <span
             aria-hidden
             data-slot="tool-fallback-trigger-shimmer"
-            className="aui-tool-fallback-trigger-shimmer shimmer pointer-events-none absolute inset-0 motion-reduce:animate-none"
+            className="pointer-events-none absolute inset-0 motion-reduce:animate-none"
           >
             {label}: <b>{toolName}</b>
           </span>
@@ -182,7 +188,7 @@ function ToolFallbackTrigger({
       <ChevronDownIcon
         data-slot="tool-fallback-trigger-chevron"
         className={cn(
-          "aui-tool-fallback-trigger-chevron size-4 shrink-0",
+          "size-4 shrink-0",
           "transition-transform duration-(--animation-duration) ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:transition-none",
           "group-data-[state=closed]/trigger:-rotate-90",
           "group-data-[state=open]/trigger:rotate-0",
@@ -201,7 +207,7 @@ function ToolFallbackContent({
     <CollapsibleContent
       data-slot="tool-fallback-content"
       className={cn(
-        "aui-tool-fallback-content relative overflow-hidden text-sm outline-none",
+        "relative overflow-hidden text-sm outline-none",
         "group/collapsible-content ease-[cubic-bezier(0.32,0.72,0,1)] motion-reduce:animate-none",
         "data-[state=closed]:animate-collapsible-up",
         "data-[state=open]:animate-collapsible-down",
@@ -239,10 +245,10 @@ function ToolFallbackArgs({
   return (
     <div
       data-slot="tool-fallback-args"
-      className={cn("aui-tool-fallback-args", className)}
+      className={className}
       {...props}
     >
-      <div className="aui-tool-fallback-args-value bg-muted/50 text-foreground/90 rounded-md p-2.5 text-xs whitespace-pre-wrap">
+      <div className={toolFallbackMonoBlock}>
         {argsText}
       </div>
     </div>
@@ -261,13 +267,13 @@ function ToolFallbackResult({
   return (
     <div
       data-slot="tool-fallback-result"
-      className={cn("aui-tool-fallback-result", className)}
+      className={className}
       {...props}
     >
-      <p className="aui-tool-fallback-result-header text-muted-foreground text-xs font-medium">
+      <p className={cn(toolFallbackMetaLabel, "leading-[calc(1/0.75)]")}>
         Result:
       </p>
-      <div className="aui-tool-fallback-result-content bg-muted/50 text-foreground/90 mt-1 rounded-md p-2.5 text-xs whitespace-pre-wrap">
+      <div className={cn("mt-1", toolFallbackMonoBlock)}>
         {typeof result === "string" ? result : JSON.stringify(result, null, 2)}
       </div>
     </div>
@@ -298,13 +304,16 @@ function ToolFallbackError({
   return (
     <div
       data-slot="tool-fallback-error"
-      className={cn("aui-tool-fallback-error", className)}
+      className={cn(
+        "border-l-2 [border-left-color:var(--aui-danger)] pl-[0.65rem]",
+        className,
+      )}
       {...props}
     >
-      <p className="aui-tool-fallback-error-header text-muted-foreground font-semibold">
+      <p className={toolFallbackMetaLabel}>
         {headerText}
       </p>
-      <p className="aui-tool-fallback-error-reason text-muted-foreground">
+      <p className={toolFallbackErrorReason}>
         {errorText}
       </p>
     </div>
@@ -414,24 +423,24 @@ function ToolFallbackApproval({
       <div
         data-slot="tool-fallback-approval-confirm"
         className={cn(
-          "aui-tool-fallback-approval-confirm flex flex-col gap-2 pt-1",
+          "flex flex-col gap-2 pt-1",
           className,
         )}
         {...props}
       >
-        <p className="aui-tool-fallback-approval-confirm-title font-semibold">
+        <p className="font-semibold">
           {confirmMeta?.title ?? `${approvalOptionLabel(confirming)}?`}
         </p>
         {confirmDescription && (
-          <p className="aui-tool-fallback-approval-confirm-description text-muted-foreground">
+          <p className="text-muted-foreground">
             {confirmDescription}
           </p>
         )}
         {confirming.grants && confirming.grants.length > 0 && (
-          <ul className="aui-tool-fallback-approval-confirm-grants flex flex-col gap-1">
+          <ul className="flex flex-col gap-1">
             {confirming.grants.map((grant) => (
               <li key={grant}>
-                <code className="aui-tool-fallback-approval-confirm-grant bg-muted rounded px-1.5 py-0.5 text-xs">
+                <code className="bg-muted rounded px-1.5 py-0.5 text-xs">
                   {grant}
                 </code>
               </li>
@@ -468,7 +477,7 @@ function ToolFallbackApproval({
       <div
         data-slot="tool-fallback-approval"
         className={cn(
-          "aui-tool-fallback-approval flex flex-wrap items-center gap-2 pt-1",
+          "flex flex-wrap items-center gap-2 pt-1",
           className,
         )}
         {...props}
@@ -504,7 +513,7 @@ function ToolFallbackApproval({
     <div
       data-slot="tool-fallback-approval"
       className={cn(
-        "aui-tool-fallback-approval flex items-center gap-2 pt-1",
+        "flex items-center gap-2 pt-1",
         className,
       )}
       {...props}

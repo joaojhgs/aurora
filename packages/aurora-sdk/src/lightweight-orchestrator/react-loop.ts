@@ -1,4 +1,4 @@
-import { buildEnvelopeAad, type ConversationMessageRecord, type ConversationRecord, type EncryptedDataEnvelopeV1, type LocalDataScope } from '../local-data/index.js'
+import { buildEnvelopeAad, runSerializedLocalDataTransaction, type ConversationMessageRecord, type ConversationRecord, type EncryptedDataEnvelopeV1, type LocalDataScope } from '../local-data/index.js'
 import {
   assertSerializedBound,
   assertTextBound,
@@ -57,17 +57,38 @@ export class LightweightOrchestrator {
   }
 
   async recoverStalePending(): Promise<LightweightRecoveryResult> {
-    const conversations = await this.options.localData.conversations.listConversations()
-    const scoped = conversations.filter((conversation) => conversation.profileId === this.options.scope.profileId && conversation.localNodeId === this.options.scope.localNodeId)
+    const scoped: ConversationRecord[] = []
+    let conversationCursor: { readonly updatedAtMs: number; readonly id: string } | undefined
+    while (true) {
+      const page = await this.options.localData.conversations.listConversations({
+        limit: 501,
+        ...(conversationCursor === undefined ? {} : { cursor: conversationCursor })
+      })
+      scoped.push(...page.filter((conversation) => conversation.profileId === this.options.scope.profileId && conversation.localNodeId === this.options.scope.localNodeId))
+      if (page.length < 501) break
+      const last = page[page.length - 1]
+      if (!last) break
+      conversationCursor = { updatedAtMs: last.updatedAtMs, id: last.id }
+    }
     let cancelledMessages = 0
     const conversationIds = new Set<string>()
     for (const conversation of scoped) {
-      const messages = await this.options.localData.conversations.listMessages(conversation.id)
-      const pending = messages.filter((message) => message.status === 'pending')
-      for (const message of pending) {
-        await this.options.localData.conversations.appendMessage(await this.messageRecord(conversation.id, nextSequence(messages) + cancelledMessages, 'system', 'cancelled', {}))
-        cancelledMessages += 1
-        conversationIds.add(message.conversationId)
+      let afterSequence: number | undefined
+      while (true) {
+        const page = await this.options.localData.conversations.listMessages(conversation.id, {
+          limit: 2_001,
+          direction: 'asc',
+          ...(afterSequence === undefined ? {} : { afterSequence })
+        })
+        for (const message of page.filter((candidate) => candidate.status === 'pending')) {
+          await this.appendState(conversation.id, 'system', 'cancelled')
+          cancelledMessages += 1
+          conversationIds.add(message.conversationId)
+        }
+        if (page.length < 2_001) break
+        const last = page[page.length - 1]
+        if (!last) break
+        afterSequence = last.sequence
       }
     }
     return { cancelledMessages, conversationIds: [...conversationIds].sort() }
@@ -96,8 +117,8 @@ export class LightweightOrchestrator {
         )
         if (providerResponse.type === 'message') {
           assertTextBound(providerResponse.content, this.limits.maxProviderResponseBytes, 'provider_response_too_large')
-          await this.appendState(conversationId, 'assistant', 'complete', { content: providerResponse.content })
-          return { status: 'completed', conversationId, assistantText: providerResponse.content }
+          const assistantMessageId = await this.appendState(conversationId, 'assistant', 'complete', { content: providerResponse.content })
+          return { status: 'completed', conversationId, assistantText: providerResponse.content, assistantMessageId }
         }
         totalTools += providerResponse.toolCalls.length
         if (totalTools > this.limits.maxTotalTools) throw new LightweightOrchestratorError('tool_total_limit_exceeded')
@@ -175,11 +196,12 @@ export class LightweightOrchestrator {
         throw new LightweightOrchestratorError('provider_nested_confirmation_not_supported')
       }
       await this.appendState(pending.conversationId, 'tool', result.ok ? 'complete' : 'failed', { tool: persistedToolResult(pending.toolCall, result) })
-      await this.appendState(pending.conversationId, 'assistant', 'complete', { content: providerResponse.content })
+      const assistantMessageId = await this.appendState(pending.conversationId, 'assistant', 'complete', { content: providerResponse.content })
       return {
         status: 'completed',
         conversationId: pending.conversationId,
-        assistantText: providerResponse.content
+        assistantText: providerResponse.content,
+        assistantMessageId
       }
     } catch (error) {
       if (isAbortError(error)) {
@@ -440,8 +462,7 @@ export class LightweightOrchestrator {
 
   private async ensureConversation(conversationId: string): Promise<void> {
     const now = this.nowMs()
-    const existing = (await this.options.localData.conversations.listConversations())
-      .find((conversation) => conversation.id === conversationId)
+    const existing = await this.options.localData.conversations.getConversation(conversationId)
     if (existing) {
       if (
         existing.profileId !== this.options.scope.profileId
@@ -468,14 +489,25 @@ export class LightweightOrchestrator {
   }
 
   private async loadConversationHistory(conversationId: string): Promise<LightweightProviderMessage[]> {
-    const records = await this.options.localData.conversations.listMessages(conversationId)
     const historyLimit = Math.max(0, this.limits.maxHistoryMessages - 1)
     if (historyLimit === 0) return []
-    const candidates = records
-      .filter((record) => record.status === 'complete' && record.role !== 'tool' && record.contentEnvelope !== null)
-      .slice(-historyLimit)
+    const candidates: ConversationMessageRecord[] = []
+    let beforeSequence: number | undefined
+    while (candidates.length < historyLimit) {
+      const requested = 50
+      const page = await this.options.localData.conversations.listMessages(conversationId, {
+        limit: requested,
+        direction: 'desc',
+        ...(beforeSequence === undefined ? {} : { beforeSequence })
+      })
+      if (page.length === 0) break
+      candidates.unshift(...page.filter((record) => record.status === 'complete' && record.role !== 'tool' && record.contentEnvelope !== null).reverse())
+      if (page.length < requested) break
+      beforeSequence = page[page.length - 1]!.sequence
+    }
+    const selected = candidates.slice(-historyLimit)
     const messages: LightweightProviderMessage[] = []
-    for (const record of candidates) {
+    for (const record of selected) {
       const envelope = record.contentEnvelope
       if (!envelope) continue
       const crypto = this.options.localDataCrypto
@@ -508,9 +540,19 @@ export class LightweightOrchestrator {
     role: ConversationMessageRecord['role'],
     status: ConversationMessageRecord['status'],
     persisted: { readonly content?: string | null; readonly tool?: unknown } = {}
-  ): Promise<void> {
-    const messages = await this.options.localData.conversations.listMessages(conversationId)
-    await this.options.localData.conversations.appendMessage(await this.messageRecord(conversationId, nextSequence(messages), role, status, persisted))
+  ): Promise<string> {
+    const record = await this.messageRecord(conversationId, 0, role, status, persisted)
+    await runSerializedLocalDataTransaction(this.options.localData, async (repositories) => {
+      const latest = await repositories.conversations.getLatestMessageSequence(conversationId)
+      if (latest !== null && latest >= Number.MAX_SAFE_INTEGER) {
+        throw new LightweightOrchestratorError('message_sequence_exhausted')
+      }
+      await repositories.conversations.appendMessage({
+        ...record,
+        sequence: (latest ?? -1) + 1
+      })
+    })
+    return record.id
   }
 
   private async messageRecord(
@@ -685,10 +727,6 @@ function persistedToolResult(toolCall: LightweightToolCall, result: LightweightT
 
 function stableJson(value: unknown): string {
   return JSON.stringify(value) ?? 'null'
-}
-
-function nextSequence(messages: readonly ConversationMessageRecord[]): number {
-  return messages.reduce((max, message) => Math.max(max, message.sequence + 1), 0)
 }
 
 function throwIfAborted(signal: AbortSignal): void {

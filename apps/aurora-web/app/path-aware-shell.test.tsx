@@ -3,27 +3,21 @@
 import { StrictMode, act } from 'react'
 import { createRoot, hydrateRoot, type Root } from 'react-dom/client'
 import { renderToString } from 'react-dom/server'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AuroraClient, MockAuroraTransport } from '@aurora/client'
 import {
   encodeMeshInviteToken,
+  getAuroraSurfaceProfile,
   loadingShellSnapshot,
   parseWebRtcInvite,
+  useConnectionStore,
   type BrowserWebRtcSnapshot,
+  type AuroraShellSnapshot,
 } from '@aurora/ui'
 
 const mockedBrowserRuntime = vi.hoisted(() => ({
   requiresOnboarding: true,
-  runtime: null as unknown as {
-    client: AuroraClient
-    peer: unknown
-    mode: 'http-only'
-    surface?: {
-      kind: string
-      nodeMode: 'remote-console' | 'mesh-node'
-    }
-    close(): Promise<void>
-  },
+  runtime: null as unknown as ReturnType<typeof testBrowserRuntime>,
   profile: undefined as undefined,
   document: {
     version: 1 as const,
@@ -44,6 +38,18 @@ const mockedBrowserRuntime = vi.hoisted(() => ({
   routerReplace: vi.fn(),
   routerPush: vi.fn(),
 }))
+
+const mockedUi = vi.hoisted(() => ({
+  fetchAuroraShellSnapshot: vi.fn(),
+}))
+
+vi.mock('@aurora/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@aurora/ui')>()
+  return {
+    ...actual,
+    fetchAuroraShellSnapshot: mockedUi.fetchAuroraShellSnapshot,
+  }
+})
 
 vi.mock('next/navigation', () => ({
   usePathname: () => '/',
@@ -69,10 +75,21 @@ vi.mock('./aurora-client', () => ({
   saveAuroraBrowserOnboardingProfile: mockedBrowserRuntime.save,
 }))
 
-import { PathAwareShell } from './path-aware-shell'
+import {
+  PathAwareShell,
+  browserRuntimePeerScopeFromSnapshot,
+  startBoundedSerialShellRefresh,
+} from './path-aware-shell'
 import { useBrowserRuntimeProfile } from './browser-shell-runtime'
 
 const roots: Root[] = []
+
+beforeEach(() => {
+  mockedUi.fetchAuroraShellSnapshot.mockReset()
+  mockedUi.fetchAuroraShellSnapshot.mockResolvedValue(
+    readyShellSnapshot('Home Aurora'),
+  )
+})
 
 afterEach(() => {
   for (const root of roots.splice(0)) root.unmount()
@@ -83,6 +100,8 @@ afterEach(() => {
   mockedBrowserRuntime.createRuntime.mockReset()
   mockedBrowserRuntime.routerReplace.mockReset()
   mockedBrowserRuntime.routerPush.mockReset()
+  mockedUi.fetchAuroraShellSnapshot.mockReset()
+  useConnectionStore.getState().reset()
   mockedBrowserRuntime.runtimeDocument = {
     version: 2,
     activeProfileId: null,
@@ -93,12 +112,7 @@ afterEach(() => {
 describe('hosted web thin first-run shell', () => {
   it('hydrates through a deterministic boot shell before reading browser persistence', async () => {
     const transport = new MockAuroraTransport()
-    mockedBrowserRuntime.runtime = {
-      client: new AuroraClient({ transport }),
-      peer: fakePeer(),
-      mode: 'http-only',
-      close: vi.fn(async () => undefined),
-    }
+    mockedBrowserRuntime.runtime = testBrowserRuntime({ transport })
     const element = (
       <StrictMode>
         <PathAwareShell
@@ -165,12 +179,10 @@ describe('hosted web thin first-run shell', () => {
     })
     const parsedInvite = parseWebRtcInvite(invite)
     expect(parsedInvite).not.toBeNull()
-    mockedBrowserRuntime.runtime = {
-      client: new AuroraClient({ transport }),
+    mockedBrowserRuntime.runtime = testBrowserRuntime({
+      transport,
       peer: fakePeer(parsedInvite!.profile),
-      mode: 'http-only',
-      close: vi.fn(async () => undefined),
-    }
+    })
     window.history.replaceState(
       {},
       '',
@@ -252,12 +264,7 @@ describe('hosted web thin first-run shell', () => {
   it('saves a manual address profile and leaves hosted-web onboarding', async () => {
     const transport = new MockAuroraTransport()
     const request = vi.spyOn(transport, 'request')
-    mockedBrowserRuntime.runtime = {
-      client: new AuroraClient({ transport }),
-      peer: fakePeer(),
-      mode: 'http-only',
-      close: vi.fn(async () => undefined),
-    }
+    mockedBrowserRuntime.runtime = testBrowserRuntime({ transport })
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -315,12 +322,7 @@ describe('hosted web thin first-run shell', () => {
 
   it('loads v2 node-mode context without requiring a v1 connection profile projection', async () => {
     const transport = new MockAuroraTransport()
-    mockedBrowserRuntime.runtime = {
-      client: new AuroraClient({ transport }),
-      peer: fakePeer(),
-      mode: 'http-only',
-      close: vi.fn(async () => undefined),
-    }
+    mockedBrowserRuntime.runtime = testBrowserRuntime({ transport })
     mockedBrowserRuntime.runtimeDocument = {
       version: 2,
       activeProfileId: 'mesh',
@@ -391,16 +393,10 @@ describe('hosted web thin first-run shell', () => {
         },
       }],
     }
-    mockedBrowserRuntime.runtime = {
-      client: new AuroraClient({ transport }),
-      peer: fakePeer(),
-      mode: 'http-only',
-      surface: {
-        kind: 'web',
-        nodeMode: 'mesh-node',
-      },
-      close: vi.fn(async () => undefined),
-    }
+    mockedBrowserRuntime.runtime = testBrowserRuntime({
+      transport,
+      nodeMode: 'mesh-node',
+    })
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
@@ -436,7 +432,390 @@ describe('hosted web thin first-run shell', () => {
     expect(mockedBrowserRuntime.createRuntime).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('runtime-profile:mesh-node')
   })
+
+  it('derives a new query peer scope when a ready peer identity changes', () => {
+    expect(
+      browserRuntimePeerScopeFromSnapshot({ connectedStablePeerId: 'peer-a' }, 'auth-peer'),
+    ).toBe('peer-a')
+    expect(
+      browserRuntimePeerScopeFromSnapshot({ connectedStablePeerId: 'peer-b' }, 'auth-peer'),
+    ).toBe('peer-b')
+  })
+
+  it('falls back to expected peer identity before the auth snapshot', () => {
+    expect(
+      browserRuntimePeerScopeFromSnapshot({ expectedStablePeerId: 'expected-peer' }, 'auth-peer'),
+    ).toBe('expected-peer')
+    expect(browserRuntimePeerScopeFromSnapshot({}, 'auth-peer')).toBe('auth-peer')
+    expect(browserRuntimePeerScopeFromSnapshot({}, null)).toBeNull()
+  })
+
+  it('ignores a delayed shell snapshot from an earlier browser peer scope', async () => {
+    const transport = new MockAuroraTransport()
+    const peer = controllablePeer({
+      ...basePeerSnapshot(),
+      status: 'authorized',
+      expectedStablePeerId: 'peer-a',
+    })
+    mockedBrowserRuntime.requiresOnboarding = false
+    mockedBrowserRuntime.runtimeDocument = {
+      version: 2,
+      activeProfileId: 'remote',
+      profiles: [{
+        version: 2,
+        id: 'remote',
+        label: 'Office Aurora',
+        nodeMode: 'remote-console',
+        runtimeTier: 'none',
+        homeConnection: {
+          version: 1,
+          id: 'remote',
+          label: 'Office Aurora',
+          mode: 'http-only',
+          gatewayUrl: 'https://gateway.example.test',
+          signalingUrl: '',
+          nodeName: 'Office Aurora',
+        },
+      }],
+    }
+    mockedBrowserRuntime.runtime = testBrowserRuntime({
+      transport,
+      peer,
+    })
+    const pending: Array<{
+      scopeId: string
+      signal?: AbortSignal
+      resolve: (snapshot: AuroraShellSnapshot) => void
+    }> = []
+    mockedUi.fetchAuroraShellSnapshot.mockImplementation(({ scopeKey, signal }) => new Promise((resolve) => {
+      pending.push({
+        scopeId: scopeKey[1],
+        signal,
+        resolve: resolve as (snapshot: AuroraShellSnapshot) => void,
+      })
+    }))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <PathAwareShell
+          snapshot={{
+            ...loadingShellSnapshot,
+            loadState: 'ready',
+          }}
+        >
+          <p>configured shell content</p>
+        </PathAwareShell>,
+      )
+    })
+    await waitFor(() => pending.length > 0)
+    const firstScope = pending[pending.length - 1]!.scopeId
+
+    await act(async () => {
+      peer.emit({
+        ...basePeerSnapshot(),
+        status: 'authorized',
+        expectedStablePeerId: 'peer-b',
+      })
+    })
+    await waitFor(() => pending.some((request) => request.scopeId !== firstScope))
+
+    const oldRequests = pending.filter((request) => request.scopeId === firstScope)
+    const newRequest = [...pending].reverse().find((request) => request.scopeId !== firstScope)
+    expect(newRequest).toBeDefined()
+    expect(oldRequests[0]?.signal?.aborted).toBe(true)
+
+    await act(async () => {
+      newRequest!.resolve(readyShellSnapshot('Peer B'))
+    })
+    await waitFor(() => container.textContent?.includes('Peer B') === true)
+    expect(container.textContent).toContain('Peer B')
+
+    await act(async () => {
+      for (const request of oldRequests) request.resolve(readyShellSnapshot('Peer A'))
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+
+    expect(container.textContent).toContain('Peer B')
+    expect(container.textContent).not.toContain('Peer A')
+  })
+
+  it('stops a no-event recovery loop and aborts its active refresh', async () => {
+    vi.useFakeTimers()
+    const pending: Array<() => void> = []
+    const signals: AbortSignal[] = []
+    const refresh = vi.fn((signal: AbortSignal) => {
+      signals.push(signal)
+      return new Promise<void>((resolve) => {
+        pending.push(resolve)
+      })
+    })
+
+    const stopRecoveryRefresh = startBoundedSerialShellRefresh(refresh, 100)
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(100)
+      await Promise.resolve()
+    })
+    expect(refresh).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      pending.shift()?.()
+      await Promise.resolve()
+      vi.advanceTimersByTime(100)
+      await Promise.resolve()
+    })
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    stopRecoveryRefresh()
+    expect(signals[0]?.aborted).toBe(true)
+    await act(async () => {
+      pending.shift()?.()
+      await Promise.resolve()
+      vi.advanceTimersByTime(1_000)
+      await Promise.resolve()
+    })
+    expect(refresh).toHaveBeenCalledTimes(2)
+    vi.useRealTimers()
+  })
+
+  it('drives mounted recovery refreshes from stream loss and coalesces live events', async () => {
+    vi.useFakeTimers()
+    useConnectionStore.getState().reset()
+    mockedBrowserRuntime.requiresOnboarding = false
+    const transport = new MockAuroraTransport()
+    const healthStream = controlledEventStream()
+    const configStream = controlledEventStream()
+    transport.stream('health', healthStream.registration)
+    transport.stream('config', configStream.registration)
+    mockedBrowserRuntime.runtime = testBrowserRuntime({ transport })
+    const requests: Array<{
+      resolve: (snapshot: AuroraShellSnapshot) => void
+      signal?: AbortSignal
+      forceRefresh?: boolean
+    }> = []
+    let activeRequests = 0
+    let maxActiveRequests = 0
+    mockedUi.fetchAuroraShellSnapshot.mockImplementation(({ signal, forceRefresh }) => new Promise((resolve) => {
+      activeRequests += 1
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests)
+      requests.push({
+        resolve: (snapshot) => {
+          activeRequests -= 1
+          resolve(snapshot)
+        },
+        signal,
+        forceRefresh,
+      })
+    }))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => {
+      root.render(
+        <PathAwareShell snapshot={{ ...loadingShellSnapshot, loadState: 'ready' }}>
+          <p>configured shell content</p>
+        </PathAwareShell>,
+      )
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.forceRefresh).toBeUndefined()
+    expect(maxActiveRequests).toBe(1)
+
+    await act(async () => {
+      requests[0]!.resolve(readyShellSnapshot('Initial'))
+      await Promise.resolve()
+    })
+    useConnectionStore.getState().setStreamState('health', 'connected')
+    useConnectionStore.getState().setStreamState('config', 'connected')
+    await act(async () => {
+      vi.advanceTimersByTime(16_000)
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(1)
+
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'reconnecting')
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(2)
+    expect(requests[1]?.forceRefresh).toBe(true)
+    expect(maxActiveRequests).toBe(1)
+    const recoveryRequest = requests[1]!
+
+    // A live event requests the same snapshot while recovery is unresolved;
+    // the bridge must coalesce it and refresh once after settlement.
+    await act(async () => {
+      configStream.push({
+        id: 'config-1',
+        topic: 'Gateway.StatusChanged',
+        kind: 'config.updated',
+        payload: {},
+      })
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(2)
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'connected')
+      useConnectionStore.getState().setStreamState('config', 'connected')
+      await Promise.resolve()
+    })
+    expect(recoveryRequest.signal?.aborted).toBe(true)
+    await act(async () => {
+      recoveryRequest.resolve(readyShellSnapshot('Stale'))
+      await Promise.resolve()
+    })
+    // The read captured before the event must not overwrite the event patch;
+    // its single queued follow-up is the only request allowed to restore data.
+    expect(container.textContent).not.toContain('Stale')
+    expect(requests).toHaveLength(3)
+    expect(requests[2]?.forceRefresh).toBeUndefined()
+    expect(maxActiveRequests).toBe(1)
+
+    const latestRequest = requests[2]!
+    latestRequest.resolve(readyShellSnapshot('Fresh'))
+    await act(async () => {
+      await Promise.resolve()
+      vi.advanceTimersByTime(30_001)
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(3)
+    expect(container.textContent).toContain('Fresh')
+    expect(container.textContent).not.toContain('Stale')
+    expect(maxActiveRequests).toBe(1)
+    root.unmount()
+    vi.useRealTimers()
+  })
+
+  it('does not schedule another read when recovery ends without a live event', async () => {
+    vi.useFakeTimers()
+    useConnectionStore.getState().reset()
+    mockedBrowserRuntime.requiresOnboarding = false
+    const transport = new MockAuroraTransport()
+    const healthStream = controlledEventStream()
+    const configStream = controlledEventStream()
+    transport.stream('health', healthStream.registration)
+    transport.stream('config', configStream.registration)
+    mockedBrowserRuntime.runtime = testBrowserRuntime({ transport })
+    const requests: Array<{
+      resolve: (snapshot: AuroraShellSnapshot) => void
+      signal?: AbortSignal
+    }> = []
+    let activeRequests = 0
+    let maxActiveRequests = 0
+    mockedUi.fetchAuroraShellSnapshot.mockImplementation(({ signal }) => new Promise((resolve) => {
+      activeRequests += 1
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests)
+      requests.push({
+        resolve: (snapshot) => {
+          activeRequests -= 1
+          resolve(snapshot)
+        },
+        signal,
+      })
+    }))
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    await act(async () => {
+      root.render(
+        <PathAwareShell snapshot={{ ...loadingShellSnapshot, loadState: 'ready' }}>
+          <p>configured shell content</p>
+        </PathAwareShell>,
+      )
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(1)
+
+    await act(async () => {
+      requests[0]!.resolve(readyShellSnapshot('Initial'))
+      await Promise.resolve()
+      useConnectionStore.getState().setStreamState('health', 'connected')
+      useConnectionStore.getState().setStreamState('config', 'connected')
+      await Promise.resolve()
+    })
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'reconnecting')
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(2)
+    const recoveryRequest = requests[1]!
+
+    await act(async () => {
+      useConnectionStore.getState().setStreamState('health', 'connected')
+      useConnectionStore.getState().setStreamState('config', 'connected')
+      await Promise.resolve()
+    })
+    expect(recoveryRequest.signal?.aborted).toBe(true)
+    await act(async () => {
+      recoveryRequest.resolve(readyShellSnapshot('Recovered'))
+      await Promise.resolve()
+      vi.advanceTimersByTime(30_001)
+      await Promise.resolve()
+    })
+    expect(requests).toHaveLength(2)
+    expect(maxActiveRequests).toBe(1)
+    root.unmount()
+    vi.useRealTimers()
+  })
 })
+
+
+function testBrowserRuntime({
+  transport,
+  peer = fakePeer(),
+  nodeMode = 'remote-console',
+}: {
+  transport: MockAuroraTransport
+  peer?: ReturnType<typeof fakePeer> | ReturnType<typeof controllablePeer>
+  nodeMode?: 'remote-console' | 'mesh-node'
+}) {
+  const surface = getAuroraSurfaceProfile({
+    runtimeMode: 'web-thin',
+    transportKind: 'http',
+    nodeMode,
+    runtimeTier: nodeMode === 'mesh-node' ? 'lightweight-ts' : 'none',
+  })
+  return {
+    client: new AuroraClient({ transport }),
+    peer,
+    mode: 'http-only' as const,
+    surface,
+    features: {
+      requestedNodeRole: nodeMode,
+      activeNodeRole: nodeMode,
+      meshNodeRuntimeEnabled: nodeMode === 'mesh-node',
+      localToolProviderEnabled: false,
+      lightweightOrchestratorEnabled: false,
+      usesBrowserVoiceRuntime: surface.usesBrowserVoiceRuntime,
+      focusedPushToTalkOwner: surface.voiceCapture.focusedPushToTalkOwner,
+      wakewordOwner: surface.voiceCapture.wakewordOwner,
+      localSpeechPack: surface.localSpeechPack,
+    },
+    localNodeProviderStatus: {
+      available: false,
+      state: 'not-configured' as const,
+      productMessage: 'This device is not set up for sharing.',
+      registeredFeatureCount: 0,
+      localDataWritable: false,
+    },
+    close: vi.fn(async () => undefined),
+  }
+}
 
 function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
   const button = [...container.querySelectorAll<HTMLButtonElement>('button')]
@@ -460,8 +839,60 @@ function RuntimeProfileProbe() {
   return <p>runtime-profile:{profile?.nodeMode ?? 'none'}</p>
 }
 
-function fakePeer(importedProfile?: NonNullable<ReturnType<typeof parseWebRtcInvite>>['profile']) {
-  const snapshot: BrowserWebRtcSnapshot = {
+function readyShellSnapshot(nodeName: string): AuroraShellSnapshot {
+  return {
+    ...loadingShellSnapshot,
+    loadState: 'ready',
+    connectionState: 'connected',
+    capabilityFreshness: 'fresh',
+    nodeName,
+    transportKind: 'mock',
+    evidenceSource: 'test snapshot',
+    error: null,
+  }
+}
+
+async function waitFor(assertion: () => boolean): Promise<void> {
+  for (let index = 0; index < 20; index += 1) {
+    if (assertion()) return
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  }
+  throw new Error('Timed out waiting for condition')
+}
+
+function controlledEventStream() {
+  const queued: Array<Record<string, unknown>> = []
+  let resolveNext: ((event: Record<string, unknown> | null) => void) | null = null
+  let closed = false
+  return {
+    registration: async function* () {
+      while (!closed) {
+        const next = queued.shift() ?? await new Promise<Record<string, unknown> | null>((resolve) => {
+          resolveNext = resolve
+        })
+        if (!next) return
+        yield next
+      }
+    },
+    push(event: Record<string, unknown>) {
+      if (resolveNext) {
+        const resolve = resolveNext
+        resolveNext = null
+        resolve(event)
+      } else {
+        queued.push(event)
+      }
+    },
+    close() {
+      closed = true
+      resolveNext?.(null)
+      resolveNext = null
+    },
+  }
+}
+
+function basePeerSnapshot(): BrowserWebRtcSnapshot {
+  return {
     state: 'idle',
     connectionMode: 'http-only',
     icePathCategory: 'unknown',
@@ -482,6 +913,32 @@ function fakePeer(importedProfile?: NonNullable<ReturnType<typeof parseWebRtcInv
     hasHttpFallback: false,
     secretsPersisted: false,
   }
+}
+
+function controllablePeer(initialSnapshot: BrowserWebRtcSnapshot) {
+  let snapshot = initialSnapshot
+  const listeners = new Set<(value: BrowserWebRtcSnapshot) => void>()
+  return {
+    snapshot: () => snapshot,
+    subscribe: (listener: (value: BrowserWebRtcSnapshot) => void) => {
+      listeners.add(listener)
+      listener(snapshot)
+      return () => listeners.delete(listener)
+    },
+    emit: (nextSnapshot: BrowserWebRtcSnapshot) => {
+      snapshot = nextSnapshot
+      for (const listener of listeners) listener(snapshot)
+    },
+    importInvite: vi.fn(),
+    connect: vi.fn(),
+    confirmPairing: vi.fn(),
+    rejectPairing: vi.fn(),
+    disconnect: vi.fn(),
+  }
+}
+
+function fakePeer(importedProfile?: NonNullable<ReturnType<typeof parseWebRtcInvite>>['profile']) {
+  const snapshot = basePeerSnapshot()
   return {
     snapshot: () => snapshot,
     subscribe: (listener: (value: BrowserWebRtcSnapshot) => void) => {

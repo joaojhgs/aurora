@@ -31,6 +31,7 @@ import {
   type LocalToolStateRecord,
   type MutableLocalDataCollections,
   type PeerGrantMetadataRecord
+  , type ConversationListQuery, type MessageListQuery
 } from '@aurora/client/local-data'
 
 import {
@@ -535,7 +536,7 @@ export class BrowserConversationRepository {
         throw new LocalDataError('invalid_record', 'Message conversation does not exist')
       }
       if (this.session.mutable.messages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
-        throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation')
+        throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
       }
       assertNoMessageIdCollision(this.session.mutable, record, this.session.profileId, this.session.localNodeId)
       upsert(this.session.mutable.messages, record, (item) => item.id === record.id)
@@ -561,29 +562,64 @@ export class BrowserConversationRepository {
     })
   }
 
-  async listConversations(): Promise<ConversationRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId))
-      .sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
+  async getConversation(conversationId: string): Promise<ConversationRecord | null> {
+    parseLocalDataId(conversationId, 'query.conversation_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).find((record) => record.id === conversationId) ?? null))
   }
 
-  async listMessageCounts(): Promise<Record<string, number>> {
+  async getMessage(conversationId: string, messageId: string): Promise<ConversationMessageRecord | null> {
+    parseLocalDataId(conversationId, 'query.conversation_id'); parseLocalDataId(messageId, 'query.message_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      const scoped = this.session.mutable.conversations.some((record) => record.id === conversationId && record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+      return scoped ? clone(this.session.mutable.messages.find((record) => record.conversationId === conversationId && record.id === messageId) ?? null) : null
+    })
+  }
+
+  async getLatestMessageSequence(conversationId: string): Promise<number | null> {
+    parseLocalDataId(conversationId, 'query.conversation_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      const scoped = this.session.mutable.conversations.some((record) => record.id === conversationId && record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+      if (!scoped) return null
+      const values = this.session.mutable.messages.filter((record) => record.conversationId === conversationId).map((record) => record.sequence)
+      return values.reduce<number | null>((latest, value) => latest === null || value > latest ? value : latest, null)
+    })
+  }
+
+  async listConversations(options?: ConversationListQuery): Promise<ConversationRecord[]> {
+    if (options !== undefined && hasQueryOptions(options)) validateConversationQuery(options)
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      let records = scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId)
+      if (options !== undefined && hasQueryOptions(options)) {
+        records = records.filter((record) => options.includeArchived !== false || record.archivedAtMs === null).filter((record) => options.cursor === undefined || record.updatedAtMs < options.cursor.updatedAtMs || (record.updatedAtMs === options.cursor.updatedAtMs && compareUtf8(record.id, options.cursor.id) > 0)).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id))
+        if (options.limit !== undefined) records = records.slice(0, options.limit)
+      }
+      records = records.sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id))
+      return clone(records)
+    })
+  }
+
+  async listMessageCounts(conversationIds?: readonly string[]): Promise<Record<string, number>> {
+    if (conversationIds !== undefined) { validateConversationIds(conversationIds); if (conversationIds.length === 0) return {} }
     return await this.session.withRepositoryAccess(this.access, false, () => {
       const counts: Record<string, number> = {}
-      const conversationIds = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const allowed = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const selected = conversationIds === undefined ? allowed : boundedIds(conversationIds, allowed)
       for (const message of this.session.mutable.messages) {
-        if (!conversationIds.has(message.conversationId)) continue
+        if (!selected.has(message.conversationId)) continue
         counts[message.conversationId] = (counts[message.conversationId] ?? 0) + 1
       }
       return counts
     })
   }
 
-  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
+  async listFirstUserMessages(conversationIds?: readonly string[]): Promise<Record<string, ConversationMessageRecord>> {
+    if (conversationIds !== undefined) { validateConversationIds(conversationIds); if (conversationIds.length === 0) return {} }
     return await this.session.withRepositoryAccess(this.access, false, () => {
-      const conversationIds = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const allowed = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const selectedConversationIds = conversationIds === undefined ? allowed : boundedIds(conversationIds, allowed)
       const firstByConversation = new Map<string, ConversationMessageRecord>()
       for (const message of this.session.mutable.messages) {
-        if (message.role !== 'user' || !conversationIds.has(message.conversationId)) continue
+        if (message.role !== 'user' || !selectedConversationIds.has(message.conversationId)) continue
         const current = firstByConversation.get(message.conversationId)
         if (current === undefined || message.sequence < current.sequence || (message.sequence === current.sequence && compareUtf8(message.id, current.id) < 0)) {
           firstByConversation.set(message.conversationId, message)
@@ -593,11 +629,14 @@ export class BrowserConversationRepository {
     })
   }
 
-  async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
+  async listMessages(conversationId: string, options?: MessageListQuery): Promise<ConversationMessageRecord[]> {
+    parseLocalDataId(conversationId, 'query.conversation_id'); if (options !== undefined && hasQueryOptions(options)) validateMessageQuery(options)
     return await this.session.withRepositoryAccess(this.access, false, () => {
       if (!this.session.mutable.conversations.some((conversation) => conversation.id === conversationId && conversation.profileId === this.session.profileId && conversation.localNodeId === this.session.localNodeId)) return []
-      return clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
-        .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+      let records = this.session.mutable.messages.filter((message) => message.conversationId === conversationId && (options?.afterSequence === undefined || message.sequence > options.afterSequence) && (options?.beforeSequence === undefined || message.sequence < options.beforeSequence))
+        .sort((a, b) => (options?.direction === 'desc' ? b.sequence - a.sequence : a.sequence - b.sequence) || compareUtf8(a.id, b.id))
+      if (options !== undefined && hasQueryOptions(options) && options.limit !== undefined) records = records.slice(0, options.limit)
+      return clone(records)
     })
   }
 }
@@ -935,7 +974,7 @@ function assertNoMessageIdCollision(
   if (existingConversation === undefined || existingConversation.profileId !== profileId || existingConversation.localNodeId !== localNodeId) {
     throw scopedKeyCollision()
   }
-  throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+    throw new LocalDataError('invalid_record', 'Message IDs must be unique', { reason: 'duplicate_message_id' })
 }
 
 function scopedKeyCollision(): LocalDataError {
@@ -1074,6 +1113,35 @@ function requireDeleteLimit(limit: number): number {
     throw new LocalDataError('invalid_record', 'Delete limit must be a positive safe integer', { reason: 'delete_limit' })
   }
   return limit
+}
+
+function validateConversationQuery(options: ConversationListQuery): void {
+  if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > 501)) throw new LocalDataError('invalid_record', 'Invalid conversation query', { reason: 'conversation_limit' })
+  if (typeof options.includeArchived !== 'boolean' && options.includeArchived !== undefined) throw new LocalDataError('invalid_record', 'Invalid archive filter', { reason: 'include_archived' })
+  if (options.cursor !== undefined) {
+    if (!Number.isSafeInteger(options.cursor.updatedAtMs) || options.cursor.updatedAtMs < 0 || Object.is(options.cursor.updatedAtMs, -0)) throw new LocalDataError('invalid_record', 'Invalid conversation cursor timestamp', { reason: 'conversation_cursor_updated_at' })
+    parseLocalDataId(options.cursor.id, 'conversation_cursor_id')
+  }
+}
+
+function validateMessageQuery(options: MessageListQuery): void {
+  if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > 2001)) throw new LocalDataError('invalid_record', 'Invalid message query', { reason: 'message_limit' })
+  if (options.beforeSequence !== undefined && options.afterSequence !== undefined) throw new LocalDataError('invalid_record', 'Message bounds are ambiguous', { reason: 'ambiguous_message_cursor' })
+  if (options.beforeSequence !== undefined && (!Number.isSafeInteger(options.beforeSequence) || options.beforeSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_before_sequence' })
+  if (options.afterSequence !== undefined && (!Number.isSafeInteger(options.afterSequence) || options.afterSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_after_sequence' })
+  if (options.direction !== undefined && options.direction !== 'asc' && options.direction !== 'desc') throw new LocalDataError('invalid_record', 'Invalid message direction', { reason: 'message_direction' })
+}
+function hasQueryOptions(options: object): boolean { return Object.values(options).some((value) => value !== undefined) }
+
+function boundedIds(ids: readonly string[], allowed: Set<string>): Set<string> {
+  validateConversationIds(ids)
+  if (ids.length === 0) return new Set()
+  return new Set(ids.filter((id) => allowed.has(id)))
+}
+
+function validateConversationIds(ids: readonly string[]): void {
+  if (ids.length > 500) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set_limit' })
+  if (ids.some((id) => !localDataIdSchema.safeParse(id).success)) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set' })
 }
 
 function transactionScopeError(reason: string): LocalDataError {

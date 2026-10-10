@@ -199,27 +199,33 @@ enum LocalDataRepositoryOperation {
     ConversationsAppendMessage { record: ConversationMessageRecord },
     #[serde(rename = "conversations.deleteConversation")]
     ConversationsDeleteConversation { conversation_id: String },
+    #[serde(rename = "conversations.getConversation")]
+    ConversationsGetConversation { profile_id: String, local_node_id: String, conversation_id: String },
+    #[serde(rename = "conversations.getMessage")]
+    ConversationsGetMessage { profile_id: String, local_node_id: String, conversation_id: String, message_id: String },
     #[serde(rename = "conversations.listConversations")]
-    ConversationsListConversations {
-        profile_id: String,
-        local_node_id: String,
-    },
+    ConversationsListConversations { profile_id: String, local_node_id: String, options: Option<ConversationListQuery> },
     #[serde(rename = "conversations.listMessageCounts")]
     ConversationsListMessageCounts {
         profile_id: String,
         local_node_id: String,
+        conversation_ids: Option<Vec<String>>,
     },
     #[serde(rename = "conversations.listFirstUserMessages")]
     ConversationsListFirstUserMessages {
         profile_id: String,
         local_node_id: String,
+        conversation_ids: Option<Vec<String>>,
     },
     #[serde(rename = "conversations.listMessages")]
     ConversationsListMessages {
         profile_id: String,
         local_node_id: String,
         conversation_id: String,
+        options: Option<MessageListQuery>,
     },
+    #[serde(rename = "conversations.getLatestMessageSequence")]
+    ConversationsGetLatestMessageSequence { profile_id: String, local_node_id: String, conversation_id: String },
     #[serde(rename = "memory.upsertMemoryItem")]
     MemoryUpsertMemoryItem { record: LightweightMemoryRecord },
     #[serde(rename = "memory.deleteMemoryItem")]
@@ -285,6 +291,27 @@ struct ConversationMessageRecord {
     tool_envelope: Option<Value>,
     status: String,
     created_at_ms: i64,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConversationListQuery {
+    limit: Option<usize>,
+    include_archived: Option<bool>,
+    cursor: Option<ConversationCursor>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConversationCursor { updated_at_ms: i64, id: String }
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MessageListQuery {
+    limit: Option<usize>,
+    before_sequence: Option<i64>,
+    after_sequence: Option<i64>,
+    direction: Option<String>,
 }
 
 #[derive(Clone)]
@@ -886,6 +913,19 @@ fn run_repository_operation(
                 return Err(local_data_error("conversation not found for identity"));
             }
             ensure_message_id_available(conn, &record.id, profile_id, local_node_id)?;
+            let existing_message = conn.query("SELECT conversation_id FROM aurora_messages WHERE id = ? LIMIT 1", &[json!(record.id)])?;
+            if let Some(row) = existing_message.first() {
+                if row_string(row, "conversation_id")? != record.conversation_id {
+                    return Err(local_data_error_reason("message ID belongs to another conversation", crate::LocalDataReasonCode::DuplicateMessageId));
+                }
+            }
+            let duplicate_sequence = conn.query(
+                "SELECT id FROM aurora_messages WHERE conversation_id = ? AND sequence = ? LIMIT 1",
+                &[json!(record.conversation_id), json!(record.sequence)],
+            )?;
+            if duplicate_sequence.first().map(|row| row_string(row, "id")).transpose()? != Some(record.id.clone()) && !duplicate_sequence.is_empty() {
+                return Err(local_data_error_reason("message sequence already exists", crate::LocalDataReasonCode::DuplicateMessageSequence));
+            }
             conn.execute(
                 "INSERT INTO aurora_messages (id, conversation_id, sequence, role, content_envelope_json, tool_envelope_json, status, created_at_ms)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -903,9 +943,21 @@ fn run_repository_operation(
             )?;
             Ok(Value::Null)
         }
+        LocalDataRepositoryOperation::ConversationsGetConversation { profile_id: requested_profile, local_node_id: requested_node, conversation_id } => {
+            ensure_scope(profile_id, local_node_id, &requested_profile, &requested_node)?;
+            validate_id(&conversation_id, "conversation.id")?;
+            Ok(conn.query("SELECT id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(conversation_id), json!(profile_id), json!(local_node_id)])?.first().map(|row| conversation_from_row(row.clone())).transpose()?.unwrap_or(Value::Null))
+        }
+        LocalDataRepositoryOperation::ConversationsGetMessage { profile_id: requested_profile, local_node_id: requested_node, conversation_id, message_id } => {
+            ensure_scope(profile_id, local_node_id, &requested_profile, &requested_node)?;
+            validate_id(&conversation_id, "conversation.id")?;
+            validate_id(&message_id, "message.id")?;
+            Ok(conn.query("SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE m.id = ? AND m.conversation_id = ? AND c.profile_id = ? AND c.local_node_id = ? LIMIT 1", &[json!(message_id), json!(conversation_id), json!(profile_id), json!(local_node_id)])?.first().map(|row| message_from_row(row.clone())).transpose()?.unwrap_or(Value::Null))
+        }
         LocalDataRepositoryOperation::ConversationsListConversations {
             profile_id: requested_profile,
             local_node_id: requested_node,
+            options,
         } => {
             ensure_scope(
                 profile_id,
@@ -913,17 +965,13 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
-            Ok(Value::Array(conn.query(
-                "SELECT id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms
-                 FROM aurora_conversations
-                 WHERE profile_id = ? AND local_node_id = ?
-                 ORDER BY updated_at_ms DESC, id ASC",
-                &[json!(profile_id), json!(local_node_id)],
-            )?.into_iter().map(conversation_from_row).collect::<Result<Vec<_>, _>>()?))
+            let (sql, params) = conversation_list_sql(profile_id, local_node_id, options)?;
+            Ok(Value::Array(conn.query(&sql, &params)?.into_iter().map(conversation_from_row).collect::<Result<Vec<_>, _>>()?))
         }
         LocalDataRepositoryOperation::ConversationsListMessageCounts {
             profile_id: requested_profile,
             local_node_id: requested_node,
+            conversation_ids,
         } => {
             ensure_scope(
                 profile_id,
@@ -931,13 +979,15 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
+            let (id_sql, id_params) = match validate_id_set(conversation_ids, "conversationIds")? { None => (String::new(), Vec::new()), Some(ids) if ids.is_empty() => return Ok(json!({})), Some(ids) => id_filter(&ids, "m.conversation_id") };
             let rows = conn.query(
-                "SELECT m.conversation_id, COUNT(*) AS count
+                &format!("SELECT m.conversation_id, COUNT(*) AS count
                  FROM aurora_messages m
                  INNER JOIN aurora_conversations c ON c.id = m.conversation_id
-                 WHERE c.profile_id = ? AND c.local_node_id = ?
+                 WHERE c.profile_id = ? AND c.local_node_id = ?{}
                  GROUP BY m.conversation_id",
-                &[json!(profile_id), json!(local_node_id)],
+                id_sql),
+                &[vec![json!(profile_id), json!(local_node_id)], id_params].concat(),
             )?;
             let mut result = serde_json::Map::new();
             for row in rows {
@@ -951,6 +1001,7 @@ fn run_repository_operation(
         LocalDataRepositoryOperation::ConversationsListFirstUserMessages {
             profile_id: requested_profile,
             local_node_id: requested_node,
+            conversation_ids,
         } => {
             ensure_scope(
                 profile_id,
@@ -958,24 +1009,24 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
+            let (id_sql, id_params) = match validate_id_set(conversation_ids, "conversationIds")? { None => (String::new(), Vec::new()), Some(ids) if ids.is_empty() => return Ok(json!({})), Some(ids) => id_filter(&ids, "m.conversation_id") };
             let rows = conn.query(
-                "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
+                &format!("SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
                  FROM aurora_messages m
                  INNER JOIN aurora_conversations c ON c.id = m.conversation_id
-                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.role = ?
+                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.role = ?{}
                    AND NOT EXISTS (
                      SELECT 1 FROM aurora_messages earlier
                      WHERE earlier.conversation_id = m.conversation_id
                        AND earlier.role = ?
                        AND (earlier.sequence < m.sequence OR (earlier.sequence = m.sequence AND earlier.id < m.id))
                    )
-                 ORDER BY m.conversation_id ASC, m.sequence ASC, m.id ASC",
+                ORDER BY m.conversation_id ASC, m.sequence ASC, m.id ASC", id_sql),
                 &[
-                    json!(profile_id),
-                    json!(local_node_id),
-                    json!("user"),
-                    json!("user"),
-                ],
+                    vec![json!(profile_id), json!(local_node_id), json!("user")],
+                    id_params,
+                    vec![json!("user")],
+                ].concat(),
             )?;
             let mut result = serde_json::Map::new();
             for row in rows {
@@ -1014,6 +1065,7 @@ fn run_repository_operation(
             profile_id: requested_profile,
             local_node_id: requested_node,
             conversation_id,
+            options,
         } => {
             ensure_scope(
                 profile_id,
@@ -1021,14 +1073,15 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
-            Ok(Value::Array(conn.query(
-                "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
-                 FROM aurora_messages m
-                 INNER JOIN aurora_conversations c ON c.id = m.conversation_id
-                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.conversation_id = ?
-                 ORDER BY m.sequence ASC, m.id ASC",
-                &[json!(profile_id), json!(local_node_id), json!(conversation_id)],
-            )?.into_iter().map(message_from_row).collect::<Result<Vec<_>, _>>()?))
+            validate_id(&conversation_id, "conversation.id")?;
+            let (sql, params) = message_list_sql(profile_id, local_node_id, &conversation_id, options)?;
+            Ok(Value::Array(conn.query(&sql, &params)?.into_iter().map(message_from_row).collect::<Result<Vec<_>, _>>()?))
+        }
+        LocalDataRepositoryOperation::ConversationsGetLatestMessageSequence { profile_id: requested_profile, local_node_id: requested_node, conversation_id } => {
+            ensure_scope(profile_id, local_node_id, &requested_profile, &requested_node)?;
+            validate_id(&conversation_id, "conversation.id")?;
+            let rows = conn.query("SELECT MAX(m.sequence) AS latest_sequence FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE m.conversation_id = ? AND c.profile_id = ? AND c.local_node_id = ?", &[json!(conversation_id), json!(profile_id), json!(local_node_id)])?;
+            Ok(rows.first().and_then(|row| row.get("latest_sequence")).filter(|v| !v.is_null()).cloned().unwrap_or(Value::Null))
         }
         LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record } => {
             validate_memory_record(&record)?;
@@ -1352,17 +1405,16 @@ fn persist_native_voice_turn(
         },
     )?;
 
-    let next_sequence_row = conn.query(
-        "SELECT COALESCE(MAX(sequence), -1) + 1 AS next_sequence
-         FROM aurora_messages WHERE conversation_id = ?",
-        &[json!(conversation_id)],
+    let latest = conn.query(
+        "SELECT MAX(m.sequence) AS latest_sequence FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE m.conversation_id = ? AND c.profile_id = ? AND c.local_node_id = ?",
+        &[json!(conversation_id), json!(&request.profile_id), json!(&request.local_node_id)],
     )?;
-    let mut next_sequence = row_i64(
-        next_sequence_row
-            .first()
-            .ok_or_else(|| local_data_error("voice message sequence unavailable"))?,
-        "next_sequence",
-    )?;
+    let next_sequence = match latest.first().and_then(|row| row.get("latest_sequence")).and_then(Value::as_i64) {
+        Some(value) => value.checked_add(1).ok_or_else(|| local_data_error("message sequence exhausted"))?,
+        None => 0,
+    };
+    if next_sequence > MAX_SAFE_INTEGER { return Err(local_data_error("message sequence exhausted")); }
+    let mut next_sequence = next_sequence;
     run_repository_operation(
         conn,
         &request.profile_id,
@@ -1515,7 +1567,7 @@ fn export_records(
     local_node_id: &str,
 ) -> Result<Value, AuroraCommandError> {
     Ok(json!({
-        "conversations": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::ConversationsListConversations { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
+        "conversations": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::ConversationsListConversations { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string(), options: None })?,
         "messages": export_messages(conn, profile_id, local_node_id)?,
         "memoryItems": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::MemoryListMemoryItems { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string(), namespace: None })?,
         "localToolStates": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::LocalToolsListLocalToolStates { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
@@ -2620,6 +2672,58 @@ where
     Ok(seen)
 }
 
+fn validate_id_set(ids: Option<Vec<String>>, context: &str) -> Result<Option<Vec<String>>, AuroraCommandError> {
+    let Some(ids) = ids else { return Ok(None); };
+    if ids.len() > 500 { return Err(local_data_error(format!("{context} too large"))); }
+    for id in &ids { validate_id(id, &format!("{context}[]"))?; }
+    let mut unique = Vec::with_capacity(ids.len());
+    let mut seen = HashSet::new();
+    for id in ids { if seen.insert(id.clone()) { unique.push(id); } }
+    Ok(Some(unique))
+}
+
+fn id_filter(ids: &[String], column: &str) -> (String, Vec<Value>) {
+    let placeholders = std::iter::repeat("?").take(ids.len()).collect::<Vec<_>>().join(", ");
+    (format!(" AND {column} IN ({placeholders})"), ids.iter().map(|id| json!(id)).collect())
+}
+
+fn conversation_list_sql(profile_id: &str, local_node_id: &str, options: Option<ConversationListQuery>) -> Result<(String, Vec<Value>), AuroraCommandError> {
+    let mut sql = "SELECT id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?".to_string();
+    let mut params = vec![json!(profile_id), json!(local_node_id)];
+    let bounded = options.as_ref().and_then(|query| query.limit).is_some();
+    if let Some(query) = options.as_ref() {
+        if let Some(limit) = query.limit { if limit == 0 || limit > 501 { return Err(local_data_error("conversation limit invalid")); } }
+        if query.include_archived == Some(false) { sql.push_str(" AND archived_at_ms IS NULL"); }
+        if let Some(cursor) = query.cursor.as_ref() {
+            validate_safe_int(cursor.updated_at_ms, "conversation.cursor.updatedAtMs")?;
+            validate_id(&cursor.id, "conversation.cursor.id")?;
+            sql.push_str(" AND (updated_at_ms < ? OR (updated_at_ms = ? AND id > ?))");
+            params.extend([json!(cursor.updated_at_ms), json!(cursor.updated_at_ms), json!(cursor.id)]);
+        }
+        sql.push_str(" ORDER BY updated_at_ms DESC, id COLLATE BINARY ASC");
+        if let Some(limit) = query.limit { if bounded { sql.push_str(" LIMIT ?"); params.push(json!(limit as i64)); } }
+    } else {
+        sql.push_str(" ORDER BY updated_at_ms DESC, id COLLATE BINARY ASC");
+    }
+    Ok((sql, params))
+}
+
+fn message_list_sql(profile_id: &str, local_node_id: &str, conversation_id: &str, options: Option<MessageListQuery>) -> Result<(String, Vec<Value>), AuroraCommandError> {
+    let mut sql = "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE c.profile_id = ? AND c.local_node_id = ? AND m.conversation_id = ?".to_string();
+    let mut params = vec![json!(profile_id), json!(local_node_id), json!(conversation_id)];
+    let direction = options.as_ref().and_then(|q| q.direction.as_deref()).unwrap_or("asc");
+    if let Some(limit) = options.as_ref().and_then(|q| q.limit) { if limit == 0 || limit > 2001 { return Err(local_data_error("message limit invalid")); } }
+    if direction != "asc" && direction != "desc" { return Err(local_data_error("message direction invalid")); }
+    if let Some(query) = options.as_ref() {
+        if query.before_sequence.is_some() && query.after_sequence.is_some() { return Err(local_data_error("message bounds are ambiguous")); }
+        if let Some(sequence) = query.before_sequence { validate_safe_int(sequence, "message.beforeSequence")?; sql.push_str(" AND m.sequence < ?"); params.push(json!(sequence)); }
+        if let Some(sequence) = query.after_sequence { validate_safe_int(sequence, "message.afterSequence")?; sql.push_str(" AND m.sequence > ?"); params.push(json!(sequence)); }
+    }
+    sql.push_str(if direction == "desc" { " ORDER BY m.sequence DESC, m.id COLLATE BINARY ASC" } else { " ORDER BY m.sequence ASC, m.id COLLATE BINARY ASC" });
+    if let Some(limit) = options.as_ref().and_then(|q| q.limit) { sql.push_str(" LIMIT ?"); params.push(json!(limit as i64)); }
+    Ok((sql, params))
+}
+
 fn conversation_from_row(row: Value) -> Result<Value, AuroraCommandError> {
     Ok(json!({
         "id": row_string(&row, "id")?,
@@ -2895,6 +2999,10 @@ fn local_data_error(message: impl Into<String>) -> AuroraCommandError {
     AuroraCommandError::LocalData(message.into())
 }
 
+fn local_data_error_reason(message: impl Into<String>, reason: crate::LocalDataReasonCode) -> AuroraCommandError {
+    AuroraCommandError::LocalDataReason { message: message.into(), reason }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2947,6 +3055,7 @@ mod tests {
             LocalDataRepositoryOperation::ConversationsListConversations {
                 profile_id: "profile-1".to_string(),
                 local_node_id: "node-1".to_string(),
+                options: None,
             },
         )
         .unwrap();
@@ -2959,6 +3068,7 @@ mod tests {
                 profile_id: "profile-1".to_string(),
                 local_node_id: "node-1".to_string(),
                 conversation_id: "voice-conversation-1".to_string(),
+                options: None,
             },
         )
         .unwrap();
@@ -2966,6 +3076,49 @@ mod tests {
         assert_eq!(messages[0]["id"], json!("voice-user-1"));
         assert_eq!(messages[1]["id"], json!("voice-user-2"));
         assert_eq!(messages[2]["id"], json!("voice-assistant-2"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn history_native_rejects_cross_conversation_message_id_and_paginates() {
+        let (dir, path) = test_db_path("history-pagination");
+        open_local_data_at_path(path.clone(), "profile-1", "node-1").unwrap();
+        let conn = SqliteConnection::open(path).unwrap();
+        for (id, updated, archived) in [("conversation-a", 10, None), ("conversation-b", 10, None), ("conversation-c", 9, Some(8))] {
+            let mut record = test_conversation_for("profile-1", "node-1", id);
+            record.updated_at_ms = updated;
+            record.archived_at_ms = archived;
+            run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsUpsertConversation { record }).unwrap();
+        }
+        for (id, conversation_id, sequence) in [("message-a1", "conversation-a", 1), ("message-a2", "conversation-a", 2), ("message-b1", "conversation-b", 1)] {
+            run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsAppendMessage { record: test_message_for_with_sequence(id, conversation_id, sequence) }).unwrap();
+        }
+        let ordered = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListMessages { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_id: "conversation-a".into(), options: Some(MessageListQuery { limit: None, before_sequence: None, after_sequence: None, direction: Some("desc".into()) }) }).unwrap();
+        assert_eq!(ordered.as_array().unwrap().iter().map(|row| row["id"].as_str().unwrap()).collect::<Vec<_>>(), ["message-a2", "message-a1"]);
+        let before = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListMessages { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_id: "conversation-a".into(), options: Some(MessageListQuery { limit: Some(1), before_sequence: Some(2), after_sequence: None, direction: Some("asc".into()) }) }).unwrap();
+        assert_eq!(before.as_array().unwrap().len(), 1);
+        assert_eq!(before[0]["id"], json!("message-a1"));
+        let after = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListMessages { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_id: "conversation-a".into(), options: Some(MessageListQuery { limit: None, before_sequence: None, after_sequence: Some(1), direction: Some("asc".into()) }) }).unwrap();
+        assert_eq!(after.as_array().unwrap().len(), 1);
+        let conversations = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListConversations { profile_id: "profile-1".into(), local_node_id: "node-1".into(), options: Some(ConversationListQuery { limit: Some(1), include_archived: Some(false), cursor: None }) }).unwrap();
+        assert_eq!(conversations.as_array().unwrap().len(), 1);
+        assert_eq!(conversations[0]["id"], json!("conversation-a"));
+        let next = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListConversations { profile_id: "profile-1".into(), local_node_id: "node-1".into(), options: Some(ConversationListQuery { limit: None, include_archived: Some(false), cursor: Some(ConversationCursor { updated_at_ms: 10, id: "conversation-a".into() }) }) }).unwrap();
+        assert_eq!(next.as_array().unwrap().iter().map(|row| row["id"].as_str().unwrap()).collect::<Vec<_>>(), ["conversation-b"]);
+        let empty = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListMessageCounts { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_ids: Some(Vec::new()) }).unwrap();
+        assert_eq!(empty, json!({}));
+        let deduped = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsListMessageCounts { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_ids: Some(vec!["conversation-a".into(), "conversation-a".into()]) }).unwrap();
+        assert_eq!(deduped["conversation-a"], json!(2));
+        let latest = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsGetLatestMessageSequence { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_id: "conversation-a".into() }).unwrap();
+        assert_eq!(latest, json!(2));
+        let missing_latest = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsGetLatestMessageSequence { profile_id: "profile-1".into(), local_node_id: "node-1".into(), conversation_id: "conversation-c".into() }).unwrap();
+        assert_eq!(missing_latest, Value::Null);
+        let update = test_message_for_with_sequence("message-a1", "conversation-a", 3);
+        run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsAppendMessage { record: update }).unwrap();
+        let duplicate_sequence = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsAppendMessage { record: test_message_for_with_sequence("message-new", "conversation-a", 2) });
+        assert!(matches!(duplicate_sequence, Err(AuroraCommandError::LocalDataReason { reason: crate::LocalDataReasonCode::DuplicateMessageSequence, .. })));
+        let duplicate_id = run_repository_operation(&conn, "profile-1", "node-1", LocalDataRepositoryOperation::ConversationsAppendMessage { record: test_message_for_with_sequence("message-a1", "conversation-b", 3) });
+        assert!(matches!(duplicate_id, Err(AuroraCommandError::LocalDataReason { reason: crate::LocalDataReasonCode::DuplicateMessageId, .. })));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -3426,10 +3579,12 @@ mod tests {
                 profile_id,
                 local_node_id,
                 conversation_id,
+                options,
             } => {
                 assert_eq!(profile_id, "profile-1");
                 assert_eq!(local_node_id, "node-1");
                 assert_eq!(conversation_id, "conversation-1");
+                assert!(options.is_none());
             }
             _ => panic!("list messages payload deserialized to the wrong operation"),
         }
@@ -3909,6 +4064,12 @@ mod tests {
 
     fn test_message_for(id: &str, conversation_id: &str) -> ConversationMessageRecord {
         serde_json::from_value(test_message_value(id, conversation_id)).unwrap()
+    }
+
+    fn test_message_for_with_sequence(id: &str, conversation_id: &str, sequence: i64) -> ConversationMessageRecord {
+        let mut message = test_message_for(id, conversation_id);
+        message.sequence = sequence;
+        message
     }
 
     fn test_memory_for(profile_id: &str, local_node_id: &str, id: &str) -> LightweightMemoryRecord {

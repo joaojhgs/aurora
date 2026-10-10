@@ -1,4 +1,5 @@
 export { AuroraClient, AuthTokenClient, ModelRuntimeClient } from './client.js'
+export { GATEWAY_EVENT_TOPICS } from './descriptors.js'
 export {
   GeneratedContractClient,
   generatedBackendContract,
@@ -262,13 +263,18 @@ export type * from './transport.js'
 export type * from './voice.js'
 export type * from './generated-contracts.js'
 export type {
+  AuroraEventSource,
+  AuroraEventSnapshot,
+  AuroraEventSnapshotRequest,
   AuroraEventStreamKind,
   AuroraEventStreamTransport,
   AuroraEventSubscription,
+  GatewayStatusChangedEvent,
   AuroraReconnectOptions,
   AuroraStreamProtocol,
   AuroraStreamRequest,
-  AuroraSubscribeOptions
+  AuroraSubscribeOptions,
+  NativeEventSubjectFilter
 } from './events.js'
 export type {
   EffectivePermissionInput,

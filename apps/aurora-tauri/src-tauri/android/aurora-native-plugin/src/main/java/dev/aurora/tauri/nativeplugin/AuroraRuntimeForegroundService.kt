@@ -495,6 +495,29 @@ private class AuroraNativeAudioOutputBridge : AuroraPcmOutputBridge {
     }
 }
 
+object AuroraNativePlaybackCountersBridge {
+    fun enabled(): Boolean = nativeEnabled()
+
+    fun recordAudioTrackPlayCall() {
+        if (enabled()) nativeRecordAudioTrackPlayCall()
+    }
+
+    fun recordAudioTrackWrittenSamples(sampleCount: Int) {
+        if (sampleCount > 0 && enabled()) nativeRecordAudioTrackWrittenSamples(sampleCount.toLong())
+    }
+
+    fun snapshotForLiveTest(): LongArray? = if (enabled()) nativeSnapshot() else null
+
+    private external fun nativeEnabled(): Boolean
+    private external fun nativeRecordAudioTrackPlayCall()
+    private external fun nativeRecordAudioTrackWrittenSamples(sampleCount: Long)
+    private external fun nativeSnapshot(): LongArray?
+
+    init {
+        System.loadLibrary("aurora_tauri_lib")
+    }
+}
+
 /** JNI bridge for the shared Rust VoiceRuntime session executor. */
 private class AuroraNativeVoiceSessionBridge(
     gateway: String,
@@ -572,6 +595,9 @@ private class AuroraNativeVoiceSessionBridge(
 
     fun persistBackgroundTurn(
         appConfigDir: String,
+        observationToken: String,
+        generation: Long,
+        transcriptPlaintext: String,
         scope: AuroraNativeLocalDataScope,
         newConversationId: String,
         userMessageId: String,
@@ -582,6 +608,9 @@ private class AuroraNativeVoiceSessionBridge(
         completedAtMs: Long,
     ): String? = nativePersistBackgroundTurn(
         appConfigDir,
+        observationToken,
+        generation,
+        transcriptPlaintext,
         scope.profileId,
         scope.localNodeId,
         newConversationId,
@@ -671,6 +700,9 @@ private class AuroraNativeVoiceSessionBridge(
     private external fun nativeTakeBackgroundResult(handle: Long): String?
     private external fun nativePersistBackgroundTurn(
         appConfigDir: String,
+        observationToken: String,
+        generation: Long,
+        transcriptPlaintext: String,
         profileId: String,
         localNodeId: String,
         newConversationId: String,
@@ -741,6 +773,7 @@ private class AuroraAudioPlayback(
         track = currentTrack
         try {
             currentTrack.play()
+            AuroraNativePlaybackCountersBridge.recordAudioTrackPlayCall()
             while (running.get()) {
                 val samples = bridge.drainPcm()
                 if (samples.isEmpty()) {
@@ -786,6 +819,7 @@ private class AuroraAudioPlayback(
             )
             if (written > 0) {
                 offset += written
+                AuroraNativePlaybackCountersBridge.recordAudioTrackWrittenSamples(written)
                 lastProgressMillis = SystemClock.elapsedRealtime()
                 continue
             }
@@ -2199,6 +2233,9 @@ class AuroraRuntimeForegroundService : Service() {
             }
             nativeSession.persistBackgroundTurn(
                 appConfigDir = applicationInfo.dataDir,
+                observationToken = result.optString("observationToken", ""),
+                generation = result.optLong("generation", 0L).coerceAtLeast(0L),
+                transcriptPlaintext = transcript,
                 scope = scope,
                 newConversationId = AuroraNativeLocalDataContext.newConversationId(),
                 userMessageId = userMessageId,

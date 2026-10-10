@@ -58,6 +58,7 @@ This index separates current documentation from historical/provenance material. 
 | Document | Status | Purpose |
 | --- | --- | --- |
 | [`FRONTEND_AND_UI_ARCHITECTURE.md`](FRONTEND_AND_UI_ARCHITECTURE.md) | Current | SDK-first UI architecture across React, web, Tauri, and PyQt fallback. |
+| [`NATIVE_EVENT_BRIDGE.md`](NATIVE_EVENT_BRIDGE.md) | Partial feature | Rust-origin observations through SDK events, scoped React hooks, and snapshot recovery; delivery and live acceptance limits. |
 | [`UI_CLIENT_SURFACE_ROADMAP.md`](UI_CLIENT_SURFACE_ROADMAP.md) | Current | Target client catalog, cross-surface feature contract, and delivery sequence for desktop, web, Android, iOS, and fallback clients. |
 | [`UI_CLIENT_SURFACE_STATUS.md`](UI_CLIENT_SURFACE_STATUS.md) | Current bounded check | Evidence-based implementation snapshot that separates implemented, build-proven, live-proven, planned, and limited client paths. |
 | [`WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md`](WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md) | Current | Implemented TypeScript WebView/Python WebRTC protocol contract, security posture, dependencies, and conformance commands. |

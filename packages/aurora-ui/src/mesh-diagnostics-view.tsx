@@ -14,14 +14,13 @@ import type {
   WebRTCDiagnosticsResponse,
   WebRTCPeerDiagnostic
 } from '@aurora/client'
-import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Badge } from '#components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '#components/ui/card'
 import { Progress } from '#components/ui/progress'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '#components/ui/table'
 import { EvidenceBadge, StatusBadge, presentableSignal } from './status-badges'
 import type { RouteAvailability } from './shell-data'
-import { PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice } from './state-surface'
 import { Button, StatStrip } from './primitives'
 import {
   isBrowserWebRtcConfigured,
@@ -206,7 +205,7 @@ function productDiagnosticCopy(value: string | null | undefined, fallback = 'Sta
   if (/\b(?:redacted|secret|credential|password|token|api\s*key|authorization|audio)\b/iu.test(normalized)) return 'Sensitive details are protected.'
   if (/\b(?:pending|loading|wait)\b/iu.test(normalized)) return 'Waiting for this device to finish checking.'
   if (/\b(?:available|ready|healthy|connected|authenticated|ok|running|open|complete|stable)\b/iu.test(normalized)) return 'Ready.'
-  if (INTERNAL_RENDER_TERM_PATTERN.test(redacted)) return fallback
+  if (INTERNAL_RENDER_TERM_PATTERN.test(redacted) || INTERNAL_RENDER_TERM_PATTERN.test(normalized)) return fallback
   return redacted
 }
 
@@ -386,16 +385,52 @@ export const loadingMeshDiagnosticsSnapshot: MeshDiagnosticsSnapshot = {
   evidenceSource: 'pending Aurora service calls'
 }
 
+export function canReadMeshDiagnosticsRoute(route: RouteAvailability): boolean {
+  return !route.disabled && route.state !== 'denied'
+}
+
+export function meshDiagnosticsAccessSnapshot(route: RouteAvailability): MeshDiagnosticsSnapshot {
+  const detail = route.explanation || 'Access is required before troubleshooting information can be shown.'
+  const warnings = [detail, ...route.blockers]
+    .filter((message): message is string => Boolean(message))
+    .map((message) => redactDiagnosticText(presentableSignal(message)))
+  const state: AvailabilityState = route.state === 'privacy-blocked' ? 'privacy-blocked' : 'denied'
+  return {
+    ...loadingMeshDiagnosticsSnapshot,
+    loadState: 'denied',
+    localNodeName: 'This device',
+    signalingState: state,
+    signalingEvidence: 'Access is required before this information can be shown.',
+    signalingRepair: 'Review access, then refresh troubleshooting.',
+    diagnosticsCapabilityState: state,
+    diagnosticsCapabilityReason: 'Access is required before this information can be shown.',
+    supportBundleState: state,
+    supportBundleReason: 'Access is required before support data can be prepared.',
+    liveProbes: [
+      { name: 'Device access', state, latency: 'not checked', detail: 'Access is required before troubleshooting can read device status.' },
+      { name: 'Support export', state, latency: 'not checked', detail: 'Access is required before support data can be prepared.' }
+    ],
+    redactionRows: loadingMeshDiagnosticsSnapshot.redactionRows.map((row) => ({ ...row, detail: 'Sensitive details remain protected.' })),
+    warnings,
+    errors: ['Access is required before troubleshooting can read this information.'],
+    evidenceSource: 'Access decision'
+  }
+}
+
 export async function buildMeshDiagnosticsSnapshot(
   client: AuroraClient,
-  route: RouteAvailability
+  route: RouteAvailability,
+  options: { signal?: AbortSignal } = {}
 ): Promise<MeshDiagnosticsSnapshot> {
+  throwIfAborted(options.signal)
+  if (!canReadMeshDiagnosticsRoute(route)) return meshDiagnosticsAccessSnapshot(route)
   const [webrtc, mesh, catalog, supportBundle] = await Promise.all([
-    captureDiagnostic(() => client.registry.getWebRTCDiagnostics()),
-    captureDiagnostic(() => client.mesh.getStatus().then((response) => response.ok ? response.data : Promise.reject(response.error))),
-    captureDiagnostic(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true })),
-    captureDiagnostic(() => client.diagnostics.getSupportBundle({ event_limit: 6, audit_limit: 6, include_capability_catalog: true }).then((response) => response.ok ? response.data : Promise.reject(response.error)))
+    captureDiagnostic(() => client.registry.getWebRTCDiagnostics(options), options.signal),
+    captureDiagnostic(() => client.mesh.getStatus(options).then((response) => response.ok ? response.data : Promise.reject(response.error)), options.signal),
+    captureDiagnostic(() => client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }, options), options.signal),
+    captureDiagnostic(() => client.diagnostics.getSupportBundle({ event_limit: 6, audit_limit: 6, include_capability_catalog: true }, options).then((response) => response.ok ? response.data : Promise.reject(response.error)), options.signal)
   ])
+  throwIfAborted(options.signal)
   return meshDiagnosticsSnapshotFromResults({ route, webrtc, mesh, catalog, supportBundle })
 }
 
@@ -412,7 +447,7 @@ export function meshDiagnosticsSnapshotFromResults(input: {
   const errors = [input.webrtc.error, input.mesh.error, input.catalog.error, supportBundleError]
     .filter((error): error is string => Boolean(error))
     .map(redactDiagnosticText)
-  const denied = Boolean(input.webrtc.denied || input.mesh.denied || input.catalog.denied || input.route.state === 'denied')
+  const denied = Boolean(input.route.disabled || input.webrtc.denied || input.mesh.denied || input.catalog.denied || input.route.state === 'denied')
   const webRtc = input.webrtc.data
   const mesh = input.mesh.data
   const transportRows = buildTransportRows(webRtc, mesh)
@@ -628,6 +663,8 @@ export function reconcileMeshDiagnosticsWithThinPeer(
 }
 
 export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSupportBundle, supportBundleExportState = { status: 'idle', message: null }, reauthConfirmed = false, onReauthConfirmedChange }: MeshDiagnosticsViewProps) {
+  const exportAllowed = Boolean(onExportSupportBundle && canReadMeshDiagnosticsRoute(route))
+  const refreshAllowed = Boolean(onRefresh && canReadMeshDiagnosticsRoute(route))
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -636,7 +673,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         title="Troubleshooting"
         description="Check whether connected devices, service checks, support export, and repair steps are ready."
         actions={
-          onRefresh ? (
+          refreshAllowed ? (
             <Button variant="ghost" icon={<RefreshCw size={14} aria-hidden />} onClick={onRefresh}>
               Refresh
             </Button>
@@ -706,17 +743,17 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         <p className="mt-3 text-sm text-muted-foreground">{productDiagnosticCopy(snapshot.supportBundleReason, 'Sensitive details are protected before export.')}</p>
         <label className="mt-3 flex items-center gap-2 text-sm">
           {onReauthConfirmedChange ? (
-            <input type="checkbox" checked={reauthConfirmed} onChange={(event) => onReauthConfirmedChange(event.currentTarget.checked)} disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
+            <input type="checkbox" checked={reauthConfirmed && exportAllowed} onChange={(event) => onReauthConfirmedChange(event.currentTarget.checked)} disabled={!exportAllowed || supportBundleExportState.status === 'pending'} />
           ) : (
-            <input type="checkbox" checked={false} readOnly disabled={!onExportSupportBundle || supportBundleExportState.status === 'pending'} />
+            <input type="checkbox" checked={false} readOnly disabled={!exportAllowed || supportBundleExportState.status === 'pending'} />
           )}
           <span>I confirm recent approval before exporting support data.</span>
         </label>
         <Button
           className="mt-3"
           icon={<Download size={15} aria-hidden />}
-          disabled={!onExportSupportBundle || !reauthConfirmed || supportBundleExportState.status === 'pending'}
-          {...(onExportSupportBundle ? { onClick: () => void onExportSupportBundle() } : {})}
+          disabled={!exportAllowed || !reauthConfirmed || supportBundleExportState.status === 'pending'}
+          {...(exportAllowed ? { onClick: () => void onExportSupportBundle?.() } : {})}
         >
           {supportBundleExportState.status === 'pending' ? 'Exporting...' : 'Export support data'}
         </Button>
@@ -731,9 +768,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
         {snapshot.serviceProbeRows.length > 0 ? (
           <DetailGrid rows={snapshot.serviceProbeRows} label="Service health probes" />
         ) : (
-          <p className="text-sm text-muted-foreground" role="status">
-            Service checks are not available yet.
-          </p>
+          <EmptyState title="No service checks" message="Service checks are not available yet." />
         )}
       </Panel>
 
@@ -761,9 +796,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground" role="status">
-            No recent activity is available yet.
-          </p>
+          <EmptyState title="No recent activity" message="No recent activity is available yet." />
         )}
       </Panel>
 
@@ -802,17 +835,11 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
       </div>
 
       {snapshot.errors.length > 0 ? (
-        <Alert variant="destructive">
-          <AlertTriangle />
-          <AlertTitle>Some checks need attention</AlertTitle>
-          <AlertDescription>
-            <ul className="list-disc pl-4">
-              {snapshot.errors.map((error) => (
-                <li key={error}>{productDiagnosticCopy(error, 'Could not complete this check. Try again.')}</li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          title="Some checks need attention"
+          state={snapshot.loadState === 'denied' ? 'permission' : snapshot.loadState === 'degraded' ? 'offline' : 'error'}
+          message={snapshot.errors.map((error) => productDiagnosticCopy(error, 'Could not complete this check. Try again.')).join(' ')}
+        />
       ) : null}
 
       {snapshot.warnings.length > 0 ? (
@@ -869,9 +896,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             </TableBody>
           </Table>
         ) : (
-          <p className="text-sm text-muted-foreground" role="status">
-            No connected devices are available yet.
-          </p>
+          <EmptyState title="No connected devices" message="No connected devices are available yet." />
         )}
       </Panel>
 
@@ -908,9 +933,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             ))}
           </div>
         ) : (
-          <p className="text-sm text-muted-foreground" role="status">
-            No feature readiness checks are available yet.
-          </p>
+          <EmptyState title="No feature checks" message="No feature readiness checks are available yet." />
         )}
       </Panel>
 
@@ -930,9 +953,7 @@ export function MeshDiagnosticsView({ snapshot, route, onRefresh, onExportSuppor
             ))}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground" role="status">
-            No recent connection issues were reported.
-          </p>
+          <EmptyState title="No recent connection issues" message="No recent connection issues were reported." />
         )}
       </Panel>
     </div>
@@ -1061,7 +1082,7 @@ function buildFrontendLogRows(bundle: GatewaySupportBundleResponse | null, webRt
   if (frontendEvents.length > 0) {
     return frontendEvents.map((event, index) => ({
       id: `frontend-event-${event.id || index}`,
-      name: 'Frontend errors/logs',
+      name: 'App issues',
       state: event.status === 'failed' || event.status === 'error' ? 'degraded' : 'available-local',
       source: redactDiagnosticText(event.topic ?? event.kind ?? 'Gateway event stream'),
       detail: redactDiagnosticText(`${event.status ?? 'status unknown'}; ${safeDiagnosticDetails(event.payload_summary)}; ${event.secrets_redacted ? 'secrets protected' : 'redaction not confirmed'}`)
@@ -1069,7 +1090,7 @@ function buildFrontendLogRows(bundle: GatewaySupportBundleResponse | null, webRt
   }
   return [{
     id: 'frontend-logs-unavailable',
-    name: 'Frontend errors/logs',
+    name: 'App issues',
     state: webRtc?.recent_errors.length ? 'degraded' : 'unsupported',
     source: 'Gateway.GetSupportBundle recent_events',
     detail: 'No redacted frontend log stream is exposed yet; use this repair state instead of embedding raw frontend dumps on product pages.'
@@ -1129,12 +1150,9 @@ function buildTimelineRows(bundle: GatewaySupportBundleResponse | null): Diagnos
 }
 
 function DetailGrid({ rows, label, empty }: { rows: DiagnosticsDetailRow[]; label: string; empty?: string }) {
-  if (rows.length === 0)
-    return (
-      <p className="text-sm text-muted-foreground" role="status">
-        {empty ?? 'No diagnostics metadata was returned.'}
-      </p>
-    )
+  if (rows.length === 0) {
+    return <EmptyState title="No details available" message={empty ?? 'No diagnostics metadata was returned.'} />
+  }
   return (
     <div className="flex flex-col gap-2.5" aria-label={label}>
       {rows.map((row) => (
@@ -1309,12 +1327,20 @@ function signalingWarnings(webrtc: WebRTCDiagnosticsResponse | null): string[] {
   ]
 }
 
-async function captureDiagnostic<T>(operation: () => Promise<T>): Promise<SettledDiagnostic<T>> {
+async function captureDiagnostic<T>(operation: () => Promise<T>, signal?: AbortSignal): Promise<SettledDiagnostic<T>> {
   try {
+    throwIfAborted(signal)
     return { data: await operation(), error: null, denied: false }
   } catch (error) {
+    if (signal?.aborted) throw error
     const message = error instanceof Error ? error.message : 'SDK request failed'
     return { data: null, error: message, denied: /permission|forbidden|denied|auth/i.test(message) }
+  }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('Mesh diagnostics request was cancelled', 'AbortError')
   }
 }
 

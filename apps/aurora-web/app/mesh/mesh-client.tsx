@@ -30,6 +30,7 @@ export function MeshPeersClientPage({ route }: { route: RouteAvailability }) {
 
   return (
     <div
+      className="flex min-w-0 flex-col gap-5"
       data-local-node-provider={providerStatus.state}
       data-local-node-provider-available={String(providerStatus.available)}
       data-local-data-writable={String(providerStatus.localDataWritable)}

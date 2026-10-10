@@ -750,6 +750,35 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     @Command
+    fun nativeVoicePlaybackCountersForLiveTest(invoke: Invoke) {
+        val ret = JSObject()
+        if ((activity.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) == 0) {
+            ret.put("available", false)
+            ret.put("reason", "debuggable_package_required")
+            invoke.resolve(ret)
+            return
+        }
+        val counters = AuroraNativePlaybackCountersBridge.snapshotForLiveTest()
+        if (counters == null) {
+            ret.put("available", false)
+            ret.put("reason", "android_voice_live_test_feature_disabled")
+            invoke.resolve(ret)
+            return
+        }
+        ret.put("available", true)
+        ret.put("globalPlayCallCount", counters.getOrElse(0) { 0L })
+        ret.put("globalChunkEnqueueCount", counters.getOrElse(1) { 0L })
+        ret.put("globalFinalChunkQueuedCount", counters.getOrElse(2) { 0L })
+        ret.put("globalDrainNonEmptyCount", counters.getOrElse(3) { 0L })
+        ret.put("globalAckCount", counters.getOrElse(4) { 0L })
+        ret.put("globalCompleteCount", counters.getOrElse(5) { 0L })
+        ret.put("globalFailureCount", counters.getOrElse(6) { 0L })
+        ret.put("globalAudioTrackPlayCallCount", counters.getOrElse(7) { 0L })
+        ret.put("globalAudioTrackWrittenSamples", counters.getOrElse(8) { 0L })
+        invoke.resolve(ret)
+    }
+
+    @Command
     fun voicePackCatalogStatus(invoke: Invoke) {
         invoke.resolve(voicePackCatalogStatusObject())
     }

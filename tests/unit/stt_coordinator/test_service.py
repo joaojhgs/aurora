@@ -90,7 +90,7 @@ def mock_bus():
 
 
 @pytest.fixture
-def service(mock_bus):
+def service(mock_bus, monkeypatch):
     """Fixture for the STTCoordinatorService."""
     # Service uses bus singleton and PyAudio - patch both
     with (
@@ -105,9 +105,15 @@ def service(mock_bus):
         mock_stream.is_active.return_value = False
         mock_stream.is_stopped.return_value = True
         mock_pa.open.return_value = mock_stream
-        mock_pa.get_default_input_device_info.return_value = {"index": 0, "name": "Mock Mic"}
+        # Coordinator tests drive bus events; a non-blocking mock microphone
+        # otherwise starts an unbounded reader thread during service.start().
+        monkeypatch.delenv("AURORA_STT_REQUIRE_MICROPHONE", raising=False)
+        mock_pa.get_device_count.return_value = 0
+        mock_pa.get_default_input_device_info.side_effect = OSError("No test microphone")
 
         svc = STTCoordinatorService()
+        # ConfigService availability is independent of these coordinator tests.
+        monkeypatch.setattr(svc, "_is_runtime_enabled", AsyncMock(return_value=True))
         yield svc
 
 
@@ -125,6 +131,7 @@ async def test_start_service(service, mock_bus):
     """Test the start method of the service."""
     await service.start()
     assert service._running
+    assert service._capture_thread is None
 
     # Service uses auto-subscription via contracts now
     # These tests need to be updated to test contract-based subscriptions

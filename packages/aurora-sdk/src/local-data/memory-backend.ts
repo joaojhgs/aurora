@@ -8,6 +8,11 @@ import {
   type DeleteExpiredMemoryItemsResult,
   type DeleteRecordResult,
   type LocalDataRepositories,
+  type ConversationListQuery,
+  type MessageListQuery,
+  LOCAL_DATA_CONVERSATION_QUERY_MAX,
+  LOCAL_DATA_MESSAGE_QUERY_MAX,
+  LOCAL_DATA_CONVERSATION_ID_SET_MAX,
   type MutableLocalDataCollections
 } from './repositories.js'
 import {
@@ -267,11 +272,11 @@ class MemoryConversationRepository {
         throw new LocalDataError('invalid_record', 'Message conversation does not exist')
       }
       if (this.session.mutable.messages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
-        throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation')
+        throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
       }
       const existing = this.session.mutable.messages.find((message) => message.id === record.id)
       if (existing !== undefined && existing.conversationId !== record.conversationId) {
-        throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+        throw new LocalDataError('invalid_record', 'Message IDs must be unique', { reason: 'duplicate_message_id' })
       }
       upsert(this.session.mutable.messages, record, (item) => item.id === record.id)
     })
@@ -292,25 +297,61 @@ class MemoryConversationRepository {
     })
   }
 
-  async listConversations(): Promise<ConversationRecord[]> {
-    return this.session.withRepositoryAccess(this.access, () => clone(this.session.mutable.conversations).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
+  async getConversation(conversationId: string): Promise<ConversationRecord | null> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, conversationId, 'conversation.id')
+      const record = this.session.mutable.conversations.find((conversation) => conversation.id === id)
+      return record === undefined ? null : clone(record)
+    })
   }
 
-  async listMessageCounts(): Promise<Record<string, number>> {
+  async getMessage(conversationId: string, messageId: string): Promise<ConversationMessageRecord | null> {
     return this.session.withRepositoryAccess(this.access, () => {
+      const conversation = parseLocalDataBoundary(localDataIdSchema, conversationId, 'conversation.id')
+      const id = parseLocalDataBoundary(localDataIdSchema, messageId, 'message.id')
+      const record = this.session.mutable.messages.find((message) => message.conversationId === conversation && message.id === id)
+      return record === undefined ? null : clone(record)
+    })
+  }
+
+  async listConversations(options: ConversationListQuery = {}): Promise<ConversationRecord[]> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const limit = options.limit === undefined ? undefined : requireRepositoryLimit(options.limit, LOCAL_DATA_CONVERSATION_QUERY_MAX, 'conversation_limit')
+      const cursor = options.cursor
+      if (cursor !== undefined) {
+        requireRepositoryTimestamp(cursor.updatedAtMs, 'conversation_cursor_updated_at')
+        parseLocalDataBoundary(localDataIdSchema, cursor.id, 'conversation_cursor_id')
+      }
+      return this.session.mutable.conversations
+        .filter((record) => options.includeArchived !== false || record.archivedAtMs === null)
+        .sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id))
+        .filter((record) => cursor === undefined || record.updatedAtMs < cursor.updatedAtMs || (record.updatedAtMs === cursor.updatedAtMs && compareUtf8(record.id, cursor.id) > 0))
+        .slice(0, limit)
+        .map(clone)
+    })
+  }
+
+  async listMessageCounts(conversationIds?: readonly string[]): Promise<Record<string, number>> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const ids = normalizeConversationIds(conversationIds)
+      if (ids !== undefined && ids.size === 0) return {}
       const counts: Record<string, number> = {}
       for (const message of this.session.mutable.messages) {
+        if (ids !== undefined && !ids.has(message.conversationId)) continue
         counts[message.conversationId] = (counts[message.conversationId] ?? 0) + 1
       }
       return counts
     })
   }
 
-  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
+  async listFirstUserMessages(conversationIds?: readonly string[]): Promise<Record<string, ConversationMessageRecord>> {
     return this.session.withRepositoryAccess(this.access, () => {
+      const ids = normalizeConversationIds(conversationIds)
+      if (ids !== undefined && ids.size === 0) return {}
       const firstByConversation = new Map<string, ConversationMessageRecord>()
       for (const message of this.session.mutable.messages) {
         if (message.role !== 'user') continue
+        if (ids !== undefined && !ids.has(message.conversationId)) continue
         const current = firstByConversation.get(message.conversationId)
         if (current === undefined || message.sequence < current.sequence || (message.sequence === current.sequence && compareUtf8(message.id, current.id) < 0)) {
           firstByConversation.set(message.conversationId, message)
@@ -320,9 +361,35 @@ class MemoryConversationRepository {
     })
   }
 
-  async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
-    return this.session.withRepositoryAccess(this.access, () => clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
-      .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id)))
+  async listMessages(conversationId: string, options: MessageListQuery = {}): Promise<ConversationMessageRecord[]> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, conversationId, 'conversation.id')
+      if (options.beforeSequence !== undefined && options.afterSequence !== undefined) {
+        throw new LocalDataError('invalid_record', 'Message before and after cursors are mutually exclusive', { reason: 'ambiguous_message_cursor' })
+      }
+      const limit = options.limit === undefined ? undefined : requireRepositoryLimit(options.limit, LOCAL_DATA_MESSAGE_QUERY_MAX, 'message_limit')
+      const before = options.beforeSequence === undefined ? undefined : requireRepositorySequence(options.beforeSequence, 'message_before_sequence')
+      const after = options.afterSequence === undefined ? undefined : requireRepositorySequence(options.afterSequence, 'message_after_sequence')
+      const direction = options.direction ?? 'asc'
+      if (direction !== 'asc' && direction !== 'desc') throw new LocalDataError('invalid_record', 'Message direction is invalid', { reason: 'message_direction' })
+      return this.session.mutable.messages.filter((message) => message.conversationId === id)
+        .filter((message) => before === undefined || message.sequence < before)
+        .filter((message) => after === undefined || message.sequence > after)
+        .sort((a, b) => direction === 'asc' ? a.sequence - b.sequence || compareUtf8(a.id, b.id) : b.sequence - a.sequence || compareUtf8(a.id, b.id))
+        .slice(0, limit)
+        .map(clone)
+    })
+  }
+
+  async getLatestMessageSequence(conversationId: string): Promise<number | null> {
+    return this.session.withRepositoryAccess(this.access, () => {
+      const id = parseLocalDataBoundary(localDataIdSchema, conversationId, 'conversation.id')
+      let latest: number | null = null
+      for (const message of this.session.mutable.messages) {
+        if (message.conversationId === id && (latest === null || message.sequence > latest)) latest = message.sequence
+      }
+      return latest
+    })
   }
 }
 
@@ -460,6 +527,37 @@ function requireDeleteLimit(limit: number): number {
     throw new LocalDataError('invalid_record', 'Delete limit must be a positive safe integer', { reason: 'delete_limit' })
   }
   return limit
+}
+
+function requireRepositoryLimit(limit: number, max: number, reason: string): number {
+  if (!Number.isSafeInteger(limit) || limit < 1 || limit > max) {
+    throw new LocalDataError('invalid_record', 'Limit must be a positive safe integer within the SDK bound', { reason })
+  }
+  return limit
+}
+
+function requireRepositoryTimestamp(value: number, reason: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new LocalDataError('invalid_record', 'Cursor timestamp must be a non-negative safe integer', { reason })
+  }
+  return value
+}
+
+function requireRepositorySequence(value: number, reason: string): number {
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new LocalDataError('invalid_record', 'Message sequence must be a non-negative safe integer', { reason })
+  }
+  return value
+}
+
+function normalizeConversationIds(conversationIds: readonly string[] | undefined): Set<string> | undefined {
+  if (conversationIds === undefined) return undefined
+  if (conversationIds.length > LOCAL_DATA_CONVERSATION_ID_SET_MAX) {
+    throw new LocalDataError('invalid_record', 'Conversation ID set exceeds the SDK bound', { reason: 'conversation_id_set_limit' })
+  }
+  const ids = new Set<string>()
+  for (const id of conversationIds) ids.add(parseLocalDataBoundary(localDataIdSchema, id, 'conversation.id'))
+  return ids
 }
 
 function validateImportedCollections(records: LocalDataRecordCollections, profileId: string, localNodeId: string): void {

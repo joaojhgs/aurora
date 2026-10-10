@@ -125,10 +125,13 @@ def mock_vad():
 
 
 @pytest.fixture
-def service(mock_bus, mock_config, mock_whisper_model, mock_vad):
+def service(mock_bus, mock_config, mock_whisper_model, mock_vad, monkeypatch):
     """Create a TranscriptionService instance with mocked dependencies."""
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
-        yield TranscriptionService()
+        svc = TranscriptionService()
+        # ConfigService availability is independent of these service tests.
+        monkeypatch.setattr(svc, "_is_runtime_enabled", AsyncMock(return_value=True))
+        yield svc
 
 
 def test_active_speech_segments_are_not_rolling_window_limited(service):

@@ -312,6 +312,16 @@ export const GatewayExplainRouteOutputRouteExplainResponseSchema = z.object({
 }).meta({"x-aurora-extra-behavior":"strip"})
 export type GatewayExplainRouteOutputRouteExplainResponse = z.infer<typeof GatewayExplainRouteOutputRouteExplainResponseSchema>
 
+export const GatewayStatusChangedEventGatewayStatusChangedEventSchema = z.object({
+  "event_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}),
+  "freshness": z.enum(["current", "stale"]).prefault("current").meta({"default":"current"}).optional(),
+  "kind": z.enum(["config.updated", "config.validation_failed", "health.stale", "health.updated", "service.announced", "service.stale"]),
+  "service_id": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 128, { message: 'string must contain at most 128 Unicode code points' }).meta({"maxLength":128}).regex(new RegExp("^[A-Za-z0-9_.:-]+$")).nullable().prefault(null).meta({"default":null}).optional(),
+  "status": z.enum(["connected", "degraded", "disconnected", "failed", "healthy", "unhealthy", "updated"]),
+  "timestamp": z.string().refine((value) => codePointLength(value) >= 1, { message: 'string must contain at least 1 Unicode code points' }).meta({"minLength":1}).refine((value) => codePointLength(value) <= 64, { message: 'string must contain at most 64 Unicode code points' }).meta({"maxLength":64})
+}).meta({"x-aurora-extra-behavior":"strip"})
+export type GatewayStatusChangedEventGatewayStatusChangedEvent = z.infer<typeof GatewayStatusChangedEventGatewayStatusChangedEventSchema>
+
 const OrchestratorExternalUserInputInputOrchestratorProcessRequestSchemaMeshAddressSelectorSchemaDef: z.ZodType<JsonValue> = z.lazy(() => z.object({
   "data_scope": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
   "hardware_target": z.string().regex(/^(?=.*\S)[\s\S]*$/).meta({"x-aurora-string-non-blank":true}).nullable().prefault(null).meta({"default":null}).optional(),
@@ -2344,6 +2354,7 @@ export const backendContractSchemas = {
   AuroraEventStreamEnvelopeAuroraEventStreamEventSchema,
   GatewayExplainRouteInputRouteExplainRequestSchema,
   GatewayExplainRouteOutputRouteExplainResponseSchema,
+  GatewayStatusChangedEventGatewayStatusChangedEventSchema,
   OrchestratorExternalUserInputInputOrchestratorProcessRequestSchema,
   OrchestratorExternalUserInputOutputOrchestratorResponseSchema,
   OrchestratorInterruptInputOrchestratorInterruptRequestSchema,
@@ -2473,6 +2484,7 @@ export const backendContractSchemaById = {
   "Aurora.EventStream.envelope.AuroraEventStreamEvent": AuroraEventStreamEnvelopeAuroraEventStreamEventSchema,
   "Gateway.ExplainRoute.input.RouteExplainRequest": GatewayExplainRouteInputRouteExplainRequestSchema,
   "Gateway.ExplainRoute.output.RouteExplainResponse": GatewayExplainRouteOutputRouteExplainResponseSchema,
+  "Gateway.StatusChanged.event.GatewayStatusChangedEvent": GatewayStatusChangedEventGatewayStatusChangedEventSchema,
   "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest": OrchestratorExternalUserInputInputOrchestratorProcessRequestSchema,
   "Orchestrator.ExternalUserInput.output.OrchestratorResponse": OrchestratorExternalUserInputOutputOrchestratorResponseSchema,
   "Orchestrator.Interrupt.input.OrchestratorInterruptRequest": OrchestratorInterruptInputOrchestratorInterruptRequestSchema,
@@ -5711,6 +5723,23 @@ export const backendContractEventDescriptors = [
     "authorized": true,
     "ordered_event_group": "tts_text_stream",
     "remote_raw_audio_route": false
+  },
+  {
+    "event_topic": "Gateway.StatusChanged",
+    "module": "Gateway",
+    "name": "StatusChanged",
+    "topic": "Gateway.StatusChanged",
+    "model": "GatewayStatusChangedEvent",
+    "schema_id": "Gateway.StatusChanged.event.GatewayStatusChangedEvent",
+    "schema_hash": "95f28400de7c9de9c3cf1ed83a068e7c65901534d64e286d17a1758322306a04",
+    "required_permission": "Gateway.use",
+    "required_perms": [
+      "Gateway.use"
+    ],
+    "bounded": true,
+    "authorized": true,
+    "ordered_event_group": "gateway_status",
+    "remote_raw_audio_route": false
   }
 ] as const
 
@@ -5718,6 +5747,7 @@ export const backendContractEventDescriptorByTopic = {
   "Orchestrator.Response": {"event_topic": "Orchestrator.Response", "module": "Orchestrator", "name": "Response", "topic": "Orchestrator.Response", "model": "AssistantStreamEvent", "schema_id": "Orchestrator.Response.event.AssistantStreamEvent", "schema_hash": "1469513416f663f9a27944a8d6fa5bf97158248bc87e4f80e3366ecc60657392", "required_permission": "Orchestrator.use", "required_perms": ["Orchestrator.use"], "bounded": true, "authorized": true, "ordered_event_group": "assistant_stream", "remote_raw_audio_route": false},
   "Orchestrator.Interrupted": {"event_topic": "Orchestrator.Interrupted", "module": "Orchestrator", "name": "Interrupted", "topic": "Orchestrator.Interrupted", "model": "OrchestratorInterruptedEvent", "schema_id": "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent", "schema_hash": "dabddcb83584367b6dfad8f9bbba135201f456c60b2091757cc097773f856bc3", "required_permission": "Orchestrator.use", "required_perms": ["Orchestrator.use"], "bounded": true, "authorized": true, "ordered_event_group": "assistant_interrupt", "remote_raw_audio_route": false},
   "TTS.AudioChunk": {"event_topic": "TTS.AudioChunk", "module": "TTS", "name": "AudioChunk", "topic": "TTS.AudioChunk", "model": "TTSAudioChunkEvent", "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent", "schema_hash": "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542", "required_permission": "TTS.use", "required_perms": ["TTS.use"], "bounded": true, "authorized": true, "ordered_event_group": "tts_text_stream", "remote_raw_audio_route": false},
+  "Gateway.StatusChanged": {"event_topic": "Gateway.StatusChanged", "module": "Gateway", "name": "StatusChanged", "topic": "Gateway.StatusChanged", "model": "GatewayStatusChangedEvent", "schema_id": "Gateway.StatusChanged.event.GatewayStatusChangedEvent", "schema_hash": "95f28400de7c9de9c3cf1ed83a068e7c65901534d64e286d17a1758322306a04", "required_permission": "Gateway.use", "required_perms": ["Gateway.use"], "bounded": true, "authorized": true, "ordered_event_group": "gateway_status", "remote_raw_audio_route": false},
 } as const
 
 export const backendContractEnvelopeDescriptors = [

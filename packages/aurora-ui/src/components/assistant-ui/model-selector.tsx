@@ -312,7 +312,7 @@ export type ModelSelectorValueProps = {
 
 function ModelIcon({ children }: { children: ReactNode }) {
   return (
-    <span className="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4">
+    <span data-slot="model-selector-icon" className="flex size-4 shrink-0 items-center justify-center [&_svg]:size-4">
       {children}
     </span>
   );

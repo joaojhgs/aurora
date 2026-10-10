@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AuroraError } from '@aurora/client'
+import { buildShellSnapshot } from '@aurora/ui'
 import {
   BrowserMeshNodeCompositionError,
   type BrowserMeshNodeServices,
@@ -81,6 +82,50 @@ describe('createAuroraWebClient', () => {
     const client = createAuroraWebClient()
 
     expect(client.transport.kind).toBe('mock')
+  })
+
+  it('serves a fresh shell capability snapshot for explicit debug demo clients', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('AURORA_GATEWAY_URL', '')
+    vi.stubEnv('AURORA_WEB_DEMO_MODE', '1')
+    const client = createAuroraWebClient()
+
+    const snapshot = await buildShellSnapshot(client)
+
+    expect(snapshot.connectionState).toBe('connected')
+    expect(snapshot.capabilityFreshness).toBe('fresh')
+  })
+
+  it('keeps debug demo health and config streams open without inventing config changes', async () => {
+    vi.stubEnv('NODE_ENV', 'production')
+    vi.stubEnv('AURORA_GATEWAY_URL', '')
+    vi.stubEnv('AURORA_WEB_DEMO_MODE', '1')
+    const client = createAuroraWebClient()
+
+    const health = client.events.watchHealth({ reconnect: false })
+    const config = client.events.watchConfig({ reconnect: false })
+    const healthIterator = health[Symbol.asyncIterator]()
+    const configIterator = config[Symbol.asyncIterator]()
+
+    await expect(healthIterator.next()).resolves.toMatchObject({
+      done: false,
+      value: { id: 'debug-health-1', kind: 'service.announced', payload: { event_id: 'debug-health-1', status: 'connected', freshness: 'current', demo_mode: true } },
+    })
+
+    await config.ready
+    const configNext = configIterator.next()
+    await expect(Promise.race([
+      configNext.then((result) => ({ settled: true, result })),
+      Promise.resolve({ settled: false }),
+    ])).resolves.toEqual({ settled: false })
+
+    health.close('test-close')
+    config.close('test-close')
+
+    await expect(health.closed).resolves.toBeUndefined()
+    await expect(config.closed).resolves.toBeUndefined()
+    await expect(healthIterator.next()).resolves.toEqual({ done: true, value: undefined })
+    await expect(configNext).resolves.toEqual({ done: true, value: undefined })
   })
 
   it('does not attach the shared environment Gateway token to server-rendered Gateway reads', async () => {

@@ -868,9 +868,9 @@ describe('generated backend contracts', () => {
       'VAD.StreamStatus',
       'VAD.StreamResult',
     ])
-    expect(contractSchema.schemas).toHaveLength(126)
+    expect(contractSchema.schemas).toHaveLength(127)
     expect(contractSchema.method_descriptors).toHaveLength(61)
-    expect(contractSchema.event_descriptors).toHaveLength(3)
+    expect(contractSchema.event_descriptors).toHaveLength(4)
     expect(contractSchema.envelope_descriptors).toHaveLength(1)
     expect(contractSchema.tooling_provider_allowlist).toHaveLength(4)
     const descriptors = Object.fromEntries(
@@ -1047,7 +1047,7 @@ describe('generated backend contracts', () => {
 
   it('keeps generated event descriptors event-only and validates TTS audio chunks', () => {
     const eventDescriptor = backendContractEventDescriptorByTopic['TTS.AudioChunk']
-    expect(backendContractEventDescriptors).toHaveLength(3)
+    expect(backendContractEventDescriptors).toHaveLength(4)
     expect(eventDescriptor).toEqual(
       contractSchema.event_descriptors.find(
         (descriptor: Record<string, unknown>) => descriptor.event_topic === 'TTS.AudioChunk'
@@ -1071,6 +1071,31 @@ describe('generated backend contracts', () => {
       ordered_event_group: 'assistant_interrupt',
       remote_raw_audio_route: false
     })
+    const gatewayStatusDescriptor = backendContractEventDescriptorByTopic['Gateway.StatusChanged']
+    expect(gatewayStatusDescriptor).toMatchObject({
+      event_topic: 'Gateway.StatusChanged',
+      module: 'Gateway',
+      model: 'GatewayStatusChangedEvent',
+      schema_id: 'Gateway.StatusChanged.event.GatewayStatusChangedEvent',
+      required_permission: 'Gateway.use',
+      required_perms: ['Gateway.use'],
+      bounded: true,
+      authorized: true,
+      ordered_event_group: 'gateway_status',
+      remote_raw_audio_route: false
+    })
+    expect(gatewayStatusDescriptor).toEqual(
+      contractSchema.event_descriptors.find(
+        (descriptor: Record<string, unknown>) => descriptor.event_topic === 'Gateway.StatusChanged'
+      )
+    )
+    const gatewayStatusSchemaId = 'Gateway.StatusChanged.event.GatewayStatusChangedEvent'
+    expect(
+      contractSchema.schemas.find(
+        (schema: Record<string, unknown>) => schema.schema_id === gatewayStatusSchemaId
+      )?.model_name
+    ).toBe('GatewayStatusChangedEvent')
+    expect(backendContractSchemaById[gatewayStatusSchemaId]).toBeDefined()
 
     const schema = backendContractSchemaById['TTS.AudioChunk.event.TTSAudioChunkEvent']
     expect(schema.safeParse({

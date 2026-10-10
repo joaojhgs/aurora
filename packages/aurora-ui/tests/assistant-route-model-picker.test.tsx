@@ -51,7 +51,11 @@ describe('assistant execution and model pickers', () => {
     expect(markup).not.toContain('Choose how Aurora answers')
     expect(markup.match(/aria-label="Prompt composer"/g)).toHaveLength(1)
     expect(markup).toContain('aria-label="Using this device"')
-    expect(markup).toContain('aui-execution-selector-trigger')
+    const executionTriggers = markup.match(/<button\b[^>]*aria-label="Using this device"[^>]*>/g)
+    expect(executionTriggers).toHaveLength(1)
+    expect(executionTriggers?.[0]).toContain('role="combobox"')
+    expect(executionTriggers?.[0]).toContain('aria-haspopup="listbox"')
+    expect(executionTriggers?.[0]).toContain('aria-expanded="false"')
     expect(markup).not.toContain('aui-execution-segment')
   })
 

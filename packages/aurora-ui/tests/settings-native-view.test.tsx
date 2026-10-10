@@ -46,7 +46,7 @@ describe('settings this-device surface', () => {
     expect(settingsMarkup).toContain('Privacy defaults')
     expect(settingsMarkup).toContain('Assistant behavior')
     expect(settingsMarkup).toContain('Appearance')
-    expect(settingsMarkup).toContain('Connection &amp; role')
+    expect(settingsMarkup).toContain('Device connection')
     expect(settingsMarkup).toContain('Voice on this device')
     expect(settingsMarkup).toContain('Overlay &amp; shortcuts')
     expect(settingsMarkup).toContain('Storage on this device')
@@ -91,6 +91,10 @@ describe('settings this-device surface', () => {
     expect(markup).toContain('Device access')
     expect(markup).toContain('Default assistant')
     expect(markup).toContain('Request access')
+    expect(markup).toContain('Hands-free listening')
+    expect(markup).toContain('Ask before listening')
+    expect(markup).not.toContain('foreground explicit consent')
+    expect(markup).not.toContain('Android foreground voice service')
     expect(markup).toContain('Export my data')
     expect(markup).not.toContain('>Advanced<')
     expect(markup).not.toContain('Overlay &amp; shortcuts')
@@ -184,6 +188,10 @@ describe('settings this-device surface', () => {
 
     expect(markup).toContain('This device')
     expect(markup).toContain('Export my data')
+    expect(markup).toContain('On-device replies')
+    expect(markup).toContain('Face ID or Touch ID is available on supported Apple devices.')
+    expect(markup).not.toContain('local-light')
+    expect(markup).not.toContain('LocalAuthentication')
     expect(markup).not.toContain('>Advanced<')
     expect(markup).not.toContain('Voice on this device')
     expect(markup).not.toContain('Overlay &amp; shortcuts')
@@ -400,6 +408,13 @@ function poisonSnapshot(snapshot: AuroraShellSnapshot): AuroraShellSnapshot {
   return poisoned
 }
 
+function testAuth(peerId: string) {
+  return {
+    snapshot: () => ({ principalId: 'settings-principal', peerId }),
+    subscribe: () => () => undefined,
+  }
+}
+
 function availableConfigRoute(snapshot: AuroraShellSnapshot): RouteAvailability {
   const route = snapshot.routes.find((candidate) => candidate.item.id === 'config')!
   return {
@@ -413,6 +428,8 @@ function availableConfigRoute(snapshot: AuroraShellSnapshot): RouteAvailability 
 
 function hostileSettingsClient(applied: unknown[], fields: unknown[]): AuroraClient {
   return {
+    transport: { kind: 'mock' },
+    auth: testAuth('settings-peer'),
     config: {
       getSchemaMetadata: async () => ({ ok: true, data: { fields, secrets_redacted: true } }),
       applyChange: async (change: unknown) => {
@@ -486,7 +503,11 @@ function forbiddenCopyMatches(value: string): string[] {
     'transport',
     'sidecar',
     'thin',
-    'keypath'
+    'keypath',
+    'tauri',
+    'foreground',
+    'locallight',
+    'localauthentication'
   ]) {
     if (compact.includes(term)) matches.push('raw-settings-detail')
   }
@@ -495,11 +516,9 @@ function forbiddenCopyMatches(value: string): string[] {
 }
 
 function visibleText(markup: string): string {
-  return markup
-    .replace(/<script[\s\S]*?<\/script>/giu, ' ')
-    .replace(/<style[\s\S]*?<\/style>/giu, ' ')
-    .replace(/<[^>]+>/gu, ' ')
-    .replace(/&quot;|&#x27;|&amp;|&lt;|&gt;/gu, ' ')
+  const template = document.createElement('template')
+  template.innerHTML = markup
+  return (template.content.textContent ?? '')
     .replace(/\s+/gu, ' ')
     .trim()
 }

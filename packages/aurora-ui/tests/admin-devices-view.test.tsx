@@ -39,6 +39,24 @@ describe('AdminDevicesView production device and pairing controls', () => {
     expect(markup).not.toContain('mesh-pairing-secret')
   })
 
+  it('keeps pending pairing controls disabled while a device action is submitting', async () => {
+    const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const markup = renderToStaticMarkup(
+      <AdminDevicesView
+        snapshot={snapshot}
+        reauthConfirmed
+        pendingDeviceId="mesh-pairing-peer-kitchen"
+      />
+    )
+
+    const disabledPairingButtons = (markup.match(/<button[\s\S]*?<\/button>/g) ?? []).filter((button) =>
+      button.includes('disabled=""') && button.includes('Finish the current device action before changing another pairing.')
+    )
+
+    expect(disabledPairingButtons.some((button) => button.includes('Approve and trust'))).toBe(true)
+    expect(disabledPairingButtons.some((button) => button.includes('Deny request'))).toBe(true)
+  })
+
   it('builds device revoke, pairing approve/deny, and mesh trust action drafts locked until explicit confirmation', async () => {
     const snapshot = await buildAdminDevicesSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const device = snapshot.devices.find((row) => row.id === 'device-studio-mac')

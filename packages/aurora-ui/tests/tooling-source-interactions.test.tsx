@@ -12,6 +12,7 @@ import {
 } from '@aurora/client'
 import {
   ToolApprovalPanel,
+  ToolingConsole,
   auroraNavSections,
   navItemSnapshot,
   type RouteAvailability,
@@ -46,10 +47,13 @@ describe('Tooling source interactions', () => {
   })
 
   it('surfaces onboarding validation failures from typed Tooling source contracts', async () => {
+    let rejectRequest: ((error: Error) => void) | null = null
     const transport = {
       kind: 'http',
       async request() {
-        throw new Error('backend validation down')
+        return new Promise<never>((_, reject) => {
+          rejectRequest = reject
+        })
       },
     }
     const container = renderPanel(new Aurora({ transport }))
@@ -72,8 +76,20 @@ describe('Tooling source interactions', () => {
       await Promise.resolve()
     })
 
+    expect(findButtonByText(container, 'Test connection')?.disabled).toBe(true)
+    expect(findButtonByText(container, '1. Details')?.disabled).toBe(true)
+    expect(container.querySelector<HTMLButtonElement>('button[aria-label="Close Add MCP source"]')?.disabled).toBe(true)
+
+    await act(async () => {
+      rejectRequest?.(new Error('backend validation down'))
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
     expect(container.textContent).toContain('Could not connect to this Aurora device. Try again.')
     expect(container.textContent).not.toContain('backend validation down')
+    expect(findButtonByText(container, 'Test connection')?.disabled).toBe(false)
+    expect(findButtonByText(container, '1. Details')?.disabled).toBe(false)
   })
 
   it('does not present unsupported onboarding as successful validation', async () => {
@@ -100,6 +116,85 @@ describe('Tooling source interactions', () => {
 
     expect(container.textContent).toContain('MCP source is not available in this Aurora version yet.')
     expect(container.textContent).not.toContain('MCP source test valid')
+  })
+
+  it('disables plugin activation while saving', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    let finishToggle: (() => void) | null = null
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(
+        <ToolingConsole
+          client={client}
+          route={toolsRoute()}
+          tools={[]}
+          loading={false}
+          error={null}
+          schedulerJobs={[]}
+          schedulerLoading={false}
+          schedulerError={null}
+          selectedProviders={{}}
+          decisionMessages={{}}
+          builtinPlugins={[{
+            id: 'calendar',
+            label: 'Calendar',
+            active: false,
+            configured: true,
+            activateKeyPath: 'services.tooling.plugins.calendar.enabled',
+            fields: [],
+            evidence: 'ready',
+          }]}
+          managementLoading={false}
+          sourceSummaries={[]}
+          sourceDetails={{}}
+          grants={[]}
+          pendingApprovals={[]}
+          auditEvents={[]}
+          sharingPolicy={null}
+          sharingPeers={[]}
+          sharingDecisions={{}}
+          sharingLoading={false}
+          sharingError={null}
+          sharingMessage={null}
+          sharingPendingKey={null}
+          sourceConfiguredTrustTiers={{}}
+          onTogglePlugin={() => new Promise<void>((resolve) => {
+            finishToggle = resolve
+          })}
+          onSelectProvider={() => undefined}
+          onApprove={() => undefined}
+          onDeny={() => undefined}
+          onExecuteSafe={() => undefined}
+        />
+      )
+    })
+
+    await act(async () => {
+      findButtonByText(container, 'Plugins')!.click()
+    })
+    await act(async () => {
+      await Promise.resolve()
+    })
+    const activationSwitch = container.querySelector<HTMLElement>('[role="switch"][aria-label="Inactive"]')
+    expect(activationSwitch).toBeTruthy()
+
+    await act(async () => {
+      activationSwitch?.click()
+      await Promise.resolve()
+    })
+
+    expect(activationSwitch?.getAttribute('data-disabled')).toBe('')
+
+    await act(async () => {
+      finishToggle?.()
+      await Promise.resolve()
+    })
+
+    expect(activationSwitch?.getAttribute('data-disabled')).toBeNull()
   })
 })
 

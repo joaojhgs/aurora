@@ -76,6 +76,7 @@ class GatewayMethods:
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
     GET_WEBRTC_DIAGNOSTICS = f"{GatewayModule.NAME}.GetWebRTCDiagnostics"
     EVENT_STREAM = AuroraMethods.EVENT_STREAM
+    STATUS_CHANGED = f"{GatewayModule.NAME}.StatusChanged"
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
     ADMIN_ACTION_DRAFT = f"{GatewayModule.NAME}.AdminActionDraft"
@@ -167,6 +168,28 @@ class ServiceHeartbeat(IOModel):
     module: str
     instance_id: str | None = None
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class GatewayStatusChangedEvent(IOModel):
+    """Whitelisted live status/config projection for authorized peers."""
+
+    event_id: str = Field(min_length=1, max_length=128)
+    timestamp: str = Field(min_length=1, max_length=64)
+    kind: Literal[
+        "health.updated",
+        "health.stale",
+        "service.announced",
+        "service.stale",
+        "config.updated",
+        "config.validation_failed",
+    ]
+    status: Literal[
+        "healthy", "degraded", "unhealthy", "connected", "disconnected", "updated", "failed"
+    ]
+    freshness: Literal["current", "stale"] = "current"
+    service_id: str | None = Field(
+        default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$"
+    )
 
 
 # =============================================================================

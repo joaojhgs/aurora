@@ -1,5 +1,6 @@
 import type { AuroraError, AuroraErrorCode, AvailabilityState } from '@aurora/client'
 import { backupErrorMessage } from '@aurora/ui'
+import { allAuroraRouteNavItems, auroraFeatureProductCopyById, type AuroraNavItem } from '@aurora/ui/nav'
 
 const GENERIC_READ_ERROR = 'Aurora could not read this information. Try again.'
 const GENERIC_ACTION_ERROR = 'Aurora could not complete that action. Try again.'
@@ -94,6 +95,31 @@ const BUNDLE_ITEM_AVAILABLE: Record<BundleItemStatus, boolean> = {
   metadata_only: false,
   unknown: false
 }
+
+export type ProductRouteCopy = { title: string; description: string }
+
+type ProductRouteCopyLookup = {
+  get: (id: string) => ProductRouteCopy | undefined
+}
+
+export function projectProductRouteCopy(
+  items: readonly AuroraNavItem[] = allAuroraRouteNavItems,
+  copyById: ProductRouteCopyLookup = auroraFeatureProductCopyById as ProductRouteCopyLookup,
+): Readonly<Record<string, ProductRouteCopy>> {
+  return Object.freeze(
+    Object.fromEntries(
+      items.map((item) => [
+        item.id,
+        copyById.get(item.id) ?? {
+          title: item.label,
+          description: 'This feature is available through Aurora.',
+        },
+      ]),
+    ),
+  ) as Readonly<Record<string, ProductRouteCopy>>
+}
+
+export const PRODUCT_ROUTE_COPY = projectProductRouteCopy()
 
 export function productErrorText(error: unknown, fallback = GENERIC_READ_ERROR): string {
   const code = errorCode(error)

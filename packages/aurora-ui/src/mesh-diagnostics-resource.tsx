@@ -1,124 +1,135 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import type { GatewaySupportBundleResponse } from '@aurora/client'
+import { AuroraQueryProvider, AURORA_QUERY_STALE_TIMES, useAuroraClient, useAuroraQueryScope } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 import {
   MeshDiagnosticsView,
-  buildMeshDiagnosticsSnapshot,
+  canReadMeshDiagnosticsRoute,
   loadingMeshDiagnosticsSnapshot,
+  buildMeshDiagnosticsSnapshot,
+  meshDiagnosticsAccessSnapshot,
   reconcileMeshDiagnosticsWithThinPeer,
-  type MeshDiagnosticsSnapshot,
   type SupportBundleExportState
 } from './mesh-diagnostics-view'
 import type { MeshDiagnosticsResourceProps } from './mesh-diagnostics-view'
-
-const NATIVE_RTT_POLL_MS = 3_000
+import type { RouteAvailability } from './shell-data'
+import type { BrowserWebRtcPeerController } from './web-thin-runtime'
+import { useThinPeerDiagnosticsProjection } from './thin-peer-diagnostics'
 
 export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnosticsResourceProps) {
-  const [snapshot, setSnapshot] = useState<MeshDiagnosticsSnapshot>(loadingMeshDiagnosticsSnapshot)
-  const [thinPeerSnapshot, setThinPeerSnapshot] = useState(() => thinPeer?.snapshot() ?? null)
-  const thinPeerLatencyMs = useRef<number | null>(null)
-  const [exportState, setExportState] = useState<SupportBundleExportState>({ status: 'idle', message: null })
-  const [reauthConfirmed, setReauthConfirmed] = useState(false)
-
-  useEffect(() => {
-    if (!thinPeer) {
-      setThinPeerSnapshot(null)
-      return
-    }
-    return thinPeer.subscribe((nextThinSnapshot) => {
-      setThinPeerSnapshot(nextThinSnapshot)
-      setSnapshot((current) =>
-        reconcileMeshDiagnosticsWithThinPeer(
-          current,
-          nextThinSnapshot,
-          current,
-          thinPeerLatencyMs.current,
-        ),
-      )
-    })
-  }, [thinPeer])
-
-  useEffect(() => {
-    if (!thinPeer || thinPeerSnapshot?.status !== 'authorized') {
-      thinPeerLatencyMs.current = null
-      return
-    }
-    let cancelled = false
-    let pending = false
-    const measure = async () => {
-      if (pending) return
-      pending = true
-      try {
-        const evidence = await thinPeer.getSelectedCandidatePairEvidence()
-        if (cancelled) return
-        const value = evidence.roundTripTimeMs
-        const latencyMs = typeof value === 'number' && Number.isFinite(value) && value > 0
-          ? value
-          : null
-        thinPeerLatencyMs.current = latencyMs
-        const currentThinSnapshot = thinPeer.snapshot()
-        setSnapshot((current) => reconcileMeshDiagnosticsWithThinPeer(
-          current,
-          currentThinSnapshot,
-          current,
-          latencyMs,
-        ))
-      } catch {
-        if (cancelled) return
-        thinPeerLatencyMs.current = null
-        const currentThinSnapshot = thinPeer.snapshot()
-        setSnapshot((current) => reconcileMeshDiagnosticsWithThinPeer(
-          current,
-          currentThinSnapshot,
-          current,
-          null,
-        ))
-      } finally {
-        pending = false
-      }
-    }
-    void measure()
-    const interval = window.setInterval(() => void measure(), NATIVE_RTT_POLL_MS)
-    return () => {
-      cancelled = true
-      window.clearInterval(interval)
-    }
-  }, [thinPeer, thinPeerSnapshot?.status])
-
-  const loadDiagnostics = useCallback(async () => {
-    const next = await buildMeshDiagnosticsSnapshot(client, route)
-    setSnapshot((current) =>
-      reconcileMeshDiagnosticsWithThinPeer(
-        next,
-        thinPeer?.snapshot() ?? thinPeerSnapshot,
-        current,
-        thinPeerLatencyMs.current,
-      ),
+  const hasQueryScope = useAuroraQueryScope()
+  if (!hasQueryScope) {
+    return (
+      <AuroraQueryProvider client={client} queryScope={meshDiagnosticsQueryScope(thinPeer)}>
+        <MeshDiagnosticsResourceContent route={route} {...(thinPeer ? { thinPeer } : {})} />
+      </AuroraQueryProvider>
     )
-  }, [client, route, thinPeer, thinPeerSnapshot])
+  }
+  return <MeshDiagnosticsResourceContent route={route} {...(thinPeer ? { thinPeer } : {})} />
+}
+
+function MeshDiagnosticsResourceContent({ route, thinPeer }: Omit<MeshDiagnosticsResourceProps, 'client'>) {
+  const client = useAuroraClient()
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const diagnosticsQueryInput = useMemo(() => meshDiagnosticsQueryInput(route), [route])
+  const diagnosticsAccessAllowed = canReadMeshDiagnosticsRoute(route)
+  const diagnosticsQueryKey = useMemo(
+    () => queryKeys.admin('mesh-diagnostics', diagnosticsQueryInput),
+    [diagnosticsQueryInput, queryKeys],
+  )
+  const diagnosticsScopeKey = useMemo(() => JSON.stringify(diagnosticsQueryKey), [diagnosticsQueryKey])
+  const thinPeerProjection = useThinPeerDiagnosticsProjection(thinPeer)
+  const [exportState, setExportState] = useState<SupportBundleExportState>({ status: 'idle', message: null })
+  const [reauthConfirmation, setReauthConfirmation] = useState<{
+    scopeKey: string
+    generation: number
+    confirmed: boolean
+  }>({ scopeKey: '', generation: -1, confirmed: false })
+  const activeDiagnosticsScopeRef = useRef({
+    scopeKey: diagnosticsScopeKey,
+    generation: 0,
+    accessAllowed: diagnosticsAccessAllowed,
+    mounted: true,
+  })
+  if (
+    activeDiagnosticsScopeRef.current.scopeKey !== diagnosticsScopeKey
+    || activeDiagnosticsScopeRef.current.accessAllowed !== diagnosticsAccessAllowed
+  ) {
+    activeDiagnosticsScopeRef.current = {
+      scopeKey: diagnosticsScopeKey,
+      generation: activeDiagnosticsScopeRef.current.generation + 1,
+      accessAllowed: diagnosticsAccessAllowed,
+      mounted: true,
+    }
+  } else {
+    activeDiagnosticsScopeRef.current.mounted = true
+  }
+  const activeDiagnosticsScope = activeDiagnosticsScopeRef.current
+  const reauthConfirmed = diagnosticsAccessAllowed
+    && reauthConfirmation.confirmed
+    && reauthConfirmation.scopeKey === activeDiagnosticsScope.scopeKey
+    && reauthConfirmation.generation === activeDiagnosticsScope.generation
 
   useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingMeshDiagnosticsSnapshot)
-    void buildMeshDiagnosticsSnapshot(client, route).then((next) => {
-      if (!cancelled) {
-        setSnapshot((current) =>
-          reconcileMeshDiagnosticsWithThinPeer(
-            next,
-            thinPeer?.snapshot() ?? thinPeerSnapshot,
-            current,
-            thinPeerLatencyMs.current,
-          ),
-        )
-      }
-    })
+    setReauthConfirmation({ scopeKey: '', generation: -1, confirmed: false })
+    setExportState({ status: 'idle', message: null })
+  }, [activeDiagnosticsScope.generation, activeDiagnosticsScope.scopeKey])
+
+  useEffect(() => {
+    activeDiagnosticsScopeRef.current.mounted = true
     return () => {
-      cancelled = true
+      activeDiagnosticsScopeRef.current = {
+        ...activeDiagnosticsScopeRef.current,
+        generation: activeDiagnosticsScopeRef.current.generation + 1,
+        mounted: false,
+      }
     }
-  }, [client, route, thinPeer])
+  }, [])
+
+  const updateReauthConfirmed = useCallback((confirmed: boolean) => {
+    const scope = activeDiagnosticsScopeRef.current
+    setReauthConfirmation({
+      scopeKey: scope.scopeKey,
+      generation: scope.generation,
+      confirmed,
+    })
+  }, [])
+
+  const diagnosticsQuery = useQuery({
+    queryKey: diagnosticsQueryKey,
+    queryFn: ({ signal }) => buildMeshDiagnosticsSnapshot(client, route, { signal }),
+    staleTime: AURORA_QUERY_STALE_TIMES.volatile,
+    refetchInterval: diagnosticsAccessAllowed ? fallbackInterval : false,
+    enabled: diagnosticsAccessAllowed,
+  })
+
+  const routeAccessSnapshot = useMemo(() => meshDiagnosticsAccessSnapshot(route), [route])
+  const snapshot = useMemo(() => {
+    if (!diagnosticsAccessAllowed) return routeAccessSnapshot
+    return reconcileMeshDiagnosticsWithThinPeer(
+      diagnosticsQuery.data ?? loadingMeshDiagnosticsSnapshot,
+      thinPeerProjection.snapshot,
+      diagnosticsQuery.data ?? null,
+      thinPeerProjection.latencyMs,
+    )
+  }, [diagnosticsAccessAllowed, diagnosticsQuery.data, routeAccessSnapshot, thinPeerProjection.latencyMs, thinPeerProjection.snapshot])
+
+  const loadDiagnostics = useCallback(() => {
+    if (!diagnosticsAccessAllowed) return
+    void diagnosticsQuery.refetch()
+  }, [diagnosticsAccessAllowed, diagnosticsQuery])
 
   const exportSupportBundle = useCallback(async () => {
+    const startedScope = { ...activeDiagnosticsScopeRef.current }
+    if (!diagnosticsAccessAllowed || !startedScope.accessAllowed || !startedScope.mounted) {
+      setReauthConfirmation({ scopeKey: '', generation: -1, confirmed: false })
+      setExportState({ status: 'idle', message: null })
+      return
+    }
     if (!reauthConfirmed) {
       setExportState({ status: 'error', message: 'Confirm recent approval before exporting support data.' })
       return
@@ -131,37 +142,58 @@ export function MeshDiagnosticsResource({ client, route, thinPeer }: MeshDiagnos
         reauthConfirmed,
         affectedResources: ['diagnostics.support_bundle', 'diagnostics.redaction_preview', 'diagnostics.audit_receipt']
       })
+      if (!isCurrentDiagnosticsExportScope(activeDiagnosticsScopeRef.current, startedScope)) return
       assertSupportBundleRedacted(result.data)
       downloadSupportBundle(result.data)
       setExportState({
         status: 'success',
         message: `Support data exported. Reference ${result.data.correlation_id ?? 'available'}; receipt ${result.confirmation.audit_receipt}.`
       })
-      const next = await buildMeshDiagnosticsSnapshot(client, route)
-      setSnapshot((current) =>
-        reconcileMeshDiagnosticsWithThinPeer(
-          next,
-          thinPeer?.snapshot() ?? thinPeerSnapshot,
-          current,
-          thinPeerLatencyMs.current,
-        ),
-      )
+      await diagnosticsQuery.refetch()
     } catch (error) {
+      if (!isCurrentDiagnosticsExportScope(activeDiagnosticsScopeRef.current, startedScope)) return
       setExportState({ status: 'error', message: error instanceof Error ? 'Support data export failed. Try again.' : 'Support data export failed.' })
     }
-  }, [client, route, reauthConfirmed, thinPeer, thinPeerSnapshot])
+  }, [client, diagnosticsAccessAllowed, diagnosticsQuery, reauthConfirmed])
 
   return (
     <MeshDiagnosticsView
       snapshot={snapshot}
       route={route}
-      onRefresh={loadDiagnostics}
-      onExportSupportBundle={exportSupportBundle}
+      {...(diagnosticsAccessAllowed ? { onRefresh: loadDiagnostics, onExportSupportBundle: exportSupportBundle } : {})}
       supportBundleExportState={exportState}
       reauthConfirmed={reauthConfirmed}
-      onReauthConfirmedChange={setReauthConfirmed}
+      onReauthConfirmedChange={updateReauthConfirmed}
     />
   )
+}
+
+
+function isCurrentDiagnosticsExportScope(
+  current: { scopeKey: string; generation: number; accessAllowed: boolean; mounted: boolean },
+  started: { scopeKey: string; generation: number; accessAllowed: boolean; mounted: boolean }
+): boolean {
+  return current.mounted
+    && current.accessAllowed
+    && started.accessAllowed
+    && current.scopeKey === started.scopeKey
+    && current.generation === started.generation
+}
+
+function meshDiagnosticsQueryScope(thinPeer: BrowserWebRtcPeerController | undefined) {
+  return { peerId: thinPeer?.snapshot().expectedStablePeerId ?? null }
+}
+
+function meshDiagnosticsQueryInput(route: RouteAvailability) {
+  return {
+    routeId: route.item.id,
+    state: route.state,
+    disabled: route.disabled,
+    routeable: route.routeable,
+    selectorRequired: route.selectorRequired,
+    approvalRequired: route.approvalRequired,
+    requiresAdminAction: route.requiresAdminAction,
+  }
 }
 
 function assertSupportBundleRedacted(bundle: GatewaySupportBundleResponse) {

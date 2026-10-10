@@ -45,7 +45,7 @@ export function ModeBadge({ mode, className }: { mode: string; className?: strin
   )
 }
 
-/** Healthy / Degraded / Offline topbar pill - `Aurora.HealthBadge`. */
+/** Healthy / Needs attention / Offline topbar pill - `Aurora.HealthBadge`. */
 export function HealthBadge({ health, className }: { health: string; className?: string }) {
   const normalized = health.toLowerCase()
   const tone =
@@ -57,7 +57,7 @@ export function HealthBadge({ health, className }: { health: string; className?:
   return (
     <Badge variant="outline" className={cn('gap-1', tone, className)}>
       <ShieldCheck data-icon="inline-start" aria-hidden />
-      {health}
+      {normalized === 'degraded' ? 'Needs attention' : health}
     </Badge>
   )
 }

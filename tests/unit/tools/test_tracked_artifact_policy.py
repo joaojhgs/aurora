@@ -17,6 +17,22 @@ def test_artifact_policy_allows_source_contracts_and_preserved_plans():
     assert find_forbidden_tracked_paths(allowed) == []
 
 
+def test_artifact_policy_allows_only_preserved_008_report_receipt():
+    preserved_receipt = ".omx/handoff/20261006/referenced-reports/008-REPORT.md"
+    assert artifact_reason(preserved_receipt) is None
+    assert find_forbidden_tracked_paths([preserved_receipt]) == []
+
+    still_forbidden = {
+        ".omx/handoff/20261006/referenced-reports/009-REPORT.md",
+        ".omx/evidence/native-runtime-report.md",
+        "tests/unit/tools/runtime-output.log",
+    }
+    violations = find_forbidden_tracked_paths(sorted(still_forbidden))
+
+    assert {path for path, _reason in violations} == still_forbidden
+    assert all(artifact_reason(path) for path in still_forbidden)
+
+
 def test_artifact_policy_rejects_reports_caches_packages_models_and_runtime_state():
     forbidden = {
         ".omx/archive/old-goal/ledger.jsonl",

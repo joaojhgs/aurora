@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
   AuroraClient as Aurora,
   MockAuroraTransport,
@@ -14,6 +14,7 @@ import {
   type ConfigVersionHistoryResponse
 } from '@aurora/client'
 import { AdminConfigView, buildAdminConfigModel } from '../src/admin-config-view'
+import { AuroraQueryProvider, createAuroraQueryClient, createAuroraQueryScopeId, type AuroraQueryScopeInput } from '../src/query'
 import { parseFieldValue } from '../src/config-editor-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
@@ -65,7 +66,7 @@ describe('AdminConfigView', () => {
     roots.push(root)
 
     await act(async () => {
-      root.render(<AdminConfigView client={client} route={configRoute()} initialModel={model} />)
+      root.render(withAuroraQuery(client, <AdminConfigView client={client} route={configRoute()} initialModel={model} />))
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     })
 
@@ -98,8 +99,8 @@ describe('AdminConfigView', () => {
     await act(async () => {
       setInputValue(input!, 'local')
       input!.dispatchEvent(new Event('input', { bubbles: true }))
-      await Promise.resolve()
     })
+    await waitForText(container, 'local')
 
     expect(container.textContent).toContain('Assistant setting')
     expect(container.textContent).toContain('Assistant')
@@ -119,10 +120,81 @@ describe('AdminConfigView', () => {
     expectUnsafeConfigCopyAbsent(document.body.innerHTML)
   })
 
+  it('dedupes the scoped base config editor query for concurrent views', async () => {
+    const calls: string[] = []
+    const client = new Aurora({ transport: trackedConfigTransport(calls) })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(withAuroraQuery(client, (
+        <>
+          <AdminConfigView client={client} route={configRoute()} />
+          <AdminConfigView client={client} route={configRoute()} />
+        </>
+      )))
+      await flushQueryRender()
+    })
+
+    expect(calls.filter((call) => call === 'Config.GetSchemaMetadata')).toHaveLength(1)
+    expect(calls.filter((call) => call === 'Config.GetVersionHistory')).toHaveLength(1)
+    expect(calls.filter((call) => call === 'Config.Validate')).toHaveLength(1)
+  })
+
+  it('keeps config editor query data isolated by explicit query scope', async () => {
+    const client = new Aurora({ transport: scopedConfigTransport() })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const route = configRoute()
+    seedScopedConfigModel(queryClient, client, route, { profileId: 'profile-a' }, 'Profile A port', 8181)
+    seedScopedConfigModel(queryClient, client, route, { profileId: 'profile-b' }, 'Profile B port', 6262)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+
+    await act(async () => {
+      root.render(withAuroraQuery(
+        client,
+        <AdminConfigView client={client} route={route} />,
+        queryClient,
+        { profileId: 'profile-a' }
+      ))
+      await flushQueryRender()
+    })
+    const scopedInput = container.querySelector('input[type="number"]') as HTMLInputElement | null
+    expect(scopedInput).not.toBeNull()
+    expect(scopedInput!.value).toBe('8181')
+    await act(async () => {
+      setInputValue(scopedInput!, '7373')
+      scopedInput!.dispatchEvent(new Event('input', { bubbles: true }))
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('staged')
+    expect(scopedInput!.value).toBe('7373')
+
+    await act(async () => {
+      root.render(withAuroraQuery(
+        client,
+        <AdminConfigView client={client} route={route} />,
+        queryClient,
+        { profileId: 'profile-b' }
+      ))
+      await flushQueryRender()
+    })
+    const nextScopedInput = container.querySelector('input[type="number"]') as HTMLInputElement | null
+    expect(nextScopedInput).not.toBeNull()
+    expect(nextScopedInput!.value).toBe('6262')
+    expect(container.textContent).toContain('No staged changes.')
+  })
+
   it('does not submit Config.Set until a staged change is reviewed and explicitly confirmed', async () => {
     const calls: string[] = []
     const transport = configTransport(calls)
     const client = new Aurora({ transport })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
     const model = await buildAdminConfigModel(client, configRoute())
     const container = document.createElement('div')
     document.body.appendChild(container)
@@ -130,7 +202,7 @@ describe('AdminConfigView', () => {
     roots.push(root)
 
     await act(async () => {
-      root.render(<AdminConfigView client={client} route={configRoute()} initialModel={model} />)
+      root.render(withAuroraQuery(client, <AdminConfigView client={client} route={configRoute()} initialModel={model} />, queryClient))
     })
 
     const input = container.querySelector('input[type="number"]') as HTMLInputElement | null
@@ -141,6 +213,7 @@ describe('AdminConfigView', () => {
       await Promise.resolve()
     })
 
+    expect(JSON.stringify(queryClient.getQueryCache().findAll().map((query) => query.queryKey))).not.toContain('9000')
     expect(calls).toEqual(['Config.PreviewDiff', 'Config.PreviewReloadImpact'])
     expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
 
@@ -182,9 +255,89 @@ describe('AdminConfigView', () => {
       'Gateway.AdminActionConfirm',
       'Config.Set'
     ])
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'config-editor']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['capabilities']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['capability-graph']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['services']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['tool-catalog']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'plugins']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'models']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'service-routing']) }))
     expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
   })
 })
+
+function withAuroraQuery(
+  client: Aurora,
+  children: ReactNode,
+  queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } }),
+  queryScope: { profileId?: string } = {}
+) {
+  return (
+    <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={queryScope}>
+      {children}
+    </AuroraQueryProvider>
+  )
+}
+
+function seedScopedConfigModel(
+  queryClient: ReturnType<typeof createAuroraQueryClient>,
+  client: Aurora,
+  route: RouteAvailability,
+  queryScope: AuroraQueryScopeInput,
+  title: string,
+  currentValue: number
+): void {
+  const scopeId = createAuroraQueryScopeId(client, queryScope)
+  queryClient.setQueryData(
+    ['aurora', scopeId, 'admin', 'config-editor', configEditorRouteRequest(route)],
+    configModelFixture(title, currentValue)
+  )
+}
+
+function configEditorRouteRequest(route: RouteAvailability): Record<string, unknown> {
+  return {
+    routeId: route.item.id,
+    routeState: route.state,
+    disabled: route.disabled,
+    providerLabel: route.providerLabel
+  }
+}
+
+function configModelFixture(title: string, currentValue: number) {
+  return {
+    state: 'ready',
+    fields: [
+      field({
+        key_path: 'services.gateway.api.port',
+        title,
+        type: 'integer',
+        current_value: currentValue,
+        constraints: { minimum: 1024, maximum: 65535 }
+      })
+    ],
+    versions: [],
+    validationErrors: [],
+    secretsRedacted: true,
+    evidence: 'Config.GetSchemaMetadata',
+    error: null
+  }
+}
+
+async function flushQueryRender(): Promise<void> {
+  await Promise.resolve()
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+}
+
+async function waitForText(container: ParentNode, text: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (container.textContent?.includes(text)) return
+    await act(async () => {
+      await flushQueryRender()
+    })
+  }
+  expect(container.textContent).toContain(text)
+}
 
 function configRoute(): RouteAvailability {
   const item = [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems].find((candidate) => candidate.id === 'config')
@@ -297,6 +450,45 @@ function configTransport(calls: string[] = []): MockAuroraTransport {
     .register('Config.Set', () => {
       calls.push('Config.Set')
       return { success: true, previous_value: 8080, error: null }
+    })
+}
+
+function trackedConfigTransport(calls: string[]): MockAuroraTransport {
+  return configTransport()
+    .register('Config.GetSchemaMetadata', () => {
+      calls.push('Config.GetSchemaMetadata')
+      return schemaFixture()
+    })
+    .register('Config.GetVersionHistory', () => {
+      calls.push('Config.GetVersionHistory')
+      return {
+        versions: [],
+        secrets_redacted: true
+      } satisfies ConfigVersionHistoryResponse
+    })
+    .register('Config.Validate', () => {
+      calls.push('Config.Validate')
+      return { errors: [] }
+    })
+}
+
+function scopedConfigTransport(): MockAuroraTransport {
+  let schemaReadCount = 0
+  return configTransport()
+    .register('Config.GetSchemaMetadata', () => {
+      schemaReadCount += 1
+      return {
+        secrets_redacted: true,
+        fields: [
+          field({
+            key_path: 'services.gateway.api.port',
+            title: schemaReadCount === 1 ? 'Profile A port' : 'Profile B port',
+            type: 'integer',
+            current_value: schemaReadCount === 1 ? 8080 : 9090,
+            constraints: { minimum: 1024, maximum: 65535 }
+          })
+        ]
+      } satisfies ConfigSchemaMetadataResponse
     })
 }
 

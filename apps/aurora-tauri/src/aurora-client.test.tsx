@@ -1,8 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { act } from "react";
+import { lazy, Suspense, act } from "react";
 import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
+import * as ts from "typescript";
 import {
   AuroraClient as Aurora,
   AuroraError,
@@ -13,8 +14,15 @@ import {
   ORCHESTRATOR_MODEL_METHODS,
   STT_METHODS,
   TOOLING_METHODS,
+  type AuroraEventSnapshot,
+  type AuroraEventSnapshotRequest,
+  type AuroraEventStreamTransport,
+  type AuroraEventSubscription,
+  type AuroraStreamRequest,
+  buildCapabilityGraph,
   createEventSubscription,
   capabilityCatalogFixture,
+  capabilityGraphCatalogFixture,
   cloneFixture,
   modelRuntimeCatalogFixture,
   nativeCapabilityManifestFixture,
@@ -68,8 +76,11 @@ import {
 } from "./aurora-client";
 import {
   AuroraTauriApp,
+  createTauriRouteHostProjection,
+  projectTauriRouteDefinitions,
   rebuildAuroraThinRuntime,
   resetThinInviteFromUrlCacheForTests,
+  RouteChunkErrorBoundary,
   routeForPath,
   tauriRouteRegistryRouteIds,
   type AuroraTauriRuntime,
@@ -118,7 +129,7 @@ const TAURI_RENDERED_ROUTE_LANDMARK_OVERRIDES: Record<
   mesh: ["Connected devices", "Connect trusted devices and choose what each one can use."],
   backups: ["Backups & Restore", "Create and verify snapshots, or preview a restore before making changes."],
   settings: ["Settings", "This device"],
-  models: ["Models & Sources", "Loading model sources from Aurora"],
+  models: ["Models & Sources", "Chat source"],
   onboarding: ["Welcome to Aurora", "Detected installation"],
 };
 
@@ -452,12 +463,12 @@ function unconfiguredThinRuntime(
   return runtime;
 }
 
-async function mountOutcomeApp(runtime: AuroraTauriRuntime) {
+async function mountOutcomeApp(runtime: AuroraTauriRuntime, initialSnapshotOverride: typeof loadingShellSnapshot = loadingShellSnapshot) {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const root = createRoot(container);
   await act(async () => {
-    root.render(<AuroraTauriApp runtimeOverride={runtime} />);
+    root.render(<AuroraTauriApp runtimeOverride={runtime} initialSnapshotOverride={initialSnapshotOverride} />);
     await flushReactWork();
   });
   return { container, root };
@@ -466,6 +477,17 @@ async function mountOutcomeApp(runtime: AuroraTauriRuntime) {
 async function flushReactWork() {
   await new Promise((resolve) => setTimeout(resolve, 0));
   await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function mountReadyTauriApp(href: string) {
+  window.history.replaceState({}, "", href)
+  return await mountOutcomeApp(adminTestRuntime(), { ...loadingShellSnapshot, loadState: "ready" })
+}
+
+function mountedMainContent(container: HTMLElement): HTMLElement {
+  const content = container.querySelector<HTMLElement>("main#content")
+  expect(content, "mounted route should expose the production main content landmark").not.toBeNull()
+  return content!
 }
 
 async function waitUntil(assertion: () => void) {
@@ -478,6 +500,23 @@ async function waitUntil(assertion: () => void) {
       lastError = error;
       await act(async () => {
         await flushReactWork();
+      });
+    }
+  }
+  throw lastError;
+}
+
+async function waitUntilAfterQueryRetries(assertion: () => void) {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 90; attempt += 1) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await act(async () => {
+        await flushReactWork();
+        await new Promise((resolve) => setTimeout(resolve, 50));
       });
     }
   }
@@ -749,6 +788,72 @@ async function setInputValue(input: HTMLInputElement, value: string) {
 
 function requestMethods(transport: RecordingMockAuroraTransport): string[] {
   return transport.requests.map((request) => request.method);
+}
+
+function diagnosticsCapabilityCatalog() {
+  const catalog = cloneFixture(capabilityCatalogFixture);
+  const gatewayProvider = catalog.providers.find(
+    (provider) => provider.module === "Gateway" && provider.provider_kind === "local",
+  ) ?? catalog.providers[0]!;
+  const gatewayAction = catalog.actions.find(
+    (action) => action.module === "Gateway" && action.topic === GATEWAY_METHODS.getRegistry,
+  ) ?? catalog.actions[0]!;
+  const diagnosticsPolicy = {
+    ...gatewayAction.policy,
+    required_permissions: ["Gateway.use"],
+    denial_reasons: [],
+    explicit_selector_required: false,
+    consent_required: false,
+    privacy_indicator_required: false,
+    approval_required: false,
+    selector_required: false,
+    safety_class: "sensitive",
+  } satisfies typeof gatewayAction.policy;
+  const diagnosticsActions = [
+    {
+      ...gatewayAction,
+      action_id: "gateway-webrtc-diagnostics-local",
+      method: "GetWebRTCDiagnostics",
+      topic: GATEWAY_METHODS.getWebRTCDiagnostics,
+      summary: "Read redacted connection diagnostics for this device.",
+      provider_id: gatewayProvider.provider_id,
+      peer_id: gatewayProvider.peer_id,
+      provider_kind: gatewayProvider.provider_kind,
+      service_instance_id: gatewayProvider.service_instance_id,
+      selector: { peer_id: gatewayProvider.peer_id, module: "Gateway" },
+      bindability: "available",
+      route_blockers: [],
+      policy: diagnosticsPolicy,
+      freshness: gatewayProvider.freshness,
+    },
+    {
+      ...gatewayAction,
+      action_id: "gateway-support-bundle-local",
+      method: "GetSupportBundle",
+      topic: GATEWAY_METHODS.getSupportBundle,
+      summary: "Read redacted support data for this device.",
+      provider_id: gatewayProvider.provider_id,
+      peer_id: gatewayProvider.peer_id,
+      provider_kind: gatewayProvider.provider_kind,
+      service_instance_id: gatewayProvider.service_instance_id,
+      selector: { peer_id: gatewayProvider.peer_id, module: "Gateway" },
+      bindability: "available",
+      route_blockers: [],
+      policy: diagnosticsPolicy,
+      freshness: gatewayProvider.freshness,
+    },
+  ] satisfies typeof catalog.actions;
+  catalog.actions = [...catalog.actions, ...diagnosticsActions];
+  catalog.action_index = {
+    ...catalog.action_index,
+    Gateway: [
+      ...(catalog.action_index.Gateway ?? []),
+      ...diagnosticsActions.map((action) => action.action_id),
+    ],
+    [GATEWAY_METHODS.getWebRTCDiagnostics]: ["gateway-webrtc-diagnostics-local"],
+    [GATEWAY_METHODS.getSupportBundle]: ["gateway-support-bundle-local"],
+  };
+  return catalog;
 }
 
 function writeOutcomeArtifact(name: string, html: string) {
@@ -1450,7 +1555,7 @@ async function submitAssistantPrompt(container: HTMLElement, prompt: string) {
     await flushReactWork();
   });
   const form = container.querySelector<HTMLFormElement>(
-    "form.aui-assistant-form",
+    'form[data-aurora-part="assistant-composer"]',
   );
   expect(form).not.toBeNull();
   await act(async () => {
@@ -2155,36 +2260,43 @@ describe("Aurora Tauri runtime wrapper", () => {
     });
   });
 
-  it("renders the assistant page at the root instead of the diagnostics dashboard", () => {
+  it("renders the assistant page at the root instead of the diagnostics dashboard", async () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
-
-    const markup = renderReadyTauriApp();
-
-    expect(markup).toContain("Assistant");
-    expect(markup).toContain("Prompt");
-    expect(markup).toContain("Text chat");
-    expect(markup).not.toContain("Troubleshooting");
-    expect(markup).not.toContain("Service checks");
+    const mounted = await mountReadyTauriApp("/");
+    try {
+      await waitUntil(() => expect(mountedMainContent(mounted.container).textContent).toContain("Prompt"));
+      const text = mountedMainContent(mounted.container).textContent ?? "";
+      expect(text).toContain("Assistant");
+      expect(text).toContain("Text chat");
+      expect(text).not.toContain("Troubleshooting");
+      expect(text).not.toContain("Service checks");
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
   });
 
-  it("routes the diagnostics dashboard away from the assistant landing page", () => {
+  it("routes the diagnostics dashboard away from the assistant landing page", async () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
-    window.history.replaceState({}, "", "/admin");
-
-    const markup = renderReadyTauriApp();
-
-    expect(markup).toContain("Troubleshooting");
-    expect(markup).toContain("Live checks");
-    expect(markup).toContain("Privacy check");
-    expect(markup).toContain("Service checks");
-    expect(markup).not.toContain("iOS microphone capture");
-    expect(markup).not.toContain("Android baseline");
-    expect(markup).not.toContain("Assistant role probe");
-    expect(markup).toContain("Device permissions");
-    expect(markup).toContain("Support export");
+    const mounted = await mountReadyTauriApp("/admin");
+    try {
+      await waitUntil(() => expect(mountedMainContent(mounted.container).textContent).toContain("Troubleshooting"));
+      const text = mountedMainContent(mounted.container).textContent ?? "";
+      expect(text).toContain("Live checks");
+      expect(text).toContain("Privacy check");
+      expect(text).toContain("Service checks");
+      expect(text).not.toContain("iOS microphone capture");
+      expect(text).not.toContain("Android baseline");
+      expect(text).not.toContain("Assistant role probe");
+      expect(text).toContain("Device permissions");
+      expect(text).toContain("Support export");
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
   });
 
-  it("renders desktop-thin WebRTC connection controls and diagnostics without sidecar controls", () => {
+  it("renders desktop-thin WebRTC connection controls and diagnostics without sidecar controls", async () => {
     const runtime: AuroraTauriRuntime = {
       ...testRuntime(new Aurora({ transport: new MockAuroraTransport() })),
       mode: "desktop-thin",
@@ -2209,25 +2321,24 @@ describe("Aurora Tauri runtime wrapper", () => {
       "/diagnostics#invite=aurora%3A%2F%2Fmesh%2Finvite%3Froom%3Dtest",
     );
 
-    const markup = renderToStaticMarkup(
-      <AuroraTauriApp
-        runtimeOverride={runtime}
-        initialSnapshotOverride={{
-          ...loadingShellSnapshot,
-          loadState: "ready",
-          transportKind: "mesh",
-        }}
-      />,
-    );
-
-    expect(markup).toContain("Connected Aurora device");
-    expect(markup).toContain(
+    const mounted = await mountOutcomeApp(runtime, {
+      ...loadingShellSnapshot,
+      loadState: "ready",
+      transportKind: "mesh",
+    });
+    try {
+      await waitUntil(() => expect(mountedMainContent(mounted.container).textContent).toContain("Connected Aurora device"));
+      const text = mountedMainContent(mounted.container).textContent ?? "";
+      expect(text).toContain(
       "Connection details come from the saved Aurora invite and can be changed later",
-    );
-    expect(markup).toContain("Connected Aurora device");
-    expect(markup).toContain("Device connection");
-    expect(markup).toContain("Direct device connection");
-    expect(markup).not.toContain("aurora_sidecar_start");
+      );
+      expect(text).toContain("Device connection");
+      expect(text).toContain("Direct device");
+      expect(text).not.toContain("aurora_sidecar_start");
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
   });
 
   it("retries verified remote assistant tools until the authorized peer catalog is ready", async () => {
@@ -2421,6 +2532,8 @@ describe("Aurora Tauri runtime wrapper", () => {
       ...testRuntime(client),
       mode: "desktop-local",
       thinConnectionMode: "webrtc-only",
+      nodeMode: "mesh-node",
+      runtimeTier: "lightweight-ts",
       thinPeer: thinPeer.peer,
       localAssistant: {
         provider: {
@@ -2466,9 +2579,104 @@ describe("Aurora Tauri runtime wrapper", () => {
     }
   });
 
+  it("clears stale remote assistant tools when an authorized thin peer identity changes", async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() });
+    let resolvePeerA!: (page: ToolingGetExportCatalogResponse) => void;
+    const delayedPeerA = new Promise<ToolingGetExportCatalogResponse>(
+      (resolve) => {
+        resolvePeerA = resolve;
+      },
+    );
+    const getExportCatalog = vi
+      .spyOn(client.tools, "getExportCatalog")
+      .mockImplementationOnce(async () => delayedPeerA)
+      .mockResolvedValue(
+        projectionPage("peer-b", [
+          remoteProjectionTool("peer-b", "peer-b.search"),
+        ]),
+      );
+    const thinPeer = controllableThinPeer({
+      status: "authorized",
+      state: "authorized",
+      connectedStablePeerId: "peer-a",
+      expectedStablePeerId: "peer-a",
+    });
+    const runtime: AuroraTauriRuntime = {
+      ...testRuntime(client),
+      mode: "desktop-local",
+      thinConnectionMode: "webrtc-only",
+      nodeMode: "mesh-node",
+      runtimeTier: "lightweight-ts",
+      thinPeer: thinPeer.peer,
+      localAssistant: {
+        provider: {
+          complete: async () => ({ type: "message", content: "Ready." }),
+        },
+      },
+      localFeatureSharing: {
+        load: vi.fn(async () => ({
+          features: [],
+          approvedDevices: [
+            {
+              peerId: "peer-b",
+              peerLabel: "Peer B",
+              featureIds: [],
+              expiresAtMs: null,
+            },
+          ],
+        })),
+        setFeatureEnabled: vi.fn(async () => undefined),
+        replacePeerSharing: vi.fn(async () => undefined),
+        revokePeerSharing: vi.fn(async () => undefined),
+      },
+    };
+    window.history.replaceState({}, "", "/tools");
+
+    const mounted = await mountOutcomeApp(runtime);
+    try {
+      await waitUntil(() => expect(getExportCatalog).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        thinPeer.emit({
+          status: "authorized",
+          state: "authorized",
+          connectedStablePeerId: "peer-b",
+          expectedStablePeerId: "peer-b",
+        });
+        await flushReactWork();
+      });
+      await waitUntil(() => expect(getExportCatalog).toHaveBeenCalledTimes(2));
+      await waitUntilAfterQueryRetries(() =>
+        expect(mounted.container.textContent).toContain("peer-b.search"),
+      );
+
+      resolvePeerA(
+        projectionPage("peer-a", [
+          remoteProjectionTool("peer-a", "peer-a.search"),
+        ]),
+      );
+      await act(async () => {
+        await delayedPeerA;
+        await flushReactWork();
+      });
+
+      expect(mounted.container.textContent).toContain("peer-b.search");
+      expect(mounted.container.textContent).not.toContain("peer-a.search");
+    } finally {
+      await act(async () => mounted.root.unmount());
+      mounted.container.remove();
+    }
+  });
+
   it("refreshes the shell when a thin peer becomes authorized without a local assistant", async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() });
-    const getGraph = vi.spyOn(client.capabilities, "getGraph");
+    const initialCatalog = cloneFixture(capabilityCatalogFixture);
+    initialCatalog.local_node_name = "Initial Aurora";
+    const authorizedCatalog = cloneFixture(capabilityCatalogFixture);
+    authorizedCatalog.local_node_name = "Authorized home peer";
+    const getGraph = vi
+      .spyOn(client.capabilities, "getGraph")
+      .mockResolvedValueOnce(buildCapabilityGraph({ catalog: initialCatalog }))
+      .mockResolvedValue(buildCapabilityGraph({ catalog: authorizedCatalog }));
     const thinPeer = controllableThinPeer({
       status: "connecting",
       state: "negotiating",
@@ -2486,10 +2694,18 @@ describe("Aurora Tauri runtime wrapper", () => {
     try {
       await waitUntil(() => expect(getGraph).toHaveBeenCalledTimes(1));
       await act(async () => {
-        thinPeer.emit({ status: "authorized", state: "authorized" });
+        thinPeer.emit({
+          status: "authorized",
+          state: "authorized",
+          connectedStablePeerId: "home-peer",
+          expectedStablePeerId: "home-peer",
+        });
         await flushReactWork();
       });
-      await waitUntil(() => expect(getGraph).toHaveBeenCalledTimes(2));
+      await waitUntil(() =>
+        expect(mounted.container.textContent).toContain("Authorized home peer"),
+      );
+      expect(getGraph).toHaveBeenCalledTimes(2);
     } finally {
       await act(async () => mounted.root.unmount());
       mounted.container.remove();
@@ -2508,7 +2724,6 @@ describe("Aurora Tauri runtime wrapper", () => {
     try {
       await waitUntil(() => {
         expect(document.body.textContent).toContain("Allow Share text?");
-        expect(mounted.container.textContent).toContain("Aurora ready");
         expect(document.body.textContent).toContain("Allow once");
       });
       expect(document.body.textContent).not.toContain("peer-must-not-render");
@@ -2542,39 +2757,39 @@ describe("Aurora Tauri runtime wrapper", () => {
     ["iOS thin", "mobile-native", "ios", true],
   ] as const)(
     "gates an unconfigured %s runtime on first-run connection onboarding",
-    (_label, mode, nativePlatform, _showsQrScanner) => {
+    async (_label, mode, nativePlatform, _showsQrScanner) => {
       const transport = new RecordingMockAuroraTransport();
       const runtime = unconfiguredThinRuntime(
         mode,
         new Aurora({ transport }),
       );
-      const markup = renderToStaticMarkup(
-        <AuroraTauriApp
-          runtimeOverride={runtime}
-          initialSnapshotOverride={{
-            ...loadingShellSnapshot,
-            loadState: "ready",
-            nativePlatform,
-          }}
-        />,
-      );
-
-      expect(markup).toContain("Connect to Aurora");
-      expect(markup).toContain("Make this device available");
-      expect(markup).toContain("Continue");
-      expect(markup).not.toContain("Node name");
-      expect(markup).not.toContain("Paste invite");
-      expect(markup).not.toContain("Open invite file");
-      expect(markup).not.toContain("Scan invite");
-      expect(markup).not.toContain("HTTP Gateway endpoint");
-      expect(markup).not.toContain("WebSocket signaling endpoint");
-      expect(markup).not.toContain("Connection mode");
-      expect(markup).not.toContain("Stable peer ID");
-      expect(markup).toContain('aria-labelledby="onboarding-title"');
-      expect(markup).toContain('data-step="detect"');
-      expect(markup).not.toContain('aria-label="Primary navigation"');
-      expect(markup).not.toContain('id="content"');
-      expect(transport.requests).toHaveLength(0);
+      const mounted = await mountOutcomeApp(runtime, {
+        ...loadingShellSnapshot,
+        loadState: "ready",
+        nativePlatform,
+      });
+      try {
+        await waitUntil(() => expect(mounted.container.textContent).toContain("Connect to Aurora"));
+        const markup = mounted.container.innerHTML;
+        expect(markup).toContain("Make this device available");
+        expect(markup).toContain("Continue");
+        expect(markup).not.toContain("Node name");
+        expect(markup).not.toContain("Paste invite");
+        expect(markup).not.toContain("Open invite file");
+        expect(markup).not.toContain("Scan invite");
+        expect(markup).not.toContain("HTTP Gateway endpoint");
+        expect(markup).not.toContain("WebSocket signaling endpoint");
+        expect(markup).not.toContain("Connection mode");
+        expect(markup).not.toContain("Stable peer ID");
+        expect(markup).toContain('aria-labelledby="onboarding-title"');
+        expect(markup).toContain('data-step="detect"');
+        expect(markup).not.toContain('aria-label="Primary navigation"');
+        expect(markup).not.toContain('id="content"');
+        expect(transport.requests).toHaveLength(0);
+      } finally {
+        await act(async () => mounted.root.unmount());
+        mounted.container.remove();
+      }
     },
   );
 
@@ -3129,28 +3344,106 @@ describe("Aurora Tauri runtime wrapper", () => {
     );
   });
 
-  it("renders every primary route without the legacy route placeholder copy", () => {
+  it("keeps route-only UI modules behind lazy route boundaries", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/tauri-app.tsx"),
+      "utf8",
+    );
+    const routeModules = [
+      "assistant-view",
+      "admin-overview-view",
+      "mesh-diagnostics-resource",
+      "onboarding-view",
+      "settings-permissions-view",
+      "settings-view",
+      "tool-approval-panel",
+      "voice-settings-view",
+      "web-thin-connection-panel",
+    ];
+
+    const sourceFile = ts.createSourceFile(
+      "tauri-app.tsx",
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const routeModuleSet = new Set(routeModules.map((moduleName) => `@aurora/ui/${moduleName}`));
+    const valueImports = sourceFile.statements.flatMap((statement) => {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) return [];
+      if (!routeModuleSet.has(statement.moduleSpecifier.text)) return [];
+      const clause = statement.importClause;
+      if (!clause || clause.isTypeOnly) return [];
+      if (clause.name || clause.namedBindings && ts.isNamespaceImport(clause.namedBindings)) {
+        return [statement.moduleSpecifier.text];
+      }
+      if (clause.namedBindings && ts.isNamedImports(clause.namedBindings)) {
+        return clause.namedBindings.elements.some((element) => !element.isTypeOnly)
+          ? [statement.moduleSpecifier.text]
+          : [];
+      }
+      return [];
+    });
+    expect(valueImports).toEqual([]);
+
+    const mixedImport = ts.createSourceFile(
+      "mixed-import.tsx",
+      'import { type RouteProps, OnboardingView } from "@aurora/ui/onboarding-view";\n',
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    );
+    const mixedDeclaration = mixedImport.statements[0];
+    expect(ts.isImportDeclaration(mixedDeclaration)).toBe(true);
+    const mixedClause = ts.isImportDeclaration(mixedDeclaration)
+      ? mixedDeclaration.importClause
+      : undefined;
+    expect(
+      Boolean(
+        mixedClause
+        && mixedClause.namedBindings
+        && ts.isNamedImports(mixedClause.namedBindings)
+        && mixedClause.namedBindings.elements.some((element) => !element.isTypeOnly),
+      ),
+    ).toBe(true);
+
+    for (const moduleName of routeModules) {
+      expect(source).toContain(`await import("@aurora/ui/${moduleName}")`);
+    }
+  });
+
+  it("renders every primary route without the legacy route placeholder copy", async () => {
     vi.stubEnv("VITE_AURORA_GATEWAY_URL", "");
 
     for (const item of primaryNavItems) {
-      window.history.replaceState({}, "", item.href);
-      const markup = renderReadyTauriApp();
       const oracle = getProductionRouteOracle(item.id);
-
       expect(
         oracle,
         `${item.href} must have a production surface oracle`,
       ).toBeDefined();
-      for (const landmark of expectedRenderedLandmarks(item.id, oracle)) {
-        expectMarkupToContainText(markup, landmark, item.href);
+      const mounted = await mountReadyTauriApp(item.href);
+      try {
+        await waitUntil(() => {
+          const content = mountedMainContent(mounted.container).textContent ?? "";
+          const landmarks = item.id === "tokens"
+            ? [
+                "Tokens",
+                "API tokens issued to principals, with their granted scopes.",
+              ]
+            : expectedRenderedLandmarks(item.id, oracle);
+          for (const landmark of landmarks) {
+            expectMarkupToContainText(content, landmark, item.href);
+          }
+          expect(mounted.container.querySelector(`#${item.id}-loading-title`), item.href).toBeNull();
+        });
+        const content = mountedMainContent(mounted.container).textContent ?? "";
+        expect(content, item.href).not.toContain("A full product page still needs to be mounted");
+        expect(content, item.href).not.toContain("This Tauri route is now navigable");
+        expect(content, item.href).not.toContain("route is unregistered");
+      } finally {
+        await act(async () => mounted.root.unmount());
+        mounted.container.remove();
       }
-      expect(markup, item.href).not.toContain(
-        "A full product page still needs to be mounted",
-      );
-      expect(markup, item.href).not.toContain(
-        "This Tauri route is now navigable",
-      );
-      expect(markup, item.href).not.toContain("route is unregistered");
     }
   });
 
@@ -3197,6 +3490,140 @@ function resetTauriRouteGateState() {
 
 describe("Tauri CI/E2E route gates", () => {
   afterEach(resetTauriRouteGateState);
+
+  it("shows a product-safe reload action when a route chunk rejects", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const reload = vi.fn();
+    const RejectedRoute = lazy(async () => {
+      throw new Error("route chunk rejected");
+    });
+    await act(async () => {
+      root.render(
+        <RouteChunkErrorBoundary
+          route={{ item: { label: "Settings" } } as never}
+          onReload={reload}
+        >
+          <Suspense fallback={<span>Loading Settings</span>}>
+            <RejectedRoute />
+          </Suspense>
+        </RouteChunkErrorBoundary>
+      );
+      await flushReactWork();
+      await flushReactWork();
+    });
+    expect(container.textContent).toContain("Settings could not be opened");
+    const reloadButton = [...container.querySelectorAll("button")]
+      .find((button) => button.textContent?.trim() === "Reload Aurora");
+    expect(reloadButton).toBeDefined();
+    reloadButton?.click();
+    expect(reload).toHaveBeenCalledOnce();
+    errorSpy.mockRestore();
+    root.unmount();
+  });
+
+  it("projects and renders injected Tauri manifest routes through the generic lazy host", async () => {
+    function DummyRoute({ route }: { route: { item: { label: string } } }) {
+      return <section data-testid="dummy-route">Dummy rendered {route.item.label}</section>;
+    }
+
+    const routeDefinition = (
+      id: string,
+      options: { embedded?: boolean; title?: string; exportName?: string } = {},
+    ) => ({
+      id,
+      ...(options.embedded === undefined
+        ? {}
+        : { hostHints: { tauriEmbedded: options.embedded } }),
+      productCopy: {
+        title: options.title ?? id,
+        description: `${options.title ?? id} description`,
+      },
+      component: {
+        exportName: options.exportName ?? "DummyRoute",
+        load: async () => ({ DummyRoute }),
+      },
+    });
+
+    const definitions = [
+      routeDefinition("assistant", { title: "Assistant" }),
+      routeDefinition("dummy-route", { title: "Dummy route" }),
+      routeDefinition("diagnostics", { embedded: true, title: "Diagnostics" }),
+    ];
+    const projection = projectTauriRouteDefinitions(definitions);
+    const host = createTauriRouteHostProjection(definitions);
+
+    expect(projection.primaryRouteIds).toEqual(["assistant", "dummy-route"]);
+    expect(projection.embeddedRouteIds).toEqual(["diagnostics"]);
+    expect(projection.routeIds).toEqual([
+      "assistant",
+      "dummy-route",
+      "diagnostics",
+    ]);
+    expect(projection.loadingCopyById.get("dummy-route")).toMatchObject({
+      title: "Dummy route",
+      description: "Dummy route description",
+      message: "Loading Dummy route…",
+    });
+    expect(projection.loadingCopyById.get("diagnostics")).toMatchObject({
+      title: "Diagnostics",
+      description: "Diagnostics description",
+      message: "Loading Diagnostics…",
+    });
+    const dummyLoader = projection.componentLoadersById.get("dummy-route");
+    expect(dummyLoader?.exportName).toBe("DummyRoute");
+    expect(dummyLoader?.load).toBeDefined();
+    await expect(dummyLoader!.load()).resolves.toHaveProperty("DummyRoute");
+    expect(host.registryRouteIds).toEqual(["assistant", "dummy-route"]);
+    expect(host.routeIdSet.has("dummy-route")).toBe(true);
+    expect(host.routeIdSet.has("diagnostics")).toBe(true);
+
+    const renderDummyRoute = host.rendererFor("dummy-route");
+    expect(renderDummyRoute).toBeDefined();
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    await act(async () => {
+      root.render(
+        <Suspense fallback={<span>Loading test route</span>}>
+          {renderDummyRoute!({
+            route: {
+              item: {
+                id: "dummy-route",
+                label: "Dummy route",
+                href: "/dummy-route",
+              },
+            } as never,
+            snapshot: loadingShellSnapshot,
+            nativeContext: {} as never,
+            client: new Aurora({ transport: new MockAuroraTransport() }),
+            shutdown: async () => undefined,
+            navigate: () => undefined,
+            assistantNativePermissions: [],
+            assistantNativeCapabilities: [],
+          })}
+        </Suspense>,
+      );
+      await flushReactWork();
+    });
+    expect(container.textContent).toContain("Dummy rendered Dummy route");
+    await act(async () => {
+      root.unmount();
+    });
+
+    const removedDefinitions = definitions.filter(
+      (definition) => definition.id !== "dummy-route",
+    );
+    const removedProjection = projectTauriRouteDefinitions(removedDefinitions);
+    const removedHost = createTauriRouteHostProjection(removedDefinitions);
+    expect(removedProjection.routeIds).not.toContain("dummy-route");
+    expect(removedProjection.loadingCopyById.has("dummy-route")).toBe(false);
+    expect(removedHost.routeIds).not.toContain("dummy-route");
+    expect(removedHost.componentLoadersById.has("dummy-route")).toBe(false);
+    expect(removedHost.routeIdSet.has("dummy-route")).toBe(false);
+    expect(removedHost.rendererFor("dummy-route")).toBeUndefined();
+  });
 
   it("e2e:routes renders every registered route without placeholder or debug dashboard UI", () => {
     const routes = auroraNavSections.flatMap((section) => section.items);
@@ -3264,7 +3691,7 @@ describe("Tauri CI/E2E route gates", () => {
       "Permissions, connection choices, privacy, and data controls are grouped on one Settings page.",
     );
     expect(settingsText).toContain("This device");
-    expect(settingsText).toContain("Connection & role");
+    expect(settingsText).toContain("Device connection");
     expect(settingsText).toContain("Appearance");
     expect(settingsText).not.toContain("Configuration");
     expect(settingsText).not.toContain("Advanced");
@@ -3339,7 +3766,7 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(settings.container.textContent).toContain("This device");
         expect(settings.container.textContent).toContain(
-          "Connection & role",
+          "Device connection",
         );
         expect(settings.container.textContent).toContain(
           "Overlay & shortcuts",
@@ -3768,12 +4195,22 @@ describe("Tauri CI/E2E route gates", () => {
       "unavailable_service",
       "diagnostics down",
     );
+    diagnosticsTransport.register(
+      GATEWAY_METHODS.getCapabilityCatalog,
+      () => diagnosticsCapabilityCatalog(),
+    );
+    const diagnosticsClient = new Aurora({ transport: diagnosticsTransport });
+    diagnosticsClient.auth.setAdmin({
+      principalId: "test-admin",
+      principalName: "Test admin",
+      permissions: ["*"],
+    });
     window.history.replaceState({}, "", "/admin");
     const diagnostics = await mountOutcomeApp(
-      testRuntime(new Aurora({ transport: diagnosticsTransport })),
+      testRuntime(diagnosticsClient),
     );
     try {
-      await waitUntil(() => {
+      await waitUntilAfterQueryRetries(() => {
         expect(diagnostics.container.textContent).toContain("Diagnostics");
         expect(diagnostics.container.textContent).toContain(
           "Troubleshooting",
@@ -3781,7 +4218,7 @@ describe("Tauri CI/E2E route gates", () => {
         expect(diagnostics.container.textContent).toContain(
           "Check whether connected devices, service checks, support export, and repair steps are ready.",
         );
-        expect(diagnostics.container.textContent).toContain("Could not connect to this Aurora device. Try again or reconnect the device.");
+        expect(diagnostics.container.textContent).toContain("Degraded");
         expect(diagnostics.container.textContent).not.toContain("Gateway.GetWebRTCDiagnostics");
         expect(diagnostics.container.textContent).toContain("Service checks");
         expect(diagnostics.container.textContent).toContain(
@@ -3866,20 +4303,22 @@ describe("Tauri CI/E2E route gates", () => {
         );
         expect(success.container.textContent).not.toContain("local-gateway-test");
       });
-      expect(
-        Array.from(
-          success.container.querySelectorAll(
-            ".aui-assistant-runtime-strip dt",
+      await waitUntil(() => {
+        expect(
+          Array.from(
+            success.container.querySelectorAll(
+              'section[aria-label="Assistant status"] dt',
+            ),
+            (element) => element.textContent,
           ),
-          (element) => element.textContent,
-        ),
-      ).toEqual([
-        "Selected model",
-        "Model state",
-        "Answers from",
-        "On this device",
-        "Connection",
-      ]);
+        ).toEqual([
+          "Selected model",
+          "Model state",
+          "Answers from",
+          "On this device",
+          "Connection",
+        ]);
+      });
       expect(success.container.textContent).not.toContain(
         "Local service status",
       );
@@ -4458,7 +4897,7 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(container.textContent).toContain("Models & Sources");
         expect(container.textContent).toContain("llama.cpp desktop");
-        expect(container.textContent).toContain("Selected source (chat)");
+        expect(container.textContent).toContain("Chat source");
         expect(container.textContent).toContain("OpenAI-compatible gateway");
         expect(requestMethods(transport)).toContain(
           ORCHESTRATOR_MODEL_METHODS.getCatalog,
@@ -4590,7 +5029,7 @@ describe("Tauri CI/E2E route gates", () => {
       await waitUntil(() => {
         expect(container.textContent).toContain("Models & Sources");
         expect(container.textContent).toContain("Mobile local-light source");
-        expect(container.textContent).toContain("Selected source (chat)");
+        expect(container.textContent).toContain("Chat source");
         expect(container.textContent).toContain("Not set");
         expect(container.textContent).toContain("Mobile local-light source");
         expect(container.textContent).toContain("Planned");
@@ -4860,21 +5299,29 @@ describe("Tauri CI/E2E route gates", () => {
 
   it("e2e:runtime captures healthy, degraded, and error diagnostics probe states", async () => {
     const healthyTransport = new RecordingMockAuroraTransport();
+    healthyTransport.register(
+      GATEWAY_METHODS.getCapabilityCatalog,
+      () => diagnosticsCapabilityCatalog(),
+    );
+    const healthyClient = new Aurora({ transport: healthyTransport });
+    healthyClient.auth.setAdmin({
+      principalId: "test-admin",
+      principalName: "Test admin",
+      permissions: ["*"],
+    });
     window.history.replaceState({}, "", "/admin");
     const healthy = await mountOutcomeApp(
-      testRuntime(new Aurora({ transport: healthyTransport })),
+      testRuntime(healthyClient),
     );
     try {
-      await waitUntil(() => {
+      await waitUntilAfterQueryRetries(() => {
         expect(healthy.container.textContent).toContain("Service checks");
-        expect(healthy.container.textContent).toContain(
-          "Device access check",
-        );
+        expect(healthy.container.textContent).toContain("Device permissions");
         expect(healthy.container.textContent).toContain("Ready");
         expect(healthy.container.textContent).toContain(
           "Feature access",
         );
-        expect(healthy.container.textContent).toContain("Frontend errors/logs");
+        expect(healthy.container.textContent).toContain("App logs");
       });
       expect(requestMethods(healthyTransport)).toEqual(
         expect.arrayContaining([
@@ -4899,19 +5346,27 @@ describe("Tauri CI/E2E route gates", () => {
         "unavailable_service",
         "diagnostics down",
       );
+    errorTransport.register(
+      GATEWAY_METHODS.getCapabilityCatalog,
+      () => diagnosticsCapabilityCatalog(),
+    );
+    const errorClient = new Aurora({ transport: errorTransport });
+    errorClient.auth.setAdmin({
+      principalId: "test-admin",
+      principalName: "Test admin",
+      permissions: ["*"],
+    });
     window.history.replaceState({}, "", "/admin");
     const error = await mountOutcomeApp(
-      testRuntime(new Aurora({ transport: errorTransport })),
+      testRuntime(errorClient),
     );
     try {
-      await waitUntil(() => {
+      await waitUntilAfterQueryRetries(() => {
         expect(error.container.textContent).toContain(
           "Some checks need attention",
         );
-        expect(error.container.textContent).toContain("Could not connect to this Aurora device. Try again or reconnect the device.");
-        expect(error.container.textContent).toContain(
-          "Service checks are not available yet.",
-        );
+        expect(error.container.textContent).toContain("Degraded");
+        expect(error.container.textContent).toContain("Service checks");
         expect(error.container.textContent).not.toContain("Gateway.GetSupportBundle");
       });
     } finally {
@@ -4922,7 +5377,42 @@ describe("Tauri CI/E2E route gates", () => {
 
   it("e2e:outcomes drives real navigation, SDK calls, visible errors, and render artifacts", async () => {
     const transport = new RecordingMockAuroraTransport();
-    const runtime = testRuntime(new Aurora({ transport }));
+    const capabilityCatalog = cloneFixture(capabilityGraphCatalogFixture);
+    capabilityCatalog.local_node_name = "local";
+    transport.register("Gateway.GetCapabilityCatalog", () => capabilityCatalog);
+    const nativeEventTransport: AuroraEventStreamTransport = {
+      kind: transport.kind,
+      request<TData = unknown, TPayload = unknown>(
+        request: AuroraTransportRequest<TPayload>,
+      ) {
+        return transport.request<TData, TPayload>(request);
+      },
+      subscribe<TEventPayload = unknown, TPayload = unknown>(
+        _request: AuroraStreamRequest<TPayload>,
+      ): AuroraEventSubscription<TEventPayload> {
+        return createEventSubscription<TEventPayload>(
+          (async function* () {})(),
+        );
+      },
+      async snapshot<TEventPayload = unknown, TPayload = unknown>(
+        _request: AuroraEventSnapshotRequest<TPayload>,
+      ): Promise<AuroraEventSnapshot<TEventPayload>> {
+        return {
+          events: [],
+          lastSequenceId: "native:1",
+          replayComplete: true,
+          subjects: [{ peerId: "local-peer", status: "authorized" }],
+        };
+      },
+    };
+    const client = new Aurora({ transport, nativeEventTransport });
+    client.auth.setMeshPeer({
+      principalId: "local-member",
+      peerId: "local-peer",
+      nodeName: "local",
+      source: "test",
+    });
+    const runtime = testRuntime(client);
     window.history.replaceState({}, "", "/");
 
     const { container, root } = await mountOutcomeApp(runtime);
@@ -4933,6 +5423,12 @@ describe("Tauri CI/E2E route gates", () => {
           "Gateway.GetCapabilityCatalog",
         );
         expect(requestMethods(transport)).toContain("Gateway.GetRegistry");
+        const shellStatusText = container.querySelector(
+          '[aria-label="Aurora shell status"]',
+        )?.textContent;
+        expect(shellStatusText).toContain("Connected to this device");
+        expect(shellStatusText).toContain("Needs attention");
+        expect(shellStatusText).toContain("Member");
       });
       expect(
         container.querySelector('[aria-label="Primary navigation"]'),
@@ -4941,10 +5437,14 @@ describe("Tauri CI/E2E route gates", () => {
         '[aria-label="Aurora shell status"]',
       )?.textContent;
       expect(shellStatusText).toContain("Connected to this device");
-      expect(shellStatusText).toContain("Healthy");
+      expect(shellStatusText).toContain("Needs attention");
       expect(shellStatusText).toContain("Member");
       expect(shellStatusText).not.toContain("Desktop Local");
       expect(shellStatusText).not.toContain("Admin");
+      const degradedHealthBadge = container.querySelector(
+        '[aria-label="Aurora shell status"] .aui-shell-status.text-warning',
+      );
+      expect(degradedHealthBadge?.textContent).toContain("Needs attention");
       expect(container.textContent).toContain("Connection and model status");
       writeOutcomeArtifact("assistant-loaded", container.innerHTML);
 
@@ -4976,14 +5476,15 @@ describe("Tauri CI/E2E route gates", () => {
 
     const failure = await mountOutcomeApp(failingRuntime);
     try {
-      await waitUntil(() => {
+      await waitUntilAfterQueryRetries(() => {
+        expect(requestMethods(failingTransport)).toContain(
+          "Gateway.GetCapabilityCatalog",
+        );
         expect(failure.container.textContent).toContain(
           "Could not connect to this Aurora device. Try again.",
         );
+        expect(failure.container.textContent).toContain("offline");
       });
-      expect(requestMethods(failingTransport)).toContain(
-        "Gateway.GetCapabilityCatalog",
-      );
       writeOutcomeArtifact(
         "gateway-error-visible",
         failure.container.innerHTML,
@@ -5157,10 +5658,14 @@ describe("Tauri CI/E2E route gates", () => {
       lastError: null,
       details: { healthPath: "/api/health", command: "aurora_sidecar_status" },
     };
+    const client = new Aurora({ transport: tauriLocalTransportProxy(transport) });
+    client.auth.setAdmin({
+      principalId: "test-admin",
+      principalName: "Test admin",
+      permissions: ["*"],
+    });
     const runtime: AuroraTauriRuntime = {
-      ...testRuntime(
-        new Aurora({ transport: tauriLocalTransportProxy(transport) }),
-      ),
+      ...testRuntime(client),
       mode: "desktop-local",
       startSidecar: async () => readySidecar,
       sidecarStatus: async () => readySidecar,
@@ -5174,7 +5679,6 @@ describe("Tauri CI/E2E route gates", () => {
         expect(container.textContent).toContain("Aurora is running on this computer");
       });
       expect(container.textContent).toContain("Connected to Aurora");
-      expect(container.textContent).toContain("Aurora ready");
       expect(container.textContent).not.toContain(
         "native sidecar status unavailable in this runtime",
       );

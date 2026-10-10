@@ -12,6 +12,7 @@ import {
   toolingApprovalGrantsFixture,
   toolingMcpStatusFixture,
   toolingSharingPolicyFixture,
+  submitToolApprovalDecision,
   type AuroraTransportRequest,
   type ToolCatalogResponse,
 } from '../src/index.js'
@@ -70,6 +71,241 @@ describe('Tooling management SDK surface', () => {
       ['Tooling.ListPolicyAuditEvents', '/api/Tooling/ListPolicyAuditEvents'],
       ['Tooling.SetPolicyMode', '/api/Tooling/SetPolicyMode'],
     ]))
+  })
+
+  it('passes AbortSignal through tooling management read helpers', async () => {
+    const controller = new AbortController()
+    const requests: AuroraTransportRequest[] = []
+    const record = (response: Record<string, unknown>) => (request: AuroraTransportRequest) => {
+      requests.push(request)
+      return response
+    }
+    const transport = MockAuroraTransport.empty()
+      .register('Tooling.GetPolicySummary', record({ policy: cloneFixture(toolingSharingPolicyFixture), source_count: 0, tool_count: 0, secrets_redacted: true }))
+      .register('Tooling.ListToolSources', record({ sources: [], count: 0, secrets_redacted: true }))
+      .register('Tooling.GetToolSourceDetail', record({ found: false, secrets_redacted: true }))
+      .register('Tooling.ListApprovalGrants', record({ grants: [], count: 0, secrets_redacted: true }))
+      .register('Tooling.ListPendingApprovals', record({ approvals: [], count: 0, secrets_redacted: true }))
+      .register('Tooling.ListPolicyAuditEvents', record({ events: [], total: 0, secrets_redacted: true }))
+      .register('Tooling.GetToolExportPolicy', record({
+        policy: { default_state: 'shared', revision: 1, initialized: true, migrated_from_legacy: false, updated_at: null },
+        rules: [],
+        stale_tool_ids: [],
+        stale_group_ids: [],
+        protocol_tier: 'projection_v1',
+        mesh_switches: { provider_mesh_tooling_enabled: true, consumer_mesh_tooling_enabled: true, revision: 1, enforcement_active: true },
+        secrets_redacted: true,
+      }))
+      .register('Tooling.PreviewToolExportDecision', record({
+        decision: {
+          effective_state: 'shared',
+          inherited_from: 'global_default',
+          matched_rule_id: null,
+          peer_id: null,
+          global_tool_id: 'aurora-tool:v1:local:Tooling:test.echo',
+          share_group_id: null,
+          exportable: true,
+          stale_tool_id: false,
+          stale_group_id: false,
+          prerequisites: { local_exportable: true, enforcement_active: true },
+          policy_revision: 1,
+          reason_code: 'global_default',
+        },
+      }))
+    const client = new AuroraClient({ transport })
+
+    await client.tools.getPolicySummary({ signal: controller.signal })
+    await client.tools.listSources({ signal: controller.signal })
+    await client.tools.getSourceDetail('local:core', { signal: controller.signal })
+    await client.tools.listNormalizedGrants({ include_revoked: true }, { signal: controller.signal })
+    await client.tools.listPendingApprovals({ status: 'pending' }, { signal: controller.signal })
+    await client.tools.listPolicyAuditEvents({ limit: 100 }, { signal: controller.signal })
+    await client.tools.getToolExportPolicyModel({}, { label: 'All peers' }, { signal: controller.signal })
+    await client.tools.previewToolExportDecisionModel({
+      global_tool_id: 'aurora-tool:v1:local:Tooling:test.echo',
+      share_group_id: null,
+      peer_id: null,
+    }, { signal: controller.signal })
+
+    expect(requests.map((request) => request.method)).toEqual([
+      'Tooling.GetPolicySummary',
+      'Tooling.ListToolSources',
+      'Tooling.GetToolSourceDetail',
+      'Tooling.ListApprovalGrants',
+      'Tooling.ListPendingApprovals',
+      'Tooling.ListPolicyAuditEvents',
+      'Tooling.GetToolExportPolicy',
+      'Tooling.PreviewToolExportDecision',
+    ])
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true)
+  })
+
+
+  it('passes AbortSignal through tooling write helpers', async () => {
+    const controller = new AbortController()
+    const requests: AuroraTransportRequest[] = []
+    const record = <T,>(response: T) => (request: AuroraTransportRequest) => {
+      requests.push(request)
+      return response
+    }
+    const transport = MockAuroraTransport.empty()
+      .register('Gateway.AdminActionDraft', record(adminDraftResponse()))
+      .register('Gateway.AdminActionConfirm', record(adminConfirmResponse()))
+      .register(TOOLING_METHODS.upsertToolExportOverride, record({
+        ok: true,
+        policy: { default_state: 'shared', revision: 2, initialized: true, migrated_from_legacy: false, updated_at: null },
+        rule: null,
+        cleared: false,
+        changed: true,
+        previous_revision: 1,
+        revision: 2,
+      }))
+      .register(TOOLING_METHODS.createApprovalGrant, record({ grant: { grant_id: 'grant-created' }, secrets_redacted: true }))
+      .register(TOOLING_METHODS.revokeApprovalGrant, record({ ok: true, grant_id: 'grant-created', revoked: true, secrets_redacted: true }))
+      .register(TOOLING_METHODS.requestApproval, record({ ok: true, approval_request_id: 'approval-signal', policy_decision: { decision_id: 'decision-signal' }, correlation_id: 'corr-signal', expires_at: null, error: null }))
+      .register(TOOLING_METHODS.confirmExecution, record({ ok: true, approval_token: 'token-signal', policy_decision_id: 'decision-signal', correlation_id: 'corr-signal', expires_at: null, error: null }))
+      .register(TOOLING_METHODS.prepareExecution, record({ ok: true, approval_request_id: null, policy_decision: { allowed: true }, args_schema_hash: null, secrets_redacted: true }))
+      .register(TOOLING_METHODS.executeTool, record({ ok: true, result: null, secrets_redacted: true }))
+    const client = new AuroraClient({ transport })
+
+    await client.tools.upsertToolExportOverride({
+      expected_revision: 1,
+      global_tool_id: 'tool:local:test',
+      peer_id: null,
+      state: 'unshared',
+      actor_principal_id: 'admin',
+      reason: 'test export mutation signal',
+      confirmation_text: 'CONFIRM',
+    }, { signal: controller.signal })
+    await client.tools.createGrant({
+      grant_scope: 'once',
+      grant_type: 'approval',
+      principal_id: 'principal:test',
+      global_tool_id: 'tool:local:test',
+      resource_scope: [],
+      include_future_tools: false,
+      reason: 'test grant signal',
+      created_by: 'admin',
+    }, { signal: controller.signal })
+    await client.tools.revokeGrant({
+      grant_id: 'grant-created',
+      revoked_by: 'admin',
+      reason: 'test revoke signal',
+    }, { signal: controller.signal })
+    await client.tools.requestApproval({
+      global_tool_id: 'tool:local:test',
+      requested_approval_scope: 'once',
+    }, { signal: controller.signal })
+    await client.tools.confirmExecution({
+      approval_request_id: 'approval-signal',
+      approve: true,
+      reason: 'test confirm signal',
+    }, { signal: controller.signal })
+    await client.tools.prepareExecution({
+      tool_name: 'tool:local:test',
+      arguments: {},
+    }, { signal: controller.signal })
+    await client.tools.execute({
+      tool_name: 'tool:local:test',
+      arguments: {},
+      confirmed: true,
+    }, { signal: controller.signal })
+
+    expect(requests.map((request) => request.method)).toEqual([
+      'Gateway.AdminActionDraft',
+      'Gateway.AdminActionConfirm',
+      TOOLING_METHODS.upsertToolExportOverride,
+      TOOLING_METHODS.createApprovalGrant,
+      TOOLING_METHODS.revokeApprovalGrant,
+      TOOLING_METHODS.requestApproval,
+      TOOLING_METHODS.confirmExecution,
+      TOOLING_METHODS.prepareExecution,
+      TOOLING_METHODS.executeTool,
+    ])
+    expect(requests.every((request) => request.signal === controller.signal)).toBe(true)
+  })
+
+  it('stops approval continuation when the caller aborts between request and confirm', async () => {
+    const controller = new AbortController()
+    const approvalGate = deferred<void>()
+    const requests: AuroraTransportRequest[] = []
+    const transport = MockAuroraTransport.empty()
+      .register(TOOLING_METHODS.requestApproval, async (request) => {
+        requests.push(request)
+        await approvalGate.promise
+        return {
+          ok: true,
+          approval_request_id: 'approval-between-stages',
+          policy_decision: { decision_id: 'decision-between-stages' },
+          correlation_id: 'corr-between-stages',
+          expires_at: null,
+          error: null,
+        }
+      })
+      .register(TOOLING_METHODS.confirmExecution, (request) => {
+        requests.push(request)
+        return { ok: true, approval_token: 'token-late', policy_decision_id: 'decision-between-stages', correlation_id: 'corr-between-stages', expires_at: null, error: null }
+      })
+    const client = new AuroraClient({ transport })
+    const decision = submitToolApprovalDecision(client, {
+      tool: {
+        id: 'tool:local:test',
+        name: 'Test tool',
+        description: 'Test tool',
+        providerLabel: 'Local',
+        providerPeerId: null,
+        serviceInstanceId: null,
+        providerKind: 'local',
+        sourceType: 'core',
+        trustTier: 'untrusted',
+        transport: 'local',
+        routePath: ['Tooling', 'ExecuteTool'],
+        riskClass: 'mutating',
+        approvalRequired: true,
+        requiresAdminAction: false,
+        selectorRequired: false,
+        providerSelectorRequired: false,
+        dataEgress: false,
+        mutating: true,
+        requiredPermissions: [],
+        argsSchema: null,
+        argsPreview: null,
+        argsHash: null,
+        meshSelector: null,
+        resourceSelector: null,
+        approvalScopes: ['once'],
+        requestedApprovalScope: 'once',
+        tokenTtlSeconds: null,
+        state: 'ready',
+        disabledReason: null,
+        denialReason: null,
+        dryRunSupported: false,
+        dryRunRequired: false,
+        dryRunPreview: null,
+        auditDestination: null,
+        correlationId: null,
+        policyDecisionId: null,
+        approvalRequestId: null,
+        expiresAt: null,
+        providers: [],
+        result: null,
+        secretsRedacted: true,
+      },
+      scope: 'once',
+      approverPrincipalId: 'principal:test',
+      reason: 'test approval abort',
+      signal: controller.signal,
+    })
+
+    await waitUntil(() => {
+      expect(requests.map((request) => request.method)).toEqual([TOOLING_METHODS.requestApproval])
+    })
+    expect(requests[0]?.signal).toBe(controller.signal)
+    controller.abort()
+    approvalGate.resolve()
+
+    await expect(decision).rejects.toMatchObject({ name: 'AbortError' })
+    expect(requests.map((request) => request.method)).toEqual([TOOLING_METHODS.requestApproval])
   })
 
   it('preserves per-source local MCP and plugin IDs when normalizing catalog tools', () => {
@@ -506,3 +742,62 @@ describe('Tooling management SDK surface', () => {
     expect(JSON.stringify(result)).not.toContain('sk-live-secret-token')
   })
 })
+
+function adminDraftResponse() {
+  return {
+    action_id: 'aa-tooling-test',
+    nonce: 'nonce-tooling-test',
+    digest: 'digest-tooling-test',
+    method_id: 'tooling-write',
+    affected_resources: [],
+    required_phrase: 'CONFIRM',
+    required_reason: true,
+    required_reauth: true,
+    expires_at: '2026-07-14T23:59:00Z',
+    expires_in_seconds: 300,
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest',
+    },
+  }
+}
+
+function adminConfirmResponse() {
+  return {
+    action_id: 'aa-tooling-test',
+    confirmation_token: 'token-tooling-test',
+    digest: 'digest-tooling-test',
+    confirmed: true,
+    expires_at: '2026-07-14T23:59:00Z',
+    audit_receipt: 'audit-tooling-test',
+    confirmation_headers: {
+      action_id: 'X-Aurora-AdminAction-Id',
+      confirmation_token: 'X-Aurora-AdminAction-Token',
+      digest: 'X-Aurora-AdminAction-Digest',
+    },
+  }
+}
+
+function deferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
+async function waitUntil(assertion: () => void, timeoutMs = 1_000): Promise<void> {
+  const started = Date.now()
+  while (Date.now() - started < timeoutMs) {
+    try {
+      assertion()
+      return
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 10))
+    }
+  }
+  assertion()
+}

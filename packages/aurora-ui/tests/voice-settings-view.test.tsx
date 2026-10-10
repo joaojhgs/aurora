@@ -5,6 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import type { AuroraClient, GeneratedBackendMethodOutput, JsonObject, JsonValue } from '@aurora/client'
 import { VoiceSettingsView, type VoiceSettingsViewProps } from '../src/voice-settings-view'
+import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
 import { getAuroraSurfaceProfile } from '../src/platform-surface'
 import { SettingsView } from '../src/settings-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
@@ -213,6 +214,152 @@ describe('VoiceSettingsView', () => {
 
     expect(adminExecute).not.toHaveBeenCalled()
     await unmount()
+  })
+
+  it('dedupes voice discovery reads through the scoped query cache', async () => {
+    const getCapabilities = vi.fn(async () => ({ ok: true, data: { capabilities: capabilities() } }))
+    const listVoices = vi.fn(async () => ({ ok: true, data: { voices: [voice()] } }))
+    const client = voiceClient({ getCapabilities, listVoices })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient}>
+          <VoiceSettingsView client={client} />
+          <VoiceSettingsView client={client} />
+        </AuroraQueryProvider>
+      )
+    })
+    await flushReactWork()
+
+    expect(getCapabilities).toHaveBeenCalledTimes(1)
+    expect(listVoices).toHaveBeenCalledTimes(1)
+    await act(async () => root.unmount())
+    container.remove()
+  })
+
+  it('scopes protected voice catalog reads by query provider identity', async () => {
+    const adminExecute = vi.fn(async (input: { methodId: string }) => {
+      if (input.methodId === 'TTS.ListVoiceProfiles') return adminResult({ profiles: [profile()] })
+      if (input.methodId === 'TTS.ListLanguagePacks') return adminResult({ packs: [] })
+      throw new Error(`Unexpected action: ${input.methodId}`)
+    })
+    const client = voiceClient({ adminExecute })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ peerId: 'voice-peer-a' }}>
+          <VoiceSettingsView client={client} />
+        </AuroraQueryProvider>
+      )
+    })
+    await flushReactWork()
+    await loadManagedVoices(container)
+    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(1)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ peerId: 'voice-peer-b' }}>
+          <VoiceSettingsView client={client} />
+        </AuroraQueryProvider>
+      )
+    })
+    await flushReactWork()
+
+    expect(buttonByText(container, 'Show available voices').disabled).toBe(true)
+    await act(async () => root.unmount())
+    container.remove()
+  })
+
+  it('ignores delayed local speech catalog results after the query scope changes', async () => {
+    const firstCatalog = deferred<{
+      state: 'ready'
+      items: Array<{
+        task: 'stt'
+        packId: string
+        packVersion: string
+        displayName: string
+        language: string
+      }>
+    }>()
+    const listCatalog = vi
+      .fn()
+      .mockImplementationOnce(() => firstCatalog.promise)
+      .mockImplementationOnce(async () => ({
+        state: 'ready' as const,
+        items: [{
+          task: 'stt' as const,
+          packId: 'scope-b.stt',
+          packVersion: 'scope-b-rev-1',
+          displayName: 'Scope B transcription',
+          language: 'English',
+        }],
+      }))
+    const client = voiceClient({ capabilities: capabilities({ engine_capabilities: { vad: true, kws: true, stt: true, tts: true } }) })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const localSpeechCatalog: NonNullable<VoiceSettingsViewProps['localSpeechCatalog']> = {
+      available: true,
+      listCatalog,
+      listReferenceProfiles: vi.fn(async () => []),
+      select: vi.fn(),
+    }
+    const props = {
+      runtimeProfile: meshVoiceRuntimeProfile(),
+      onLocalSpeechSelectionConfirmed: vi.fn(),
+      localSpeechCatalog,
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ peerId: 'voice-peer-a' }}>
+          <VoiceSettingsView client={client} {...props} />
+        </AuroraQueryProvider>
+      )
+    })
+    await flushReactWork()
+    expect(listCatalog).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ peerId: 'voice-peer-b' }}>
+          <VoiceSettingsView client={client} {...props} />
+        </AuroraQueryProvider>
+      )
+    })
+    await flushReactWork()
+    expect(listCatalog).toHaveBeenCalledTimes(2)
+    expect(buttonByAriaLabel(container, 'Choose transcription').textContent).toContain('Scope B transcription')
+
+    await act(async () => {
+      firstCatalog.resolve({
+        state: 'ready',
+        items: [{
+          task: 'stt' as const,
+          packId: 'scope-a.stt',
+          packVersion: 'scope-a-rev-1',
+          displayName: 'Scope A transcription',
+          language: 'English',
+        }],
+      })
+    })
+    await flushReactWork()
+
+    expect(buttonByAriaLabel(container, 'Choose transcription').textContent).toContain('Scope B transcription')
+    await openSearchableChoice(container, 'Choose transcription')
+    expect(document.body.textContent).toContain('Scope B transcription')
+    expect(document.body.textContent).not.toContain('Scope A transcription')
+    await act(async () => root.unmount())
+    container.remove()
   })
 
   it('adds a voice only after an explicit click', async () => {
@@ -550,7 +697,7 @@ describe('VoiceSettingsView', () => {
     }))
     expect(exportVoiceProfile).not.toHaveBeenCalled()
     expect(fileInput.value).toBe('')
-    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
+    await vi.waitFor(() => expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2))
     const text = visibleText(container)
     expect(text).toContain('Voice file added.')
     expect(text).toContain('Dina')
@@ -668,7 +815,7 @@ describe('VoiceSettingsView', () => {
       path: '/api/TTS/SetDefaultVoice'
     }))
     expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.SetDefaultVoice')?.[0]).not.toHaveProperty('phrase')
-    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
+    await vi.waitFor(() => expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2))
     expect(onLocalSpeechSelectionConfirmed).toHaveBeenCalledWith({
       tts: {
         packId: 'en_pack',
@@ -730,7 +877,7 @@ describe('VoiceSettingsView', () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
-      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonByText(document.body, 'Remove voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
 
@@ -768,7 +915,7 @@ describe('VoiceSettingsView', () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
-      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonByText(document.body, 'Remove voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(buttonByText(document.body, 'Removing').disabled).toBe(true)
     await act(async () => {
@@ -807,7 +954,7 @@ describe('VoiceSettingsView', () => {
     })
     expect(visibleText(document.body)).toContain('Delete voice?')
     await act(async () => {
-      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonByText(document.body, 'Delete voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
 
@@ -825,7 +972,7 @@ describe('VoiceSettingsView', () => {
       path: '/api/TTS/DeleteVoiceProfile'
     }))
     expect(adminExecute.mock.calls.find(([input]) => input.methodId === 'TTS.DeleteVoiceProfile')?.[0]).not.toHaveProperty('phrase')
-    expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2)
+    await vi.waitFor(() => expect(adminExecute.mock.calls.filter(([input]) => input.methodId === 'TTS.ListVoiceProfiles')).toHaveLength(2))
     expect(visibleText(container)).toContain('Voice deleted.')
     expect(visibleText(container)).not.toContain('11111111-1111-4111-8111-111111111111')
     assertNoForbiddenCopy(visibleText(container))
@@ -855,7 +1002,7 @@ describe('VoiceSettingsView', () => {
       buttonByText(container, 'Remove').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
-      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonByText(document.body, 'Remove voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
     expect(visibleText(container)).toContain('Voice was not removed. Try again.')
@@ -864,7 +1011,7 @@ describe('VoiceSettingsView', () => {
       buttonByText(container, 'Delete').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await act(async () => {
-      buttonByText(document.body, 'Confirm').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      buttonByText(document.body, 'Delete voice').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await flushReactWork()
 
@@ -2062,6 +2209,8 @@ function voiceClient(overrides: {
     throw new Error(`Unexpected action: ${input.methodId}`)
   })
   return {
+    transport: { kind: 'mock' },
+    auth: testAuth('voice-peer'),
     speech: {
       tts: {
         getCapabilities,
@@ -2094,6 +2243,14 @@ function voiceClient(overrides: {
       evaluatePolicy: async () => ({ decision: 'allowed', allowed: true, availability: 'available-local', blockers: [] })
     }
   } as unknown as AuroraClient
+}
+
+
+function testAuth(peerId: string) {
+  return {
+    snapshot: () => ({ principalId: 'voice-principal', peerId }),
+    subscribe: () => () => undefined,
+  }
 }
 
 function capabilities(overrides: Partial<Capabilities> = {}): Capabilities {
@@ -2431,7 +2588,11 @@ async function loadManagedVoices(container: HTMLElement): Promise<void> {
   await act(async () => {
     buttonByText(container, 'Show available voices').dispatchEvent(new MouseEvent('click', { bubbles: true }))
   })
-  await flushReactWork()
+  await vi.waitFor(() => {
+    const text = visibleText(container)
+    expect(text).not.toContain('Show available voices before adding or changing spoken reply voices.')
+    expect(text).not.toContain('Loading available voices')
+  })
 }
 
 async function unlockVoiceManagement(container: HTMLElement): Promise<void> {

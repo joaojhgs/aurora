@@ -12,8 +12,6 @@ export default async function Page() {
       {!route ? (
         <AuroraRoutePage
           routeId="tools"
-          title="Tools"
-          description="Tool approvals appear when Aurora confirms available tools and required approvals."
         />
       ) : null}
     </>

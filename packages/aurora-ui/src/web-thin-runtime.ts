@@ -13,6 +13,7 @@ import {
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  CAP_GATEWAY_STATUS_EVENTS_V1,
   MemoryPeerCredentialStore,
   createBrowserWebRtcAuroraRuntime,
   type BrowserWebRtcRuntime,
@@ -1116,7 +1117,12 @@ class ProductSafeTransport implements AuroraTransport {
 function wrapProductSafeSubscription<TPayload>(
   subscription: AuroraEventSubscription<TPayload>,
 ): AuroraEventSubscription<TPayload> {
+  const ready = subscription.ready?.catch((error) => {
+    throw productSafeAuroraError(error)
+  })
+  if (ready) void ready.catch(() => undefined)
   return {
+    ...(ready ? { ready } : {}),
     get closed() {
       return subscription.closed.catch((error) => {
         throw productSafeAuroraError(error)
@@ -1244,6 +1250,7 @@ export function localProtocolCapabilities(
   const capabilities: string[] = [
     ...(flags.webrtc_fragmentation ? [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1] : []),
     ...(flags.webrtc_scoped_subscriptions ? [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] : []),
+    ...(flags.webrtc_scoped_subscriptions ? [CAP_GATEWAY_STATUS_EVENTS_V1] : []),
   ]
   if (nodeRole === 'remote-console') capabilities.push(CAP_CONSUMER_ONLY_V1)
   return [...new Set(capabilities)]

@@ -2,9 +2,17 @@ import { AuroraError, classifyHttpError, readDetailCode, type AuroraErrorCode } 
 import {
   createEventSubscription,
   eventFromUnknown,
+  normalizeSnapshotRequest,
+  type AuroraEventSnapshot,
+  type AuroraEventSnapshotRequest,
   type AuroraEventSubscription,
   type AuroraStreamRequest
 } from './events.js'
+import {
+  isNativeEventSubscribeRequest,
+  normalizeNativeAuroraEvent,
+  prepareNativeEventSubscribeRequest
+} from './native-events.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 import type {
   AndroidAssistantRoleRequestResult,
@@ -114,7 +122,9 @@ export interface TauriCommandNames {
   localFilePick: string
   secureFileHandleOpen: string
   eventSubscribe: string
+  eventSnapshot: string
   eventActivateSubscription: string
+  eventAck: string
   eventUnsubscribe: string
 }
 
@@ -574,7 +584,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   localFilePick: 'aurora_local_file_pick',
   secureFileHandleOpen: 'aurora_secure_file_handle_open',
   eventSubscribe: 'aurora_subscribe',
+  eventSnapshot: 'aurora_native_event_snapshot',
   eventActivateSubscription: 'aurora_activate_subscription',
+  eventAck: 'aurora_native_event_ack',
   eventUnsubscribe: 'aurora_unsubscribe'
 }
 
@@ -972,8 +984,12 @@ export class TauriLocalTransport implements AuroraTransport {
   async subscribe<TEventPayload = unknown, TPayload = unknown>(
     request: AuroraStreamRequest<TPayload>
   ): Promise<AuroraEventSubscription<TEventPayload>> {
-    const sidecarSession = await this.getSidecarSession()
-    const bridgeRequest = withSubscribeSidecarHeader(request, sidecarSession)
+    const nativeEventRequest = isNativeEventSubscribeRequest(request)
+    const sidecarSession = nativeEventRequest ? null : await this.getSidecarSession()
+    const bridgeRequest = withSubscribeSidecarHeader(
+      nativeEventRequest ? prepareNativeEventSubscribeRequest(request) : request,
+      sidecarSession
+    )
     const context: TauriInvokeContext = { method: this.commands.eventSubscribe }
     if (request.topics[0] !== undefined) context.busTopic = request.topics[0]
     const response = await this.invokeCommand<unknown>(
@@ -1001,6 +1017,17 @@ export class TauriLocalTransport implements AuroraTransport {
             activateContext
           )
         },
+        nativeEventRequest
+          ? (subscriptionId, eventId) => {
+            const ackContext: TauriInvokeContext = { method: this.commands.eventAck }
+            if (context.busTopic !== undefined) ackContext.busTopic = context.busTopic
+            return this.invokeCommand(
+              this.commands.eventAck,
+              { [this.requestArgName]: { subscriptionId, eventId } },
+              ackContext
+            )
+          }
+          : undefined,
         (subscriptionId) => {
           const unsubscribeContext: TauriInvokeContext = { method: this.commands.eventUnsubscribe }
           if (context.busTopic !== undefined) unsubscribeContext.busTopic = context.busTopic
@@ -1013,6 +1040,21 @@ export class TauriLocalTransport implements AuroraTransport {
       )
     }
     return createEventSubscription(normalizeTauriEvents<TEventPayload>(response, request))
+  }
+
+  async snapshot<TEventPayload = unknown, TPayload = unknown>(
+    request: AuroraEventSnapshotRequest<TPayload>
+  ): Promise<AuroraEventSnapshot<TEventPayload>> {
+    const snapshotRequest = normalizeSnapshotRequest({
+      ...request,
+      source: 'native'
+    })
+    const response = await this.invokeCommand<unknown>(
+      this.commands.eventSnapshot,
+      { [this.requestArgName]: nativeSnapshotBridgeRequest(snapshotRequest) },
+      { method: this.commands.eventSnapshot }
+    )
+    return normalizeTauriEventSnapshot<TEventPayload>(response)
   }
 
   async invokeNative<TResponse = unknown>(
@@ -1119,6 +1161,8 @@ interface TauriSubscriptionClosedPayload {
   secretsRedacted?: boolean
 }
 
+const TAURI_NATIVE_EVENT_QUEUE_LIMIT = 1
+
 function isTauriSubscriptionDescriptor(value: unknown): value is TauriSubscriptionDescriptor {
   return (
     typeof value === 'object' &&
@@ -1128,20 +1172,73 @@ function isTauriSubscriptionDescriptor(value: unknown): value is TauriSubscripti
   )
 }
 
+function normalizeTauriEvent<TPayload>(raw: unknown, request: AuroraStreamRequest): AuroraEvent<TPayload> {
+  if (isNativeEventSubscribeRequest(request)) return normalizeNativeAuroraEvent<TPayload>(raw)
+  return eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit })
+}
+
+function nativeSnapshotBridgeRequest(request: AuroraEventSnapshotRequest): {
+  kinds?: string[]
+  topics?: string[]
+  subjects?: string[]
+  afterSequence?: number
+} {
+  const bridgeRequest: {
+    kinds?: string[]
+    topics?: string[]
+    subjects?: string[]
+    afterSequence?: number
+  } = {
+    kinds: request.kinds,
+    topics: request.topics,
+    ...(request.subjects ? { subjects: request.subjects } : {})
+  }
+  if (typeof request.afterSequence === 'number') bridgeRequest.afterSequence = request.afterSequence
+  return bridgeRequest
+}
+
 async function createTauriIpcEventSubscription<TPayload>(
   descriptor: TauriSubscriptionDescriptor,
   request: AuroraStreamRequest,
   listen: TauriListen,
   activate: (subscriptionId: string) => Promise<unknown>,
+  acknowledge: ((subscriptionId: string, eventId: string) => Promise<unknown>) | undefined,
   unsubscribe: (subscriptionId: string) => void
 ): Promise<AuroraEventSubscription<TPayload>> {
   const queue: Array<AuroraEvent<TPayload>> = []
   const waiters: Array<() => void> = []
-  let closed = false
+  let remoteClosed = false
+  let locallyClosed = false
+  let cleanupComplete = false
   let closeError: AuroraError | null = null
+  let lastDeliveredEventId: string | null = request.lastEventId ?? null
+  let unacknowledgedEventId: string | null = null
+  let unlistenEvents: () => void = () => undefined
+  let unlistenClosed: () => void = () => undefined
   const wake = () => waiters.splice(0).forEach((resolve) => resolve())
+  const isClosed = () => remoteClosed || locallyClosed
+  const cleanup = () => {
+    if (cleanupComplete) {
+      wake()
+      return
+    }
+    cleanupComplete = true
+    locallyClosed = true
+    queue.splice(0, queue.length)
+    unacknowledgedEventId = null
+    if (!remoteClosed) {
+      unsubscribe(descriptor.subscriptionId)
+    }
+    unlistenEvents()
+    unlistenClosed()
+    wake()
+  }
+  const failLocalProtocol = (error: AuroraError) => {
+    closeError = error
+    cleanup()
+  }
   const closeFromNative = (payload: TauriSubscriptionClosedPayload) => {
-    closed = true
+    remoteClosed = true
     if (payload.code && payload.code !== 'closed') {
       closeError = new AuroraError({
         code: payload.code as AuroraErrorCode,
@@ -1157,12 +1254,30 @@ async function createTauriIpcEventSubscription<TPayload>(
     }
     wake()
   }
-  const unlistenEvents = await listen<TauriSubscriptionPayload>(descriptor.eventName, ({ payload }) => {
+  unlistenEvents = await listen<TauriSubscriptionPayload>(descriptor.eventName, ({ payload }) => {
+    if (isClosed()) return
     const raw = payload?.event ?? payload
-    queue.push(eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit }))
+    const event = normalizeTauriEvent<TPayload>(raw, request)
+    const nativeOutstanding = queue.length + (unacknowledgedEventId ? 1 : 0)
+    if (isNativeEventSubscribeRequest(request) && nativeOutstanding >= TAURI_NATIVE_EVENT_QUEUE_LIMIT) {
+      failLocalProtocol(new AuroraError({
+        code: 'transport_loss',
+        message: 'Native event subscription delivered more than one unacknowledged event',
+        method: 'aurora_subscribe',
+        busTopic: request.topics[0],
+        detail: {
+          code: 'native_event_ack_window_exceeded',
+          lastDeliveredEventId,
+          secretsRedacted: true
+        }
+      }))
+      return
+    }
+    queue.push(event)
     wake()
   })
-  const unlistenClosed = await listen<TauriSubscriptionClosedPayload>(`${descriptor.eventName}/closed`, ({ payload }) => {
+  unlistenClosed = await listen<TauriSubscriptionClosedPayload>(`${descriptor.eventName}/closed`, ({ payload }) => {
+    if (locallyClosed) return
     closeFromNative(payload ?? {})
   })
   try {
@@ -1173,25 +1288,35 @@ async function createTauriIpcEventSubscription<TPayload>(
     unsubscribe(descriptor.subscriptionId)
     throw error
   }
-  const cleanup = () => {
-    if (!closed) {
-      closed = true
-      unsubscribe(descriptor.subscriptionId)
-    }
-    unlistenEvents()
-    unlistenClosed()
-    wake()
-  }
   const source: AsyncIterable<AuroraEvent<TPayload>> = {
     async *[Symbol.asyncIterator]() {
       try {
         while (true) {
           if (queue.length > 0) {
             const event = queue.shift()
-            if (event) yield event
+            if (event) {
+              lastDeliveredEventId = event.id ?? lastDeliveredEventId
+              if (isNativeEventSubscribeRequest(request) && event.id) {
+                unacknowledgedEventId = event.id
+              }
+              yield event
+              if (!locallyClosed && acknowledge && event.id) {
+                const acknowledgedEventId = event.id
+                if (unacknowledgedEventId === acknowledgedEventId) {
+                  unacknowledgedEventId = null
+                }
+                try {
+                  await acknowledge(descriptor.subscriptionId, acknowledgedEventId)
+                } catch (error) {
+                  closeError = normalizeNativeAcknowledgementError(error, request, acknowledgedEventId)
+                  cleanup()
+                  throw closeError
+                }
+              }
+            }
             continue
           }
-          if (closed) {
+          if (isClosed()) {
             if (closeError) throw closeError
             return
           }
@@ -1207,19 +1332,34 @@ async function createTauriIpcEventSubscription<TPayload>(
   return createEventSubscription(source, cleanup)
 }
 
+function normalizeNativeAcknowledgementError(
+  error: unknown,
+  request: AuroraStreamRequest,
+  eventId: string
+): AuroraError {
+  if (error instanceof AuroraError && error.code !== 'unknown') return error
+  return new AuroraError({
+    code: 'transport_loss',
+    message: 'Native event acknowledgement failed',
+    method: 'aurora_native_event_ack',
+    busTopic: request.topics[0],
+    detail: { eventId, secretsRedacted: true }
+  })
+}
+
 async function* normalizeTauriEvents<TPayload>(
   response: unknown,
   request: AuroraStreamRequest
 ): AsyncIterable<AuroraEvent<TPayload>> {
   if (isAsyncIterable<AuroraEvent<TPayload> | Record<string, unknown>>(response)) {
     for await (const raw of response) {
-      yield eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit })
+      yield normalizeTauriEvent<TPayload>(raw, request)
     }
     return
   }
   if (isIterable<AuroraEvent<TPayload> | Record<string, unknown>>(response)) {
     for (const raw of response) {
-      yield eventFromUnknown<TPayload>(raw, { kind: request.stream, transport: 'tauri-local', audit: request.audit })
+      yield normalizeTauriEvent<TPayload>(raw, request)
     }
     return
   }
@@ -1227,6 +1367,45 @@ async function* normalizeTauriEvents<TPayload>(
     code: 'unsupported_feature',
     message: 'Tauri event subscribe command must return an iterable event stream.'
   })
+}
+
+function normalizeTauriEventSnapshot<TPayload>(response: unknown): AuroraEventSnapshot<TPayload> {
+  if (typeof response !== 'object' || response === null || Array.isArray(response)) {
+    throw new AuroraError({
+      code: 'validation',
+      message: 'Tauri native event snapshot command returned an invalid response'
+    })
+  }
+  const raw = response as {
+    events?: unknown
+    lastSequenceId?: unknown
+    last_sequence_id?: unknown
+    replayComplete?: unknown
+    replay_complete?: unknown
+    subjects?: unknown
+  }
+  const events = Array.isArray(raw.events)
+    ? raw.events.map((event) => normalizeNativeAuroraEvent<TPayload>(event))
+    : []
+  const lastSequenceId = readNativeSequenceId(raw.lastSequenceId ?? raw.last_sequence_id)
+  return {
+    events,
+    lastSequenceId,
+    replayComplete: readBoolean(raw.replayComplete ?? raw.replay_complete) ?? false,
+    subjects: Array.isArray(raw.subjects) ? raw.subjects : undefined
+  }
+}
+
+function readNativeSequenceId(value: unknown): string | null {
+  if (typeof value === 'string' && value.trim()) {
+    return value.startsWith('native:') ? value : `native:${value}`
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) return `native:${value}`
+  return null
+}
+
+function readBoolean(value: unknown): boolean | null {
+  return typeof value === 'boolean' ? value : null
 }
 
 function isAsyncIterable<T>(value: unknown): value is AsyncIterable<T> {

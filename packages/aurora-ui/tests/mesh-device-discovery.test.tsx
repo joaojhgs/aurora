@@ -281,6 +281,54 @@ describe('W5 device discovery and selection', () => {
     expect(added).toEqual(['peer-home', 'peer-kitchen'])
   })
 
+  it('guards each discovered device independently and releases after resolve, reject, or sync throw', async () => {
+    let resolveHome!: () => void
+    let rejectKitchen!: (reason?: unknown) => void
+    const homeConnection = new Promise<void>((resolve) => { resolveHome = resolve })
+    const kitchenConnection = new Promise<void>((_, reject) => { rejectKitchen = reject })
+    const connect = vi.fn((peerId: string) => {
+      if (peerId === 'peer-home') return homeConnection
+      if (peerId === 'peer-kitchen') return kitchenConnection
+      return undefined
+    })
+    const container = render(
+      <MeshPeersView
+        snapshot={meshSnapshot()}
+        route={route()}
+        canManageLocalServiceConfiguration={false}
+        thinPeerSnapshot={thinSnapshot({ status: 'authorized', state: 'authorized' })}
+        onConnectDiscoveredDevice={connect}
+      />,
+    )
+
+    const rows = Array.from(container.querySelectorAll('[aria-label="Devices in this Aurora"] [class*="justify-between"]'))
+    const homeButton = findButton(rows.find((row) => row.textContent?.includes('Living room Aurora')) ?? container, 'Set up')
+    const kitchenButton = findButton(rows.find((row) => row.textContent?.includes('Kitchen speaker')) ?? container, 'Set up')
+    await act(async () => {
+      homeButton.click()
+      kitchenButton.click()
+      homeButton.click()
+      await Promise.resolve()
+    })
+
+    expect(connect).toHaveBeenCalledTimes(2)
+    expect(connect).toHaveBeenNthCalledWith(1, 'peer-home')
+    expect(connect).toHaveBeenNthCalledWith(2, 'peer-kitchen')
+    expect(homeButton.disabled).toBe(true)
+    expect(kitchenButton.disabled).toBe(true)
+
+    await act(async () => { resolveHome(); await Promise.resolve() })
+    expect(homeButton.disabled).toBe(false)
+    expect(kitchenButton.disabled).toBe(true)
+
+    await act(async () => { rejectKitchen(new Error('connection failed')); await Promise.resolve() })
+    expect(kitchenButton.disabled).toBe(false)
+
+    connect.mockImplementationOnce(() => { throw new Error('sync connection failed') })
+    await act(async () => { homeButton.click(); await Promise.resolve(); await Promise.resolve() })
+    expect(homeButton.disabled).toBe(false)
+  })
+
   it('opens the permission review for the device started from Set up', async () => {
     const container = document.createElement('div')
     document.body.appendChild(container)

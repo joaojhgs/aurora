@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-node-config-delete"
+description = "Enables the aurora_node_config_delete command without any pre-configured scope."
+commands.allow = ["aurora_node_config_delete"]
+
+[[permission]]
+identifier = "deny-aurora-node-config-delete"
+description = "Denies the aurora_node_config_delete command without any pre-configured scope."
+commands.deny = ["aurora_node_config_delete"]

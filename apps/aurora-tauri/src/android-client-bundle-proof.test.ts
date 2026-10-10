@@ -371,7 +371,11 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     process.exit(3)
   }
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-  if (JSON.stringify(config.app.security.capabilities) !== JSON.stringify(['aurora-android-thin', 'aurora-mobile-mesh'])) process.exit(4)
+  const capabilities = config.app.security.capabilities
+  const liveFeature = argv.includes('android-voice-live-test')
+  if (JSON.stringify(capabilities.slice(0, 2)) !== JSON.stringify(['aurora-android-thin', 'aurora-mobile-mesh'])) process.exit(4)
+  if (capabilities.length !== (liveFeature ? 3 : 2)) process.exit(7)
+  if (liveFeature && capabilities[2]?.identifier !== 'aurora-android-voice-live-e2e-capability') process.exit(8)
   if (config.build.beforeBuildCommand !== null) process.exit(5)
   if (!config.build.frontendDist || !fs.existsSync(config.build.frontendDist)) process.exit(6)
 }
@@ -469,7 +473,41 @@ if (argv[0] === 'build:frontend:android-client') {
       target: 'aarch64',
       targets: ['aarch64'],
     })
+
+    const liveResult = spawnSync(
+      process.execPath,
+      [buildClient, '--kind', 'apk', '--target', 'x86_64', '--voice-live-test'],
+      {
+        cwd: packageRoot,
+        encoding: 'utf8',
+        env: androidClientEnv(context, 'apk', {
+          PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+          JAVA_HOME: jdkHome,
+          AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+        }),
+      },
+    )
+    expect(liveResult.status, liveResult.stderr).toBe(0)
+    const liveCalls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).slice(-4)
+    expect(liveCalls[3].argv).toEqual([
+      'tauri', 'android', 'build', '--debug', '--features', 'android-voice-live-test',
+      '--apk', '--target', 'x86_64', '--config', liveCalls[3].argv.at(-1),
+    ])
+    expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
+      bundleMode: 'android-client-voice-live-test',
+      buildMode: 'debug',
+      voiceLiveTest: true,
+    })
   }, 30_000)
+
+  it('rejects release voice-live builds before preparing native dependencies', () => {
+    const result = spawnSync(process.execPath, [buildClient, '--voice-live-test', '--release'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('--voice-live-test requires a debug build')
+  })
 
   it('auto-discovers generated universal debug APK and AAB artifacts from nested Tauri output paths', () => {
     const context = createAndroidClientProofContext()

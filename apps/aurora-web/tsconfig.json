@@ -30,7 +30,9 @@
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts",
     "tmp/aurora-ui-next/debug/types/**/*.ts",
-    "tmp/aurora-ui-next/debug/dev/types/**/*.ts"
+    "tmp/aurora-ui-next/debug/dev/types/**/*.ts",
+    "tmp/aurora-ui-visual-next/types/**/*.ts",
+    "tmp/aurora-ui-visual-next/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

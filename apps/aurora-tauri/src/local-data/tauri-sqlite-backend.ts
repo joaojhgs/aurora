@@ -1,5 +1,7 @@
 import {
   LocalDataError,
+  localDataIdSchema,
+  parseLocalDataBoundary,
   parseConversationMessageRecord,
   parseConversationRecord,
   parseLightweightMemoryRecord,
@@ -8,6 +10,7 @@ import {
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
   type ConversationMessageRecord,
+  type ConversationListQuery,
   type ConversationRecord,
   type DeleteConversationResult,
   type DeleteExpiredMemoryItemsResult,
@@ -22,8 +25,14 @@ import {
   type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
+  type MessageListQuery,
   type PeerGrantMetadataRecord
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
+import {
+  LOCAL_DATA_CONVERSATION_ID_SET_MAX,
+  LOCAL_DATA_CONVERSATION_QUERY_MAX,
+  LOCAL_DATA_MESSAGE_QUERY_MAX
+} from '../../../../packages/aurora-sdk/src/local-data/repositories.js'
 import { invokeAuroraLocalDataCommand } from './tauri-local-data-invoke.js'
 
 export interface TauriSqliteLocalDataBackendOptions {
@@ -34,10 +43,13 @@ type RepositoryOperation =
   | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
   | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
-  | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
-  | { readonly kind: 'conversations.listMessageCounts'; readonly profileId: string; readonly localNodeId: string }
-  | { readonly kind: 'conversations.listFirstUserMessages'; readonly profileId: string; readonly localNodeId: string }
-  | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
+  | { readonly kind: 'conversations.getConversation'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
+  | { readonly kind: 'conversations.getMessage'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string; readonly messageId: string }
+  | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string; readonly options?: ConversationListQuery }
+  | { readonly kind: 'conversations.listMessageCounts'; readonly profileId: string; readonly localNodeId: string; readonly conversationIds?: readonly string[] }
+  | { readonly kind: 'conversations.listFirstUserMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationIds?: readonly string[] }
+  | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string; readonly options?: MessageListQuery }
+  | { readonly kind: 'conversations.getLatestMessageSequence'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
   | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
@@ -186,7 +198,11 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
       const request = this.access.kind === 'transaction'
         ? { txId: this.access.txId, operation }
         : { operation }
-      return await this.invokeCommand('aurora_local_data_repository_operation', { request }) as T
+      try {
+        return await this.invokeCommand('aurora_local_data_repository_operation', { request }) as T
+      } catch (error) {
+        throw parseNativeLocalDataError(error)
+      }
     })
   }
 
@@ -218,6 +234,42 @@ class TauriSqliteLocalDataSession implements LocalDataSession {
   }
 }
 
+function queryError(reason: string): never { throw new LocalDataError('invalid_record', 'Invalid local history query', { reason }) }
+function validateQueryId(value: string, reason: string): void {
+  if (typeof value !== 'string') queryError(reason)
+  parseLocalDataBoundary(localDataIdSchema, value, reason)
+}
+function validateConversationQuery(options?: ConversationListQuery): void {
+  if (options?.includeArchived !== undefined && typeof options.includeArchived !== 'boolean') queryError('include_archived')
+  if (options?.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > LOCAL_DATA_CONVERSATION_QUERY_MAX)) queryError('conversation_limit')
+  if (options?.cursor !== undefined) { validateQueryId(options.cursor.id, 'conversation_cursor_id'); if (!Number.isSafeInteger(options.cursor.updatedAtMs) || options.cursor.updatedAtMs < 0) queryError('conversation_cursor_updated_at') }
+}
+function validateMessageQuery(options?: MessageListQuery): void {
+  if (options?.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > LOCAL_DATA_MESSAGE_QUERY_MAX)) queryError('message_limit')
+  if (options?.direction !== undefined && options.direction !== 'asc' && options.direction !== 'desc') queryError('message_direction')
+  if (options?.beforeSequence !== undefined && options?.afterSequence !== undefined) queryError('ambiguous_message_cursor')
+  if (options?.beforeSequence !== undefined && (!Number.isSafeInteger(options.beforeSequence) || options.beforeSequence < 0)) queryError('message_before_sequence')
+  if (options?.afterSequence !== undefined && (!Number.isSafeInteger(options.afterSequence) || options.afterSequence < 0)) queryError('message_after_sequence')
+}
+function validateIdSetQuery(ids?: readonly string[]): void {
+  if (ids !== undefined && ids.length > LOCAL_DATA_CONVERSATION_ID_SET_MAX) queryError('conversation_id_set_limit')
+  for (const id of ids ?? []) validateQueryId(id, 'conversation.id')
+}
+
+function parseNativeLocalDataError(error: unknown): unknown {
+  if (error instanceof LocalDataError) return error
+  const value = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown; detail?: unknown } : {}
+  if (value.code !== 'LocalData' && value.code !== 'local_data' && value.code !== 'invalid_record') return error
+  const detail = value.detail && typeof value.detail === 'object' ? value.detail as { reason?: unknown; code?: unknown } : {}
+  const message = typeof value.message === 'string' ? value.message : 'Tauri local data operation failed'
+  const reason = typeof detail.reason === 'string' && new Set([
+    'duplicate_message_id',
+    'duplicate_message_sequence'
+  ]).has(detail.reason) ? detail.reason : undefined
+  if (reason === undefined) return error
+  return new LocalDataError('invalid_record', message, { reason })
+}
+
 class TauriConversationRepository {
   constructor(private readonly session: TauriSqliteLocalDataSession) {}
   async upsertConversation(record: ConversationRecord): Promise<void> {
@@ -229,18 +281,36 @@ class TauriConversationRepository {
   async deleteConversation(conversationId: string): Promise<DeleteConversationResult> {
     return await this.session.repositoryOperation<DeleteConversationResult>({ kind: 'conversations.deleteConversation', conversationId })
   }
-  async listConversations(): Promise<ConversationRecord[]> {
-    return (await this.session.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations', profileId: this.session.profileId, localNodeId: this.session.localNodeId })).map(parseConversationRecord)
+  async getConversation(conversationId: string): Promise<ConversationRecord | null> {
+    validateQueryId(conversationId, 'conversation.id')
+    const value = await this.session.repositoryOperation<ConversationRecord | null>({ kind: 'conversations.getConversation', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationId })
+    return value === null ? null : parseConversationRecord(value)
   }
-  async listMessageCounts(): Promise<Record<string, number>> {
-    return await this.session.repositoryOperation<Record<string, number>>({ kind: 'conversations.listMessageCounts', profileId: this.session.profileId, localNodeId: this.session.localNodeId })
+  async getMessage(conversationId: string, messageId: string): Promise<ConversationMessageRecord | null> {
+    validateQueryId(conversationId, 'conversation.id'); validateQueryId(messageId, 'message.id')
+    const value = await this.session.repositoryOperation<ConversationMessageRecord | null>({ kind: 'conversations.getMessage', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationId, messageId })
+    return value === null ? null : parseConversationMessageRecord(value)
   }
-  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
-    const messages = await this.session.repositoryOperation<Record<string, ConversationMessageRecord>>({ kind: 'conversations.listFirstUserMessages', profileId: this.session.profileId, localNodeId: this.session.localNodeId })
+  async listConversations(options?: ConversationListQuery): Promise<ConversationRecord[]> {
+    validateConversationQuery(options)
+    return (await this.session.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations', profileId: this.session.profileId, localNodeId: this.session.localNodeId, options })).map(parseConversationRecord)
+  }
+  async listMessageCounts(conversationIds?: readonly string[]): Promise<Record<string, number>> {
+    validateIdSetQuery(conversationIds)
+    return await this.session.repositoryOperation<Record<string, number>>({ kind: 'conversations.listMessageCounts', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationIds })
+  }
+  async listFirstUserMessages(conversationIds?: readonly string[]): Promise<Record<string, ConversationMessageRecord>> {
+    validateIdSetQuery(conversationIds)
+    const messages = await this.session.repositoryOperation<Record<string, ConversationMessageRecord>>({ kind: 'conversations.listFirstUserMessages', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationIds })
     return Object.fromEntries(Object.entries(messages).map(([conversationId, message]) => [conversationId, parseConversationMessageRecord(message)]))
   }
-  async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
-    return (await this.session.repositoryOperation<ConversationMessageRecord[]>({ kind: 'conversations.listMessages', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationId })).map(parseConversationMessageRecord)
+  async listMessages(conversationId: string, options?: MessageListQuery): Promise<ConversationMessageRecord[]> {
+    validateQueryId(conversationId, 'conversation.id'); validateMessageQuery(options)
+    return (await this.session.repositoryOperation<ConversationMessageRecord[]>({ kind: 'conversations.listMessages', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationId, options })).map(parseConversationMessageRecord)
+  }
+  async getLatestMessageSequence(conversationId: string): Promise<number | null> {
+    validateQueryId(conversationId, 'conversation.id')
+    return await this.session.repositoryOperation<number | null>({ kind: 'conversations.getLatestMessageSequence', profileId: this.session.profileId, localNodeId: this.session.localNodeId, conversationId })
   }
 }
 

@@ -209,16 +209,16 @@ export function normalizeSchedulerJob(job: SchedulerJobInfo): NormalizedSchedule
 export class SchedulerClient {
   constructor(private readonly client: AuroraClient) {}
 
-  listJobs(request: SchedulerListJobsRequest = {}): Promise<SchedulerListJobsResponse> {
+  listJobs(request: SchedulerListJobsRequest = {}, options: { signal?: AbortSignal } = {}): Promise<SchedulerListJobsResponse> {
     return this.client.request<SchedulerListJobsResponse, SchedulerListJobsRequest>(
       SCHEDULER_METHODS.listJobs,
       request,
-      { path: routePath('Scheduler', 'ListJobs') }
+      { path: routePath('Scheduler', 'ListJobs'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 
-  async listNormalizedJobs(request: SchedulerListJobsRequest = {}): Promise<NormalizedSchedulerJob[]> {
-    const response = await this.listJobs(request)
+  async listNormalizedJobs(request: SchedulerListJobsRequest = {}, options: { signal?: AbortSignal } = {}): Promise<NormalizedSchedulerJob[]> {
+    const response = await this.listJobs(request, options)
     return response.jobs.map(normalizeSchedulerJob)
   }
 

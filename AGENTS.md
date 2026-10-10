@@ -157,7 +157,7 @@ uv sync                         # Install dependencies
 source .venv/bin/activate        # Activate environment
 ```
 
-**Python Version**: 3.10-3.11 only (managed by `uv` in `.python-version`)
+**Python Version**: 3.10-3.11 only (enforced by `pyproject.toml`)
 
 ### Running Aurora
 
@@ -517,8 +517,8 @@ async def my_method(self, param: str) -> str:
 
 ```bash
 ./setup.sh                       # Guided setup
-pip install -e .[dev-local-cpu]  # Manual install (CPU)
-pip install -e .[dev-local-gpu]  # Manual install (GPU)
+uv sync --extra dev-local-cpu    # Manual install (CPU)
+uv sync --extra dev-local-gpu    # Manual install (GPU)
 make format                      # Auto-format
 make lint                        # Lint
 make check                       # All checks
@@ -538,7 +538,7 @@ make clean                       # Remove temp files
 <!-- gitnexus:start -->
 # GitNexus MCP
 
-This project is indexed by GitNexus as **aurora-mesh-parity-implementation** (29830 symbols, 105580 relationships, 300 execution flows).
+This project is indexed by GitNexus as **aurora** (28739 symbols, 103319 relationships, 300 execution flows).
 
 GitNexus provides a knowledge graph over this codebase — call chains, blast radius, execution flows, and semantic search.
 

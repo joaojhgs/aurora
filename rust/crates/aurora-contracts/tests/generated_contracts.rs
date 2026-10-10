@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use aurora_contracts::{
     envelope_by_topic, event_by_topic, ids, method_by_id, normalize_generated_contract,
-    ENVELOPE_DESCRIPTORS, EVENT_DESCRIPTORS, METHOD_DESCRIPTORS, SCHEMA_DESCRIPTORS,
+    schema_by_id, ENVELOPE_DESCRIPTORS, EVENT_DESCRIPTORS, METHOD_DESCRIPTORS, SCHEMA_DESCRIPTORS,
 };
 use serde::Deserialize;
 use serde_json::json;
@@ -141,9 +141,9 @@ fn parsed_input_shape(parsed: &Value, input: &Value) -> Value {
 
 #[test]
 fn descriptors_match_the_backend_inventory() {
-    assert_eq!(SCHEMA_DESCRIPTORS.len(), 126);
+    assert_eq!(SCHEMA_DESCRIPTORS.len(), 127);
     assert_eq!(METHOD_DESCRIPTORS.len(), 61);
-    assert_eq!(EVENT_DESCRIPTORS.len(), 3);
+    assert_eq!(EVENT_DESCRIPTORS.len(), 4);
     assert_eq!(ENVELOPE_DESCRIPTORS.len(), 1);
 
     let synthesize = method_by_id("TTS.Synthesize").expect("TTS.Synthesize descriptor");
@@ -166,6 +166,29 @@ fn descriptors_match_the_backend_inventory() {
     assert!(audio.bounded);
     assert!(audio.authorized);
     assert!(!audio.remote_raw_audio_route);
+
+    let gateway_status =
+        event_by_topic(ids::GATEWAY_STATUS_CHANGED).expect("Gateway.StatusChanged descriptor");
+    assert_eq!(gateway_status.event_topic, ids::GATEWAY_STATUS_CHANGED);
+    assert_eq!(gateway_status.module, "Gateway");
+    assert_eq!(gateway_status.name, "StatusChanged");
+    assert_eq!(
+        gateway_status.schema_id,
+        "Gateway.StatusChanged.event.GatewayStatusChangedEvent"
+    );
+    assert_eq!(gateway_status.required_permissions, &["Gateway.use"]);
+    assert!(gateway_status.bounded);
+    assert!(gateway_status.authorized);
+    assert_eq!(gateway_status.ordered_event_group, Some("gateway_status"));
+    assert!(!gateway_status.remote_raw_audio_route);
+    let gateway_status_schema =
+        schema_by_id(gateway_status.schema_id).expect("Gateway.StatusChanged schema");
+    assert_eq!(gateway_status_schema.method_id, ids::GATEWAY_STATUS_CHANGED);
+    assert_eq!(gateway_status_schema.direction, "event");
+    assert_eq!(
+        gateway_status_schema.model_name,
+        "GatewayStatusChangedEvent"
+    );
 
     let assistant =
         method_by_id(ids::ORCHESTRATOR_EXTERNAL_USER_INPUT).expect("assistant request descriptor");
@@ -192,6 +215,43 @@ fn descriptors_match_the_backend_inventory() {
         &["Orchestrator.Response", "TTS.AudioChunk"]
     );
     assert!(envelope.requires_correlation_id);
+}
+
+#[test]
+fn gateway_status_event_normalization_strips_unknown_audio_and_redacts_errors() {
+    let schema_id = "Gateway.StatusChanged.event.GatewayStatusChangedEvent";
+    let secret = "raw-audio-secret-that-must-not-escape";
+    let normalized = normalize_generated_contract(
+        schema_id,
+        json!({
+            "event_id": "status-1",
+            "timestamp": "2026-10-06T20:00:00Z",
+            "kind": "health.updated",
+            "status": "healthy",
+            "service_id": "Gateway",
+            "raw_audio": secret
+        }),
+    )
+    .expect("valid Gateway status projection");
+    assert_eq!(normalized["event_id"], "status-1");
+    assert_eq!(normalized["kind"], "health.updated");
+    assert!(normalized.get("raw_audio").is_none());
+    assert!(!normalized.to_string().contains(secret));
+
+    let error = normalize_generated_contract(
+        schema_id,
+        json!({
+            "event_id": "status-2",
+            "timestamp": "2026-10-06T20:00:01Z",
+            "kind": "unlisted.kind",
+            "status": "healthy",
+            "raw_audio": secret
+        }),
+    )
+    .expect_err("unlisted Gateway status kind must be rejected");
+    let message = error.to_string();
+    assert!(message.contains(schema_id));
+    assert!(!message.contains(secret));
 }
 
 #[test]

@@ -2,14 +2,18 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AuroraClient, ToolApprovalCardModel, ToolExportPolicyModel, ToolExportScopeModel } from '@aurora/client'
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { AuroraError, type AuroraClient, type ToolApprovalCardModel, type ToolCatalogResponse, type ToolExportPolicyModel, type ToolExportScopeModel } from '@aurora/client'
 import { ToolApprovalPanel, auroraNavSections, navItemSnapshot, type RouteAvailability, type ToolApprovalPanelManagementState } from '../src'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import { ToolSharingRowControl } from '../src/tooling/tool-sharing-controls'
 
 let container: HTMLDivElement
 let root: Root
+
+beforeAll(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
 
 describe('tooling product copy', () => {
   beforeEach(() => {
@@ -51,8 +55,10 @@ describe('tooling product copy', () => {
     )
 
     const text = visibleText(markup)
-    expect(text).toContain('Tools are unavailable. Review access and try again.')
-    expect(text).toContain('No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.')
+    expect(text).toContain('Tools unavailable')
+    expect(text).toContain('Review access and try again.')
+    expect(text).toContain('No tool sources are available right now.')
+    expect(text).toContain('No tools are available on this device or its approved devices right now.')
     expectForbiddenFree(text)
   })
 
@@ -245,19 +251,19 @@ describe('tooling product copy', () => {
   })
 
   it('maps hostile catalog and top-level alert failures before rendering', async () => {
-    await renderPanel(client({
-      loadApprovalCards: async () => ({
-        ok: false,
-        error: {
-          code: 'connection_lost',
-          message: dynamicHostileText(),
-        },
-      }),
-    }), null)
-    await act(async () => { await flushAsync() })
+    const listCatalog = vi.fn(async () => {
+      throw new AuroraError({ code: 'transport_loss', message: dynamicHostileText() })
+    })
+    await renderPanel(client({ listCatalog }), null)
 
+    await vi.waitFor(async () => {
+      await act(async () => { await flushAsync() })
+      const current = visibleAndAriaText()
+      expect(current).toContain('Connection lost. Reconnecting...')
+    }, { timeout: 5_000, interval: 25 })
+
+    expect(listCatalog).toHaveBeenCalled()
     let rendered = visibleAndAriaText()
-    expect(rendered).toContain('Connection lost. Reconnecting...')
     expectNoHostileTerms(rendered)
     expectForbiddenFree(visibleText(container.innerHTML))
 
@@ -624,6 +630,7 @@ function visibleText(markup: string): string {
 function client(overrides: {
   testMcpSource?: () => Promise<unknown>
   loadApprovalCards?: () => Promise<unknown>
+  listCatalog?: () => Promise<ToolCatalogResponse>
   applyChange?: (request: { change: { key_path: string; value: unknown }; reason: string }) => Promise<unknown>
 } = {}): AuroraClient {
   return {
@@ -635,6 +642,7 @@ function client(overrides: {
     tools: {
       testMcpSource: overrides.testMcpSource,
       loadApprovalCards: overrides.loadApprovalCards,
+      listCatalog: overrides.listCatalog,
     },
     config: {
       previewDiff: async () => ({ ok: true, data: { valid: true, diffs: [], errors: [], secrets_redacted: true, base_revision: 1, preview_token: 'preview-1', changed_paths: [] } }),

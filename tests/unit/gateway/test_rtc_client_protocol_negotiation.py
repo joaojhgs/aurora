@@ -792,7 +792,7 @@ async def test_no_pc_signaling_departure_cancels_provider_timer_and_removes_peer
 
 
 @pytest.mark.asyncio
-async def test_structured_manifest_ack_opens_local_provider_lease_and_renews() -> None:
+async def test_structured_manifest_ack_opens_local_provider_lease_and_renews(monkeypatch) -> None:
     client = _client()
     _negotiate_provider_lease(client)
     hello = build_protocol_hello(role="hybrid", capabilities=(CAP_PROVIDER_LEASE_V1,))
@@ -805,6 +805,22 @@ async def test_structured_manifest_ack_opens_local_provider_lease_and_renews() -
     client._has_authenticated_stable_peer = lambda _peer_id: True  # type: ignore[method-assign]  # noqa: SLF001
     client._peer_registry = MagicMock()  # noqa: SLF001
     client._peer_registry.update_manifest_ack = AsyncMock()  # noqa: SLF001
+    reannounce_called = asyncio.Event()
+    reannounce_calls: list[str] = []
+
+    async def reannounce(_stable_peer_id: str, *, retry: bool = False) -> bool:
+        reannounce_calls.append(_stable_peer_id)
+        reannounce_called.set()
+        return True
+
+    client.reannounce_manifest_for_peer = reannounce  # type: ignore[method-assign]
+    client._can_reannounce_manifest_for_peer = lambda _peer_id: True  # type: ignore[method-assign]  # noqa: SLF001
+    original_sleep = asyncio.sleep
+
+    async def immediate_retry_sleep(_delay: float) -> None:
+        await original_sleep(0)
+
+    monkeypatch.setattr(asyncio, "sleep", immediate_retry_sleep)
     sleep_release = asyncio.Event()
     sleeps: list[float] = []
 
@@ -828,6 +844,33 @@ async def test_structured_manifest_ack_opens_local_provider_lease_and_renews() -
         advertised_services=("TTS",),
         compatible_services=(),
     )
+
+    stale_ack = {
+        "type": "manifest_ack",
+        "compatible_services": ["TTS"],
+        "incompatible_services": [],
+        "unused_services": [],
+        "active_protocol": "projection-v1",
+        "active_version": "v1",
+        "active_tier": "projection",
+        "protocol_revision": "v1",
+        "registry_revision": "registry-1",
+        "export_policy_revision": "policy-1",
+        "auth_grant_revision": 7,
+        "projection_digest": "old-projection-digest",
+        "services": [
+            {"service_id": "TTS", "status": "compatible", "reason_codes": []},
+        ],
+    }
+    await client._on_manifest_ack("session-peer", stale_ack)  # noqa: SLF001
+    await client._on_manifest_ack("session-peer", stale_ack)  # noqa: SLF001
+    client._peer_stable_ids["replaced-session"] = "stable-peer"  # noqa: SLF001
+    await client._on_manifest_ack("replaced-session", stale_ack)  # noqa: SLF001
+    retry_task = client._manifest_reannounce_retry_tasks["stable-peer"]  # noqa: SLF001
+    await asyncio.wait_for(reannounce_called.wait(), timeout=1.0)
+    await asyncio.wait_for(asyncio.shield(retry_task), timeout=1.0)
+    assert reannounce_calls == ["stable-peer"]
+    assert client._is_local_provider_ready_for_session("session-peer") is False  # noqa: SLF001
 
     await client._on_manifest_ack(  # noqa: SLF001
         "session-peer",

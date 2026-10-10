@@ -622,6 +622,10 @@ export function requiresAsyncAuroraTauriBootstrap(): boolean {
   return isTauriRuntime();
 }
 
+function subscribeTauriNativeResume(listener: () => void): Promise<() => void> {
+  return listen("aurora://mesh-surface-resumed", () => listener());
+}
+
 export function createAuroraTauriRuntime({
   thinProfileStore,
   thinProfileDocument,
@@ -819,8 +823,11 @@ export function createAuroraTauriRuntime({
       }
 
       const mobileClient = configuredGatewayUrl
-        ? createDynamicHttpClient(configuredGatewayUrl)
-        : new AuroraClient({ transport: nativeTransport });
+        ? createDynamicHttpClient(configuredGatewayUrl, nativeTransport)
+        : new AuroraClient({
+            transport: nativeTransport,
+            subscribeNativeResume: subscribeTauriNativeResume,
+          });
 
       return {
         client: mobileClient,
@@ -977,7 +984,10 @@ export function createAuroraTauriRuntime({
     }
 
     return {
-      client: new AuroraClient({ transport: nativeTransport }),
+      client: new AuroraClient({
+        transport: nativeTransport,
+        subscribeNativeResume: subscribeTauriNativeResume,
+      }),
       mode: "desktop-local",
       thinConnectionMode: DEFAULT_THIN_CONNECTION_MODE,
       thinDiagnostics: () => [
@@ -1413,6 +1423,9 @@ function createTauriWebThinRuntime({
     rolloutFlags,
     surfaceProfile,
   });
+  const nativeEventTransport = isTauriRuntime()
+    ? new TauriLocalTransport({ invoke, listen })
+    : undefined;
   runtime = createBrowserWebThinRuntime({
     mode,
     nodeRole: meshNodeServices?.enabled ? "mesh-node" : "remote-console",
@@ -1456,6 +1469,12 @@ function createTauriWebThinRuntime({
     createClient: (transport) =>
       new AuroraClient({
         transport,
+        ...(nativeEventTransport
+          ? {
+              nativeEventTransport,
+              subscribeNativeResume: subscribeTauriNativeResume,
+            }
+          : {}),
         ...(usesNativePeerConnection
           ? { defaultTimeoutMs: TAURI_NATIVE_WEBRTC_DEFAULT_TIMEOUT_MS }
           : {}),
@@ -1484,8 +1503,7 @@ function createTauriWebThinRuntime({
         ...(typeof document === "undefined"
           ? {}
           : { lifecycleTarget: document }),
-        subscribeNativeResume: async (listener) =>
-          await listen("aurora://mesh-surface-resumed", () => listener()),
+        subscribeNativeResume: subscribeTauriNativeResume,
         onCleanupFailure: reportMeshSessionCleanupFailure,
         onLifecycleFailure: reportMeshSessionLifecycleFailure,
       })
@@ -1538,13 +1556,17 @@ function explainTauriThinRuntime(
   });
 }
 
-function createDynamicHttpClient(baseUrl: string): AuroraClient {
+function createDynamicHttpClient(baseUrl: string, nativeEventTransport: TauriLocalTransport): AuroraClient {
   let client!: AuroraClient;
   const transport = new HttpGatewayTransport({
     baseUrl,
     bearerToken: () => client.auth.bearerToken(),
   });
-  client = new AuroraClient({ transport });
+  client = new AuroraClient({
+    transport,
+    nativeEventTransport,
+    subscribeNativeResume: subscribeTauriNativeResume,
+  });
   return client;
 }
 

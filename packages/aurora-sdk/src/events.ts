@@ -1,14 +1,28 @@
 import { AuroraError } from './errors.js'
+import { GATEWAY_EVENT_TOPICS } from './descriptors.js'
 import { createAuditReceipt, createAuroraEvent, normalizeError, unsupportedTransport, type AuroraTransport } from './transport.js'
 import type { AuditReceipt, AuroraEvent, AuroraTransportKind, JsonObject } from './types.js'
 
 export type AuroraEventStreamKind = 'generic' | 'assistant' | 'health' | 'config' | string
 export type AuroraStreamProtocol = 'sse' | 'websocket' | 'ipc' | 'mesh' | 'mock' | string
 
+/** Whitelisted Gateway.StatusChanged projection shared by health and config views. */
+export interface GatewayStatusChangedEvent {
+  event_id: string
+  timestamp: string
+  kind: 'config.updated' | 'config.validation_failed' | 'service.announced' | 'service.stale'
+  status: 'updated' | 'failed' | 'connected' | 'disconnected'
+  freshness: 'current' | 'stale'
+  service_id?: string | null
+}
+
 export interface AuroraSubscribeOptions<TPayload = unknown> {
   stream?: AuroraEventStreamKind | undefined
+  source?: AuroraEventSource | undefined
   topics?: string[] | undefined
   kinds?: string[] | undefined
+  subject?: string | NativeEventSubjectFilter | undefined
+  subjects?: Array<string | NativeEventSubjectFilter> | undefined
   path?: string | undefined
   protocol?: AuroraStreamProtocol | undefined
   payload?: TPayload | undefined
@@ -17,11 +31,24 @@ export interface AuroraSubscribeOptions<TPayload = unknown> {
   signal?: AbortSignal | undefined
   lastEventId?: string | null | undefined
   replayFrom?: string | null | undefined
+  lastSequenceId?: number | string | null | undefined
   correlationId?: string | null | undefined
   backfill?: boolean | undefined
   reconnect?: boolean | AuroraReconnectOptions | undefined
   audit?: Partial<AuditReceipt> | undefined
+  diagnostic?: AuroraEventDiagnostic | undefined
 }
+
+export type AuroraEventDiagnosticStage = 'received' | 'filter.accepted' | 'filter.rejected'
+
+export type AuroraEventDiagnostic = (input: {
+  stage: AuroraEventDiagnosticStage
+  stream: AuroraEventStreamKind
+  event: Pick<AuroraEvent, 'id' | 'kind'>
+}) => void
+
+export type AuroraEventSource = 'gateway' | 'native' | 'mesh' | 'mock' | string
+export type NativeEventSubjectFilter = string | { type?: string | null | undefined; id: string }
 
 export interface AuroraReconnectOptions {
   maxAttempts?: number | undefined
@@ -39,6 +66,21 @@ export interface AuroraStreamRequest<TPayload = unknown> extends AuroraSubscribe
   stream: AuroraEventStreamKind
   topics: string[]
   kinds: string[]
+  subjects?: string[] | undefined
+}
+
+export interface AuroraEventSnapshotRequest<TPayload = unknown> extends AuroraSubscribeOptions<TPayload> {
+  topics: string[]
+  kinds: string[]
+  subjects?: string[] | undefined
+  afterSequence?: number | null | undefined
+}
+
+export interface AuroraEventSnapshot<TPayload = unknown> {
+  events: Array<AuroraEvent<TPayload>>
+  lastSequenceId: string | null
+  replayComplete: boolean
+  subjects?: unknown[] | undefined
 }
 
 export interface AuroraEventSubscription<TPayload = unknown> extends AsyncIterable<AuroraEvent<TPayload>> {
@@ -47,23 +89,37 @@ export interface AuroraEventSubscription<TPayload = unknown> extends AsyncIterab
   close(reason?: unknown): void
 }
 
+export type AuroraNativeResumeUnsubscribe = () => void | Promise<void>
+export type AuroraNativeResumeSubscriber = (listener: () => void) => AuroraNativeResumeUnsubscribe | Promise<AuroraNativeResumeUnsubscribe>
+
 export interface AuroraEventStreamTransport extends AuroraTransport {
   subscribe<TEventPayload = unknown, TPayload = unknown>(
     request: AuroraStreamRequest<TPayload>
   ): AuroraEventSubscription<TEventPayload> | Promise<AuroraEventSubscription<TEventPayload>>
+  snapshot?<TEventPayload = unknown, TPayload = unknown>(
+    request: AuroraEventSnapshotRequest<TPayload>
+  ): AuroraEventSnapshot<TEventPayload> | Promise<AuroraEventSnapshot<TEventPayload>>
 }
 
 export class EventStreamClient {
   constructor(
     private readonly transport: AuroraTransport,
-    private readonly onStreamError?: ((error: AuroraError) => void) | undefined
+    private readonly onStreamError?: ((error: AuroraError) => void) | undefined,
+    private readonly nativeSource?: AuroraEventStreamTransport | undefined,
+    private readonly nativeResumeSubscriber?: AuroraNativeResumeSubscriber | undefined
   ) {}
+
+  async subscribeNativeResume(listener: () => void): Promise<AuroraNativeResumeUnsubscribe> {
+    if (!this.nativeResumeSubscriber) return () => undefined
+    return await this.nativeResumeSubscriber(listener)
+  }
 
   subscribe<TEventPayload = unknown, TPayload = unknown>(
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
+    const request = normalizeStreamRequest('generic', options)
     return this.withStreamErrorHandling(
-      subscribeWithReconnect<TEventPayload, TPayload>(this.transport, normalizeStreamRequest('generic', options))
+      subscribeWithReconnect<TEventPayload, TPayload>(this.transportForRequest(request), request)
     )
   }
 
@@ -71,26 +127,27 @@ export class EventStreamClient {
     payload?: TPayload,
     options: AuroraSubscribeOptions<TPayload> = {}
   ): AuroraEventSubscription<TEventPayload> {
+    const request = normalizeStreamRequest('assistant', {
+      topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      kinds: [
+        'assistant.delta',
+        'assistant.completed',
+        'assistant.failed',
+        'tool.requested',
+        'tool.running',
+        'tool.completed',
+        'tool.failed',
+        'tool.requires_action',
+        'tts.audio_chunk',
+        'tts.audio.chunk',
+        'tts.chunk'
+      ],
+      ...options,
+      payload: payload ?? options.payload
+    })
     const subscription = subscribeWithReconnect<TEventPayload, TPayload>(
-      this.transport,
-      normalizeStreamRequest('assistant', {
-        topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
-        kinds: [
-          'assistant.delta',
-          'assistant.completed',
-          'assistant.failed',
-          'tool.requested',
-          'tool.running',
-          'tool.completed',
-          'tool.failed',
-          'tool.requires_action',
-          'tts.audio_chunk',
-          'tts.audio.chunk',
-          'tts.chunk'
-        ],
-        ...options,
-        payload: payload ?? options.payload
-      })
+      this.transportForRequest(request),
+      request
     )
     return this.withStreamErrorHandling(sanitizeAssistantSubscription(subscription))
   }
@@ -98,27 +155,48 @@ export class EventStreamClient {
   watchHealth<TEventPayload = unknown>(
     options: AuroraSubscribeOptions = {}
   ): AuroraEventSubscription<TEventPayload> {
+    const request = normalizeStreamRequest('health', {
+      topics: [GATEWAY_EVENT_TOPICS.statusChanged],
+      kinds: ['service.announced', 'service.stale'],
+      ...options
+    })
     return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, unknown>(
-      this.transport,
-      normalizeStreamRequest('health', {
-        topics: ['Gateway.Health', 'Service.Announcement'],
-        kinds: ['health.updated', 'service.announced', 'service.stale'],
-        ...options
-      })
+      this.transportForRequest(request),
+      request
     ))
   }
 
   watchConfig<TEventPayload = unknown>(
     options: AuroraSubscribeOptions = {}
   ): AuroraEventSubscription<TEventPayload> {
+    const request = normalizeStreamRequest('config', {
+      topics: [GATEWAY_EVENT_TOPICS.statusChanged],
+      kinds: ['config.updated', 'config.validation_failed'],
+      ...options
+    })
     return this.withStreamErrorHandling(subscribeWithReconnect<TEventPayload, unknown>(
-      this.transport,
-      normalizeStreamRequest('config', {
-        topics: ['Config.Updated'],
-        kinds: ['config.updated', 'config.reload', 'config.validation_failed'],
-        ...options
-      })
+      this.transportForRequest(request),
+      request
     ))
+  }
+
+  async snapshot<TEventPayload = unknown, TPayload = unknown>(
+    options: AuroraSubscribeOptions<TPayload> & { afterSequence?: number | null | undefined } = {}
+  ): Promise<AuroraEventSnapshot<TEventPayload>> {
+    const request = normalizeSnapshotRequest(options)
+    const transport = this.transportForRequest(request)
+    if (!isEventSnapshotTransport(transport)) throw eventStreamUnsupported(transport.kind)
+    try {
+      return await transport.snapshot<TEventPayload, TPayload>(request)
+    } catch (error) {
+      const normalized = normalizeError(error)
+      this.onStreamError?.(normalized)
+      throw normalized
+    }
+  }
+
+  private transportForRequest<TPayload>(request: AuroraSubscribeOptions<TPayload>): AuroraTransport {
+    return request.source === 'native' && this.nativeSource ? this.nativeSource : this.transport
   }
 
   private withStreamErrorHandling<TPayload>(subscription: AuroraEventSubscription<TPayload>): AuroraEventSubscription<TPayload> {
@@ -181,16 +259,59 @@ export function normalizeStreamRequest<TPayload = unknown>(
   stream: AuroraEventStreamKind,
   options: AuroraSubscribeOptions<TPayload> = {}
 ): AuroraStreamRequest<TPayload> {
+  const subjects = normalizeEventSubjects(options.subject, options.subjects)
   return {
     ...options,
     stream: options.stream ?? stream,
     topics: options.topics ?? [],
-    kinds: options.kinds ?? []
+    kinds: options.kinds ?? [],
+    subjects
   }
+}
+
+export function normalizeSnapshotRequest<TPayload = unknown>(
+  options: AuroraSubscribeOptions<TPayload> & { afterSequence?: number | null | undefined } = {}
+): AuroraEventSnapshotRequest<TPayload> {
+  const request = normalizeStreamRequest('generic', options)
+  return {
+    ...request,
+    afterSequence: options.afterSequence ?? null
+  }
+}
+
+export function normalizeEventSubjects(
+  subject?: string | NativeEventSubjectFilter | null,
+  subjects: Array<string | NativeEventSubjectFilter> = []
+): string[] {
+  const seen = new Set<string>()
+  const normalized: string[] = []
+  const add = (value: string | NativeEventSubjectFilter | null | undefined) => {
+    const subjectId = normalizeEventSubject(value)
+    if (!subjectId || seen.has(subjectId)) return
+    seen.add(subjectId)
+    normalized.push(subjectId)
+  }
+  add(subject)
+  for (const value of subjects) add(value)
+  return normalized
+}
+
+export function normalizeEventSubject(value: string | NativeEventSubjectFilter | null | undefined): string | null {
+  if (!value) return null
+  if (typeof value === 'string') return value
+  const id = value.id.trim()
+  if (!id) return null
+  return id
 }
 
 export function isEventStreamTransport(transport: AuroraTransport): transport is AuroraEventStreamTransport {
   return typeof (transport as { subscribe?: unknown }).subscribe === 'function'
+}
+
+export function isEventSnapshotTransport(
+  transport: AuroraTransport
+): transport is AuroraEventStreamTransport & Required<Pick<AuroraEventStreamTransport, 'snapshot'>> {
+  return typeof (transport as { snapshot?: unknown }).snapshot === 'function'
 }
 
 export function createEventSubscription<TPayload = unknown>(
@@ -338,12 +459,21 @@ function subscribeWithReconnect<TEventPayload, TPayload>(
     request.signal?.addEventListener('abort', abortFromCaller, { once: true })
   }
   const readiness = createReadinessGate()
-  const source = reconnect.maxAttempts === 0
-    ? singleStream<TEventPayload, TPayload>(transport, request, controller.signal, readiness)
-    : reconnectingStream<TEventPayload, TPayload>(transport, request, reconnect, controller.signal, readiness)
-  return createEventSubscription(source, () => {
+  if (controller.signal.aborted) {
+    readiness.reject(eventStreamClosedError())
+    return createEventSubscription(async function* (): AsyncIterable<AuroraEvent<TEventPayload>> {
+      // The caller cancelled before activation; do not touch the underlying transport.
+    }(), () => {
+      request.signal?.removeEventListener('abort', abortFromCaller)
+    }, readiness.promise)
+  }
+  const active = reconnect.maxAttempts === 0
+    ? createActiveEventStream<TEventPayload>(() => singleStream<TEventPayload, TPayload>(transport, request, controller.signal, readiness))
+    : createActiveEventStream<TEventPayload>(() => reconnectingStream<TEventPayload, TPayload>(transport, request, reconnect, controller.signal, readiness))
+  return createEventSubscription(active, () => {
     request.signal?.removeEventListener('abort', abortFromCaller)
     controller.abort()
+    active.close()
   }, readiness.promise)
 }
 
@@ -377,6 +507,100 @@ function createReadinessGate(): ReadinessGate {
   }
 }
 
+function createActiveEventStream<TPayload>(
+  sourceFactory: () => AsyncIterable<AuroraEvent<TPayload>>
+): AsyncIterable<AuroraEvent<TPayload>> & { close(): void } {
+  const source = sourceFactory()
+  const iterator = source[Symbol.asyncIterator]()
+  let closed = false
+  let reading = false
+  let buffered: IteratorResult<AuroraEvent<TPayload>> | null = null
+  let bufferedError: unknown
+  let hasBufferedError = false
+  const waiters: Array<() => void> = []
+
+  const wake = () => {
+    waiters.splice(0).forEach((resolve) => resolve())
+  }
+  const handleCleanupFailure = (error: unknown) => {
+    bufferedError = error
+    hasBufferedError = true
+    closed = true
+    wake()
+  }
+  const closeActive = () => {
+    if (closed) return
+    closed = true
+    try {
+      const cleanup = iterator.return?.()
+      if (cleanup) void Promise.resolve(cleanup).catch(handleCleanupFailure)
+    } catch (error) {
+      handleCleanupFailure(error)
+    }
+    wake()
+  }
+
+  const prefetch = () => {
+    if (closed || reading || buffered || hasBufferedError) return
+    reading = true
+    void iterator.next().then(
+      (result) => {
+        reading = false
+        buffered = result
+        if (result.done) closed = true
+        wake()
+      },
+      (error) => {
+        reading = false
+        bufferedError = error
+        hasBufferedError = true
+        closed = true
+        wake()
+      }
+    )
+  }
+
+  const waitForBufferedResult = async (): Promise<void> => {
+    while (!closed && !buffered && !hasBufferedError) {
+      await new Promise<void>((resolve) => {
+        waiters.push(resolve)
+      })
+    }
+  }
+
+  prefetch()
+
+  return {
+    close: closeActive,
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          prefetch()
+          await waitForBufferedResult()
+          if (hasBufferedError) {
+            const error = bufferedError
+            bufferedError = undefined
+            hasBufferedError = false
+            throw error
+          }
+          if (!buffered) return { done: true, value: undefined }
+          const result = buffered
+          buffered = null
+          return result
+        },
+        async return(): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          closeActive()
+          return { done: true, value: undefined }
+        },
+        async throw(error?: unknown): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          closeActive()
+          throw error
+        }
+      }
+    }
+  }
+}
+
 async function* singleStream<TEventPayload, TPayload>(
   transport: AuroraEventStreamTransport,
   request: AuroraStreamRequest<TPayload>,
@@ -385,8 +609,7 @@ async function* singleStream<TEventPayload, TPayload>(
 ): AsyncIterable<AuroraEvent<TEventPayload>> {
   let subscription: AuroraEventSubscription<TEventPayload>
   try {
-    subscription = await transport.subscribe<TEventPayload, TPayload>(request)
-    if (subscription.ready) await subscription.ready
+    subscription = await openEventSubscription<TEventPayload, TPayload>(transport, request, signal)
     readiness.resolve()
   } catch (error) {
     readiness.reject(error)
@@ -395,8 +618,9 @@ async function* singleStream<TEventPayload, TPayload>(
   const iterator = subscription[Symbol.asyncIterator]()
   try {
     while (!signal.aborted) {
-      const result = await Promise.race([iterator.next(), abortIteratorResult<TEventPayload>(signal)])
+      const result = await nextWithAbort(iterator, signal)
       if (result.done || signal.aborted) return
+      notifyEventDiagnostic(request, result.value)
       yield result.value
     }
   } finally {
@@ -417,8 +641,7 @@ async function* reconnectingStream<TEventPayload, TPayload>(
     const currentRequest = { ...request, lastEventId }
     let subscription: AuroraEventSubscription<TEventPayload>
     try {
-      subscription = await transport.subscribe<TEventPayload, TPayload>(currentRequest)
-      if (subscription.ready) await subscription.ready
+      subscription = await openEventSubscription<TEventPayload, TPayload>(transport, currentRequest, signal)
       readiness.resolve()
     } catch (error) {
       attempt += 1
@@ -427,14 +650,20 @@ async function* reconnectingStream<TEventPayload, TPayload>(
         readiness.reject(normalized)
         throw normalized
       }
-      await delay(backoff(attempt, reconnect), signal)
+      try {
+        await delay(backoff(attempt, reconnect), signal)
+      } catch (delayError) {
+        const normalized = normalizeError(delayError)
+        readiness.reject(normalized)
+        throw normalized
+      }
       continue
     }
     const iterator = subscription[Symbol.asyncIterator]()
     let endedCleanly = false
     try {
       while (!signal.aborted) {
-        const result = await Promise.race([iterator.next(), abortIteratorResult<TEventPayload>(signal)])
+        const result = await nextWithAbort(iterator, signal)
         if (signal.aborted) return
         if (result.done) {
           endedCleanly = true
@@ -443,13 +672,18 @@ async function* reconnectingStream<TEventPayload, TPayload>(
         const event = result.value
         attempt = 0
         lastEventId = event.id ?? lastEventId
+        notifyEventDiagnostic(currentRequest, event)
         yield event
       }
     } catch (error) {
       subscription.close(error)
       attempt += 1
       if (attempt > reconnect.maxAttempts || signal.aborted) throw normalizeError(error)
-      await delay(backoff(attempt, reconnect), signal)
+      try {
+        await delay(backoff(attempt, reconnect), signal)
+      } catch (delayError) {
+        throw normalizeError(delayError)
+      }
     } finally {
       subscription.close()
     }
@@ -466,15 +700,102 @@ async function* reconnectingStream<TEventPayload, TPayload>(
   }
 }
 
-function abortIteratorResult<TPayload>(signal: AbortSignal): Promise<IteratorResult<AuroraEvent<TPayload>>> {
-  if (signal.aborted) return Promise.resolve({ done: true, value: undefined })
-  return new Promise<IteratorResult<AuroraEvent<TPayload>>>((resolve) => {
-    signal.addEventListener(
-      'abort',
-      () => resolve({ done: true, value: undefined }),
-      { once: true }
+async function openEventSubscription<TEventPayload, TPayload>(
+  transport: AuroraEventStreamTransport,
+  request: AuroraStreamRequest<TPayload>,
+  signal: AbortSignal
+): Promise<AuroraEventSubscription<TEventPayload>> {
+  if (signal.aborted) throw eventStreamClosedError()
+  const { diagnostic: _diagnostic, ...transportRequest } = request
+  const pendingSubscription = Promise.resolve(transport.subscribe<TEventPayload, TPayload>(transportRequest))
+  void pendingSubscription.then(
+    (subscription) => {
+      if (signal.aborted) subscription.close('subscription-aborted')
+    },
+    () => undefined
+  )
+  const subscription = await raceWithAbort(pendingSubscription, signal)
+  try {
+    if (subscription.ready) await raceWithAbort(subscription.ready, signal)
+    return subscription
+  } catch (error) {
+    subscription.close(error)
+    throw error
+  }
+}
+
+function notifyEventDiagnostic<TPayload>(
+  request: AuroraStreamRequest<TPayload>,
+  event: Pick<AuroraEvent, 'id' | 'kind'>,
+): void {
+  const diagnostic = request.diagnostic
+  if (!diagnostic) return
+  try {
+    diagnostic({ stage: 'received', stream: request.stream, event })
+    diagnostic({
+      stage: request.kinds.includes(event.kind) ? 'filter.accepted' : 'filter.rejected',
+      stream: request.stream,
+      event,
+    })
+  } catch {
+    // Diagnostics are strictly observational and must never affect delivery.
+  }
+}
+
+function raceWithAbort<TValue>(promise: Promise<TValue>, signal: AbortSignal): Promise<TValue> {
+  if (signal.aborted) return Promise.reject(eventStreamClosedError())
+  return new Promise<TValue>((resolve, reject) => {
+    const abort = () => {
+      cleanup()
+      reject(eventStreamClosedError())
+    }
+    const cleanup = () => {
+      signal.removeEventListener('abort', abort)
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    promise.then(
+      (value) => {
+        cleanup()
+        resolve(value)
+      },
+      (error) => {
+        cleanup()
+        reject(error)
+      }
     )
   })
+}
+
+function nextWithAbort<TPayload>(
+  iterator: AsyncIterator<AuroraEvent<TPayload>>,
+  signal: AbortSignal
+): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+  if (signal.aborted) return Promise.resolve({ done: true, value: undefined })
+  const next = iterator.next()
+  return new Promise<IteratorResult<AuroraEvent<TPayload>>>((resolve, reject) => {
+    const abort = () => {
+      cleanup()
+      resolve({ done: true, value: undefined })
+    }
+    const cleanup = () => {
+      signal.removeEventListener('abort', abort)
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    next.then(
+      (result) => {
+        cleanup()
+        resolve(result)
+      },
+      (error) => {
+        cleanup()
+        reject(error)
+      }
+    )
+  })
+}
+
+function eventStreamClosedError(): AuroraError {
+  return new AuroraError({ code: 'timeout', message: 'Event stream subscription was closed' })
 }
 
 function normalizeReconnect(value: AuroraSubscribeOptions['reconnect']): NormalizedReconnectOptions {
@@ -497,17 +818,23 @@ function backoff(attempt: number, reconnect: NormalizedReconnectOptions): number
 }
 
 async function delay(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) throw eventStreamClosedError()
   if (ms <= 0) return
   await new Promise<void>((resolve, reject) => {
-    const timeout = setTimeout(resolve, ms)
-    signal.addEventListener(
-      'abort',
-      () => {
-        clearTimeout(timeout)
-        reject(new AuroraError({ code: 'timeout', message: 'Event stream subscription was closed' }))
-      },
-      { once: true }
-    )
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    const abort = () => {
+      cleanup()
+      if (timeout) clearTimeout(timeout)
+      reject(eventStreamClosedError())
+    }
+    const cleanup = () => {
+      signal.removeEventListener('abort', abort)
+    }
+    signal.addEventListener('abort', abort, { once: true })
+    timeout = setTimeout(() => {
+      cleanup()
+      resolve()
+    }, ms)
   })
 }
 

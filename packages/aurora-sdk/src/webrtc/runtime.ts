@@ -12,6 +12,7 @@ import {
   CAP_FRAGMENTATION_V1,
   CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  CAP_GATEWAY_STATUS_EVENTS_V1,
   buildProtocolHello
 } from './peer-protocol.js'
 import { bytesToBase64Url, constantTimeEqual, decodeJsonPayload, deriveRoomKeys, encodeJsonPayload, hexToBytes, randomBytes, sha256Bytes, type AuroraScryptDeriver, type RoomKeys, type ScryptWorkerFactory } from './crypto.js'
@@ -2201,6 +2202,7 @@ function buildLocalProtocolHello(
     CAP_FRAGMENTATION_V1,
     CAP_BACKPRESSURE_V1,
     CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+    CAP_GATEWAY_STATUS_EVENTS_V1,
   ]
   if (options.nodeRole === 'mesh-node') {
     return buildProtocolHello({

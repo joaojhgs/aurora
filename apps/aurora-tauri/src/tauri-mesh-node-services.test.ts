@@ -770,10 +770,13 @@ function emptyConversationRepository() {
     upsertConversation: async () => undefined,
     appendMessage: async () => undefined,
     deleteConversation: async (): Promise<DeleteConversationResult> => ({ deleted: false, deletedMessages: 0 }),
+    getConversation: async () => null,
+    getMessage: async () => null,
     listConversations: async () => [],
     listMessageCounts: async () => ({}),
     listFirstUserMessages: async () => ({}),
     listMessages: async () => [],
+    getLatestMessageSequence: async () => null,
   };
 }
 

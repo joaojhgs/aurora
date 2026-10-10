@@ -261,7 +261,7 @@
       "handler": "process_external_input",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 558
+        "line": 569
       },
       "exposure": "external",
       "method_type": "use",
@@ -282,7 +282,7 @@
       "handler": "infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 635
+        "line": 646
       },
       "exposure": "external",
       "method_type": "use",
@@ -303,7 +303,7 @@
       "handler": "stream_infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 664
+        "line": 684
       },
       "exposure": "external",
       "method_type": "use",
@@ -324,7 +324,7 @@
       "handler": "ingest_context",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 692
+        "line": 718
       },
       "exposure": "external",
       "method_type": "use",
@@ -345,7 +345,7 @@
       "handler": "list_pending_tool_approvals",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 880
+        "line": 906
       },
       "exposure": "external",
       "method_type": "use",
@@ -366,7 +366,7 @@
       "handler": "resume_tool_approval",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 931
+        "line": 957
       },
       "exposure": "external",
       "method_type": "use",
@@ -387,7 +387,7 @@
       "handler": "interrupt_assistant",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1082
+        "line": 1108
       },
       "exposure": "external",
       "method_type": "use",
@@ -408,7 +408,7 @@
       "handler": "get_model_runtime",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1209
+        "line": 1235
       },
       "exposure": "external",
       "method_type": "use",
@@ -429,7 +429,7 @@
       "handler": "get_model_catalog",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1253
+        "line": 1279
       },
       "exposure": "external",
       "method_type": "use",
@@ -450,7 +450,7 @@
       "handler": "get_model_operation",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1281
+        "line": 1307
       },
       "exposure": "external",
       "method_type": "use",
@@ -471,7 +471,7 @@
       "handler": "import_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1308
+        "line": 1334
       },
       "exposure": "external",
       "method_type": "manage",
@@ -492,7 +492,7 @@
       "handler": "download_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1324
+        "line": 1350
       },
       "exposure": "external",
       "method_type": "manage",
@@ -513,7 +513,7 @@
       "handler": "benchmark_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1340
+        "line": 1366
       },
       "exposure": "external",
       "method_type": "manage",
@@ -2569,7 +2569,29 @@
       "permission_status": "protected"
     }
   ],
-  "mesh_publishers": [],
+  "mesh_publishers": [
+    {
+      "topic": "Gateway.StatusChanged",
+      "payload_type": "GatewayStatusChangedEvent",
+      "payload_fields_or_shape": [
+        "event_id",
+        "timestamp",
+        "kind",
+        "status",
+        "freshness",
+        "service_id"
+      ],
+      "sensitivity": "low",
+      "current_forwarding": "active_for_authorized_status_subscribers",
+      "safe_for_service_wide_broadcast": false,
+      "remediation_goal": null,
+      "blocker_reason": "Not safe for blanket service-wide broadcast: recipients are restricted to peers with the status-events capability and current Gateway status authority.",
+      "source": {
+        "file": "app/services/gateway/service.py",
+        "line": 2160
+      }
+    }
+  ],
   "tooling_rule_selectors": {
     "matching_semantics": "non_null_conjunctive_exact_match",
     "precedence": "first_match_wins",
@@ -2691,7 +2713,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 775
+        "line": 781
       }
     },
     {
@@ -2706,7 +2728,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 1998
+        "line": 2037
       }
     },
     {

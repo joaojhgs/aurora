@@ -66,6 +66,7 @@ export interface AdminActionSubmitOptions {
   httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   timeoutMs?: number
   extraHeaders?: Record<string, string>
+  signal?: AbortSignal
 }
 
 export interface ToolApprovalRequest {
@@ -147,6 +148,7 @@ export interface AdminActionControllerClient {
       httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
       timeoutMs?: number
       headers?: Record<string, string>
+      signal?: AbortSignal
     }
   ): Promise<TData>
   requestResult<TData = unknown, TPayload = unknown>(
@@ -158,6 +160,7 @@ export interface AdminActionControllerClient {
       httpMethod?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
       timeoutMs?: number
       headers?: Record<string, string>
+      signal?: AbortSignal
     }
   ): Promise<AuroraResponse<TData>>
   readonly transport: AuroraTransport
@@ -166,18 +169,27 @@ export interface AdminActionControllerClient {
 export class AdminActionClient {
   constructor(private readonly client: AdminActionControllerClient) {}
 
-  draft(request: AdminActionDraftRequest): Promise<AdminActionDraftResponse> {
+  draft(
+    request: AdminActionDraftRequest,
+    options: { signal?: AbortSignal } = {}
+  ): Promise<AdminActionDraftResponse> {
+    throwIfAborted(options.signal)
     return this.client.request<AdminActionDraftResponse, AdminActionDraftRequest>(
       GATEWAY_METHODS.adminActionDraft,
       request,
-      { path: routePath('Gateway', 'AdminActionDraft') }
+      {
+        path: routePath('Gateway', 'AdminActionDraft'),
+        ...(options.signal !== undefined ? { signal: options.signal } : {})
+      }
     )
   }
 
   confirm(
     draft: AdminActionDraftResponse,
-    input: { reason: string; reauthConfirmed: boolean; phrase?: string }
+    input: { reason: string; reauthConfirmed: boolean; phrase?: string },
+    options: { signal?: AbortSignal } = {}
   ): Promise<AdminActionConfirmResponse> {
+    throwIfAborted(options.signal)
     const request: AdminActionConfirmRequest = {
       action_id: draft.action_id,
       nonce: draft.nonce,
@@ -189,7 +201,10 @@ export class AdminActionClient {
     return this.client.request<AdminActionConfirmResponse, AdminActionConfirmRequest>(
       GATEWAY_METHODS.adminActionConfirm,
       request,
-      { path: routePath('Gateway', 'AdminActionConfirm') }
+      {
+        path: routePath('Gateway', 'AdminActionConfirm'),
+        ...(options.signal !== undefined ? { signal: options.signal } : {})
+      }
     )
   }
 
@@ -217,13 +232,15 @@ export class AdminActionClient {
   }
 
   async submit<TData = unknown>(options: AdminActionSubmitOptions): Promise<TData> {
+    throwIfAborted(options.signal)
     const requestOptions: Parameters<AdminActionControllerClient['request']>[2] = {
       path: options.path ?? pathFromMethodId(options.methodId),
       httpMethod: options.httpMethod ?? 'POST',
       headers: {
         ...this.headers(options.confirmation),
         ...options.extraHeaders
-      }
+      },
+      ...(options.signal !== undefined ? { signal: options.signal } : {})
     }
     if (options.timeoutMs !== undefined) requestOptions.timeoutMs = options.timeoutMs
     return this.client.request<TData, JsonObject>(
@@ -242,19 +259,24 @@ export class AdminActionClient {
     affectedResources?: string[]
     path?: string
     timeoutMs?: number
+    signal?: AbortSignal
   }): Promise<{ draft: AdminActionDraftResponse; confirmation: AdminActionConfirmResponse; data: TData }> {
+    throwIfAborted(input.signal)
     const draftRequest: AdminActionDraftRequest = {
       method_id: input.methodId,
       payload: input.payload ?? {}
     }
     if (input.affectedResources !== undefined) draftRequest.affected_resources = input.affectedResources
-    const draft = await this.draft(draftRequest)
+    const requestOptions = input.signal !== undefined ? { signal: input.signal } : {}
+    const draft = await this.draft(draftRequest, requestOptions)
+    throwIfAborted(input.signal)
     const confirmInput: { reason: string; reauthConfirmed: boolean; phrase?: string } = {
       reason: input.reason,
       reauthConfirmed: input.reauthConfirmed
     }
     if (input.phrase !== undefined) confirmInput.phrase = input.phrase
-    const confirmation = await this.confirm(draft, confirmInput)
+    const confirmation = await this.confirm(draft, confirmInput, requestOptions)
+    throwIfAborted(input.signal)
     const submitOptions: AdminActionSubmitOptions = {
       methodId: input.methodId,
       payload: input.payload ?? {},
@@ -262,6 +284,7 @@ export class AdminActionClient {
     }
     if (input.path !== undefined) submitOptions.path = input.path
     if (input.timeoutMs !== undefined) submitOptions.timeoutMs = input.timeoutMs
+    if (input.signal !== undefined) submitOptions.signal = input.signal
     const data = await this.submit<TData>(submitOptions)
     return { draft, confirmation, data }
   }
@@ -327,6 +350,11 @@ export function adminActionAudit(confirmation: AdminActionConfirmResponse): Part
     method: GATEWAY_METHODS.adminActionConfirm,
     status: confirmation.confirmed ? 'confirmed' : 'unconfirmed'
   }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return
+  throw signal.reason ?? new DOMException('The operation was aborted', 'AbortError')
 }
 
 function pathFromMethodId(methodId: string): string {

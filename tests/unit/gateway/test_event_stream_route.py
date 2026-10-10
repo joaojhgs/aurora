@@ -5,6 +5,7 @@ import json
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from app.messaging.bus import QueryResult
@@ -15,6 +16,7 @@ from app.services.gateway.fastapi_app import (
 )
 from app.shared.contracts.models.aurora import AuroraEventStreamEvent, AuroraMethods
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.config import ConfigMethods
 from app.shared.contracts.models.gateway import GatewayListEventsResponse, GatewayMethods
 
 
@@ -261,6 +263,42 @@ def test_event_stream_route_denies_broad_stream_without_gateway_manage():
 
     assert response.status_code == 403
     assert "Gateway.manage is required" in response.json()["error"]
+
+
+def test_event_stream_route_allows_only_gateway_use_status_projection():
+    from app.services.gateway.acl.identity import Identity
+    from app.services.gateway.fastapi_app import _authorize_event_stream_request
+
+    identity = Identity(
+        principal_id="peer",
+        effective_perms=frozenset({"Gateway.use"}),
+        source="http_bearer",
+    )
+    _authorize_event_stream_request(
+        identity,
+        topics=[GatewayMethods.STATUS_CHANGED],
+        categories=set(),
+        kinds={"config.updated"},
+        correlation_id=None,
+    )
+    with pytest.raises(HTTPException, match="Gateway.manage is required") as broad_topics:
+        _authorize_event_stream_request(
+            identity,
+            topics=[GatewayMethods.STATUS_CHANGED, ConfigMethods.UPDATED],
+            categories=set(),
+            kinds={"config.updated"},
+            correlation_id=None,
+        )
+    assert broad_topics.value.status_code == 403
+    with pytest.raises(HTTPException, match="Gateway.manage is required") as audit_kind:
+        _authorize_event_stream_request(
+            identity,
+            topics=[GatewayMethods.STATUS_CHANGED],
+            categories=set(),
+            kinds={"audit"},
+            correlation_id=None,
+        )
+    assert audit_kind.value.status_code == 403
 
 
 @pytest.mark.asyncio

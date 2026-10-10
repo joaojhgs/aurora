@@ -12,21 +12,52 @@ import {
   type AuroraClient,
   type GatewaySupportBundleResponse,
 } from '@aurora/client'
+import type { MeshPeerRosterSnapshot } from '@aurora/client/webrtc'
 import {
   MeshDiagnosticsResource,
   MeshDiagnosticsView,
+  buildMeshDiagnosticsSnapshot,
   meshDiagnosticsSnapshotFromResults,
   type MeshDiagnosticsSnapshot,
   type RouteAvailability,
   type SupportBundleExportState,
 } from '../src/index'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
+import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
+import type { BrowserWebRtcPeerController, BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
 
 afterEach(() => {
   vi.restoreAllMocks()
 })
 
 describe('mesh diagnostics product copy', () => {
+  it('threads the caller abort signal through diagnostics snapshot reads', async () => {
+    const client = diagnosticsClient()
+    const signal = new AbortController().signal
+
+    await buildMeshDiagnosticsSnapshot(client, hostileRoute(), { signal })
+
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledWith({ signal })
+    expect(client.mesh.getStatus).toHaveBeenCalledWith({ signal })
+    expect(client.capabilities.listCatalog).toHaveBeenCalledWith(
+      { include_unavailable: true, include_internal: true },
+      { signal },
+    )
+    expect(client.diagnostics.getSupportBundle).toHaveBeenCalledWith(
+      { event_limit: 6, audit_limit: 6, include_capability_catalog: true },
+      { signal },
+    )
+  })
+
+  it('propagates diagnostics aborts instead of returning a successful snapshot', async () => {
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(buildMeshDiagnosticsSnapshot(diagnosticsClient(), hostileRoute(), { signal: controller.signal }))
+      .rejects
+      .toMatchObject({ name: 'AbortError' })
+  })
+
   it('maps hostile backend strings before headings, cards, tables, alerts, and attributes render', () => {
     const snapshot = hostileSnapshot()
     const markup = renderToStaticMarkup(
@@ -205,6 +236,386 @@ describe('mesh diagnostics product copy', () => {
     expect(container.textContent).toContain('Support data exported.')
 
     root.unmount()
+    container.remove()
+  })
+
+  it('does not read diagnostics or arm support export when the route is disabled', async () => {
+    const exportSupportBundle = vi.fn().mockResolvedValue({
+      draft: {},
+      confirmation: { audit_receipt: 'receipt-denied' },
+      data: cloneFixture(supportBundleFixture),
+    })
+    const client = diagnosticsClient({ exportSupportBundle })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={disabledRoute()} />)
+      await flushPromises()
+    })
+
+    expect(client.registry.getWebRTCDiagnostics).not.toHaveBeenCalled()
+    expect(client.mesh.getStatus).not.toHaveBeenCalled()
+    expect(client.capabilities.listCatalog).not.toHaveBeenCalled()
+    expect(client.diagnostics.getSupportBundle).not.toHaveBeenCalled()
+    expect(exportSupportBundle).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Access needed')
+    expect(buttonByText(container, 'Export support data').disabled).toBe(true)
+    expect(checkbox(container).disabled).toBe(true)
+
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+    expect(exportSupportBundle).not.toHaveBeenCalled()
+
+    root.unmount()
+    container.remove()
+  })
+
+  it('clears approval and ignores a pending support export after route access is revoked', async () => {
+    let resolveExport: ((value: unknown) => void) | null = null
+    const exportSupportBundle = vi.fn(() => new Promise((resolve) => {
+      resolveExport = resolve
+    }))
+    const client = diagnosticsClient({ exportSupportBundle })
+    const createObjectURL = vi.fn(() => 'blob:revoked')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={hostileRoute()} />)
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    expect(checkbox(container).checked).toBe(true)
+
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+    expect(exportSupportBundle).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={deniedRoute()} />)
+      await flushPromises()
+    })
+    expect(checkbox(container).checked).toBe(false)
+    expect(checkbox(container).disabled).toBe(true)
+    expect(buttonByText(container, 'Export support data').disabled).toBe(true)
+
+    await act(async () => {
+      resolveExport?.({
+        draft: {},
+        confirmation: { audit_receipt: 'receipt-revoked' },
+        data: cloneFixture(supportBundleFixture),
+      })
+      await flushPromises()
+    })
+
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Support data exported.')
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledTimes(1)
+    expect(client.diagnostics.getSupportBundle).toHaveBeenCalledTimes(1)
+
+    click.mockRestore()
+    root.unmount()
+    container.remove()
+  })
+
+  it('ignores a pending support export after the same route moves to another signed-in scope', async () => {
+    let resolveExport: ((value: unknown) => void) | null = null
+    const exportSupportBundle = vi.fn(() => new Promise((resolve) => {
+      resolveExport = resolve
+    }))
+    const client = diagnosticsClientWithMutableAuth({ exportSupportBundle })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const createObjectURL = vi.fn(() => 'blob:auth-switch')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-one' }}>
+          <MeshDiagnosticsResource client={client} route={hostileRoute()} />
+        </AuroraQueryProvider>,
+      )
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    expect(checkbox(container).checked).toBe(true)
+
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+    expect(exportSupportBundle).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      client.emitTestAuth({ principalId: 'principal-002' })
+      await flushPromises()
+    })
+    expect(checkbox(container).checked).toBe(false)
+    expect(buttonByText(container, 'Export support data').disabled).toBe(true)
+
+    await act(async () => {
+      resolveExport?.({
+        draft: {},
+        confirmation: { audit_receipt: 'receipt-auth-switch' },
+        data: cloneFixture(supportBundleFixture),
+      })
+      await flushPromises()
+    })
+
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Support data exported.')
+
+    click.mockRestore()
+    root.unmount()
+    queryClient.clear()
+    container.remove()
+  })
+
+  it('ignores a pending support export after the same route moves to another peer scope', async () => {
+    let resolveExport: ((value: unknown) => void) | null = null
+    const exportSupportBundle = vi.fn(() => new Promise((resolve) => {
+      resolveExport = resolve
+    }))
+    const client = diagnosticsClient({ exportSupportBundle })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const createObjectURL = vi.fn(() => 'blob:peer-switch')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    function Harness({ peerId }: { peerId: string }) {
+      return (
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId }}>
+          <MeshDiagnosticsResource client={client} route={hostileRoute()} />
+        </AuroraQueryProvider>
+      )
+    }
+
+    await act(async () => {
+      root.render(<Harness peerId="peer-one" />)
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    expect(checkbox(container).checked).toBe(true)
+
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+    expect(exportSupportBundle).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.render(<Harness peerId="peer-two" />)
+      await flushPromises()
+    })
+    expect(checkbox(container).checked).toBe(false)
+    expect(buttonByText(container, 'Export support data').disabled).toBe(true)
+
+    await act(async () => {
+      resolveExport?.({
+        draft: {},
+        confirmation: { audit_receipt: 'receipt-peer-switch' },
+        data: cloneFixture(supportBundleFixture),
+      })
+      await flushPromises()
+    })
+
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Support data exported.')
+
+    click.mockRestore()
+    root.unmount()
+    queryClient.clear()
+    container.remove()
+  })
+
+  it('ignores a pending support export after diagnostics unmounts', async () => {
+    let resolveExport: ((value: unknown) => void) | null = null
+    const exportSupportBundle = vi.fn(() => new Promise((resolve) => {
+      resolveExport = resolve
+    }))
+    const client = diagnosticsClient({ exportSupportBundle })
+    const createObjectURL = vi.fn(() => 'blob:unmounted')
+    const revokeObjectURL = vi.fn()
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+
+    Object.defineProperty(URL, 'createObjectURL', { configurable: true, value: createObjectURL })
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: revokeObjectURL })
+
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(<MeshDiagnosticsResource client={client} route={hostileRoute()} />)
+      await flushPromises()
+    })
+    await act(async () => {
+      checkbox(container).click()
+    })
+    await act(async () => {
+      buttonByText(container, 'Export support data').click()
+      await flushPromises()
+    })
+    expect(exportSupportBundle).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.unmount()
+      await flushPromises()
+    })
+    await act(async () => {
+      resolveExport?.({
+        draft: {},
+        confirmation: { audit_receipt: 'receipt-unmounted' },
+        data: cloneFixture(supportBundleFixture),
+      })
+      await flushPromises()
+    })
+
+    expect(createObjectURL).not.toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+
+    click.mockRestore()
+    container.remove()
+  })
+
+  it('dedupes concurrent diagnostics loads inside one query scope', async () => {
+    const client = diagnosticsClient()
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-one' }}>
+          <MeshDiagnosticsResource client={client} route={hostileRoute()} />
+          <MeshDiagnosticsResource client={client} route={hostileRoute()} />
+        </AuroraQueryProvider>,
+      )
+      await flushPromises()
+    })
+
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledTimes(1)
+    expect(client.mesh.getStatus).toHaveBeenCalledTimes(1)
+    expect(client.capabilities.listCatalog).toHaveBeenCalledTimes(1)
+    expect(client.diagnostics.getSupportBundle).toHaveBeenCalledTimes(1)
+
+    root.unmount()
+    queryClient.clear()
+    container.remove()
+  })
+
+  it('keeps diagnostics query data separated by peer scope', async () => {
+    const client = diagnosticsClient()
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <>
+          <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-one' }}>
+            <MeshDiagnosticsResource client={client} route={hostileRoute()} />
+          </AuroraQueryProvider>
+          <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-two' }}>
+            <MeshDiagnosticsResource client={client} route={hostileRoute()} />
+          </AuroraQueryProvider>
+        </>,
+      )
+      await flushPromises()
+    })
+
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledTimes(2)
+    expect(client.mesh.getStatus).toHaveBeenCalledTimes(2)
+    expect(client.capabilities.listCatalog).toHaveBeenCalledTimes(2)
+    expect(client.diagnostics.getSupportBundle).toHaveBeenCalledTimes(2)
+
+    root.unmount()
+    queryClient.clear()
+    container.remove()
+  })
+
+  it('projects thin-peer changes locally and refetches server diagnostics only on refresh', async () => {
+    const client = diagnosticsClient()
+    const thinPeer = thinPeerController(thinPeerSnapshot({ status: 'authorized' }))
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-thin' }}>
+          <MeshDiagnosticsResource client={client} route={hostileRoute()} thinPeer={thinPeer} />
+        </AuroraQueryProvider>,
+      )
+      await flushPromises()
+    })
+
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('2026-07-28T00:00:00Z')
+
+    await act(async () => {
+      thinPeer.emitTestSnapshot(thinPeerSnapshot({ status: 'authorized', updatedAt: '2026-07-28T00:01:00Z' }))
+      await flushPromises()
+    })
+
+    expect(container.textContent).toContain('2026-07-28T00:01:00Z')
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      buttonByText(container, 'Refresh').click()
+      await flushPromises()
+    })
+
+    expect(client.registry.getWebRTCDiagnostics).toHaveBeenCalledTimes(2)
+    expect(client.mesh.getStatus).toHaveBeenCalledTimes(2)
+    expect(client.capabilities.listCatalog).toHaveBeenCalledTimes(2)
+    expect(client.diagnostics.getSupportBundle).toHaveBeenCalledTimes(2)
+
+    root.unmount()
+    queryClient.clear()
     container.remove()
   })
 
@@ -421,6 +832,25 @@ function hostileRoute(): RouteAvailability {
   }
 }
 
+function disabledRoute(): RouteAvailability {
+  return {
+    ...hostileRoute(),
+    explanation: 'Troubleshooting is not available for this account.',
+    blockers: ['Permission required'],
+    routeable: false,
+    disabled: true,
+    requiresAdminAction: true,
+  }
+}
+
+function deniedRoute(): RouteAvailability {
+  return {
+    ...disabledRoute(),
+    state: 'denied',
+    explanation: 'Access is required before troubleshooting information can be shown.',
+  }
+}
+
 function visibleText(markup: string): string {
   return decodeHtml(markup
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/giu, ' ')
@@ -458,8 +888,58 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
   return button
 }
 
-function diagnosticsClient({ exportSupportBundle }: { exportSupportBundle: ReturnType<typeof vi.fn> }): AuroraClient {
+type DiagnosticsAuthSnapshot = ReturnType<AuroraClient['auth']['snapshot']>
+
+type MutableAuthDiagnosticsClient = AuroraClient & {
+  emitTestAuth(overrides: Partial<DiagnosticsAuthSnapshot>): void
+}
+
+function diagnosticsClientWithMutableAuth(
+  options: { exportSupportBundle?: ReturnType<typeof vi.fn> } = {},
+): MutableAuthDiagnosticsClient {
+  const baseClient = diagnosticsClient(options)
+  let currentAuth = baseClient.auth.snapshot()
+  const listeners = new Set<() => void>()
+
+  // Partial SDK test double: diagnosticsClient supplies only the AuroraClient methods MeshDiagnosticsResource reads.
   return {
+    ...baseClient,
+    auth: {
+      snapshot: vi.fn(() => currentAuth),
+      subscribe: vi.fn((listener: () => void) => {
+        listeners.add(listener)
+        return () => {
+          listeners.delete(listener)
+        }
+      }),
+    },
+    emitTestAuth(overrides: Partial<DiagnosticsAuthSnapshot>) {
+      currentAuth = { ...currentAuth, ...overrides }
+      for (const listener of listeners) listener()
+    },
+  } as unknown as MutableAuthDiagnosticsClient
+}
+
+function diagnosticsClient({ exportSupportBundle }: { exportSupportBundle?: ReturnType<typeof vi.fn> } = {}): AuroraClient {
+  return {
+    auth: {
+      snapshot: vi.fn(() => ({
+        state: 'authenticated',
+        principalId: 'principal-001',
+        deviceId: 'device-001',
+        peerId: 'peer-one',
+        credentialKind: 'session',
+        source: 'test',
+        tokenExpiresAt: null,
+        status: 200,
+        isAdmin: true,
+        effectivePermissions: ['admin:diagnostics'],
+      })),
+      subscribe: vi.fn(() => () => undefined),
+    },
+    transport: {
+      kind: 'test',
+    },
     registry: {
       getWebRTCDiagnostics: vi.fn().mockResolvedValue(cloneFixture(webrtcDiagnosticsFixture)),
     },
@@ -471,9 +951,85 @@ function diagnosticsClient({ exportSupportBundle }: { exportSupportBundle: Retur
     },
     diagnostics: {
       getSupportBundle: vi.fn().mockResolvedValue({ ok: true, data: cloneFixture(supportBundleFixture) }),
-      exportSupportBundle,
+      exportSupportBundle: exportSupportBundle ?? vi.fn().mockResolvedValue({
+        draft: {},
+        confirmation: { audit_receipt: 'receipt-001' },
+        data: cloneFixture(supportBundleFixture),
+      }),
     },
   } as unknown as AuroraClient
+}
+
+type ThinPeerTestController = BrowserWebRtcPeerController & {
+  emitTestSnapshot(snapshot: BrowserWebRtcSnapshot): void
+  emitTestRoster(roster: MeshPeerRosterSnapshot): void
+  getSelectedCandidatePairEvidence: ReturnType<typeof vi.fn>
+}
+
+function thinPeerController(initialSnapshot: BrowserWebRtcSnapshot): ThinPeerTestController {
+  let current = initialSnapshot
+  let currentRoster = thinPeerRoster(initialSnapshot)
+  const listeners = new Set<(snapshot: BrowserWebRtcSnapshot) => void>()
+  const rosterListeners = new Set<(roster: MeshPeerRosterSnapshot) => void>()
+  return {
+    snapshot: vi.fn(() => current),
+    roster: vi.fn(() => currentRoster),
+    subscribe: vi.fn((listener: (snapshot: BrowserWebRtcSnapshot) => void) => {
+      listeners.add(listener)
+      return () => {
+        listeners.delete(listener)
+      }
+    }),
+    subscribeRoster: vi.fn((listener: (roster: MeshPeerRosterSnapshot) => void) => {
+      rosterListeners.add(listener)
+      return () => {
+        rosterListeners.delete(listener)
+      }
+    }),
+    getSelectedCandidatePairEvidence: vi.fn().mockResolvedValue({ roundTripTimeMs: 42 }),
+    emitTestSnapshot(nextSnapshot: BrowserWebRtcSnapshot) {
+      current = nextSnapshot
+      currentRoster = thinPeerRoster(nextSnapshot)
+      for (const listener of listeners) listener(nextSnapshot)
+    },
+    emitTestRoster(nextRoster: MeshPeerRosterSnapshot) {
+      currentRoster = nextRoster
+      for (const listener of rosterListeners) listener(nextRoster)
+    },
+  } as unknown as ThinPeerTestController
+}
+
+function thinPeerRoster(snapshot: BrowserWebRtcSnapshot): MeshPeerRosterSnapshot {
+  return {
+    primaryPeerId: snapshot.expectedStablePeerId ?? undefined,
+    peers: snapshot.expectedStablePeerId ? [{ peerId: snapshot.expectedStablePeerId, primary: true, nodeName: snapshot.nodeName, snapshot }] : [],
+    discovered: [],
+    updatedAt: snapshot.updatedAt ?? '1970-01-01T00:00:00Z',
+  }
+}
+
+function thinPeerSnapshot(overrides: Partial<BrowserWebRtcSnapshot> = {}): BrowserWebRtcSnapshot {
+  return {
+    state: 'authorized',
+    status: 'authorized',
+    connectionMode: 'webrtc-preferred',
+    expectedStablePeerId: 'peer-thin',
+    connectedSignalingPeerId: 'signal-thin',
+    nodeName: 'Kitchen display',
+    icePathCategory: 'direct',
+    protocolCapabilities: [],
+    reconnectCount: 0,
+    pendingCallCount: 0,
+    pendingStreamCount: 0,
+    pendingSubscriptionCount: 0,
+    updatedAt: '2026-07-28T00:00:00Z',
+    secureContext: true,
+    visible: true,
+    focused: true,
+    hasHttpFallback: false,
+    secretsPersisted: true,
+    ...overrides,
+  } as unknown as BrowserWebRtcSnapshot
 }
 
 async function flushPromises() {

@@ -753,6 +753,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       'fragmentation_v1',
       'backpressure_v1',
       'scoped_event_subscriptions_v1',
+      'gateway_status_events_v1',
       CAP_CONSUMER_ONLY_V1,
     ])
 
@@ -783,6 +784,7 @@ describe('browser WebRTC thin-shell runtime', () => {
       'fragmentation_v1',
       'backpressure_v1',
       'scoped_event_subscriptions_v1',
+      'gateway_status_events_v1',
     ])
     expect(capabilities).not.toContain(CAP_CONSUMER_ONLY_V1)
     expect(new Set(capabilities).size).toBe(capabilities.length)
@@ -795,7 +797,7 @@ describe('browser WebRTC thin-shell runtime', () => {
         webrtc_scoped_subscriptions: true,
       }),
       'mesh-node',
-    )).toEqual(['scoped_event_subscriptions_v1'])
+    )).toEqual(['scoped_event_subscriptions_v1', 'gateway_status_events_v1'])
 
     expect(localProtocolCapabilities(
       normalizeAuroraWebRtcRolloutFlags({
@@ -2063,6 +2065,152 @@ describe('browser WebRTC thin-shell runtime', () => {
     await runtime.close()
   })
 
+  it('waits for the mapped mesh subscription acknowledgement before dispatching assistant input', async () => {
+    let mappedTransport: (AuroraTransport & { source?: AuroraTransport }) | null = null
+    const createClientOnce = vi.fn((transport: AuroraTransport) => {
+      mappedTransport = transport as AuroraTransport & { source?: AuroraTransport }
+      return new AuroraClient({ transport })
+    })
+    const runtime = createBrowserWebThinRuntime({
+      createClient: createClientOnce,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    let resolveReady!: () => void
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve
+    })
+    let resolveEvent!: (result: IteratorResult<never>) => void
+    const firstEvent = new Promise<IteratorResult<never>>((resolve) => {
+      resolveEvent = resolve
+    })
+    const request = vi.fn(async () => ({
+      data: {
+        text: 'Ready response',
+        session_id: 'session-ready',
+        metadata: {},
+      },
+    }))
+    const subscription: AuroraEventSubscription<Record<string, unknown>> = {
+      ready,
+      closed: new Promise<void>(() => undefined),
+      close: vi.fn(),
+      [Symbol.asyncIterator]() {
+        let delivered = false
+        return {
+          async next() {
+            if (delivered) return { done: true, value: undefined }
+            delivered = true
+            return await firstEvent as IteratorResult<never>
+          },
+          async return() {
+            return { done: true, value: undefined }
+          },
+        }
+      },
+    }
+    mappedTransport!.source = {
+      kind: 'mesh',
+      request,
+      subscribe: vi.fn(async () => subscription),
+    } as unknown as AuroraTransport
+
+    const event = {
+      id: 'event-ready',
+      kind: 'assistant.completed',
+      topic: 'Orchestrator.Response',
+      method: 'Orchestrator.ExternalUserInput',
+      busTopic: 'Orchestrator.ExternalUserInput',
+      payload: { text: 'Ready response', request_id: 'request-ready' },
+      audit: { correlationId: 'request-ready', transport: 'mesh' },
+    }
+    const iterator = runtime.client.assistant.streamMessage({
+      text: 'hello',
+      requestId: 'request-ready',
+    })[Symbol.asyncIterator]()
+    const pendingUpdate = iterator.next()
+    void pendingUpdate.catch(() => undefined)
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(request).not.toHaveBeenCalled()
+
+      resolveReady()
+      resolveEvent({ done: false, value: event as never })
+
+      await expect(pendingUpdate).resolves.toMatchObject({
+        done: false,
+        value: { kind: 'completed', text: 'Ready response' },
+      })
+      expect(request).toHaveBeenCalledTimes(1)
+    } finally {
+      resolveReady()
+      resolveEvent({ done: false, value: event as never })
+      await pendingUpdate.catch(() => undefined)
+      await iterator.return?.()
+      await runtime.close()
+    }
+  })
+
+  it('preserves and sanitizes mapped subscription readiness failures', async () => {
+    let safeTransport: (AuroraTransport & {
+      source?: AuroraTransport
+      subscribe?: (request: AuroraStreamRequest) => AuroraEventSubscription | Promise<AuroraEventSubscription>
+    }) | null = null
+    const createClientOnce = vi.fn((transport: AuroraTransport) => {
+      safeTransport = transport as typeof safeTransport
+      return new AuroraClient({ transport })
+    })
+    const runtime = createBrowserWebThinRuntime({
+      createClient: createClientOnce,
+      createDemoClient,
+      mode: 'webrtc-only',
+      inviteText: inviteText(),
+      windowLocation: { protocol: 'https:', hostname: 'app.example' },
+    })
+
+    let rejectReady!: (error: unknown) => void
+    const ready = new Promise<void>((_resolve, reject) => {
+      rejectReady = reject
+    })
+    const request = vi.fn(async () => ({ data: {} }))
+    const sourceSubscription = {
+      ready,
+      closed: new Promise<void>(() => undefined),
+      close: vi.fn(),
+      [Symbol.asyncIterator]() {
+        return { next: async () => ({ done: true, value: undefined }) }
+      },
+    } as unknown as AuroraEventSubscription
+    safeTransport!.source = {
+      kind: 'mesh',
+      request,
+      subscribe: async () => sourceSubscription,
+    } as unknown as AuroraTransport
+
+    try {
+      const subscription = await safeTransport!.subscribe!(streamRequest())
+      expect(subscription.ready).toBeDefined()
+      const hostile = hostileAuroraError('corr-ready')
+      rejectReady(hostile)
+      await expect(subscription.ready).rejects.toMatchObject({
+        code: hostile.code,
+        status: hostile.status,
+        method: hostile.method,
+        busTopic: hostile.busTopic,
+        correlationId: hostile.correlationId,
+        detail: hostile.detail,
+        message: 'Could not connect to this Aurora device. Try again from Connection settings.',
+      })
+      expect(request).not.toHaveBeenCalled()
+    } finally {
+      await runtime.close()
+    }
+  })
+
   it('maps later stream iterator and subscription failures through fixed copy', async () => {
     let safeTransport: (AuroraTransport & {
       source?: AuroraTransport
@@ -2098,6 +2246,8 @@ describe('browser WebRTC thin-shell runtime', () => {
     } as AuroraTransport & { subscribe: () => Promise<AuroraEventSubscription> }
 
     const subscription = await safeTransport!.subscribe!(streamRequest())
+
+    expect(subscription.ready).toBeUndefined()
 
     await expect(subscription[Symbol.asyncIterator]().next()).rejects.toMatchObject({
       code: iteratorError.code,

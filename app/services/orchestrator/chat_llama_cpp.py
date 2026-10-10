@@ -51,6 +51,8 @@ from pydantic import (
     model_validator,
 )
 
+from app.services.orchestrator.native_worker import run_native, stream_native
+
 
 class ChatLlamaCpp(BaseChatModel):
     """llama.cpp model.
@@ -311,6 +313,45 @@ class ChatLlamaCpp(BaseChatModel):
             if run_manager:
                 run_manager.on_llm_new_token(chunk.text, chunk=chunk)
             yield chunk
+
+    async def _astream(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any | None = None,
+        **kwargs: Any,
+    ):
+        """Stream through provider-owned workers that can be drained on cancellation."""
+
+        sync_run_manager = run_manager.get_sync() if run_manager is not None else None
+        async for chunk in stream_native(
+            self,
+            self._stream,
+            messages,
+            stop=stop,
+            run_manager=sync_run_manager,
+            **kwargs,
+        ):
+            yield chunk
+
+    async def _agenerate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any | None = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        """Run non-streaming generation through the same drainable worker lease."""
+
+        sync_run_manager = run_manager.get_sync() if run_manager is not None else None
+        return await run_native(
+            self,
+            self._generate,
+            messages,
+            stop=stop,
+            run_manager=sync_run_manager,
+            **kwargs,
+        )
 
     def bind_tools(
         self,

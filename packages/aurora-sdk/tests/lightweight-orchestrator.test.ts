@@ -38,6 +38,7 @@ describe('lightweight orchestrator', () => {
     const result = await orchestrator.runTurn({ text: 'hello' })
 
     expect(result).toMatchObject({ status: 'completed', assistantText: 'done on device' })
+    expect(result.assistantMessageId).toEqual(expect.any(String))
     const conversations = await session.conversations.listConversations()
     const messages = await session.conversations.listMessages(result.conversationId)
     expect(conversations[0]).toMatchObject({ profileId: 'profile-1', localNodeId: 'node-1' })
@@ -45,6 +46,64 @@ describe('lightweight orchestrator', () => {
       ['user', 'complete'],
       ['assistant', 'complete']
     ])
+    await expect(session.conversations.getMessage(result.conversationId, result.assistantMessageId!)).resolves.toMatchObject({
+      id: result.assistantMessageId,
+      role: 'assistant',
+      status: 'complete'
+    })
+  })
+
+  it('uses bounded reads and transaction-owned latest sequences for concurrent identical turns', async () => {
+    const session = await dataSession()
+    const listMessages = vi.spyOn(session.conversations, 'listMessages')
+    const orchestrator = orchestratorWithProvider(sequenceProvider([
+      { type: 'message', content: 'same answer' },
+      { type: 'message', content: 'same answer' },
+    ]), session)
+
+    const results = await Promise.all([
+      orchestrator.runTurn({ text: 'same prompt', conversationId: 'concurrent' }),
+      orchestrator.runTurn({ text: 'same prompt', conversationId: 'concurrent' }),
+    ])
+
+    expect(new Set(results.map((result) => result.assistantMessageId)).size).toBe(2)
+    expect(listMessages.mock.calls.every(([, options]) => options?.limit !== undefined)).toBe(true)
+    await expect(session.conversations.listMessages('concurrent')).resolves.toHaveLength(4)
+  })
+
+  it('serializes separate orchestrator owners sharing one session', async () => {
+    const session = await dataSession()
+    let releaseFirst!: () => void
+    let firstEntered!: () => void
+    const firstTransaction = new Promise<void>((resolve) => { firstEntered = resolve })
+    const originalTransaction = session.transaction.bind(session)
+    const transaction = vi.spyOn(session, 'transaction')
+    transaction.mockImplementation(async (work) => {
+      if (transaction.mock.calls.length === 1) {
+        firstEntered()
+        await new Promise<void>((resolve) => { releaseFirst = resolve })
+      }
+      return await originalTransaction(work)
+    })
+    const first = orchestratorWithProvider(
+      sequenceProvider([{ type: 'message', content: 'first answer' }]),
+      session
+    )
+    const second = orchestratorWithProvider(
+      sequenceProvider([{ type: 'message', content: 'second answer' }]),
+      session
+    )
+
+    const firstTurn = first.runTurn({ text: 'first', conversationId: 'shared' })
+    await firstTransaction
+    const secondTurn = second.runTurn({ text: 'second', conversationId: 'shared' })
+    await Promise.resolve()
+    expect(transaction).toHaveBeenCalledTimes(1)
+    releaseFirst()
+    await expect(firstTurn).resolves.toMatchObject({ status: 'completed' })
+    await expect(secondTurn).resolves.toMatchObject({ status: 'completed' })
+    expect(transaction).toHaveBeenCalledTimes(4)
+    await session.close()
   })
 
   it('continues a selected local conversation with its decrypted message history', async () => {
@@ -271,10 +330,13 @@ describe('lightweight orchestrator', () => {
     })
 
     const pending = await orchestrator.runTurn({ text: 'delete' })
-    await expect(orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'approve' })).resolves.toMatchObject({
+    const resumed = await orchestrator.resumeConfirmation({ token: pending.confirmation!.token, decision: 'approve' })
+    expect(resumed).toMatchObject({
       status: 'completed',
       assistantText: 'deleted'
     })
+    expect(resumed.assistantMessageId).toEqual(expect.any(String))
+    await expect(session.conversations.getMessage(resumed.conversationId, resumed.assistantMessageId!)).resolves.toMatchObject({ id: resumed.assistantMessageId, role: 'assistant', status: 'complete' })
     expect(calls).toEqual([
       'prepare:local.delete:local',
       'request:local.delete:local',
@@ -571,6 +633,110 @@ describe('lightweight orchestrator', () => {
     await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual(expect.arrayContaining([
       expect.objectContaining({ role: 'system', status: 'cancelled' })
     ]))
+  })
+
+  it('continues restart recovery past the bounded message page', async () => {
+    const session = await dataSession()
+    await session.conversations.upsertConversation({
+      id: 'recovery-boundary',
+      profileId: scope.profileId,
+      localNodeId: scope.localNodeId,
+      titleEnvelope: null,
+      createdAtMs: 1000,
+      updatedAtMs: 1000,
+      archivedAtMs: null
+    })
+    for (let sequence = 0; sequence < 2_002; sequence += 1) {
+      await session.conversations.appendMessage({
+        id: `recovery-message-${sequence}`,
+        conversationId: 'recovery-boundary',
+        sequence,
+        role: 'tool',
+        contentEnvelope: null,
+        toolEnvelope: null,
+        status: sequence === 0 || sequence === 2_001 ? 'pending' : 'complete',
+        createdAtMs: 1000 + sequence
+      })
+    }
+
+    const recovery = await orchestratorWithProvider(sequenceProvider([]), session).recoverStalePending()
+
+    expect(recovery).toEqual({ cancelledMessages: 2, conversationIds: ['recovery-boundary'] })
+    await expect(session.conversations.listMessages('recovery-boundary')).resolves.toHaveLength(2_004)
+  })
+
+  it('continues restart recovery past the bounded conversation page', async () => {
+    const session = await dataSession()
+    for (let index = 0; index < 502; index += 1) {
+      await session.conversations.upsertConversation({ id: `recovery-conversation-${String(index).padStart(4, '0')}`, profileId: scope.profileId, localNodeId: scope.localNodeId, titleEnvelope: null, createdAtMs: index, updatedAtMs: index, archivedAtMs: null })
+    }
+    await session.conversations.appendMessage({ id: 'late-pending', conversationId: 'recovery-conversation-0000', sequence: 0, role: 'tool', contentEnvelope: null, toolEnvelope: null, status: 'pending', createdAtMs: 1 })
+    const recovery = await orchestratorWithProvider(sequenceProvider([]), session).recoverStalePending()
+    expect(recovery).toEqual({ cancelledMessages: 1, conversationIds: ['recovery-conversation-0000'] })
+  })
+
+  it('keeps fixed raw history pages across mixed eligible and filtered records', async () => {
+    const crypto = new RecordingEnvelopeCryptoPort()
+    const session = await dataSession()
+    await session.conversations.upsertConversation({
+      id: 'filtered-history',
+      profileId: scope.profileId,
+      localNodeId: scope.localNodeId,
+      titleEnvelope: null,
+      createdAtMs: 1000,
+      updatedAtMs: 1000,
+      archivedAtMs: null
+    })
+    for (let sequence = 0; sequence < 150; sequence += 1) {
+      if (sequence === 49 || sequence >= 112) continue
+      await session.conversations.appendMessage({
+        id: `filtered-tool-${sequence}`,
+        conversationId: 'filtered-history',
+        sequence,
+        role: 'tool',
+        contentEnvelope: null,
+        toolEnvelope: null,
+        status: 'complete',
+        createdAtMs: 1000 + sequence
+      })
+    }
+    for (const sequence of [49, ...Array.from({ length: 38 }, (_, index) => index + 112)]) {
+      const contentEnvelope = await crypto.encrypt('local-structured-data', new TextEncoder().encode(`history-${sequence}`), new Uint8Array())
+      await session.conversations.appendMessage({
+        id: `history-user-${sequence}`,
+        conversationId: 'filtered-history',
+        sequence,
+        role: 'user',
+        contentEnvelope,
+        toolEnvelope: null,
+        status: 'complete',
+        createdAtMs: 1000 + sequence
+      })
+    }
+    const requests: string[][] = []
+    const listMessages = vi.spyOn(session.conversations, 'listMessages')
+    const orchestrator = createLightweightOrchestrator({
+      provider: {
+        async complete(request) {
+          requests.push(request.messages.map((message) => message.content))
+          return { type: 'message', content: 'next' }
+        }
+      },
+      tools: toolPort(),
+      localData: session,
+      localDataCrypto: crypto,
+      scope,
+      availableTools: [],
+      limits: { maxHistoryMessages: 40 }
+    })
+
+    await orchestrator.runTurn({ conversationId: 'filtered-history', text: 'new prompt' })
+
+    expect(requests[0]).toEqual(['history-49', ...Array.from({ length: 38 }, (_, index) => `history-${index + 112}`), 'new prompt'])
+    const historyCalls = listMessages.mock.calls.filter(([conversationId]) => conversationId === 'filtered-history')
+    expect(historyCalls).toHaveLength(3)
+    expect(historyCalls.map(([, options]) => options?.beforeSequence)).toEqual([undefined, 100, 50])
+    expect(historyCalls.every(([, options]) => options?.limit === 50)).toBe(true)
   })
 
   it('keeps profile and local node selectors isolated', async () => {

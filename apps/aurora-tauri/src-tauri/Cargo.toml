@@ -21,6 +21,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [features]
 desktop-live-webdriver = ["dep:tauri-plugin-wdio-webdriver"]
 desktop-native-voice-e2e = []
+android-voice-live-test = ["aurora-voice-native/android-voice-live-test"]
 
 [build-dependencies]
 swift-rs = { version = "1.0.7", features = ["build"] }

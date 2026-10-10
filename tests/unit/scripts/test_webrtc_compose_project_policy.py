@@ -28,6 +28,15 @@ def node_default_compose_project(source: str) -> str:
     return match.group("name")
 
 
+def hosted_web_build_command(source: str) -> re.Match[str]:
+    match = re.search(
+        r"(?m)^[ \t]*pnpm --filter @aurora/web (?:build|exec next build --webpack)$",
+        source,
+    )
+    assert match is not None
+    return match
+
+
 def assert_compose_project_name_is_valid(name: str) -> None:
     assert re.fullmatch(r"[a-z0-9][a-z0-9_-]*", name)
 
@@ -63,7 +72,7 @@ def test_hosted_browser_harnesses_build_voice_package_before_web_ui() -> None:
     ):
         source = read_repo(script_path)
         voice_build = source.index("pnpm --filter @aurora/voice-web build")
-        web_build = source.index("pnpm --filter @aurora/web build")
+        web_build = hosted_web_build_command(source).start()
         web_start = source.index('node "$WEB_STANDALONE_DIR/server.js"')
         assert voice_build < web_start, script_path
         assert voice_build < web_build < web_start, script_path
@@ -80,7 +89,8 @@ def test_hosted_browser_harnesses_use_the_production_web_server() -> None:
         assert "next start" not in source, script_path
         assert re.search(
             r"NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK=1 \\\n"
-            r"\s+pnpm --filter @aurora/web build",
+            r"(?:NEXT_PUBLIC_AURORA_HOSTED_PEER_TEST=1 \\\n)?"
+            r"\s+pnpm --filter @aurora/web (?:build|exec next build --webpack)",
             source,
         ), script_path
         assert 'node "$WEB_STANDALONE_DIR/server.js"' in source, script_path

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { buildLocalDataExportV1, LocalDataError, MemoryLocalDataBackend, type LocalDataRepositories } from '../src/local-data/index.js'
+import { compareUtf8 } from '../src/local-data/export-v1.js'
 import {
   auditFixture,
   conversationFixture,
@@ -14,20 +15,115 @@ import {
 const scope = { profileId: 'profile-1', localNodeId: 'node-1' }
 
 describe('local-data memory repository contract', () => {
+  it('supports bounded keyset conversation and message queries while preserving legacy reads', async () => {
+    const session = await new MemoryLocalDataBackend().open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture({ id: 'z', updatedAtMs: 2000 }))
+    await session.conversations.upsertConversation(conversationFixture({ id: 'b', updatedAtMs: 2000 }))
+    await session.conversations.upsertConversation(conversationFixture({ id: 'a', updatedAtMs: 2000 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm-0', conversationId: 'z', sequence: 0 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm-1', conversationId: 'z', sequence: 1 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm-2', conversationId: 'z', sequence: 2 }))
+
+    const first = await session.conversations.listConversations({ limit: 2 })
+    expect(first.map((record) => record.id)).toEqual(['a', 'b'])
+    const second = await session.conversations.listConversations({ limit: 2, cursor: { updatedAtMs: 2000, id: 'b' } })
+    expect(second.map((record) => record.id)).toEqual(['z'])
+    await expect(session.conversations.listConversations()).resolves.toHaveLength(3)
+    await expect(session.conversations.listMessages('z', { limit: 2, direction: 'desc' })).resolves.toEqual([
+      messageFixture({ id: 'm-2', conversationId: 'z', sequence: 2 }),
+      messageFixture({ id: 'm-1', conversationId: 'z', sequence: 1 })
+    ])
+    await expect(session.conversations.listMessages('z', { beforeSequence: 2 })).resolves.toEqual([
+      messageFixture({ id: 'm-0', conversationId: 'z', sequence: 0 }),
+      messageFixture({ id: 'm-1', conversationId: 'z', sequence: 1 })
+    ])
+    await expect(session.conversations.getLatestMessageSequence('z')).resolves.toBe(2)
+  })
+
+  it('orders Unicode IDs by UTF-8 bytes and advances the exclusive cursor without broadening ID validation', async () => {
+    const session = await new MemoryLocalDataBackend().open('profile-1', 'node-1')
+    expect(compareUtf8('\uE000', '😀')).toBeLessThan(0)
+    expect(compareUtf8('😀', '\uE000')).toBeGreaterThan(0)
+    await session.conversations.upsertConversation(conversationFixture({ id: 'unicode-a', updatedAtMs: 2000 }))
+    await session.conversations.upsertConversation(conversationFixture({ id: 'unicode-b', updatedAtMs: 2000 }))
+    const first = await session.conversations.listConversations({ limit: 1 })
+    expect(first).toHaveLength(1)
+    const second = await session.conversations.listConversations({ limit: 1, cursor: { updatedAtMs: 2000, id: first[0]!.id } })
+    expect(second).toHaveLength(1)
+    expect(second[0]!.id).not.toBe(first[0]!.id)
+    await expect(session.conversations.listConversations({ limit: Number.NaN })).rejects.toMatchObject({ metadata: { reason: 'conversation_limit' } })
+    await expect(session.conversations.listConversations({ cursor: { updatedAtMs: Number.POSITIVE_INFINITY, id: 'unicode-a' } })).rejects.toMatchObject({ metadata: { reason: 'conversation_cursor_updated_at' } })
+  })
+
+  it('accepts repository probe maxima while rejecting oversized exact ID sets', async () => {
+    const session = await new MemoryLocalDataBackend().open('profile-1', 'node-1')
+    await expect(session.conversations.listConversations({ limit: 501 })).resolves.toEqual([])
+    await expect(session.conversations.listMessages('z', { limit: 2001 })).resolves.toEqual([])
+    await expect(session.conversations.listMessageCounts(Array.from({ length: 501 }, (_, index) => `conversation-${index}`))).rejects.toMatchObject({ metadata: { reason: 'conversation_id_set_limit' } })
+  })
+
+  it('updates an existing same-conversation message atomically inside a transaction', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-1' }))
+    await session.conversations.appendMessage(messageFixture({ id: 'message-update', conversationId: 'conversation-1', sequence: 0, status: 'pending' }))
+    await session.transaction(async (repositories) => {
+      await repositories.conversations.appendMessage(messageFixture({ id: 'message-update', conversationId: 'conversation-1', sequence: 0, status: 'complete' }))
+    })
+    await expect(session.conversations.getMessage('conversation-1', 'message-update')).resolves.toMatchObject({ id: 'message-update', status: 'complete' })
+  })
+
+  it('bounds exact ID projections and returns empty results for an empty set', async () => {
+    const session = await new MemoryLocalDataBackend().open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.appendMessage(messageFixture())
+    await expect(session.conversations.listMessageCounts([])).resolves.toEqual({})
+    await expect(session.conversations.listFirstUserMessages([])).resolves.toEqual({})
+    await expect(session.conversations.listMessageCounts(['conversation-1'])).resolves.toEqual({ 'conversation-1': 1 })
+    await expect(session.conversations.listFirstUserMessages(['conversation-1'])).resolves.toMatchObject({ 'conversation-1': { id: 'message-1' } })
+    await expect(session.conversations.listMessages('conversation-1', { beforeSequence: 1, afterSequence: 0 })).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { reason: 'ambiguous_message_cursor' }
+    })
+  })
+
+  it('reads an exact scoped message as an immutable clone, including inside a transaction', async () => {
+    const backend = new MemoryLocalDataBackend()
+    const session = await backend.open('profile-1', 'node-1')
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-1' }))
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-2' }))
+    await session.conversations.appendMessage(messageFixture({ id: 'message-exact', conversationId: 'conversation-1' }))
+
+    const outside = await session.conversations.getMessage('conversation-1', 'message-exact')
+    expect(outside).toEqual(messageFixture({ id: 'message-exact', conversationId: 'conversation-1' }))
+    if (outside === null) throw new Error('expected exact message')
+    outside.id = 'mutated-clone-id'
+    await expect(session.conversations.getMessage('conversation-1', 'message-exact')).resolves.toMatchObject({ id: 'message-exact' })
+    await expect(session.conversations.getMessage('conversation-2', 'message-exact')).resolves.toBeNull()
+
+    await session.transaction(async (repositories) => {
+      const inside = await repositories.conversations.getMessage('conversation-1', 'message-exact')
+      expect(inside).toEqual(messageFixture({ id: 'message-exact', conversationId: 'conversation-1' }))
+      if (inside === null) throw new Error('expected transaction message')
+      inside.id = 'transaction-clone-id'
+    })
+    await expect(session.conversations.getMessage('conversation-1', 'message-exact')).resolves.toMatchObject({ id: 'message-exact' })
+  })
+
   it('stores every repository type through typed ports without exposing SQL', async () => {
     const backend = new MemoryLocalDataBackend({ nowMs: () => 2000 })
     const session = await backend.open('profile-1', 'node-1')
 
     expect(Object.keys(session).join(' ').toLowerCase()).not.toContain('sql')
-    await session.conversations.upsertConversation(conversationFixture())
-    await session.conversations.appendMessage(messageFixture())
+    await session.conversations.upsertConversation(conversationFixture({ id: 'z' }))
+    await session.conversations.appendMessage(messageFixture({ conversationId: 'z' }))
     await session.memory.upsertMemoryItem(memoryFixture())
     await session.localTools.upsertLocalToolState(localToolStateFixture())
     await session.peerGrants.upsertPeerGrant(peerGrantFixture())
     await session.localAudit.appendAudit(auditFixture())
 
     await expect(session.conversations.listConversations()).resolves.toHaveLength(1)
-    await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([messageFixture()])
+    await expect(session.conversations.listMessages('z')).resolves.toEqual([messageFixture({ conversationId: 'z' })])
     await expect(session.memory.listMemoryItems('notes')).resolves.toEqual([memoryFixture()])
     await expect(session.localTools.listLocalToolStates()).resolves.toEqual([localToolStateFixture()])
     await expect(session.peerGrants.listPeerGrants()).resolves.toEqual([peerGrantFixture()])
@@ -50,7 +146,7 @@ describe('local-data memory repository contract', () => {
       deletedMessages: 2
     })
     await expect(session.conversations.listConversations()).resolves.toEqual([])
-    await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([])
+    await expect(session.conversations.listMessages('z')).resolves.toEqual([])
 
     await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-keep', expiresAtMs: null }))
     await session.memory.upsertMemoryItem(memoryFixture({ id: 'memory-new', expiresAtMs: 3000 }))

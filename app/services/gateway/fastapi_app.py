@@ -523,6 +523,9 @@ class _UnscopedPrincipal:
 _UNSCOPED_PRINCIPAL = _UnscopedPrincipal()
 _BACKFILL_UNAVAILABLE_MESSAGE = "Recent events are temporarily unavailable."
 _BACKFILL_UNAVAILABLE_CODE = "bounded_replay_unavailable"
+_SAFE_STATUS_EVENT_KINDS = frozenset(
+    {"service.announced", "service.stale", "config.updated", "config.validation_failed"}
+)
 _SSE_ID_RE = re.compile(EVENT_STREAM_ID_PATTERN)
 _SSE_KIND_RE = re.compile(EVENT_STREAM_KIND_PATTERN)
 
@@ -552,6 +555,14 @@ def _authorize_event_stream_request(
     if identity.can("Gateway.manage", method_type="manage"):
         return
     topic_set = set(topics)
+    status_scoped = (
+        topic_set == {GatewayMethods.STATUS_CHANGED}
+        and not categories
+        and (not kinds or kinds <= _SAFE_STATUS_EVENT_KINDS)
+        and correlation_id is None
+    )
+    if status_scoped and identity.can("Gateway.use", method_type="use"):
+        return
     assistant_scoped = (
         bool(topic_set)
         and topic_set <= {OrchestratorMethods.RESPONSE, TTSMethods.AUDIO_CHUNK}

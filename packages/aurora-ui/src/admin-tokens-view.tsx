@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import {
   AUTH_METHODS,
   AuroraError,
@@ -16,7 +16,11 @@ import {
 import { ToneBadge, type BadgeTone } from "./status-badges";
 import { ConfirmDialog } from "./shared-components";
 import { Card, DataTable, type DataColumn } from "./primitives";
+import { RouteStateNotice } from "./state-surface";
 import { adminCapabilityReason, adminModuleLabel, productAdminErrorCopy, sanitizeAdminText } from "./admin-product-copy";
+import { useAdminList, useAuroraQueryKeys } from "./query-hooks";
+import { AuroraQueryProvider, useAuroraQueryScope, useAuroraQueryScopeKey } from "./query";
+import { useQueryClient } from "@tanstack/react-query";
 
 export type AdminTokensLoadState =
   | "loading"
@@ -124,75 +128,106 @@ const loadingSnapshot: AdminTokensSnapshot = {
   oneTimeReveal: null,
 };
 
-export function AdminTokensResource({
+export function AdminTokensResource(props: AdminTokensResourceProps) {
+  const hasQueryScope = useAuroraQueryScope();
+  if (!hasQueryScope) {
+    return (
+      <AuroraQueryProvider client={props.client}>
+        <AdminTokensQueryResource {...props} />
+      </AuroraQueryProvider>
+    );
+  }
+  return <AdminTokensQueryResource {...props} />;
+}
+
+function AdminTokensQueryResource({
   client,
   onPreviewAdminAction,
 }: AdminTokensResourceProps) {
-  const [snapshot, setSnapshot] =
-    useState<AdminTokensSnapshot>(loadingSnapshot);
-  const [adminReason, setAdminReason] = useState("Manage scoped API credentials");
-  const [reauthConfirmed, setReauthConfirmed] = useState(false);
-  const [mutationState, setMutationState] =
-    useState<AdminTokenMutationState>("idle");
-  const [mutationError, setMutationError] = useState<string | null>(null);
-  const [busyAction, setBusyAction] = useState<string | null>(null);
-
-  const loadTokens = useCallback(
-    async (oneTimeReveal?: AdminTokenOneTimeReveal | null) => {
-      const next = await buildAdminTokensSnapshot(client);
-      setSnapshot((current) => ({
-        ...next,
-        oneTimeReveal:
-          oneTimeReveal === undefined ? current.oneTimeReveal : oneTimeReveal,
-      }));
-    },
-    [client],
+  const queryClient = useQueryClient();
+  const queryKeys = useAuroraQueryKeys();
+  const scopeKey = useAuroraQueryScopeKey();
+  const scopeIdentity = useMemo(() => JSON.stringify(scopeKey), [scopeKey]);
+  const activeScopeRef = useRef<string | null>(scopeIdentity);
+  const mutationGeneration = useRef(0);
+  const tokensQueryRequest = useMemo(() => ({ includeSecrets: false }), []);
+  const tokensQueryKey = useMemo(() => queryKeys.admin("tokens", tokensQueryRequest), [queryKeys, tokensQueryRequest]);
+  const tokensQuery = useAdminList({
+    resource: "tokens",
+    request: tokensQueryRequest,
+    queryFn: (queryClientValue, _request, signal) => buildAdminTokensSnapshot(queryClientValue, { signal }),
+  });
+  const [oneTimeRevealState, setOneTimeRevealState] = useState<{ scope: string; reveal: AdminTokenOneTimeReveal | null } | null>(null);
+  const oneTimeReveal = oneTimeRevealState?.scope === scopeIdentity ? oneTimeRevealState.reveal : null;
+  const querySnapshot = tokensQuery.data ?? (tokensQuery.error ? adminTokensQueryErrorSnapshot(tokensQuery.error) : loadingSnapshot);
+  const snapshot = useMemo(
+    () => ({ ...querySnapshot, oneTimeReveal }),
+    [oneTimeReveal, querySnapshot],
   );
+  const [adminReason, setAdminReason] = useState("Manage scoped API credentials");
+  const [reauthState, setReauthState] = useState<{ scope: string; value: boolean }>({ scope: scopeIdentity, value: false });
+  const reauthConfirmed = reauthState.scope === scopeIdentity ? reauthState.value : false;
+  const [mutationStatus, setMutationStatus] = useState<{ scope: string; state: AdminTokenMutationState; error: string | null; busyAction: string | null }>({ scope: scopeIdentity, state: "idle", error: null, busyAction: null });
+  const activeMutationStatus = mutationStatus.scope === scopeIdentity
+    ? mutationStatus
+    : { scope: scopeIdentity, state: "idle" as const, error: null, busyAction: null };
 
   useEffect(() => {
-    let cancelled = false;
-    setSnapshot(loadingSnapshot);
-    void buildAdminTokensSnapshot(client).then((next) => {
-      if (!cancelled) setSnapshot(next);
-    });
+    activeScopeRef.current = scopeIdentity;
+    mutationGeneration.current += 1;
+    setOneTimeRevealState(null);
+    setReauthState({ scope: scopeIdentity, value: false });
+    setMutationStatus({ scope: scopeIdentity, state: "idle", error: null, busyAction: null });
     return () => {
-      cancelled = true;
+      if (activeScopeRef.current === scopeIdentity) activeScopeRef.current = null;
+      mutationGeneration.current += 1;
     };
-  }, [client]);
+  }, [scopeIdentity]);
+
+  const setScopedReauthConfirmed = useCallback((value: boolean) => {
+    setReauthState({ scope: scopeIdentity, value });
+  }, [scopeIdentity]);
+
+  const beginMutation = useCallback((busyAction: string) => {
+    const generation = mutationGeneration.current + 1;
+    mutationGeneration.current = generation;
+    const guard = { scope: scopeIdentity, generation };
+    setMutationStatus({ scope: scopeIdentity, state: "optimistic", error: null, busyAction });
+    return guard;
+  }, [scopeIdentity]);
+
+  const mutationIsCurrent = useCallback((guard: { scope: string; generation: number }) => (
+    activeScopeRef.current === guard.scope && mutationGeneration.current === guard.generation
+  ), []);
+
+  const refreshTokens = useCallback(async (nextReveal?: AdminTokenOneTimeReveal | null) => {
+    if (nextReveal !== undefined) setOneTimeRevealState({ scope: scopeIdentity, reveal: nextReveal });
+    await queryClient.invalidateQueries({ queryKey: tokensQueryKey });
+  }, [queryClient, scopeIdentity, tokensQueryKey]);
 
   const createToken = useCallback(
     async (payload: AuthTokenCreateRequest) => {
-      setBusyAction("create");
-      setMutationState("optimistic");
-      setMutationError(null);
+      const guard = beginMutation("create");
       try {
         const result = await client.tokens.create(payload, {
           reason: adminReason.trim() || "Create scoped API token",
           reauthConfirmed,
         });
-        await loadTokens(tokenReveal(result.data));
-        setMutationState("idle");
+        if (!mutationIsCurrent(guard)) return;
+        await refreshTokens(tokenReveal(result.data));
+        if (mutationIsCurrent(guard)) setMutationStatus({ scope: guard.scope, state: "idle", error: null, busyAction: null });
       } catch (error) {
-        setMutationState("rollback-error");
-        setMutationError(productAdminErrorCopy(error, "Token creation failed. Try again."));
-      } finally {
-        setBusyAction(null);
+        if (mutationIsCurrent(guard)) {
+          setMutationStatus({ scope: guard.scope, state: "rollback-error", error: productAdminErrorCopy(error, "Token creation failed. Try again."), busyAction: null });
+        }
       }
     },
-    [adminReason, client.tokens, loadTokens, reauthConfirmed],
+    [adminReason, beginMutation, client.tokens, mutationIsCurrent, refreshTokens, reauthConfirmed],
   );
 
   const updateScopes = useCallback(
     async (token: AdminTokenRow, scopes: string[]) => {
-      setBusyAction(`scopes:${token.id}`);
-      setMutationState("optimistic");
-      setMutationError(null);
-      setSnapshot((current) => ({
-        ...current,
-        tokens: current.tokens.map((candidate) =>
-          candidate.id === token.id ? { ...candidate, scopes } : candidate,
-        ),
-      }));
+      const guard = beginMutation(`scopes:${token.id}`);
       try {
         const result = await client.tokens.updateScopes(
           { token_id: token.id, scopes },
@@ -203,17 +238,17 @@ export function AdminTokensResource({
           },
         );
         if (!result.data.success) throw new Error("Aurora rejected the token scope update.");
-        await loadTokens();
-        setMutationState("idle");
+        if (!mutationIsCurrent(guard)) return;
+        await refreshTokens();
+        if (mutationIsCurrent(guard)) setMutationStatus({ scope: guard.scope, state: "idle", error: null, busyAction: null });
       } catch (error) {
-        await loadTokens();
-        setMutationState("rollback-error");
-        setMutationError(productAdminErrorCopy(error, "Token scopes could not be updated. Try again."));
-      } finally {
-        setBusyAction(null);
+        if (mutationIsCurrent(guard)) {
+          await refreshTokens();
+          if (mutationIsCurrent(guard)) setMutationStatus({ scope: guard.scope, state: "rollback-error", error: productAdminErrorCopy(error, "Token scopes could not be updated. Try again."), busyAction: null });
+        }
       }
     },
-    [adminReason, client.tokens, loadTokens, reauthConfirmed],
+    [adminReason, beginMutation, client.tokens, mutationIsCurrent, refreshTokens, reauthConfirmed],
   );
 
   const runAdminAction = useCallback(
@@ -224,13 +259,7 @@ export function AdminTokensResource({
       const tokenId = String(action.payload.token_id ?? "");
       if (!tokenId) return;
 
-      setBusyAction(`revoke:${tokenId}`);
-      setMutationState("optimistic");
-      setMutationError(null);
-      setSnapshot((current) => ({
-        ...current,
-        tokens: current.tokens.filter((token) => token.id !== tokenId),
-      }));
+      const guard = beginMutation(`revoke:${tokenId}`);
       try {
         const result = await client.tokens.revoke(
           { token_id: tokenId },
@@ -240,17 +269,17 @@ export function AdminTokensResource({
           },
         );
         if (!result.data.success) throw new Error("Aurora rejected the token revocation.");
-        await loadTokens();
-        setMutationState("idle");
+        if (!mutationIsCurrent(guard)) return;
+        await refreshTokens();
+        if (mutationIsCurrent(guard)) setMutationStatus({ scope: guard.scope, state: "idle", error: null, busyAction: null });
       } catch (error) {
-        await loadTokens();
-        setMutationState("rollback-error");
-        setMutationError(productAdminErrorCopy(error, "Token could not be revoked. Try again."));
-      } finally {
-        setBusyAction(null);
+        if (mutationIsCurrent(guard)) {
+          await refreshTokens();
+          if (mutationIsCurrent(guard)) setMutationStatus({ scope: guard.scope, state: "rollback-error", error: productAdminErrorCopy(error, "Token could not be revoked. Try again."), busyAction: null });
+        }
       }
     },
-    [adminReason, client.tokens, loadTokens, onPreviewAdminAction, reauthConfirmed],
+    [adminReason, beginMutation, client.tokens, mutationIsCurrent, onPreviewAdminAction, refreshTokens, reauthConfirmed],
   );
 
   return (
@@ -260,29 +289,31 @@ export function AdminTokensResource({
       onCreateToken={createToken}
       onUpdateScopes={updateScopes}
       onDismissOneTimeReveal={() =>
-        setSnapshot((current) => dismissOneTimeTokenReveal(current))
+        setOneTimeRevealState({ scope: scopeIdentity, reveal: null })
       }
       adminReason={adminReason}
       reauthConfirmed={reauthConfirmed}
-      mutationState={mutationState}
-      mutationError={mutationError}
-      busyAction={busyAction}
+      mutationState={activeMutationStatus.state}
+      mutationError={activeMutationStatus.error}
+      busyAction={activeMutationStatus.busyAction}
       onAdminReasonChange={setAdminReason}
-      onReauthConfirmedChange={setReauthConfirmed}
+      onReauthConfirmedChange={setScopedReauthConfirmed}
     />
   );
 }
 
 export async function buildAdminTokensSnapshot(
   client: AuroraClient,
+  options: { signal?: AbortSignal } = {},
 ): Promise<AdminTokensSnapshot> {
+  const signalOptions = options.signal ? { signal: options.signal } : {};
   const [tokensResult, catalogResult] = await Promise.allSettled([
-    client.tokens.list(),
+    client.tokens.list({}, signalOptions),
     client.capabilities.listCatalog({
       include_unavailable: true,
       include_internal: true,
       include_schemas: true,
-    }),
+    }, signalOptions),
   ]);
 
   const tokensResponse = responseDataOrNull(tokensResult);
@@ -358,6 +389,23 @@ export async function buildAdminTokensSnapshot(
         ? "Local preview"
         : "Aurora service response",
     oneTimeReveal: null,
+  };
+}
+
+function adminTokensQueryErrorSnapshot(error: unknown): AdminTokensSnapshot {
+  const message = productAdminErrorCopy(
+    error,
+    "Token administration is unavailable. Try again.",
+  );
+  return {
+    ...loadingSnapshot,
+    loadState: "error",
+    listState: "unsupported",
+    revokeState: "unsupported",
+    createState: "unsupported",
+    error: message,
+    warnings: [message],
+    evidenceSource: "Aurora request error",
   };
 }
 
@@ -762,13 +810,22 @@ function TokenStatusMessage({
       : null);
   if (!message && mutationState === "idle") return null;
 
+  const pending = mutationState === "optimistic";
+  const noticeState = snapshot.loadState === "denied"
+    ? "permission"
+    : pending || snapshot.loadState === "loading"
+      ? "loading"
+      : snapshot.loadState === "empty"
+        ? "empty"
+        : mutationError || mutationState === "rollback-error" || snapshot.loadState !== "ready"
+          ? "error"
+          : "empty";
   return (
-    <div
-      className="rounded-md border border-border bg-muted/40 px-3 py-2 text-sm"
-      role={mutationError ? "alert" : "status"}
-    >
-      {mutationState === "optimistic" ? "Applying token change…" : message}
-    </div>
+    <RouteStateNotice
+      state={noticeState}
+      title={pending ? "Applying token change" : snapshot.loadState === "loading" ? "Loading tokens" : snapshot.loadState === "empty" ? "No tokens" : "Token administration status"}
+      message={pending ? "Applying token change…" : message ?? "Token administration is ready."}
+    />
   );
 }
 

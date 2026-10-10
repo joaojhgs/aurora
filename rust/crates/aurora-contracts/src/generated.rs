@@ -70,6 +70,7 @@ pub mod ids {
     pub const ORCHESTRATOR_RESPONSE: &str = "Orchestrator.Response";
     pub const ORCHESTRATOR_INTERRUPTED: &str = "Orchestrator.Interrupted";
     pub const TTS_AUDIO_CHUNK: &str = "TTS.AudioChunk";
+    pub const GATEWAY_STATUS_CHANGED: &str = "Gateway.StatusChanged";
     pub const AURORA_EVENT_STREAM: &str = "Aurora.EventStream";
 }
 
@@ -86,6 +87,10 @@ pub mod models {
         typify::import_types!(schema = "schema/empty_output.json");
     }
     pub use empty_output::EmptyOutput;
+    pub mod gateway_status_changed_event {
+        typify::import_types!(schema = "schema/gateway_status_changed_event.json");
+    }
+    pub use gateway_status_changed_event::GatewayStatusChangedEvent;
     pub mod orchestrator_interrupt_request {
         typify::import_types!(schema = "schema/orchestrator_interrupt_request.json");
     }
@@ -520,6 +525,14 @@ pub static SCHEMA_DESCRIPTORS: &[SchemaDescriptor] = &[
         model_name: "RouteExplainResponse",
         schema_hash: "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e",
         schema_json: include_str!("../schema/route_explain_response.json"),
+    },
+    SchemaDescriptor {
+        schema_id: "Gateway.StatusChanged.event.GatewayStatusChangedEvent",
+        method_id: "Gateway.StatusChanged",
+        direction: "event",
+        model_name: "GatewayStatusChangedEvent",
+        schema_hash: "95f28400de7c9de9c3cf1ed83a068e7c65901534d64e286d17a1758322306a04",
+        schema_json: include_str!("../schema/gateway_status_changed_event.json"),
     },
     SchemaDescriptor {
         schema_id: "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest",
@@ -2828,6 +2841,18 @@ pub static EVENT_DESCRIPTORS: &[EventDescriptor] = &[
         ordered_event_group: Some("tts_text_stream"),
         remote_raw_audio_route: false,
     },
+    EventDescriptor {
+        event_topic: "Gateway.StatusChanged",
+        module: "Gateway",
+        name: "StatusChanged",
+        schema_id: "Gateway.StatusChanged.event.GatewayStatusChangedEvent",
+        schema_hash: "95f28400de7c9de9c3cf1ed83a068e7c65901534d64e286d17a1758322306a04",
+        required_permissions: &["Gateway.use"],
+        bounded: true,
+        authorized: true,
+        ordered_event_group: Some("gateway_status"),
+        remote_raw_audio_route: false,
+    },
 ];
 
 pub static ENVELOPE_DESCRIPTORS: &[EnvelopeDescriptor] = &[EnvelopeDescriptor {
@@ -2882,6 +2907,7 @@ pub fn normalize_generated_contract(
         "Aurora.EventStream.envelope.AuroraEventStreamEvent" => serde_json::from_value::<models::aurora_event_stream_event::AuroraEventStreamEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Gateway.ExplainRoute.input.RouteExplainRequest" => serde_json::from_value::<models::route_explain_request::RouteExplainRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Gateway.ExplainRoute.output.RouteExplainResponse" => serde_json::from_value::<models::route_explain_response::RouteExplainResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
+        "Gateway.StatusChanged.event.GatewayStatusChangedEvent" => serde_json::from_value::<models::gateway_status_changed_event::GatewayStatusChangedEvent>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Orchestrator.ExternalUserInput.input.OrchestratorProcessRequest" => serde_json::from_value::<models::orchestrator_process_request::OrchestratorProcessRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Orchestrator.ExternalUserInput.output.OrchestratorResponse" => serde_json::from_value::<models::orchestrator_response::OrchestratorResponse>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),
         "Orchestrator.Interrupt.input.OrchestratorInterruptRequest" => serde_json::from_value::<models::orchestrator_interrupt_request::OrchestratorInterruptRequest>(normalized).and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { schema_id: schema_id.to_owned() }),

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Whitelisted live status/config projection for authorized peers.",
+  "properties": {
+    "event_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Event Id",
+      "type": "string"
+    },
+    "freshness": {
+      "default": "current",
+      "enum": [
+        "current",
+        "stale"
+      ],
+      "title": "Freshness",
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "config.updated",
+        "config.validation_failed",
+        "health.stale",
+        "health.updated",
+        "service.announced",
+        "service.stale"
+      ],
+      "title": "Kind",
+      "type": "string"
+    },
+    "service_id": {
+      "anyOf": [
+        {
+          "maxLength": 128,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9_.:-]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Service Id"
+    },
+    "status": {
+      "enum": [
+        "connected",
+        "degraded",
+        "disconnected",
+        "failed",
+        "healthy",
+        "unhealthy",
+        "updated"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "timestamp": {
+      "maxLength": 64,
+      "minLength": 1,
+      "title": "Timestamp",
+      "type": "string"
+    }
+  },
+  "required": [
+    "event_id",
+    "kind",
+    "status",
+    "timestamp"
+  ],
+  "title": "GatewayStatusChangedEvent",
+  "type": "object",
+  "x-aurora-extra-behavior": "strip"
+}

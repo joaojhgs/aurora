@@ -88,6 +88,33 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await expect(session.localAudit.listAudit()).resolves.toEqual([auditFixture()])
   })
 
+  it('bounds keyset, exact-id, and message reads before returning snapshot rows', async () => {
+    const session = await openSession()
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-a', updatedAtMs: 1100 }))
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-b', updatedAtMs: 1100 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm0', conversationId: 'conversation-a', sequence: 0 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm1', conversationId: 'conversation-a', sequence: 1 }))
+    await expect(session.conversations.listConversations({ limit: 1 })).resolves.toHaveLength(1)
+    await expect(session.conversations.listConversations({ limit: 1, cursor: { updatedAtMs: 1100, id: 'conversation-a' } })).resolves.toEqual([conversationFixture({ id: 'conversation-b', updatedAtMs: 1100 })])
+    await expect(session.conversations.listMessageCounts([])).resolves.toEqual({})
+    await expect(session.conversations.getMessage('conversation-a', 'm1')).resolves.toMatchObject({ sequence: 1 })
+    await expect(session.conversations.listMessages('conversation-a', { beforeSequence: 1, direction: 'desc' })).resolves.toMatchObject([{ id: 'm0' }])
+    await expect(session.conversations.listMessages('conversation-a', { beforeSequence: 1, afterSequence: 0 })).rejects.toMatchObject({ metadata: { reason: 'ambiguous_message_cursor' } })
+    await session.close()
+  })
+
+  it('preserves same-ID updates and reports stable message collision reasons', async () => {
+    const session = await openSession()
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-2' }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm1', sequence: 1 }))
+    await expect(session.conversations.appendMessage(messageFixture({ id: 'm2', sequence: 1 }))).rejects.toMatchObject({ metadata: { reason: 'duplicate_message_sequence' } })
+    await expect(session.conversations.appendMessage(messageFixture({ id: 'm1', sequence: 2, conversationId: 'conversation-2' }))).rejects.toMatchObject({ metadata: { reason: 'duplicate_message_id' } })
+    await session.conversations.appendMessage(messageFixture({ id: 'm1', sequence: 2 }))
+    await expect(session.conversations.getMessage('conversation-1', 'm1')).resolves.toMatchObject({ sequence: 2 })
+    await session.close()
+  })
+
   it('rolls back failed transactions and rejects leaked transaction repositories', async () => {
     const session = await openSession()
     await session.conversations.upsertConversation(conversationFixture())

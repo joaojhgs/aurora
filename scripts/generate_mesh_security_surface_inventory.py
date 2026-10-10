@@ -390,9 +390,30 @@ STABLE_IDENTITY: tuple[dict[str, Any], ...] = (
     },
 )
 
-# Explicit metadata for mesh=True publisher sites. Empty today; a new mesh=True
-# publisher must add an entry here or generation fails instead of dropping the site.
-MESH_PUBLISHER_METADATA: dict[tuple[str, int], dict[str, Any]] = {}
+# Explicit metadata for mesh=True publisher sites. A new mesh=True publisher
+# must add an entry here or generation fails instead of dropping the site.
+MESH_PUBLISHER_METADATA: dict[tuple[str, int], dict[str, Any]] = {
+    ("app/services/gateway/service.py", 2160): {
+        "topic": "Gateway.StatusChanged",
+        "payload_type": "GatewayStatusChangedEvent",
+        "payload_fields_or_shape": [
+            "event_id",
+            "timestamp",
+            "kind",
+            "status",
+            "freshness",
+            "service_id",
+        ],
+        "sensitivity": "low",
+        "current_forwarding": "active_for_authorized_status_subscribers",
+        "safe_for_service_wide_broadcast": False,
+        "remediation_goal": None,
+        "blocker_reason": (
+            "Not safe for blanket service-wide broadcast: recipients are restricted to peers "
+            "with the status-events capability and current Gateway status authority."
+        ),
+    },
+}
 
 
 @dataclass(frozen=True)

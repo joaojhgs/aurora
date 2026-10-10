@@ -7,12 +7,15 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import { acquireAndroidSmokeLock, resolveAndroidSmokeLockPath } from './android-emulator-smoke-runner.mjs'
 import { connectAndroidWebviewCdp } from './android-webview-cdp.mjs'
+import { pairFreshPythonWithAndroid } from './android-native-turn-pairing.mjs'
 
 const DEFAULT_APP_ID = 'dev.aurora.desktop'
 const DEFAULT_PACK_TIMEOUT_MS = 30 * 60_000
 const DEFAULT_STATUS_TIMEOUT_MS = 120_000
 const DEFAULT_WEBVIEW_TIMEOUT_MS = 180_000
 const COMMAND_TIMEOUT_MS = 30_000
+const NOTIFICATION_INTERACTION_MODE_ENV = 'AURORA_ANDROID_NOTIFICATION_INTERACTION'
+const NOTIFICATION_INTERACTION_MODES = new Set(['automatic', 'external'])
 const PACK_POLL_MS = 2_000
 const STATUS_POLL_MS = 500
 const MAX_DIAGNOSTIC_BYTES = 24_000
@@ -24,6 +27,7 @@ const MAX_BACKGROUND_WAKE_ATTEMPTS = 2
 const LIVE_TEST_INGRESS_RENEW_INTERVAL_MS = 30_000
 export const ANDROID_BACKGROUND_WAKE_TEXT = 'Hey Aurora.'
 export const ANDROID_BACKGROUND_COMMAND_TEXT = 'Confirm Android background voice.'
+export const ANDROID_NATIVE_TURN_PCM_LABEL = 'deterministic Android background PCM fixture'
 const DEFAULT_WAKE_PHRASES = {
   en: { phraseId: 'hey-aurora.en', phrase: 'Hey Aurora', language: 'en' },
   zh: { phraseId: 'ni-hao-aurora.zh', phrase: '你好 Aurora', language: 'zh' },
@@ -54,6 +58,35 @@ const RECOVERABLE_BACKGROUND_CAPTURE_ERRORS = new Set([
   'wake_not_detected',
   'speech_not_detected',
   'speech_timeout',
+])
+export const ANDROID_NATIVE_TURN_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_TURN_ACCEPTANCE'
+export const AUTHORIZED_NATIVE_ASSISTANT_METHOD = 'Orchestrator.ExternalUserInput'
+const NATIVE_EVENT_BRIDGE_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_EVENT_BRIDGE_ACCEPTANCE'
+const NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE'
+const NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS = 1_500
+const NATIVE_ASSISTANT_EVENT_KINDS = [
+  'assistant.delta',
+  'assistant.completed',
+  'assistant.failed',
+  'assistant.tool',
+  'tool.requested',
+  'tool.running',
+  'tool.completed',
+  'tool.failed',
+  'tool.requires_action',
+  'voice.turn.started',
+  'voice.turn.transcribing',
+  'voice.turn.requesting',
+  'voice.turn.speaking',
+  'voice.turn.finalized',
+  'voice.turn.failed',
+  'native.events.gap',
+]
+const NATIVE_TERMINAL_EVENT_KINDS = new Set([
+  'assistant.completed',
+  'assistant.failed',
+  'voice.turn.finalized',
+  'voice.turn.failed',
 ])
 
 export function parseAdbDevices(output) {
@@ -269,23 +302,44 @@ export function wakePhraseRevision({ phrase, language, packId, packRevision }) {
   return `wakephrase-v1-${hash.toString(36).padStart(7, '0')}`
 }
 
-export async function runAndroidVoiceLiveSmoke() {
-  const adb = resolveAdbCommand()
-  const devicesOutput = commandOutput(adb, ['devices', '-l'])
-  const serial = resolveAndroidDeviceSerial(
-    devicesOutput,
-    process.env.AURORA_ANDROID_DEVICE_SERIAL ?? process.env.ANDROID_SERIAL,
+export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null } = {}) {
+  const inheritedEnvironment = process.env
+  const environmentOverlay = environment === inheritedEnvironment ? null : Object.fromEntries(
+    Object.entries(environment).map(([key, value]) => [key, inheritedEnvironment[key]]),
   )
-  const releaseLock = await acquireAndroidSmokeLock({
-    lockPath: resolveAndroidSmokeLockPath(serial),
-  })
-  const appId = process.env.AURORA_ANDROID_APP_ID ?? DEFAULT_APP_ID
-  const apk = process.env.AURORA_ANDROID_APK ? resolve(process.env.AURORA_ANDROID_APK) : findApk()
-  const context = { adb, serial, appId }
+  let adb
+  let devicesOutput
+  let serial
+  let releaseLock = () => {}
+  let appId
+  let apk
+  let context
+  let nativeEventBridgeAcceptance
+  let nativeEventBridgeStallAcceptance
+  let successfulNativeTurnAcceptance
   let fixtures
   let webview
-
+  let originalProfileValue
+  let pairingCleanup
+  let pairingEvidence
+  let primaryError
   try {
+    if (environmentOverlay) Object.assign(inheritedEnvironment, environment)
+    adb = resolveAdbCommand()
+    devicesOutput = commandOutput(adb, ['devices', '-l'])
+    serial = resolveAndroidDeviceSerial(
+      devicesOutput,
+      process.env.AURORA_ANDROID_DEVICE_SERIAL ?? process.env.ANDROID_SERIAL,
+    )
+    releaseLock = await acquireAndroidSmokeLock({
+      lockPath: resolveAndroidSmokeLockPath(serial),
+    })
+    appId = process.env.AURORA_ANDROID_APP_ID ?? DEFAULT_APP_ID
+    apk = process.env.AURORA_ANDROID_APK ? resolve(process.env.AURORA_ANDROID_APK) : findApk()
+    context = { adb, serial, appId }
+    nativeEventBridgeAcceptance = nativeEventBridgeAcceptanceEnabled()
+    nativeEventBridgeStallAcceptance = nativeEventBridgeStallAcceptanceEnabled()
+    successfulNativeTurnAcceptance = successfulNativeTurnAcceptanceEnabled()
     if (!apk || !existsSync(apk)) {
       throw new Error('No Android APK found. Build it once before running android:voice:live.')
     }
@@ -311,7 +365,8 @@ export async function runAndroidVoiceLiveSmoke() {
     const readyCatalog = await invoke('aurora_android_voice_pack_catalog_status')
     const readyPacks = resolveSelectedCatalogEntries(readyCatalog, packs)
     const storedProfile = await invoke('aurora_thin_profile_get')
-    const profile = mergeAndroidVoiceRuntimeProfile(parseStoredRuntimeProfile(storedProfile?.value), readyPacks, {
+    originalProfileValue = storedProfile?.value
+    const profile = mergeAndroidVoiceRuntimeProfile(parseStoredRuntimeProfile(originalProfileValue), readyPacks, {
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
       wakePhrase: wakePhraseSelectionFromEnvironment(process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en'),
     })
@@ -321,15 +376,33 @@ export async function runAndroidVoiceLiveSmoke() {
       throw new Error(`Android voice profile was not applied: ${JSON.stringify(profileResult)}`)
     }
 
-    const activeProfile = profile.profiles.find((candidate) => candidate.id === profile.activeProfileId)
+    let activeProfile = profile.profiles.find((candidate) => candidate.id === profile.activeProfileId)
     if (!activeProfile?.localNode?.localSpeechSelection?.wakePhrase?.phrase) {
       throw new Error('Android voice profile has no active wake phrase after preserving device identity.')
+    }
+    if (pairing) {
+      const paired = await pairFreshPythonWithAndroid({
+        android: webview,
+        invoke: (command, args) => invokeTauri(webview.client, command, args),
+        navigateToMesh: (client) => navigateAndroidToMesh(client),
+        request: pairing.request,
+        gatewayUrl: pairing.gatewayUrl,
+        gatewayApiKey: pairing.gatewayApiKey,
+        inviteText: pairing.inviteText,
+        pythonPeerId: pairing.pythonPeerId,
+      })
+      pairingCleanup = paired.cleanup
+      pairingEvidence = paired
+      const pairedProfile = parseStoredRuntimeProfile((await invoke('aurora_thin_profile_get'))?.value)
+      activeProfile = pairedProfile?.profiles.find((candidate) => candidate.id === pairedProfile.activeProfileId) ?? activeProfile
     }
     fixtures = prepareVoiceFixtures({
       wakeText: activeProfile.localNode.localSpeechSelection.wakePhrase.phrase,
     })
     const automaticBackgroundStart = await proveAutomaticBackgroundStart(invoke)
-    const notificationStop = await proveNotificationStop(context, invoke)
+    const notificationStop = await proveNotificationStop(context, invoke, {
+      interactionMode: notificationInteractionMode(),
+    })
     webview.close()
     webview = null
     adbRun(context, ['shell', 'am', 'force-stop', context.appId])
@@ -351,7 +424,25 @@ export async function runAndroidVoiceLiveSmoke() {
     launchApp(context)
     webview = await connectInstalledWebview(context)
     invoke = (command, args) => invokeTauri(webview.client, command, args)
-    const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm)
+    const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm, {
+      successful: successfulNativeTurnAcceptance,
+      activeProfile,
+      pairingEvidence,
+      modelFixture,
+      nativeEventBridge: nativeEventBridgeAcceptance
+        ? ({ active, runTurn }) => proveNativeEventBridgeAcceptance(context, webview, invoke, {
+          active,
+          activeProfile,
+          runTurn,
+          modelFixture,
+          reopenForTurnUi: async () => {
+            launchApp(context)
+            return await connectInstalledWebview(context)
+          },
+          slowConsumer: nativeEventBridgeStallAcceptance,
+        })
+        : null,
+    })
 
     webview.close()
     webview = null
@@ -414,30 +505,98 @@ export async function runAndroidVoiceLiveSmoke() {
         notificationVisible: background.notificationVisible,
         wakeLockHeld: background.wakeLockHeld,
         doze: background.doze,
+        ...(background.nativeEventBridge ? { nativeEventBridge: background.nativeEventBridge } : {}),
       },
       notificationStop,
       sticky: { ...sticky, acceptedSamples: resumed.acceptedSamples },
       forceStop,
-      assistantRoute: 'local-only',
+      assistantRoute: successfulNativeTurnAcceptance ? background.acceptanceEvidence?.route ?? null : 'local-only',
+      ...(successfulNativeTurnAcceptance && background.acceptanceEvidence
+        ? { successfulNativeTurnEvidence: background.acceptanceEvidence }
+        : {}),
+      acceptanceMode: successfulNativeTurnAcceptance ? 'successful-authorized-remote' : 'failure-recovery-local',
       finalStatus: summarizeVoiceStatus(await resumedInvoke('aurora_android_voice_foreground_service_status')),
     }
     console.log(JSON.stringify(result, null, 2))
     return result
   } catch (error) {
-    const diagnostics = collectDiagnostics(context)
+    primaryError = error
+    const diagnostics = context ? collectDiagnostics(context) : { unavailable: true }
     console.error(JSON.stringify({
       ok: false,
       error: errorMessage(error),
       diagnostics,
     }, null, 2))
-    throw error
   } finally {
-    await bestEffortStopVoice(context, webview)
-    webview?.close()
-    adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce'])
-    adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP'])
-    fixtures?.close()
-    releaseLock()
+    const cleanupErrors = []
+    try {
+      if (pairingCleanup) {
+        if (!webview?.client) {
+          launchApp(context)
+          webview = await connectInstalledWebview(context)
+        } else {
+          try {
+            await invokeTauri(webview.client, 'aurora_thin_profile_get')
+          } catch {
+            webview.close()
+            launchApp(context)
+            webview = await connectInstalledWebview(context)
+          }
+        }
+        await pairingCleanup()
+      }
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      if (originalProfileValue !== undefined) {
+        if (!webview?.client) {
+          launchApp(context)
+          webview = await connectInstalledWebview(context)
+        }
+        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: originalProfileValue })
+        if (restored?.ok !== true) throw new Error(`Android profile restoration was rejected: ${JSON.stringify(restored)}`)
+        const readback = await invokeTauri(webview.client, 'aurora_thin_profile_get')
+        if (readback?.value !== originalProfileValue) throw new Error('Android profile restoration readback did not match the original profile.')
+      }
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      await bestEffortStopVoice(context, webview)
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      webview?.close()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try { if (context) adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce']) } catch (error) { cleanupErrors.push(error) }
+    try { if (context) adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']) } catch (error) { cleanupErrors.push(error) }
+    try {
+      fixtures?.close()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      releaseLock()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    try {
+      if (environmentOverlay) {
+        for (const [key, value] of Object.entries(environmentOverlay)) {
+          if (value === undefined) delete inheritedEnvironment[key]
+          else inheritedEnvironment[key] = value
+        }
+      }
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+    if (primaryError && cleanupErrors.length > 0) throw new AggregateError([primaryError, ...cleanupErrors], 'Android voice smoke failed and cleanup also failed.')
+    if (primaryError) throw primaryError
+    if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, 'Android voice smoke cleanup failed.')
   }
 }
 
@@ -571,7 +730,95 @@ export function focusedTranscriptionCompleted(baseline, status) {
     && !status?.captureError
 }
 
-async function proveBackgroundVoice(context, invoke, backgroundPcm) {
+export function successfulNativeTurnAcceptanceEnabled(environment = process.env) {
+  return environment[ANDROID_NATIVE_TURN_ACCEPTANCE_ENV] === '1'
+}
+
+/**
+ * Validate the successful remote assistant result required by the optional
+ * native-turn acceptance lane. The existing local voice smoke intentionally
+ * remains a re-arm/failure recovery check.
+ */
+export function assertSuccessfulNativeTurn({ active, completed, pairingEvidence = null, modelFixture = null, failedTurnsBefore = 0 }) {
+  const generation = nativeTurnGeneration(completed)
+  if (completed?.liveOutcome === 'rearmed' || completed?.captureError === 'assistant_unavailable') {
+    throw new Error(`Successful native turn received the local assistant-unavailable recovery path: ${JSON.stringify({ outcome: completed?.liveOutcome, captureError: completed?.captureError })}`)
+  }
+  if (active?.voiceRoute?.configured !== true) {
+    throw new Error(`Successful native turn requires the native voice route to be configured by the active profile: ${JSON.stringify(active?.voiceRoute ?? null)}`)
+  }
+  if (pairingEvidence?.authenticated !== true || pairingEvidence?.bilaterallyApproved !== true || pairingEvidence?.nativeSessionBound !== true || typeof pairingEvidence?.pythonPeerId !== 'string' || !pairingEvidence.pythonPeerId) {
+    throw new Error(`Successful native turn requires the freshly paired Python peer to be authenticated and bilaterally approved.`)
+  }
+  if (completed?.liveOutcome !== 'completed' && completed?.completed !== true && completed?.assistantCompleted !== true) {
+    throw new Error(`Successful native turn did not complete an assistant response: ${JSON.stringify(completed)}`)
+  }
+  if (generation == null || nativeTurnGeneration(active) === generation) {
+    throw new Error(`Successful native turn did not advance the turn generation: ${JSON.stringify({ active, completed })}`)
+  }
+  if (Number(completed?.failedTurns ?? 0) > Number(failedTurnsBefore)) {
+    throw new Error(`Successful native turn increased failed-turn count: ${JSON.stringify({ failedTurnsBefore, failedTurnsAfter: completed?.failedTurns })}`)
+  }
+  if (typeof modelFixture?.turnId !== 'string' || !modelFixture.turnId || typeof modelFixture.completedText !== 'string' || !modelFixture.completedText) {
+    throw new Error('Successful native turn requires the unique owned model fixture identity.')
+  }
+  return {
+    route: { configured: true, reason: active.voiceRoute.reason ?? 'voice_route_configured' },
+    method: AUTHORIZED_NATIVE_ASSISTANT_METHOD,
+    methodSource: 'apps/aurora-tauri/src-tauri/src/native_mesh_assistant.rs',
+    pythonPeerId: pairingEvidence.pythonPeerId,
+    nativeSessionBound: true,
+    fixture: { label: 'deterministic OpenAI-compatible model fixture', turnId: modelFixture.turnId, completedText: modelFixture.completedText },
+    pcmLabel: ANDROID_NATIVE_TURN_PCM_LABEL,
+    generation,
+    failedTurnsBefore,
+    failedTurnsAfter: Number(completed?.failedTurns ?? 0),
+  }
+}
+
+export function assertNativeTurnUiRecovery({ partialText, pendingVisible, completedText, expectedText }) {
+  if (typeof partialText !== 'string' || partialText.trim().length === 0) {
+    throw new Error('Successful native turn UI acceptance did not observe visible partial assistant text.')
+  }
+  if (pendingVisible !== true) {
+    throw new Error('Successful native turn UI acceptance did not observe the pending assistant state.')
+  }
+  if (typeof completedText !== 'string' || completedText.trim().length === 0) {
+    throw new Error('Successful native turn UI acceptance did not observe the completed assistant reply.')
+  }
+  if (expectedText && completedText !== expectedText) {
+    throw new Error('Successful native turn UI acceptance observed an unexpected completed assistant reply.')
+  }
+  return { partialObserved: true, pendingObserved: true, completedObserved: true }
+}
+
+export function assertNativeTurnPersistenceUniqueness({ beforeRows, afterRows, reopenedRows, generation }) {
+  const before = Array.isArray(beforeRows) ? beforeRows : []
+  const after = Array.isArray(afterRows) ? afterRows : []
+  const reopened = Array.isArray(reopenedRows) ? reopenedRows : []
+  const added = after.filter((row) => !before.some((prior) => prior?.id === row?.id))
+  const users = added.filter((row) => row?.role === 'user')
+  const assistants = added.filter((row) => row?.role === 'assistant')
+  if (users.length !== 1 || assistants.length !== 1) {
+    throw new Error(`Successful native turn expected exactly one user and assistant row; observed ${JSON.stringify({ users: users.length, assistants: assistants.length })}`)
+  }
+  if (JSON.stringify(after) !== JSON.stringify(reopened)) {
+    throw new Error('Successful native turn rows changed after UI reopen.')
+  }
+  const generations = [...new Set(added.map((row) => row?.generation).filter((value) => value != null))]
+  if (generation != null && generations.length > 0 && (generations.length !== 1 || generations[0] !== generation)) {
+    throw new Error(`Successful native turn persisted rows do not share generation ${generation}.`)
+  }
+  return { userRows: 1, assistantRows: 1, sameGeneration: true, duplicateRows: false }
+}
+
+async function proveBackgroundVoice(context, invoke, backgroundPcm, {
+  nativeEventBridge = null,
+  successful = false,
+  activeProfile = null,
+  pairingEvidence = null,
+  modelFixture = null,
+} = {}) {
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before, { background: true })
   const active = await pollVoiceStatus(
@@ -581,13 +828,21 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm) {
     { allowRecoverableBackgroundErrors: true },
   )
   await armLiveTestPcmIngress(invoke)
-  const completed = await completeBackgroundWakeTurn(invoke, backgroundPcm, active, { acceptRearmed: true })
-  if (completed.liveOutcome !== 'rearmed' || Number(completed.failedTurns) <= Number(active.failedTurns ?? 0)) {
+  if (modelFixture?.arm) await modelFixture.arm()
+  const turnRunner = () => completeBackgroundWakeTurn(invoke, backgroundPcm, active, { acceptRearmed: !successful })
+  const observedTurn = nativeEventBridge
+    ? await nativeEventBridge({ active, runTurn: turnRunner })
+    : { completed: await turnRunner(), report: null }
+  const completed = observedTurn.completed
+  if (!successful && (completed.liveOutcome !== 'rearmed' || Number(completed.failedTurns) <= Number(active.failedTurns ?? 0))) {
     throw new Error(`Background local transcription did not re-arm after the optional assistant route was unavailable: ${JSON.stringify(completed)}`)
   }
   if (Number(completed.acceptedSamples) <= Number(active.acceptedSamples ?? 0)) {
     throw new Error('Background native PCM samples were not accepted while completing the local turn.')
   }
+  const acceptanceEvidence = successful
+    ? assertSuccessfulNativeTurn({ active, completed, pairingEvidence, modelFixture, failedTurnsBefore: Number(active.failedTurns ?? 0) })
+    : null
   adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
   await sleep(1_500)
   const serviceVisible = serviceIsVisible(context)
@@ -608,28 +863,1388 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm) {
     notificationVisible,
     wakeLockHeld,
     doze,
+    ...(observedTurn.report ? { nativeEventBridge: observedTurn.report } : {}),
+    ...(acceptanceEvidence ? { acceptanceEvidence } : {}),
   }
 }
 
-async function proveNotificationStop(context, invoke) {
-  await tapNotificationStop(context)
-  const stopped = await pollVoiceStatus(
-    invoke,
-    (status) => status.running !== true
-      && status.captureActive !== true
-      && status.backgroundStoppedByUser === true,
-    'notification Stop action',
-  )
-  await sleep(1_000)
-  const stillStopped = await invoke('aurora_android_voice_foreground_service_status')
-  if (stillStopped.running === true || stillStopped.backgroundStoppedByUser !== true) {
-    throw new Error(`Background voice ignored the notification Stop action: ${JSON.stringify(stillStopped)}`)
+function nativeEventBridgeAcceptanceEnabled() {
+  return process.env[NATIVE_EVENT_BRIDGE_ACCEPTANCE_ENV] === '1'
+}
+
+function nativeEventBridgeStallAcceptanceEnabled() {
+  return process.env[NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE_ENV] === '1'
+}
+
+async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
+  active,
+  activeProfile,
+  runTurn,
+  modelFixture = null,
+  reopenForTurnUi = null,
+  slowConsumer = false,
+}) {
+  if (!webview?.client) throw new Error('Native event bridge acceptance requires an attached Android WebView.')
+  const localDataScope = localDataScopeFromRuntimeProfile(activeProfile)
+  const beforeSnapshot = await nativeEventSnapshot(invoke)
+  const beforeLocalData = await nativeTurnLocalDataSnapshot(invoke, localDataScope, 'beforeTurn')
+  const beforePlaybackCounters = await nativePlaybackCounterSnapshot(invoke, 'beforeTurn')
+  const afterSequence = nativeEventSequenceFromCursor(beforeSnapshot?.lastSequenceId)
+  let collector = null
+  let completed
+  let uiHiddenDuringTurn = false
+  let reopenedWebview = null
+  let secondReopenedWebview = null
+  try {
+    collector = await startNativeEventCollector(webview, {
+      afterSequence,
+      acknowledgeEvents: slowConsumer !== true,
+    })
+    adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
+    uiHiddenDuringTurn = true
+    const turn = runTurn()
+    if (modelFixture) {
+      await modelFixture.waitPending()
+      reopenedWebview = reopenForTurnUi ? await reopenForTurnUi() : await connectInstalledWebview(context)
+      await waitForRenderedNativeTurn(reopenedWebview.client, {
+        partialText: modelFixture.partialText,
+        pending: true,
+      })
+      await modelFixture.resume()
+    } else {
+      const hideDelayMs = Number(process.env.AURORA_ANDROID_NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS ?? NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS)
+      const earlyTurn = await Promise.race([
+        turn.then(() => true, () => true),
+        sleep(Number.isFinite(hideDelayMs) ? hideDelayMs : NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS).then(() => false),
+      ])
+      if (earlyTurn) {
+        await turn
+        throw new Error('Background voice turn settled before the UI could be hidden for native event bridge acceptance.')
+      }
+    }
+    completed = await turn
+    const afterHiddenLocalData = await nativeTurnLocalDataSnapshot(invoke, localDataScope, 'afterHiddenCompletion')
+    const afterHiddenPlaybackCounters = await nativePlaybackCounterSnapshot(invoke, 'afterHiddenCompletion')
+    if (!reopenedWebview) {
+      launchApp(context)
+      reopenedWebview = await connectInstalledWebview(context)
+    }
+    if (modelFixture) {
+      await waitForRenderedNativeTurn(reopenedWebview.client, {
+        completedText: modelFixture.completedText,
+      })
+    }
+    const replayInvoke = (command, args) => invokeTauri(reopenedWebview.client, command, args)
+    const liveCollector = await readNativeEventCollector(webview)
+    const replaySnapshot = await nativeEventSnapshot(replayInvoke, { afterSequence })
+    const afterFirstReopenLocalData = await nativeTurnLocalDataSnapshot(replayInvoke, localDataScope, 'afterFirstReopen')
+    const afterFirstReopenPlaybackCounters = await nativePlaybackCounterSnapshot(replayInvoke, 'afterFirstReopen')
+    const report = assertNativeEventBridgeProgression({
+      active,
+      completed,
+      beforeSnapshot,
+      liveCollector,
+      replaySnapshot,
+      afterSequence,
+      uiHiddenDuringTurn,
+      allowGapEvents: slowConsumer === true,
+      allowIncompleteReplay: slowConsumer === true,
+    })
+    adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
+    await sleep(500)
+    launchApp(context)
+    secondReopenedWebview = await connectInstalledWebview(context)
+    const secondReplayInvoke = (command, args) => invokeTauri(secondReopenedWebview.client, command, args)
+    const secondReplaySnapshot = await nativeEventSnapshot(secondReplayInvoke, { afterSequence })
+    const afterSecondReopenLocalData = await nativeTurnLocalDataSnapshot(secondReplayInvoke, localDataScope, 'afterSecondReopen')
+    const afterSecondReopenPlaybackCounters = await nativePlaybackCounterSnapshot(secondReplayInvoke, 'afterSecondReopen')
+    report.nativePlaybackCounters = assertNativePlaybackNoReplay({
+      beforeTurn: beforePlaybackCounters,
+      afterHiddenCompletion: afterHiddenPlaybackCounters,
+      afterFirstReopen: afterFirstReopenPlaybackCounters,
+      afterSecondReopen: afterSecondReopenPlaybackCounters,
+    })
+    report.ttsReplayMeasured = true
+    report.nativeTtsPlaybackMeasured = true
+    delete report.ttsReplayUnsupportedReason
+    delete report.nativeTtsPlaybackUnsupportedReason
+    report.localDataSnapshots = assertNativeTurnLocalDataRecovery({
+      beforeTurn: beforeLocalData,
+      afterHiddenCompletion: afterHiddenLocalData,
+      afterFirstReopen: afterFirstReopenLocalData,
+      afterSecondReopen: afterSecondReopenLocalData,
+      expectedConversationId: report.correlation?.conversationId,
+      assistantResultExpected: nativeTurnRequiresPersistedAssistantResult(report, report.nativePlaybackCounters),
+    })
+    report.persistedResultUniquenessMeasured = true
+    report.duplicatePersistedResult = false
+    delete report.persistedResultUnsupportedReason
+    report.secondReplayLastSequenceId = secondReplaySnapshot?.lastSequenceId ?? null
+    secondReopenedWebview.close()
+    secondReopenedWebview = null
+    if (slowConsumer === true) {
+      report.slowConsumer = assertNativeEventBridgeSlowConsumerRecovery({
+        active,
+        completed,
+        liveCollector,
+        replaySnapshot,
+        afterSequence,
+      })
+    }
+    await stopNativeEventCollector(webview, collector)
+    reopenedWebview.close()
+    reopenedWebview = null
+    return { completed, report }
+  } catch (error) {
+    await stopNativeEventCollector(webview, collector).catch(() => {})
+    reopenedWebview?.close()
+    secondReopenedWebview?.close()
+    throw error
+  }
+}
+
+async function waitForRenderedNativeTurn(client, { partialText, completedText, pending = false, timeoutMs = DEFAULT_STATUS_TIMEOUT_MS } = {}) {
+  const expected = completedText ?? partialText
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const state = await evaluateWebviewJson(client, `(() => {
+      const thread = document.querySelector('[aria-label="Assistant conversation thread"]');
+      return JSON.stringify({
+        text: thread?.textContent ?? '',
+        pending: Boolean(thread?.querySelector('[role="status"][aria-busy="true"]')),
+      });
+    })()`)
+    if (typeof state.text === 'string' && (!expected || state.text.includes(expected)) && (!pending || state.pending === true)) return state
+    await sleep(250)
+  }
+  throw new Error(`Rendered native turn did not reach the expected ${pending ? 'partial pending' : 'completed'} state.`)
+}
+
+async function navigateAndroidToMesh(client) {
+  await client.send('Runtime.evaluate', {
+    expression: "window.history.pushState({}, '', '/mesh'); window.dispatchEvent(new PopStateEvent('popstate'));",
+    returnByValue: true,
+  }, COMMAND_TIMEOUT_MS)
+  await waitForWebviewPath(client, '/mesh')
+}
+
+async function waitForWebviewPath(client, expectedPath, timeoutMs = DEFAULT_WEBVIEW_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const state = await evaluateWebviewJson(client, 'JSON.stringify({ path: window.location.pathname })')
+    if (state.path === expectedPath) return state
+    await sleep(250)
+  }
+  throw new Error(`Android WebView did not navigate to ${expectedPath}.`)
+}
+
+export function localDataScopeFromRuntimeProfile(activeProfile) {
+  const profileId = typeof activeProfile?.id === 'string' ? activeProfile.id.trim() : ''
+  const localNodeId = typeof activeProfile?.localNode?.stablePeerId === 'string'
+    ? activeProfile.localNode.stablePeerId.trim()
+    : ''
+  if (!profileId || !localNodeId) {
+    throw new Error('Native turn local-data snapshot requires an active profile id and stable local node id.')
+  }
+  return { profileId, localNodeId }
+}
+
+async function nativeTurnLocalDataSnapshot(invoke, scope, phase) {
+  await invoke('aurora_local_data_open', { request: scope })
+  const conversations = arrayResult(await localDataRepositoryOperation(invoke, {
+    kind: 'conversations.listConversations',
+    profileId: scope.profileId,
+    localNodeId: scope.localNodeId,
+  }), 'conversations')
+  const rawCounts = await localDataRepositoryOperation(invoke, {
+    kind: 'conversations.listMessageCounts',
+    profileId: scope.profileId,
+    localNodeId: scope.localNodeId,
+  })
+  const conversationIds = [...new Set([
+    ...conversations.map((conversation) => stringField(conversation, 'id')).filter(Boolean),
+    ...Object.keys(objectResult(rawCounts, 'message counts')),
+  ])].sort()
+  const messagesByConversation = {}
+  for (const conversationId of conversationIds) {
+    messagesByConversation[conversationId] = sanitizeLocalDataMessages(arrayResult(
+      await localDataRepositoryOperation(invoke, {
+        kind: 'conversations.listMessages',
+        profileId: scope.profileId,
+        localNodeId: scope.localNodeId,
+        conversationId,
+      }),
+      `messages for ${conversationId}`,
+    ))
+  }
+  const messageCounts = {}
+  for (const conversationId of conversationIds) {
+    const listedCount = Number(objectResult(rawCounts, 'message counts')[conversationId])
+    const rowCount = messagesByConversation[conversationId].length
+    if (Number.isFinite(listedCount) && listedCount !== rowCount) {
+      throw new Error(`Native turn local-data snapshot count mismatch for ${conversationId}: listed=${listedCount}, rows=${rowCount}`)
+    }
+    messageCounts[conversationId] = rowCount
+  }
+  return {
+    phase,
+    conversationIds,
+    messageCounts,
+    messagesByConversation,
+  }
+}
+
+async function localDataRepositoryOperation(invoke, operation) {
+  return await invoke('aurora_local_data_repository_operation', { request: { operation } })
+}
+
+function sanitizeLocalDataMessages(messages) {
+  return messages.map((message) => ({
+    id: requiredStringField(message, 'id'),
+    conversationId: requiredStringField(message, 'conversationId'),
+    sequence: requiredFiniteNumberField(message, 'sequence'),
+    role: requiredStringField(message, 'role'),
+    status: requiredStringField(message, 'status'),
+    createdAtMs: requiredFiniteNumberField(message, 'createdAtMs'),
+  })).sort(compareLocalDataMessages)
+}
+
+export function assertNativeTurnLocalDataRecovery({
+  beforeTurn,
+  afterHiddenCompletion,
+  afterFirstReopen,
+  afterSecondReopen,
+  expectedConversationId = null,
+  assistantResultExpected = false,
+}) {
+  assertLocalDataSnapshotShape(beforeTurn, 'beforeTurn')
+  assertLocalDataSnapshotShape(afterHiddenCompletion, 'afterHiddenCompletion')
+  assertLocalDataSnapshotShape(afterFirstReopen, 'afterFirstReopen')
+  assertLocalDataSnapshotShape(afterSecondReopen, 'afterSecondReopen')
+  assertExistingLocalDataRowsUnchanged(beforeTurn, afterHiddenCompletion)
+  assertLocalDataSnapshotsEqual(afterHiddenCompletion, afterFirstReopen, 'first UI recovery')
+  assertLocalDataSnapshotsEqual(afterHiddenCompletion, afterSecondReopen, 'second UI recovery')
+
+  const nativeDelta = localDataMessageDelta(beforeTurn, afterHiddenCompletion)
+  const userRows = nativeDelta.newRows.filter((row) => row.role === 'user')
+  const assistantRows = nativeDelta.newRows.filter((row) => row.role === 'assistant')
+  const otherRows = nativeDelta.newRows.filter((row) => row.role !== 'user' && row.role !== 'assistant')
+  if (userRows.length !== 1) {
+    throw new Error(`Native turn local-data recovery expected exactly one new user row; observed ${userRows.length}.`)
+  }
+  if (assistantResultExpected === true && assistantRows.length !== 1) {
+    throw new Error(`Native turn local-data recovery expected exactly one new assistant row; observed ${assistantRows.length}.`)
+  }
+  if (assistantRows.length > 1) {
+    throw new Error(`Native turn local-data recovery observed duplicate assistant rows: ${JSON.stringify(redactLocalDataRows(assistantRows))}`)
+  }
+  if (otherRows.length > 0) {
+    throw new Error(`Native turn local-data recovery observed unexpected row roles: ${JSON.stringify(redactLocalDataRows(otherRows))}`)
+  }
+  if (nativeDelta.conversationIds.length !== 1) {
+    throw new Error(`Native turn local-data recovery changed ${nativeDelta.conversationIds.length} conversations: ${JSON.stringify(nativeDelta.conversationIds)}`)
+  }
+  if (expectedConversationId && nativeDelta.conversationIds[0] !== expectedConversationId) {
+    throw new Error(`Native turn local-data recovery persisted rows in ${nativeDelta.conversationIds[0]}, expected correlated conversation ${expectedConversationId}.`)
+  }
+  const expectedSequences = [...nativeDelta.newRows]
+    .sort(compareLocalDataMessages)
+    .map((row) => row.sequence)
+  for (let index = 1; index < expectedSequences.length; index += 1) {
+    if (expectedSequences[index] !== expectedSequences[index - 1] + 1) {
+      throw new Error(`Native turn local-data recovery rows are not adjacent by sequence: ${JSON.stringify(expectedSequences)}`)
+    }
   }
 
+  const redactedDelta = {
+    conversationId: nativeDelta.conversationIds[0],
+    newRows: redactLocalDataRows(nativeDelta.newRows),
+  }
   return {
-    stopped: stopped.backgroundStoppedByUser === true,
+    beforeTurn: redactedLocalDataSnapshot(beforeTurn),
+    afterHiddenCompletion: {
+      ...redactedLocalDataSnapshot(afterHiddenCompletion),
+      nativeDelta: redactedDelta,
+    },
+    afterFirstReopen: {
+      ...redactedLocalDataSnapshot(afterFirstReopen),
+      sameAsAfterHiddenCompletion: true,
+    },
+    afterSecondReopen: {
+      ...redactedLocalDataSnapshot(afterSecondReopen),
+      sameAsAfterHiddenCompletion: true,
+    },
+    persistedResultUniquenessMeasured: true,
+    duplicatePersistedResult: false,
+    assistantResultExpected: assistantResultExpected === true,
+  }
+}
+
+function arrayResult(value, label) {
+  if (!Array.isArray(value)) throw new Error(`Expected ${label} to return an array.`)
+  return value
+}
+
+function objectResult(value, label) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    throw new Error(`Expected ${label} to return an object.`)
+  }
+  return value
+}
+
+function stringField(value, field) {
+  return typeof value?.[field] === 'string' && value[field].length > 0 ? value[field] : null
+}
+
+function requiredStringField(value, field) {
+  const result = stringField(value, field)
+  if (!result) throw new Error(`Local data message row is missing ${field}.`)
+  return result
+}
+
+function requiredFiniteNumberField(value, field) {
+  const result = Number(value?.[field])
+  if (!Number.isFinite(result)) throw new Error(`Local data message row is missing ${field}.`)
+  return result
+}
+
+function compareLocalDataMessages(left, right) {
+  return String(left.conversationId).localeCompare(String(right.conversationId))
+    || Number(left.sequence) - Number(right.sequence)
+    || String(left.id).localeCompare(String(right.id))
+}
+
+function assertLocalDataSnapshotShape(snapshot, label) {
+  if (!snapshot || typeof snapshot !== 'object') throw new Error(`Missing local-data snapshot: ${label}.`)
+  if (!Array.isArray(snapshot.conversationIds)) throw new Error(`Local-data snapshot ${label} is missing conversation ids.`)
+  objectResult(snapshot.messageCounts, `${label} message counts`)
+  objectResult(snapshot.messagesByConversation, `${label} messages`)
+  const expectedIds = [...snapshot.conversationIds].sort()
+  const messageIds = Object.keys(snapshot.messagesByConversation).sort()
+  if (JSON.stringify(expectedIds) !== JSON.stringify(messageIds)) {
+    throw new Error(`Local-data snapshot ${label} has mismatched conversation/message keys.`)
+  }
+  for (const conversationId of expectedIds) {
+    const messages = arrayResult(snapshot.messagesByConversation[conversationId], `${label} ${conversationId} messages`)
+    const count = Number(snapshot.messageCounts[conversationId])
+    if (!Number.isFinite(count) || count !== messages.length) {
+      throw new Error(`Local-data snapshot ${label} has an invalid count for ${conversationId}.`)
+    }
+    for (const message of messages) {
+      requiredStringField(message, 'id')
+      requiredStringField(message, 'conversationId')
+      requiredStringField(message, 'role')
+      requiredStringField(message, 'status')
+      requiredFiniteNumberField(message, 'sequence')
+      requiredFiniteNumberField(message, 'createdAtMs')
+      if (message.conversationId !== conversationId) {
+        throw new Error(`Local-data snapshot ${label} contains a message in the wrong conversation.`)
+      }
+    }
+  }
+}
+
+function assertExistingLocalDataRowsUnchanged(beforeTurn, afterHiddenCompletion) {
+  const beforeRows = localDataRowsById(beforeTurn)
+  const afterRows = localDataRowsById(afterHiddenCompletion)
+  for (const [id, beforeRow] of beforeRows) {
+    const afterRow = afterRows.get(id)
+    if (!afterRow) throw new Error(`Native turn local-data recovery removed existing row ${id}.`)
+    if (JSON.stringify(beforeRow) !== JSON.stringify(afterRow)) {
+      throw new Error(`Native turn local-data recovery changed existing row ${id}.`)
+    }
+  }
+}
+
+function assertLocalDataSnapshotsEqual(expected, actual, label) {
+  const expectedComparable = comparableLocalDataSnapshot(expected)
+  const actualComparable = comparableLocalDataSnapshot(actual)
+  if (JSON.stringify(expectedComparable) !== JSON.stringify(actualComparable)) {
+    throw new Error(`Native turn local-data snapshot changed after ${label}: ${JSON.stringify({
+      expectedHash: localDataSnapshotHash(expectedComparable),
+      actualHash: localDataSnapshotHash(actualComparable),
+      expected: redactedLocalDataSnapshot(expected),
+      actual: redactedLocalDataSnapshot(actual),
+    })}`)
+  }
+}
+
+function localDataMessageDelta(beforeTurn, afterHiddenCompletion) {
+  const beforeRows = localDataRowsById(beforeTurn)
+  const afterRows = [...localDataRowsById(afterHiddenCompletion).values()]
+  const newRows = afterRows
+    .filter((row) => !beforeRows.has(row.id))
+    .sort(compareLocalDataMessages)
+  return {
+    newRows,
+    conversationIds: [...new Set(newRows.map((row) => row.conversationId))].sort(),
+  }
+}
+
+function localDataRowsById(snapshot) {
+  const rows = new Map()
+  for (const conversationId of snapshot.conversationIds) {
+    for (const row of snapshot.messagesByConversation[conversationId] ?? []) {
+      if (rows.has(row.id)) throw new Error(`Duplicate local-data message id in snapshot: ${row.id}.`)
+      rows.set(row.id, { ...row })
+    }
+  }
+  return rows
+}
+
+function comparableLocalDataSnapshot(snapshot) {
+  const messagesByConversation = {}
+  for (const conversationId of [...snapshot.conversationIds].sort()) {
+    messagesByConversation[conversationId] = [...snapshot.messagesByConversation[conversationId]]
+      .sort(compareLocalDataMessages)
+  }
+  return {
+    conversationIds: [...snapshot.conversationIds].sort(),
+    messageCounts: Object.fromEntries(Object.entries(snapshot.messageCounts).sort(([left], [right]) => left.localeCompare(right))),
+    messagesByConversation,
+  }
+}
+
+function redactedLocalDataSnapshot(snapshot) {
+  return {
+    conversationIds: [...snapshot.conversationIds],
+    messageCounts: { ...snapshot.messageCounts },
+    messageRowsHash: localDataSnapshotHash(comparableLocalDataSnapshot(snapshot)),
+  }
+}
+
+function redactLocalDataRows(rows) {
+  return rows.map((row) => ({
+    id: row.id,
+    conversationId: row.conversationId,
+    role: row.role,
+    sequence: row.sequence,
+    status: row.status,
+    createdAtMs: row.createdAtMs,
+  }))
+}
+
+function localDataSnapshotHash(snapshot) {
+  return createHash('sha256').update(JSON.stringify(snapshot)).digest('hex').slice(0, 16)
+}
+
+
+function nativeTerminalEvidenceKinds(events, subjects) {
+  return [...new Set([
+    ...(Array.isArray(events) ? events : []).map((event) => nativeEventKind(event)),
+    ...(Array.isArray(subjects) ? subjects : []).map((subject) => subject?.kind),
+  ].filter(Boolean))].sort()
+}
+
+export function nativeTurnRequiresPersistedAssistantResult(report, playbackReport) {
+  const matchingObservedKinds = Array.isArray(report?.matchingObservedKinds) ? report.matchingObservedKinds : []
+  const terminalKinds = [...new Set([
+    ...(Array.isArray(report?.terminalKinds) ? report.terminalKinds : []),
+    ...(Array.isArray(report?.terminalEventKinds) ? report.terminalEventKinds : []),
+    ...(Array.isArray(report?.terminalSubjectKinds) ? report.terminalSubjectKinds : []),
+  ])]
+  if (matchingObservedKinds.includes('assistant.completed') || terminalKinds.includes('assistant.completed')) {
+    return true
+  }
+  const finalized = matchingObservedKinds.includes('voice.turn.finalized')
+    || terminalKinds.includes('voice.turn.finalized')
+  return finalized === true
+    && playbackReport?.measured === true
+    && Array.isArray(playbackReport.advancedDuringHiddenCompletion)
+    && playbackReport.advancedDuringHiddenCompletion.includes('globalAudioTrackWrittenSamples')
+}
+
+async function nativePlaybackCounterSnapshot(invoke, phase) {
+  const raw = await invoke('aurora_android_voice_live_test_playback_counters')
+  return sanitizeNativePlaybackCounters(raw, phase)
+}
+
+export function sanitizeNativePlaybackCounters(raw, phase = 'sample') {
+  if (raw?.available !== true) {
+    throw new Error(`Native playback counters are unavailable for ${phase}; build the dedicated Android voice-live debuggable capability.`)
+  }
+  const snapshot = { phase, available: true }
+  for (const field of NATIVE_PLAYBACK_COUNTER_FIELDS) {
+    snapshot[field] = requiredPlaybackCounter(raw, field, phase)
+  }
+  return snapshot
+}
+
+export function assertNativePlaybackNoReplay({
+  beforeTurn,
+  afterHiddenCompletion,
+  afterFirstReopen,
+  afterSecondReopen,
+}) {
+  for (const [label, snapshot] of Object.entries({
+    beforeTurn,
+    afterHiddenCompletion,
+    afterFirstReopen,
+    afterSecondReopen,
+  })) {
+    assertNativePlaybackSnapshot(snapshot, label)
+  }
+  assertPlaybackAdvanced(beforeTurn, afterHiddenCompletion)
+  assertPlaybackStable(afterHiddenCompletion, afterFirstReopen, 'first UI recovery')
+  assertPlaybackStable(afterHiddenCompletion, afterSecondReopen, 'second UI recovery')
+  if (afterHiddenCompletion.globalFailureCount !== 0) {
+    throw new Error(`Native playback counters reported failures after hidden completion: ${afterHiddenCompletion.globalFailureCount}`)
+  }
+  return {
+    beforeTurn: redactNativePlaybackSnapshot(beforeTurn),
+    afterHiddenCompletion: redactNativePlaybackSnapshot(afterHiddenCompletion),
+    afterFirstReopen: {
+      ...redactNativePlaybackSnapshot(afterFirstReopen),
+      sameAsAfterHiddenCompletion: true,
+    },
+    afterSecondReopen: {
+      ...redactNativePlaybackSnapshot(afterSecondReopen),
+      sameAsAfterHiddenCompletion: true,
+    },
+    measured: true,
+    replayedDuringRecovery: false,
+    advancedDuringHiddenCompletion: playbackAdvancedFields(beforeTurn, afterHiddenCompletion),
+  }
+}
+
+const NATIVE_PLAYBACK_COUNTER_FIELDS = [
+  'globalPlayCallCount',
+  'globalChunkEnqueueCount',
+  'globalFinalChunkQueuedCount',
+  'globalDrainNonEmptyCount',
+  'globalAckCount',
+  'globalCompleteCount',
+  'globalFailureCount',
+  'globalAudioTrackPlayCallCount',
+  'globalAudioTrackWrittenSamples',
+]
+
+const NATIVE_PLAYBACK_PROGRESS_FIELDS = [
+  'globalPlayCallCount',
+  'globalChunkEnqueueCount',
+  'globalFinalChunkQueuedCount',
+  'globalDrainNonEmptyCount',
+  'globalAckCount',
+  'globalCompleteCount',
+  'globalAudioTrackPlayCallCount',
+  'globalAudioTrackWrittenSamples',
+]
+
+const NATIVE_PLAYBACK_NO_REPLAY_FIELDS = NATIVE_PLAYBACK_COUNTER_FIELDS
+  .filter((field) => field !== 'globalAudioTrackPlayCallCount')
+
+function requiredPlaybackCounter(raw, field, phase) {
+  const value = Number(raw?.[field])
+  if (!Number.isFinite(value)) {
+    throw new Error(`Native playback counter ${field} is missing for ${phase}.`)
+  }
+  return value
+}
+
+function assertNativePlaybackSnapshot(snapshot, label) {
+  if (!snapshot || snapshot.available !== true) throw new Error(`Native playback counter snapshot ${label} is unavailable.`)
+  for (const field of NATIVE_PLAYBACK_COUNTER_FIELDS) {
+    if (!Number.isFinite(Number(snapshot[field]))) {
+      throw new Error(`Native playback counter snapshot ${label} is missing ${field}.`)
+    }
+  }
+}
+
+function assertPlaybackAdvanced(beforeTurn, afterHiddenCompletion) {
+  const advanced = playbackAdvancedFields(beforeTurn, afterHiddenCompletion)
+  if (advanced.length === 0) {
+    throw new Error('Native playback counters did not advance during hidden native completion.')
+  }
+  if (afterHiddenCompletion.globalPlayCallCount <= beforeTurn.globalPlayCallCount) {
+    throw new Error('Native playback request epoch did not advance during hidden native completion.')
+  }
+  if (afterHiddenCompletion.globalAudioTrackWrittenSamples <= beforeTurn.globalAudioTrackWrittenSamples) {
+    throw new Error('Native playback AudioTrack written samples did not advance during hidden native speech.')
+  }
+  for (const field of NATIVE_PLAYBACK_COUNTER_FIELDS) {
+    if (afterHiddenCompletion[field] < beforeTurn[field]) {
+      throw new Error(`Native playback counter ${field} regressed during hidden completion.`)
+    }
+  }
+}
+
+function assertPlaybackStable(expected, actual, label) {
+  for (const field of NATIVE_PLAYBACK_NO_REPLAY_FIELDS) {
+    if (actual[field] !== expected[field]) {
+      throw new Error(`Native playback counter ${field} changed during ${label}: before=${expected[field]}, after=${actual[field]}`)
+    }
+  }
+}
+
+function playbackAdvancedFields(beforeTurn, afterHiddenCompletion) {
+  return NATIVE_PLAYBACK_PROGRESS_FIELDS
+    .filter((field) => afterHiddenCompletion[field] > beforeTurn[field])
+}
+
+function redactNativePlaybackSnapshot(snapshot) {
+  return {
+    globalPlayCallCount: snapshot.globalPlayCallCount,
+    globalChunkEnqueueCount: snapshot.globalChunkEnqueueCount,
+    globalFinalChunkQueuedCount: snapshot.globalFinalChunkQueuedCount,
+    globalDrainNonEmptyCount: snapshot.globalDrainNonEmptyCount,
+    globalAckCount: snapshot.globalAckCount,
+    globalCompleteCount: snapshot.globalCompleteCount,
+    globalFailureCount: snapshot.globalFailureCount,
+    globalAudioTrackPlayCallCount: snapshot.globalAudioTrackPlayCallCount,
+    globalAudioTrackWrittenSamples: snapshot.globalAudioTrackWrittenSamples,
+  }
+}
+
+async function nativeEventSnapshot(invoke, { afterSequence } = {}) {
+  const request = { kinds: NATIVE_ASSISTANT_EVENT_KINDS }
+  if (afterSequence != null) request.afterSequence = afterSequence
+  return await invoke('aurora_native_event_snapshot', { request })
+}
+
+async function startNativeEventCollector(webview, { afterSequence, acknowledgeEvents = true } = {}) {
+  const request = { source: 'native', kinds: NATIVE_ASSISTANT_EVENT_KINDS, backfill: false }
+  if (afterSequence != null) request.lastSequenceId = `native:${afterSequence}`
+  return await evaluateWebviewJson(webview.client, `(async () => {
+    const invoke = window.__TAURI_INTERNALS__?.invoke;
+    if (typeof invoke !== 'function') throw new Error('tauri_invoke_unavailable');
+    const internals = globalThis.__TAURI_INTERNALS__;
+    const eventApi = globalThis.__TAURI__?.event ?? globalThis.__TAURI_EVENT__ ?? globalThis.__TAURI__;
+    const rawListen = eventApi?.listen;
+    const listen = typeof rawListen === 'function'
+      ? (...args) => rawListen.apply(eventApi, args)
+      : async (eventName, handler) => {
+        if (typeof internals?.transformCallback !== 'function') throw new Error('tauri_event_listen_unavailable');
+        const eventId = internals.transformCallback((event) => handler(event), false);
+        await invoke('plugin:event|listen', { event: eventName, target: { kind: 'Any' }, handler: eventId });
+        return async () => invoke('plugin:event|unlisten', { event: eventName, eventId });
+      };
+    const previous = globalThis.__auroraNativeEventSmoke;
+    if (previous?.unlistenEvents) await previous.unlistenEvents().catch(() => {});
+    if (previous?.unlistenClosed) await previous.unlistenClosed().catch(() => {});
+    if (previous?.descriptor?.subscriptionId) {
+      await invoke('aurora_unsubscribe', { request: { subscriptionId: previous.descriptor.subscriptionId } }).catch(() => {});
+    }
+    const state = {
+      events: [],
+      closed: [],
+      descriptor: null,
+      ready: false,
+      startedAt: Date.now(),
+      errors: [],
+      acknowledgeEvents: ${JSON.stringify(acknowledgeEvents)},
+      acknowledged: [],
+      withheldAcks: [],
+    };
+    globalThis.__auroraNativeEventSmoke = state;
+    let descriptor = null;
+    try {
+      descriptor = await invoke('aurora_subscribe', { request: ${JSON.stringify(request)} });
+      state.descriptor = descriptor;
+      const nativeEventId = (payload) => {
+        const eventShaped = (value) => value && typeof value === 'object' && typeof value.kind === 'string'
+          && (typeof value.id === 'string' || typeof value.eventId === 'string' || Number.isFinite(Number(value.sequence)));
+        const raw = eventShaped(payload)
+          ? payload
+          : payload?.event ?? payload?.payload?.event ?? (eventShaped(payload?.payload) ? payload.payload : payload);
+        if (!raw || typeof raw !== 'object') return null;
+        if (typeof raw.id === 'string') return raw.id;
+        if (typeof raw.eventId === 'string') return raw.eventId;
+        if (Number.isFinite(Number(raw.sequence))) return 'native:' + Number(raw.sequence);
+        return null;
+      };
+      state.unlistenEvents = await listen(descriptor.eventName, (event) => {
+        const payload = event?.payload ?? event ?? null;
+        const eventId = nativeEventId(payload);
+        state.events.push({ receivedAt: Date.now(), payload });
+        if (!eventId) return;
+        if (state.acknowledgeEvents !== true) {
+          state.withheldAcks.push({ eventId, receivedAt: Date.now() });
+          return;
+        }
+        void invoke('aurora_native_event_ack', { request: { subscriptionId: descriptor.subscriptionId, eventId } })
+          .then(() => { state.acknowledged.push({ eventId, receivedAt: Date.now() }); })
+          .catch((error) => { state.errors.push(error?.message ?? String(error)); });
+      });
+      state.unlistenClosed = await listen(descriptor.eventName + '/closed', (event) => {
+        state.closed.push({ receivedAt: Date.now(), payload: event?.payload ?? event ?? null });
+      });
+      await invoke('aurora_activate_subscription', { request: { subscriptionId: descriptor.subscriptionId } });
+      state.ready = true;
+      return JSON.stringify({
+        ready: state.ready,
+        descriptor: state.descriptor,
+        eventCount: state.events.length,
+        closedCount: state.closed.length,
+        acknowledgeEvents: state.acknowledgeEvents,
+      });
+    } catch (error) {
+      state.errors.push(error?.message ?? String(error));
+      if (state.unlistenEvents) await state.unlistenEvents().catch(() => {});
+      if (state.unlistenClosed) await state.unlistenClosed().catch(() => {});
+      if (descriptor?.subscriptionId) {
+        await invoke('aurora_unsubscribe', { request: { subscriptionId: descriptor.subscriptionId } }).catch(() => {});
+      }
+      globalThis.__auroraNativeEventSmoke = null;
+      throw error;
+    }
+  })()`, COMMAND_TIMEOUT_MS)
+}
+
+async function readNativeEventCollector(webview) {
+  return await evaluateWebviewJson(webview.client, `(async () => {
+    const state = globalThis.__auroraNativeEventSmoke;
+    if (!state) return JSON.stringify({ ready: false, events: [], closed: [], errors: ['collector_missing'] });
+    return JSON.stringify({
+      ready: state.ready === true,
+      descriptor: state.descriptor ?? null,
+      events: state.events ?? [],
+      closed: state.closed ?? [],
+      errors: state.errors ?? [],
+      acknowledgeEvents: state.acknowledgeEvents === true,
+      acknowledged: state.acknowledged ?? [],
+      withheldAcks: state.withheldAcks ?? [],
+    });
+  })()`, COMMAND_TIMEOUT_MS)
+}
+
+async function stopNativeEventCollector(webview, collector) {
+  if (!webview?.client || !collector?.descriptor?.subscriptionId) return
+  await evaluateWebviewJson(webview.client, `(async () => {
+    const invoke = window.__TAURI_INTERNALS__?.invoke;
+    const state = globalThis.__auroraNativeEventSmoke;
+    if (state?.unlistenEvents) await state.unlistenEvents().catch(() => {});
+    if (state?.unlistenClosed) await state.unlistenClosed().catch(() => {});
+    if (typeof invoke === 'function') {
+      await invoke('aurora_unsubscribe', { request: { subscriptionId: ${JSON.stringify(collector.descriptor.subscriptionId)} } }).catch(() => {});
+    }
+    globalThis.__auroraNativeEventSmoke = null;
+    return JSON.stringify({ stopped: true });
+  })()`, COMMAND_TIMEOUT_MS)
+}
+
+async function evaluateWebviewJson(client, expression, timeoutMs = COMMAND_TIMEOUT_MS) {
+  const response = await client.send('Runtime.evaluate', {
+    expression,
+    returnByValue: true,
+    awaitPromise: true,
+  }, timeoutMs)
+  const raw = response.result?.result?.value
+  if (typeof raw !== 'string') {
+    throw new Error(`WebView evaluation returned no serialized value: ${JSON.stringify(response)}`)
+  }
+  return parseJson(raw)
+}
+
+export function assertNativeEventBridgeProgression({
+  active,
+  completed,
+  beforeSnapshot,
+  liveCollector,
+  replaySnapshot,
+  afterSequence,
+  uiHiddenDuringTurn,
+  allowGapEvents = false,
+  allowIncompleteReplay = false,
+}) {
+  const liveEvents = normalizeNativeCollectedEvents(liveCollector?.events)
+  const replayEvents = normalizeNativeSnapshotEvents(replaySnapshot?.events)
+  const events = uniqueNativeEvents([...liveEvents, ...replayEvents])
+    .filter((event) => nativeEventAfterSequenceOrGap(event, afterSequence))
+  const subjects = Array.isArray(replaySnapshot?.subjects) ? replaySnapshot.subjects : []
+  const observedKinds = [...new Set(events.map((event) => nativeEventKind(event)).filter(Boolean))].sort()
+  const gapEvents = events.filter((event) => nativeEventKind(event) === 'native.events.gap')
+  assertNativeEventSequencesMonotonic(liveEvents, 'live native events')
+  assertNativeEventSequencesMonotonic(replayEvents, 'native replay snapshot events')
+  if (typeof replaySnapshot?.lastSequenceId !== 'string' || replaySnapshot.lastSequenceId.length === 0) {
+    throw new Error(`Native event snapshot did not report a native cursor: ${nativeBridgeSummaryJson({ replaySnapshot })}`)
+  }
+  if (gapEvents.length > 0 && allowGapEvents !== true) {
+    throw new Error(`Native event subscription reported a replay gap: ${nativeBridgeSummaryJson({ gapEvents })}`)
+  }
+  if (uiHiddenDuringTurn !== true) {
+    throw new Error('Native event bridge acceptance requires the UI to be hidden during the background turn.')
+  }
+  const completedGeneration = nativeTurnGeneration(completed)
+  if (completedGeneration == null) {
+    throw new Error(`Native event bridge acceptance requires a completed background turn generation: ${nativeBridgeSummaryJson({ active, completed })}`)
+  }
+  if (nativeTurnGeneration(active) === completedGeneration) {
+    throw new Error(`Native event bridge acceptance did not observe a new background turn generation: ${nativeBridgeSummaryJson({ active, completed })}`)
+  }
+  if (allowGapEvents !== true) {
+    assertNormalNativeEventAcks({ liveCollector, liveEvents, afterSequence })
+  }
+
+  const matchingLiveEvents = liveEvents
+    .filter((event) => nativeEventAfterSequenceOrGap(event, afterSequence))
+    .filter((event) => nativeVoiceObservationMatchesGeneration(event, completedGeneration))
+  const matchingReplayEvents = replayEvents
+    .filter((event) => nativeEventAfterSequenceOrGap(event, afterSequence))
+    .filter((event) => nativeVoiceObservationMatchesGeneration(event, completedGeneration))
+  const matchingSubjects = subjects.filter((subject) => nativeVoiceObservationMatchesGeneration(subject, completedGeneration))
+  const matchingEvents = uniqueNativeEvents([...matchingLiveEvents, ...matchingReplayEvents])
+  const correlation = assertNativeTurnCorrelation({ completed, events: matchingEvents, subjects: matchingSubjects })
+  const matchingObservedKinds = [...new Set(matchingEvents.map((event) => nativeEventKind(event)).filter(Boolean))].sort()
+  const matchingTerminalEvents = matchingEvents.filter((event) => NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(event)))
+  const matchingTerminalSubjects = matchingSubjects.filter((subject) => subject?.terminal === true || NATIVE_TERMINAL_EVENT_KINDS.has(subject?.kind))
+  const liveVoiceEvents = matchingLiveEvents.filter((event) => nativeEventKind(event)?.startsWith?.('voice.turn.'))
+  const replayVoiceEvents = matchingReplayEvents.filter((event) => nativeEventKind(event)?.startsWith?.('voice.turn.'))
+  const replayVoiceSubjects = matchingSubjects.filter((subject) => subject?.kind?.startsWith?.('voice.turn.'))
+
+  if (replaySnapshot?.replayComplete !== true && (allowIncompleteReplay !== true || (replayVoiceEvents.length === 0 && replayVoiceSubjects.length === 0))) {
+    throw new Error(`Native event replay did not complete after ${beforeSnapshot?.lastSequenceId ?? 'start'}: ${nativeBridgeSummaryJson({ replaySnapshot })}`)
+  }
+
+  if (liveVoiceEvents.length === 0) {
+    throw new Error(`Native event bridge did not deliver live events for background turn generation ${completedGeneration}: ${nativeBridgeSummaryJson({ liveEvents, observedKinds })}`)
+  }
+  if (replayVoiceEvents.length === 0 && replayVoiceSubjects.length === 0) {
+    throw new Error(`Native event replay did not recover background turn generation ${completedGeneration}: ${nativeBridgeSummaryJson({ matchingObservedKinds, subjects })}`)
+  }
+  if (matchingTerminalEvents.length === 0 && matchingTerminalSubjects.length === 0) {
+    throw new Error(`Native event bridge did not expose a terminal state for background turn generation ${completedGeneration}: ${nativeBridgeSummaryJson({ matchingObservedKinds, matchingSubjects })}`)
+  }
+
+  assertNativeTurnTerminalSemantics({
+    generation: completedGeneration,
+    liveEvents: matchingLiveEvents,
+    replayEvents: matchingReplayEvents,
+    subjects: matchingSubjects,
+  })
+
+  return {
+    enabled: true,
+    baselineLastSequenceId: beforeSnapshot?.lastSequenceId ?? null,
+    replayLastSequenceId: replaySnapshot?.lastSequenceId ?? null,
+    replayComplete: replaySnapshot?.replayComplete === true,
+    uiHiddenDuringTurn,
+    uiReopened: true,
+    liveEventCount: liveEvents.length,
+    replayEventCount: replayEvents.length,
+    subjectCount: subjects.length,
+    matchingLiveEventCount: matchingLiveEvents.length,
+    matchingReplayEventCount: matchingReplayEvents.length,
+    matchingReplaySubjectCount: matchingSubjects.length,
+    replayRecovered: replayVoiceEvents.length > 0 || replayVoiceSubjects.length > 0,
+    observedKinds,
+    gapEventCount: gapEvents.length,
+    gapReasons: [...new Set(gapEvents.map((event) => nativeEventPayload(event)?.reason).filter(Boolean))].sort(),
+    matchingObservedKinds,
+    terminalKinds: nativeTerminalEvidenceKinds(matchingTerminalEvents, matchingTerminalSubjects),
+    terminalEventKinds: [...new Set(matchingTerminalEvents.map((event) => nativeEventKind(event)).filter(Boolean))].sort(),
+    terminalSubjectKinds: [...new Set(matchingTerminalSubjects.map((subject) => subject?.kind).filter(Boolean))].sort(),
+    terminalSubjectCount: matchingTerminalSubjects.length,
+    backgroundOutcome: completed?.liveOutcome ?? null,
+    baselineGeneration: active?.sessionGeneration ?? null,
+    completedGeneration,
+    correlation,
+    persistedResultUniquenessMeasured: false,
+    duplicatePersistedResult: null,
+    persistedResultUnsupportedReason: 'The Android live smoke can assert native terminal event and subject identity; existing public Android live APIs do not expose saved conversation row ids or persisted row counts.',
+    ttsReplayMeasured: false,
+    ttsReplayUnsupportedReason: 'Existing public Android live APIs do not expose native TTS playback request ids or playback counts.',
+    nativeTtsPlaybackMeasured: false,
+    nativeTtsPlaybackUnsupportedReason: 'Existing public Android live APIs do not expose native TTS playback request ids or playback counts.',
+  }
+}
+
+export function assertNativeTurnCorrelation({ completed, events = [], subjects = [] }) {
+  const completedPayload = nativeEventPayload(completed)
+  const completedRequestId = completed?.requestId ?? completed?.request_id ?? completedPayload?.requestId ?? completedPayload?.request_id
+  const completedConversationId = completed?.conversationId ?? completed?.conversation_id ?? completedPayload?.conversationId ?? completedPayload?.conversation_id
+  const correlated = [...events, ...subjects].map((item) => {
+    const payload = nativeEventPayload(item)
+    const itemRequestId = item?.requestId ?? item?.request_id ?? payload?.requestId ?? payload?.request_id
+    const itemConversationId = item?.conversationId ?? item?.conversation_id ?? payload?.conversationId ?? payload?.conversation_id
+    return { item, requestId: itemRequestId, conversationId: itemConversationId }
+  }).filter(({ requestId, conversationId }) => requestId && conversationId)
+  const pairs = [...new Set(correlated.map(({ requestId, conversationId }) => `${requestId}\u0000${conversationId}`))]
+  if (pairs.length !== 1) {
+    throw new Error(`Native turn acceptance requires one request/conversation correlation pair; observed ${pairs.length}.`)
+  }
+  const [requestId, conversationId] = pairs[0].split('\u0000')
+  for (const item of [...events, ...subjects]) {
+    const payload = nativeEventPayload(item)
+    const itemRequestId = item?.requestId ?? item?.request_id ?? payload?.requestId ?? payload?.request_id
+    const itemConversationId = item?.conversationId ?? item?.conversation_id ?? payload?.conversationId ?? payload?.conversation_id
+    if (!itemRequestId && !itemConversationId) continue
+    if (!itemRequestId || !itemConversationId || itemRequestId !== requestId || itemConversationId !== conversationId) {
+      throw new Error(`Native turn acceptance observed a partial or conflicting correlation id: ${nativeBridgeSummaryJson({ item, requestId, conversationId })}`)
+    }
+  }
+  const terminalItems = [...events, ...subjects].filter((item) => NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(item)) || item?.terminal === true)
+  if (!terminalItems.some((item) => {
+    const payload = nativeEventPayload(item)
+    const itemRequestId = item?.requestId ?? item?.request_id ?? payload?.requestId ?? payload?.request_id
+    const itemConversationId = item?.conversationId ?? item?.conversation_id ?? payload?.conversationId ?? payload?.conversation_id
+    return itemRequestId === requestId && itemConversationId === conversationId
+  })) {
+    throw new Error(`Native turn acceptance terminal evidence was not correlated to request ${requestId} and conversation ${conversationId}.`)
+  }
+  if ((completedRequestId && completedRequestId !== requestId) || (completedConversationId && completedConversationId !== conversationId)) {
+    throw new Error(`Native turn completion correlation disagrees with event subjects: ${nativeBridgeSummaryJson({ completed, requestId, conversationId })}`)
+  }
+  const matches = correlated.filter(({ requestId: itemRequestId, conversationId: itemConversationId }) => itemRequestId === requestId && itemConversationId === conversationId)
+  if (matches.length === 0) {
+    throw new Error(`Native turn acceptance observed no event or subject for request ${requestId} and conversation ${conversationId}.`)
+  }
+  return { requestId, conversationId, matchingEventCount: matches.length }
+}
+
+
+export function assertNativeEventBridgeSlowConsumerRecovery({
+  active,
+  completed,
+  liveCollector,
+  replaySnapshot,
+  afterSequence,
+}) {
+  const liveEvents = normalizeNativeCollectedEvents(liveCollector?.events)
+    .filter((event) => nativeEventAfterSequenceOrGap(event, afterSequence))
+  const replayEvents = normalizeNativeSnapshotEvents(replaySnapshot?.events)
+    .filter((event) => nativeEventAfterSequenceOrGap(event, afterSequence))
+  const subjects = Array.isArray(replaySnapshot?.subjects) ? replaySnapshot.subjects : []
+  const completedGeneration = nativeTurnGeneration(completed)
+  if (completedGeneration == null) {
+    throw new Error(`Slow native event bridge acceptance requires a completed generation: ${nativeBridgeSummaryJson({ completed })}`)
+  }
+  if (nativeTurnGeneration(active) === completedGeneration) {
+    throw new Error(`Slow native event bridge acceptance did not advance the background generation: ${nativeBridgeSummaryJson({ active, completed })}`)
+  }
+  if (Number(completed?.acceptedSamples ?? 0) <= Number(active?.acceptedSamples ?? 0)) {
+    throw new Error(`Slow native event bridge acceptance did not advance speech samples while acknowledgement was withheld: ${nativeBridgeSummaryJson({ active, completed })}`)
+  }
+  if (liveCollector?.acknowledgeEvents !== false) {
+    throw new Error(`Slow native event bridge acceptance requires acknowledgement withholding: ${nativeBridgeSummaryJson({ liveCollector })}`)
+  }
+  const withheldAckCount = Array.isArray(liveCollector?.withheldAcks) ? liveCollector.withheldAcks.length : 0
+  if (withheldAckCount === 0) {
+    throw new Error(`Slow native event bridge acceptance did not withhold a native event acknowledgement: ${nativeBridgeSummaryJson({ liveCollector })}`)
+  }
+
+  const matchingLiveEvents = liveEvents.filter((event) => nativeVoiceObservationMatchesGeneration(event, completedGeneration))
+  const matchingReplayEvents = replayEvents.filter((event) => nativeVoiceObservationMatchesGeneration(event, completedGeneration))
+  const matchingSubjects = subjects.filter((subject) => nativeVoiceObservationMatchesGeneration(subject, completedGeneration))
+  if (matchingLiveEvents.length === 0) {
+    throw new Error(`Slow native event bridge acceptance did not receive an initial live event before withholding ack: ${nativeBridgeSummaryJson({ liveEvents, completedGeneration })}`)
+  }
+  if (matchingReplayEvents.length === 0 && matchingSubjects.length === 0) {
+    throw new Error(`Slow native event bridge acceptance did not recover the completed turn from replay or subject snapshot: ${nativeBridgeSummaryJson({ completedGeneration, subjects })}`)
+  }
+  const gapEvents = uniqueNativeEvents([...liveEvents, ...replayEvents])
+    .filter((event) => nativeEventKind(event) === 'native.events.gap')
+  const terminalEvents = [...matchingLiveEvents, ...matchingReplayEvents]
+    .filter((event) => NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(event)))
+  const terminalSubjects = matchingSubjects
+    .filter((subject) => subject?.terminal === true || NATIVE_TERMINAL_EVENT_KINDS.has(subject?.kind))
+  if (terminalEvents.length === 0 && terminalSubjects.length === 0) {
+    throw new Error(`Slow native event bridge acceptance did not expose terminal state from snapshot recovery: ${nativeBridgeSummaryJson({ completedGeneration, matchingSubjects })}`)
+  }
+  assertNativeTurnTerminalSemantics({
+    generation: completedGeneration,
+    liveEvents: matchingLiveEvents,
+    replayEvents: matchingReplayEvents,
+    subjects: matchingSubjects,
+  })
+  return {
+    enabled: true,
+    acknowledgementWithheld: true,
+    withheldAckCount,
+    acknowledgedCount: Array.isArray(liveCollector?.acknowledged) ? liveCollector.acknowledged.length : 0,
+    closedCount: Array.isArray(liveCollector?.closed) ? liveCollector.closed.length : 0,
+    hubGapObserved: gapEvents.length > 0,
+    gapReasons: [...new Set(gapEvents.map((event) => nativeEventPayload(event)?.reason).filter(Boolean))].sort(),
+    snapshotRecovered: matchingReplayEvents.length > 0 || matchingSubjects.length > 0,
+    matchingLiveEventCount: matchingLiveEvents.length,
+    matchingReplayEventCount: matchingReplayEvents.length,
+    matchingReplaySubjectCount: matchingSubjects.length,
+    completedGeneration,
+    acceptedSamplesBefore: active?.acceptedSamples ?? null,
+    acceptedSamplesAfter: completed?.acceptedSamples ?? null,
+    limitation: gapEvents.length > 0
+      ? null
+      : 'The live script withheld one-event acknowledgement and proved snapshot recovery plus voice progress; this run did not observe a native hub overrun gap because the production subscribe command does not expose a small subscriber capacity.',
+  }
+}
+
+
+function assertNormalNativeEventAcks({ liveCollector, liveEvents, afterSequence }) {
+  if (liveCollector?.acknowledgeEvents !== true) {
+    throw new Error(`Native event bridge normal mode did not acknowledge native events: ${nativeBridgeSummaryJson({ liveCollector })}`)
+  }
+  const errors = Array.isArray(liveCollector?.errors) ? liveCollector.errors : []
+  if (errors.length > 0) {
+    throw new Error(`Native event bridge normal mode reported acknowledgement errors: ${nativeBridgeSummaryJson({ liveCollector })}`)
+  }
+  const acknowledgedIds = new Set(
+    (Array.isArray(liveCollector?.acknowledged) ? liveCollector.acknowledged : [])
+      .map((entry) => entry?.eventId)
+      .filter((id) => typeof id === 'string' && id.length > 0),
+  )
+  const observedIds = liveEvents
+    .filter((event) => nativeEventSequence(event) == null || afterSequence == null || nativeEventSequence(event) > afterSequence)
+    .map((event) => nativeEventAckId(event))
+    .filter((id) => typeof id === 'string' && id.length > 0)
+  const missingAckIds = observedIds.filter((id) => !acknowledgedIds.has(id))
+  if (missingAckIds.length > 0) {
+    throw new Error(`Native event bridge normal mode received events without successful acknowledgement: ${nativeBridgeSummaryJson({ liveCollector, missingAckIds })}`)
+  }
+}
+
+function nativeEventAfterSequenceOrGap(event, afterSequence) {
+  if (afterSequence == null) return true
+  const sequence = nativeEventSequence(event)
+  if (sequence == null || sequence > afterSequence) return true
+  if (nativeEventKind(event) !== 'native.events.gap') return false
+  const payload = nativeEventPayload(event)
+  const firstMissingSequence = Number(payload?.firstMissingSequence ?? payload?.first_missing_sequence)
+  const nextAvailableSequence = Number(payload?.nextAvailableSequence ?? payload?.next_available_sequence)
+  return (Number.isFinite(firstMissingSequence) && firstMissingSequence > afterSequence)
+    || (Number.isFinite(nextAvailableSequence) && nextAvailableSequence > afterSequence)
+}
+
+function nativeEventAckId(event) {
+  if (!event || typeof event !== 'object') return null
+  if (typeof event.id === 'string') return event.id
+  if (typeof event.eventId === 'string') return event.eventId
+  const sequence = nativeEventSequence(event)
+  return sequence == null ? null : `native:${sequence}`
+}
+
+function nativeBridgeSummaryJson(input) {
+  return JSON.stringify(nativeBridgeSummary(input))
+}
+
+function nativeBridgeSummary(input) {
+  return {
+    active: summarizeNativeTurn(input?.active),
+    completed: summarizeNativeTurn(input?.completed),
+    completedGeneration: input?.completedGeneration ?? null,
+    liveCollector: summarizeNativeCollector(input?.liveCollector),
+    liveEvents: summarizeNativeEvents(input?.liveEvents),
+    replaySnapshot: summarizeNativeSnapshot(input?.replaySnapshot),
+    gapEvents: summarizeNativeEvents(input?.gapEvents),
+    subjects: summarizeNativeSubjects(input?.subjects),
+    matchingSubjects: summarizeNativeSubjects(input?.matchingSubjects),
+    observedKinds: Array.isArray(input?.observedKinds) ? input.observedKinds : undefined,
+    matchingObservedKinds: Array.isArray(input?.matchingObservedKinds) ? input.matchingObservedKinds : undefined,
+    missingAckIds: Array.isArray(input?.missingAckIds) ? input.missingAckIds : undefined,
+  }
+}
+
+function summarizeNativeCollector(collector) {
+  if (!collector || typeof collector !== 'object') return null
+  return {
+    ready: collector.ready === true,
+    acknowledgeEvents: collector.acknowledgeEvents === true,
+    eventCount: Array.isArray(collector.events) ? collector.events.length : 0,
+    acknowledgedCount: Array.isArray(collector.acknowledged) ? collector.acknowledged.length : 0,
+    acknowledgedIds: summarizeNativeIds(collector.acknowledged),
+    withheldAckCount: Array.isArray(collector.withheldAcks) ? collector.withheldAcks.length : 0,
+    withheldAckIds: summarizeNativeIds(collector.withheldAcks),
+    closedCount: Array.isArray(collector.closed) ? collector.closed.length : 0,
+    errorCount: Array.isArray(collector.errors) ? collector.errors.length : 0,
+  }
+}
+
+function summarizeNativeSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return null
+  return {
+    lastSequenceId: typeof snapshot.lastSequenceId === 'string' ? snapshot.lastSequenceId : null,
+    replayComplete: snapshot.replayComplete === true,
+    eventCount: Array.isArray(snapshot.events) ? snapshot.events.length : 0,
+    events: summarizeNativeEvents(snapshot.events),
+    subjectCount: Array.isArray(snapshot.subjects) ? snapshot.subjects.length : 0,
+    subjects: summarizeNativeSubjects(snapshot.subjects),
+  }
+}
+
+function summarizeNativeEvents(events) {
+  if (!Array.isArray(events)) return undefined
+  return events.map((event) => ({
+    id: nativeEventAckId(event),
+    sequence: nativeEventSequence(event),
+    kind: nativeEventKind(event),
+    generation: nativeTurnGeneration(event),
+    reason: nativeEventPayload(event)?.reason ?? undefined,
+  }))
+}
+
+function summarizeNativeSubjects(subjects) {
+  if (!Array.isArray(subjects)) return undefined
+  return subjects.map((subject) => ({
+    id: typeof subject?.id === 'string' ? subject.id : undefined,
+    subject: typeof subject?.subject === 'string' ? subject.subject : undefined,
+    kind: typeof subject?.kind === 'string' ? subject.kind : undefined,
+    generation: nativeTurnGeneration(subject),
+    terminal: subject?.terminal === true,
+    persisted: subject?.persisted === true,
+  }))
+}
+
+function summarizeNativeTurn(turn) {
+  if (!turn || typeof turn !== 'object') return null
+  return {
+    generation: nativeTurnGeneration(turn),
+    acceptedSamples: Number.isFinite(Number(turn.acceptedSamples)) ? Number(turn.acceptedSamples) : null,
+    liveOutcome: typeof turn.liveOutcome === 'string' ? turn.liveOutcome : null,
+  }
+}
+
+function summarizeNativeIds(entries) {
+  if (!Array.isArray(entries)) return []
+  return entries
+    .map((entry) => (typeof entry?.eventId === 'string' ? entry.eventId : null))
+    .filter(Boolean)
+}
+
+function normalizeNativeCollectedEvents(entries) {
+  if (!Array.isArray(entries)) return []
+  return entries.map((entry) => normalizeNativeEventPayload(entry?.payload ?? entry)).filter(Boolean)
+}
+
+function normalizeNativeSnapshotEvents(entries) {
+  if (!Array.isArray(entries)) return []
+  return entries.map((entry) => normalizeNativeEventPayload(entry)).filter(Boolean)
+}
+
+function normalizeNativeEventPayload(payload) {
+  if (!payload || typeof payload !== 'object') return null
+  if (isNativeAuroraEvent(payload)) return payload
+  if (isNativeAuroraEvent(payload.event)) return payload.event
+  if (isNativeAuroraEvent(payload.payload)) return payload.payload
+  if (isNativeAuroraEvent(payload.payload?.event)) return payload.payload.event
+  return null
+}
+
+function isNativeAuroraEvent(value) {
+  if (!value || typeof value !== 'object') return false
+  return typeof value.kind === 'string'
+    && (nativeEventSequence(value) != null || typeof value.id === 'string' || typeof value.eventId === 'string')
+}
+
+function uniqueNativeEvents(events) {
+  const seen = new Set()
+  const unique = []
+  for (const event of events) {
+    const key = nativeEventIdentity(event)
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(event)
+  }
+  return unique
+}
+
+function nativeEventIdentity(event) {
+  if (nativeEventKind(event) === 'native.events.gap') {
+    const payload = nativeEventPayload(event)
+    return [
+      event?.id ?? event?.eventId ?? event?.sequence ?? 'gap',
+      nativeEventKind(event),
+      payload?.reason ?? '',
+      payload?.firstMissingSequence ?? payload?.first_missing_sequence ?? '',
+      payload?.nextAvailableSequence ?? payload?.next_available_sequence ?? '',
+    ].join(':')
+  }
+  return String(event?.id ?? event?.eventId ?? event?.sequence ?? JSON.stringify(event))
+}
+
+function nativeEventKind(event) {
+  return event?.kind ?? event?.eventKind ?? event?.payload?.kind ?? null
+}
+
+function nativeEventPayload(item) {
+  return item?.payload && typeof item.payload === 'object' ? item.payload : item
+}
+
+function nativeTurnGeneration(item) {
+  const payload = nativeEventPayload(item)
+  const value = payload?.generation ?? item?.generation ?? item?.sessionGeneration ?? item?.session_generation
+  const number = Number(value)
+  return Number.isFinite(number) ? number : null
+}
+
+function nativeVoiceObservationMatchesGeneration(item, generation) {
+  if (!item || typeof item !== 'object') return false
+  const expectedSubject = `voice:${generation}`
+  const itemGeneration = nativeTurnGeneration(item)
+  if (itemGeneration === generation) return true
+  if (item.subject === expectedSubject) return true
+  if (Array.isArray(item.subjects) && item.subjects.includes(expectedSubject)) return true
+  const payload = nativeEventPayload(item)
+  return payload?.subject === expectedSubject || (Array.isArray(payload?.subjects) && payload.subjects.includes(expectedSubject))
+}
+
+function nativeEventSequence(event) {
+  const direct = Number(event?.sequence ?? event?.sequenceId ?? event?.sequence_id)
+  if (Number.isFinite(direct)) return direct
+  return nativeEventSequenceFromCursor(event?.id ?? event?.eventId ?? event?.lastSequenceId)
+}
+
+function nativeEventSequenceFromCursor(cursor) {
+  const match = typeof cursor === 'string' ? /^native:(\d+)$/u.exec(cursor) : null
+  if (!match) return null
+  const value = Number(match[1])
+  return Number.isFinite(value) ? value : null
+}
+
+function assertNativeEventSequencesMonotonic(events, label) {
+  let previous = null
+  for (const event of events) {
+    const sequence = nativeEventSequence(event)
+    if (sequence == null) continue
+    if (previous != null && sequence < previous) {
+      throw new Error(`${label} regressed from sequence ${previous} to sequence ${sequence}.`)
+    }
+    previous = sequence
+  }
+}
+
+function assertNativeTurnTerminalSemantics({ generation, liveEvents, replayEvents, subjects }) {
+  const eventTerminals = [...liveEvents, ...replayEvents]
+    .filter((event) => nativeEventKind(event)?.startsWith?.('voice.turn.'))
+    .filter((event) => NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(event)))
+  const subjectTerminals = subjects
+    .filter((subject) => subject?.kind?.startsWith?.('voice.turn.'))
+    .filter((subject) => subject?.terminal === true || NATIVE_TERMINAL_EVENT_KINDS.has(subject?.kind))
+  const terminalKinds = new Set([
+    ...eventTerminals.map((event) => nativeEventKind(event)),
+    ...subjectTerminals.map((subject) => subject?.kind),
+  ].filter(Boolean))
+  if (terminalKinds.size > 1) {
+    throw new Error(`Native event bridge reported conflicting terminal states for background turn generation ${generation}: ${JSON.stringify([...terminalKinds].sort())}`)
+  }
+
+  const terminalSequences = [...new Set(eventTerminals
+    .map((event) => nativeEventSequence(event))
+    .filter((sequence) => sequence != null))]
+  if (terminalSequences.length > 1) {
+    throw new Error(`Native event bridge reported duplicate terminal results for background turn generation ${generation}: ${terminalSequences.map((sequence) => `native:${sequence}`).join(', ')}`)
+  }
+
+  const terminalSequence = terminalSequences[0]
+  if (terminalSequence != null) {
+    const laterNonTerminal = [...liveEvents, ...replayEvents]
+      .filter((event) => nativeEventKind(event)?.startsWith?.('voice.turn.'))
+      .filter((event) => !NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(event)))
+      .map((event) => nativeEventSequence(event))
+      .filter((sequence) => sequence != null && sequence > terminalSequence)
+    if (laterNonTerminal.length > 0) {
+      throw new Error(`Native event bridge reported non-terminal events after the terminal state for background turn generation ${generation}: ${JSON.stringify(laterNonTerminal)}`)
+    }
+  }
+}
+
+async function proveNotificationStop(context, invoke, { interactionMode = notificationInteractionMode() } = {}) {
+  const preconditions = await assertNotificationStopPreconditions(context, invoke)
+  const stopped = interactionMode === 'external'
+    ? await waitForExternalNotificationStop(context, invoke)
+    : await tapNotificationStop(context).then(() => pollNotificationStopPostconditions(context, invoke))
+  const stillStopped = stopped.status
+
+  return {
+    interactionMode,
+    preconditions,
+    stopped: stopped.status.backgroundStoppedByUser === true,
+    stoppedStatus: summarizeVoiceStatus(stopped.status),
+    finalStoppedStatus: summarizeVoiceStatus(stillStopped),
+    serviceStopped: stopped.serviceVisible === false,
+    notificationDismissed: stopped.notificationVisible === false,
     remainedStoppedUntilReopen: true,
     restartedOnReopen: false,
+  }
+}
+
+export function notificationInteractionMode(value = process.env[NOTIFICATION_INTERACTION_MODE_ENV]) {
+  const mode = value == null || value === '' ? 'automatic' : String(value).trim().toLowerCase()
+  if (!NOTIFICATION_INTERACTION_MODES.has(mode)) {
+    throw new Error(`Unsupported Android notification interaction mode: ${mode}`)
+  }
+  return mode
+}
+
+export function notificationStopPostcondition(status) {
+  return status?.running !== true
+    && status?.captureActive !== true
+    && status?.backgroundStoppedByUser === true
+}
+
+export async function pollNotificationStopPostconditions(context, invoke, {
+  sleepFn = sleep,
+  serviceVisible = () => serviceIsVisibleStrict(context),
+  notificationVisible = () => notificationIsVisibleStrict(context),
+  timeoutMs = Number(process.env.AURORA_ANDROID_VOICE_STATUS_TIMEOUT_MS ?? DEFAULT_STATUS_TIMEOUT_MS),
+  now = () => Date.now(),
+} = {}) {
+  const deadline = now() + timeoutMs
+  let last
+  while (now() < deadline) {
+    last = await invoke('aurora_android_voice_foreground_service_status')
+    const serviceStillVisible = serviceVisible() === true
+    const notificationStillVisible = notificationVisible() === true
+    if (notificationStopPostcondition(last) && !serviceStillVisible && !notificationStillVisible) {
+      return {
+        status: last,
+        serviceVisible: serviceStillVisible,
+        notificationVisible: notificationStillVisible,
+      }
+    }
+    await sleepFn(STATUS_POLL_MS)
+  }
+  throw new Error(`Android notification Stop postconditions timed out. Last status: ${JSON.stringify({
+    status: last,
+    serviceVisible: serviceVisible() === true,
+    notificationVisible: notificationVisible() === true,
+  })}`)
+}
+
+export async function assertNotificationStopPreconditions(context, invoke, {
+  serviceVisible = serviceIsVisible(context),
+  notificationVisible = notificationIsVisible(context),
+} = {}) {
+  const status = await invoke('aurora_android_voice_foreground_service_status')
+  if (status?.running !== true || status?.backgroundSessionActive !== true || status?.captureActive !== true
+    || serviceVisible !== true || notificationVisible !== true) {
+    throw new Error(`Notification Stop preconditions were not live: ${JSON.stringify({
+      status: summarizeVoiceStatus(status), serviceVisible, notificationVisible,
+    })}`)
+  }
+  return { status: summarizeVoiceStatus(status), serviceVisible, notificationVisible }
+}
+
+export async function waitForExternalNotificationStop(context, invoke, {
+  emit = (marker) => console.log(JSON.stringify(marker)),
+  expand = () => adbRun(context, ['shell', 'cmd', 'statusbar', 'expand-notifications']),
+  collapse = () => adbTry(context, ['shell', 'cmd', 'statusbar', 'collapse']),
+  wake = () => adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']),
+  dismissKeyguard = () => adbTry(context, ['shell', 'wm', 'dismiss-keyguard']),
+  wait = sleep,
+  serviceVisible = () => serviceIsVisibleStrict(context),
+  notificationVisible = () => notificationIsVisibleStrict(context),
+  now = () => Date.now(),
+  timeoutMs = Number(process.env.AURORA_ANDROID_VOICE_STATUS_TIMEOUT_MS ?? DEFAULT_STATUS_TIMEOUT_MS),
+} = {}) {
+  collapse()
+  wake()
+  dismissKeyguard()
+  expand()
+  await wait(750)
+  emit({
+    event: 'notification_stop_waiting',
+    interactionMode: 'external',
+    deadline: Date.now() + Number(process.env.AURORA_ANDROID_VOICE_STATUS_TIMEOUT_MS ?? DEFAULT_STATUS_TIMEOUT_MS),
+    postcondition: 'backgroundStoppedByUser_and_capture_inactive_and_service_stopped',
+  })
+  try {
+    return await pollNotificationStopPostconditions(context, invoke, {
+      sleepFn: wait,
+      serviceVisible,
+      notificationVisible,
+      now,
+      timeoutMs,
+    })
+  } finally {
+    collapse()
   }
 }
 
@@ -639,9 +2254,10 @@ async function tapNotificationStop(context) {
   adbTry(context, ['shell', 'wm', 'dismiss-keyguard'])
   adbRun(context, ['shell', 'cmd', 'statusbar', 'expand-notifications'])
   await sleep(750)
-  let hierarchy = adbOutput(context, ['exec-out', 'uiautomator', 'dump', '/dev/tty'])
+  let capture = captureUiAutomatorHierarchy(context)
+  assertNotificationHierarchyAvailable(capture)
   let action = auroraNotificationNodeBounds(
-    hierarchy,
+    capture.hierarchy,
     {
       resourceId: 'android:id/action0',
       text: 'Stop',
@@ -653,7 +2269,7 @@ async function tapNotificationStop(context) {
   // action is present instead of assuming SystemUI renders it while collapsed.
   for (let attempt = 0; !action && attempt < 6; attempt += 1) {
     const expand = auroraNotificationNodeBounds(
-      hierarchy,
+      capture.hierarchy,
       {
         resourceId: 'android:id/expand_button',
         contentDesc: 'Expand',
@@ -669,9 +2285,10 @@ async function tapNotificationStop(context) {
       String(Math.round((expand.top + expand.bottom) / 2)),
     ])
     await sleep(750)
-    hierarchy = adbOutput(context, ['exec-out', 'uiautomator', 'dump', '/dev/tty'])
+    capture = captureUiAutomatorHierarchy(context)
+    assertNotificationHierarchyAvailable(capture)
     action = auroraNotificationNodeBounds(
-      hierarchy,
+      capture.hierarchy,
       {
         resourceId: 'android:id/action0',
         text: 'Stop',
@@ -694,6 +2311,50 @@ async function tapNotificationStop(context) {
   adbRun(context, ['shell', 'cmd', 'statusbar', 'collapse'])
 }
 
+export function parseUiAutomatorCapture({ status, stdout = '', stderr = '', error = null }) {
+  const hierarchy = String(stdout)
+  const diagnostic = {
+    exitCode: status,
+    stdout: String(stdout),
+    stderr: String(stderr),
+    ...(error ? {
+      error: {
+        message: String(error.message ?? error),
+        ...(error.code ? { code: String(error.code) } : {}),
+      },
+    } : {}),
+  }
+  if (status !== 0 || !/^\s*<\?xml[\s\S]*<hierarchy\b[\s\S]*<\/hierarchy>\s*$/u.test(hierarchy)) {
+    return { ok: false, hierarchy: '', diagnostic }
+  }
+  return { ok: true, hierarchy, diagnostic }
+}
+
+function captureUiAutomatorHierarchy(context) {
+  const result = spawnSync(
+    context.adb,
+    ['-s', context.serial, 'exec-out', 'uiautomator', 'dump', '/dev/tty'],
+    { encoding: 'utf8' },
+  )
+  if (result.error) {
+    return parseUiAutomatorCapture({
+      status: result.status,
+      stdout: result.stdout ?? '',
+      stderr: result.stderr ?? '',
+      error: result.error,
+    })
+  }
+  return parseUiAutomatorCapture({
+    status: result.status,
+    stdout: result.stdout,
+    stderr: result.stderr,
+  })
+}
+
+function assertNotificationHierarchyAvailable(capture) {
+  if (capture.ok) return
+  throw new Error(`notification hierarchy unavailable: ${JSON.stringify(capture.diagnostic)}`)
+}
 export function auroraNotificationNodeBounds(hierarchy, attributes = {}, appId = DEFAULT_APP_ID) {
   const stack = []
   for (const match of String(hierarchy ?? '').matchAll(/<node\b[^>]*\/>|<node\b[^>]*>|<\/node>/gu)) {
@@ -1419,9 +3080,21 @@ function serviceIsVisible(context) {
   return output.includes('AuroraRuntimeForegroundService')
 }
 
+function serviceIsVisibleStrict(context) {
+  return adbOutput(context, ['shell', 'dumpsys', 'activity', 'services', context.appId])
+    .includes('AuroraRuntimeForegroundService')
+}
+
 function notificationIsVisible(context) {
   const output = adbOutput(context, ['shell', 'dumpsys', 'notification', '--noredact'], { allowFailure: true })
   return notificationIsVisibleFromDump(output, context.appId)
+}
+
+function notificationIsVisibleStrict(context) {
+  return notificationIsVisibleFromDump(
+    adbOutput(context, ['shell', 'dumpsys', 'notification', '--noredact']),
+    context.appId,
+  )
 }
 
 export function notificationIsVisibleFromDump(output, appId) {

@@ -58,3 +58,112 @@ background listening without separately proven native adapters.
 - [WebView WebRTC protocol contract](../../docs/WEBVIEW_WEBRTC_PROTOCOL_CONTRACT.md)
 - [Production UI contracts](../../docs/PRODUCTION_UI_CONTRACTS.md)
 - [Accessibility/responsive/visual tests](../../docs/ACCESSIBILITY_RESPONSIVE_VISUAL_TESTS.md)
+
+## UI ownership boundaries
+
+`src/feature-manifest.tsx` is the package source for Aurora route identity, route copy, navigation metadata, availability policy, and lazy route entries. Web and Tauri hosts should project route adapters from the manifest and keep host-specific chrome, shell wiring, and platform bridges in their own files.
+
+TanStack Query owns server, peer, and route data fetching. Query subscriptions and live shell events update cached server snapshots when a host can provide events. Routes that still need a timed safety refresh use the shared 15 second query fallback family from the query layer instead of route-local polling loops.
+
+Zustand stores own client state such as the active surface, connection profile state, and local stream buffers. Server or peer records should not be moved into zustand stores to avoid creating a second cache beside Query.
+
+Decomposition helpers should preserve existing public view props and route resource exports. Hooks such as `usePeerRoster` and `useSpeechCatalog`, diagnostics controllers, and section helpers are package-internal unless they are intentionally promoted through `src/index.ts` or a documented package subpath for a host adapter.
+
+When adding a new route, update the feature manifest first, then derive nav, shell, product copy, web route registry, and Tauri route projections from that entry. A route should not add a parallel manual inventory unless the host needs platform-specific adapter metadata that cannot belong in the shared manifest.
+
+## Styling contract
+
+Edit `src/styles.input.css`, then run `pnpm --filter @aurora/ui build:styles`.
+Tailwind v4 generates `src/styles.css`, exported as `@aurora/ui/styles.css`,
+and copies it into `dist`. Never hand-edit the generated stylesheet. Hosts
+import the shared output; add app source paths to the shared pipeline when needed.
+Use theme tokens from `@theme`, existing `components/ui` primitives, and static
+utilities in JSX. Delete owned CSS rules when their consumers move to utilities.
+
+Run `pnpm --filter @aurora/ui check:styles` to check generated coverage and
+`pnpm --filter @aurora/ui test:styles` for guardrail regression tests.
+`scripts/style-guardrail-inventory.json` records the compatibility budget; new
+custom classes or unresolved dynamic class sites require explicit review.
+Do not add empty selectors or blanket exceptions to silence missing-style errors.
+Retained CSS handles shared component descendants, platform viewport/keyboard
+state, safe-area sizing, older WebView fallbacks, and animation keyframes.
+Development preview overrides stay isolated in the debug-only web module.
+
+## Public exports
+
+`package.json` defines supported subpaths. Web and Tauri use explicit view and
+runtime subpaths for lazy route loading and host adapters. Preserve public
+exports when decomposing a view; private helpers remain internal. The
+`./components/*`, `./lib/*`, and `./hooks/*` patterns are compatibility surfaces.
+Removing a public export requires considering both repository imports and
+external consumers, separately from unused dependency cleanup.
+
+The root `src/index.ts` barrel is for stable host-facing components, contracts,
+and adapters. Prefer an explicit subpath when a host needs only one lazy view or
+runtime adapter. Do not promote a hook, store, test seam, or section helper to
+the root barrel just because it is exported from its defining file. A workspace
+search found no live workspace consumer of the legacy store class, but it cannot
+establish compatibility for external package users. PER-282 therefore prunes
+the unused `./assistant-stream-store` class export and package subpath as an
+intentional API change; external compatibility is unproven. Production
+streaming continues to use the Zustand store at
+`./state/assistant-stream-store`, which remains exported and covered by the
+existing production-store behavior tests.
+
+### Dependency ownership
+
+Every runtime dependency below has a current source importer. Keep this table
+aligned with `package.json` when dependencies or UI surfaces change.
+
+| Dependency | Live importer | Surface effect |
+| --- | --- | --- |
+| `@assistant-ui/react` | `components/assistant-ui/tool-fallback.tsx`, `mermaid-diagram.tsx`, `model-selector.tsx` | Assistant messages, diagrams, and model controls |
+| `@assistant-ui/react-markdown` | `components/assistant-ui/mermaid-diagram.tsx` | Markdown rendering types for assistant diagrams |
+| `@assistant-ui/react-mcp` | `components/assistant-ui/mcp-config.tsx` | MCP configuration panel |
+| `@assistant-ui/store` | `components/assistant-ui/mcp-config.tsx` | Assistant UI state access |
+| `@aurora/client` | `assistant-history-model.ts`, `browser-native-capability-pack.ts`, and runtime adapters | Typed SDK, service, and event boundaries |
+| `@aurora/voice-web` | `use-assistant-tts.ts`, `browser-speech-pack.ts` | Browser speech and playback |
+| `@base-ui/react` | `components/ui/*` | Shared accessible UI primitives |
+| `@floating-ui/react` | `components/animate-ui/primitives/animate/tooltip.tsx` | Tooltip positioning |
+| `@shadcn/react` | `components/ui/message-scroller.tsx` | Assistant message scrolling |
+| `@sqlite.org/sqlite-wasm` | `local-data/browser-sqlite-worker.ts` | Browser-local SQL storage |
+| `beautiful-mermaid` | `components/assistant-ui/mermaid-diagram.tsx` | Assistant diagram rendering |
+| `class-variance-authority` | `components/ui/field.tsx`, `attachment.tsx`, `sidebar.tsx`, `marker.tsx` | Declarative primitive variants |
+| `clsx` | `shadcn-lib/utils.ts` | Conditional class composition |
+| `cmdk` | `components/ui/command.tsx` | Command palette behavior |
+| `lucide-react` | `feature-manifest.tsx`, `nav.tsx`, and shared views | Product and navigation icons |
+| `motion` | `components/animate-ui/*`, `tooling/tool-sharing-controls.tsx` | UI transitions and animated controls |
+| `next-themes` | `components/ui/sonner.tsx` | Theme-aware toast presentation |
+| `qrcode` | `mesh-peers-sections.tsx` (dynamic import) | Pairing invite QR rendering |
+| `radix-ui` | `components/ui/direction.tsx`, `components/assistant-ui/model-selector.tsx` | Direction and select primitives |
+| `react` | Shared components and hooks | UI rendering and state lifecycle |
+| `react-resizable-panels` | `components/ui/resizable.tsx` | Resizable panels |
+| `sonner` | `primitives.tsx`, `components/ui/sonner.tsx` | User notifications |
+| `tailwind-merge` | `shadcn-lib/utils.ts` | Utility-class conflict resolution |
+| `zustand` | `src/state/{assistant-stream-store,connection-store,surface-store}.ts` | Client-side UI state |
+| `@tanstack/react-query` | `query-hooks.ts`, assistant history, peer roster, speech catalog, and data views | Remote/local query caching and synchronization |
+
+`@types/qrcode` is the development type package for the dynamic `qrcode`
+import. Other development dependencies serve test, typecheck, coverage, or
+style-build workflows rather than production UI behavior.
+
+## View composition
+
+The view modules keep product surfaces together while stateful behavior is
+extracted into hooks and focused sections. Current measured sizes are:
+
+| View | Lines | Composition responsibility |
+| --- | ---: | --- |
+| `assistant-view.tsx` | 728 | Compose assistant session, history, streaming, voice, and execution hooks with the conversation and composer surfaces. |
+| `mesh-peers-view.tsx` | 1,082 | Compose peer roster, pairing, connection state, and mesh administration sections. |
+| `voice-settings-view.tsx` | 635 | Compose voice catalog, local speech-pack, language, and runtime setting sections. |
+
+PER-282 gives approximate targets of 600 lines for the top-level `AssistantView`
+and 400 lines for extracted units; its separate acceptance criterion is that no
+`*-view.tsx` exceed approximately 1,500 lines without written justification.
+The 728-line `assistant-view.tsx` module includes imports, types, and public
+re-exports: exported `AssistantView` is a 9-line provider wrapper, and its
+`AssistantQueryView` composition spans 593 lines. Module line count therefore
+does not equal the top-level component's size. Further decomposition should
+follow existing component or state seams while preserving public props and
+behavior; these measurements alone do not claim PER-282 acceptance.

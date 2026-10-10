@@ -5,6 +5,7 @@ import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, ToneBadge, presentableSignal, type BadgeTone } from './status-badges'
 import { Button } from '#components/ui/button'
 import { Badge } from '#components/ui/badge'
+import { Card, CardContent } from '#components/ui/card'
 import { Skeleton } from '#components/ui/skeleton'
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from '#components/ui/empty'
 import { cn } from '#lib/utils'
@@ -27,6 +28,16 @@ export interface PageHeaderProps {
 }
 
 export type RouteNoticeState = 'loading' | 'empty' | 'error' | 'offline' | 'permission'
+
+export const STANDARD_STATE_SURFACE_CONTRACT = Object.freeze({
+  primitives: ['RouteStateNotice', 'SurfaceSkeleton', 'EmptyState', 'StateSurface'] as const,
+  forbiddenSpinOnlyPatterns: [
+    'animate-spin',
+    'spinner-only',
+    'Loading…',
+    'Loading...',
+  ] as const,
+})
 
 export interface RouteStateNoticeProps {
   title: string
@@ -70,6 +81,8 @@ export interface EmptyStateProps {
   title: string
   message: string
   actionLabel?: string | null | undefined
+  variant?: 'default' | 'card' | 'inline'
+  icon?: ReactNode
 }
 
 export function PageHeader({ title, description, eyebrow = 'Page', id, badges, actions, className, badgesLabel }: PageHeaderProps) {
@@ -232,18 +245,37 @@ export function SurfaceSkeleton({ title = 'Loading page', lines = 3 }: SurfaceSk
   )
 }
 
-export function EmptyState({ title, message, actionLabel }: EmptyStateProps) {
+export function EmptyState({ title, message, actionLabel, variant = 'default', icon }: EmptyStateProps) {
+  const action = actionLabel ? <Button type="button" variant="outline" disabled>{actionLabel}</Button> : null
+  if (variant === 'inline') {
+    return (
+      <div role="status">
+        <span className="sr-only">{title}</span>
+        <p className="text-sm text-muted-foreground">{message}</p>
+        {action}
+      </div>
+    )
+  }
+  if (variant === 'card') {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center gap-2 py-8 text-center">
+          {icon}
+          <p className="font-medium">{title}</p>
+          <p className="max-w-lg text-sm text-muted-foreground">{message}</p>
+          {action}
+        </CardContent>
+      </Card>
+    )
+  }
   return (
     <Empty>
       <EmptyHeader>
+        {icon}
         <EmptyTitle>{title}</EmptyTitle>
         <EmptyDescription>{message}</EmptyDescription>
       </EmptyHeader>
-      {actionLabel ? (
-        <Button type="button" variant="outline" disabled>
-          {actionLabel}
-        </Button>
-      ) : null}
+      {action}
     </Empty>
   )
 }

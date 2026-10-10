@@ -6,11 +6,13 @@ import { describe, expect, it } from 'vitest'
 import {
   buildEnvelopeAad,
   type ConversationMessageRecord,
+  type ConversationListQuery,
   type ConversationRecord,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalDataRepositories,
   type LocalToolStateRecord,
+  type MessageListQuery,
   type PeerGrantMetadataRecord
 } from '../../../../packages/aurora-sdk/src/local-data/index.js'
 
@@ -21,10 +23,13 @@ type RepositoryOperation =
   | { readonly kind: 'conversations.upsertConversation'; readonly record: ConversationRecord }
   | { readonly kind: 'conversations.appendMessage'; readonly record: ConversationMessageRecord }
   | { readonly kind: 'conversations.deleteConversation'; readonly conversationId: string }
-  | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string }
-  | { readonly kind: 'conversations.listMessageCounts'; readonly profileId: string; readonly localNodeId: string }
-  | { readonly kind: 'conversations.listFirstUserMessages'; readonly profileId: string; readonly localNodeId: string }
-  | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
+  | { readonly kind: 'conversations.getConversation'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
+  | { readonly kind: 'conversations.getMessage'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string; readonly messageId: string }
+  | { readonly kind: 'conversations.listConversations'; readonly profileId: string; readonly localNodeId: string; readonly options?: ConversationListQuery }
+  | { readonly kind: 'conversations.listMessageCounts'; readonly profileId: string; readonly localNodeId: string; readonly conversationIds?: readonly string[] }
+  | { readonly kind: 'conversations.listFirstUserMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationIds?: readonly string[] }
+  | { readonly kind: 'conversations.listMessages'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string; readonly options?: MessageListQuery }
+  | { readonly kind: 'conversations.getLatestMessageSequence'; readonly profileId: string; readonly localNodeId: string; readonly conversationId: string }
   | { readonly kind: 'memory.upsertMemoryItem'; readonly record: LightweightMemoryRecord }
   | { readonly kind: 'memory.deleteMemoryItem'; readonly memoryItemId: string }
   | { readonly kind: 'memory.deleteExpiredMemoryItems'; readonly profileId: string; readonly localNodeId: string; readonly nowMs: number; readonly limit: number }
@@ -391,14 +396,23 @@ class FakeTauriLocalDataBridge {
         this.messages = this.messages.filter((record) => record.conversationId !== operation.conversationId)
         return { deleted: true, deletedMessages: beforeMessages - this.messages.length }
       }
-      case 'conversations.listConversations':
+      case 'conversations.getConversation':
         this.assertScope(operation)
-        return this.conversations.filter((record) => record.profileId === this.profileId && record.localNodeId === this.localNodeId)
+        return this.conversations.find((record) => record.id === operation.conversationId && record.profileId === this.profileId && record.localNodeId === this.localNodeId) ?? null
+      case 'conversations.getMessage':
+        this.assertScope(operation)
+        return this.messages.find((message) => message.id === operation.messageId && message.conversationId === operation.conversationId && this.conversations.some((conversation) => conversation.id === message.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) ?? null
+      case 'conversations.listConversations': {
+        this.assertScope(operation)
+        const options = operation.options ?? {}
+        return this.conversations.filter((record) => record.profileId === this.profileId && record.localNodeId === this.localNodeId && (options.includeArchived !== false || record.archivedAtMs === null) && (options.cursor === undefined || record.updatedAtMs < options.cursor.updatedAtMs || (record.updatedAtMs === options.cursor.updatedAtMs && record.id > options.cursor.id))).sort((a, b) => b.updatedAtMs - a.updatedAtMs || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, options.limit)
+      }
       case 'conversations.listMessageCounts': {
         this.assertScope(operation)
+        const ids = operation.conversationIds === undefined ? null : new Set(operation.conversationIds)
         const counts: Record<string, number> = {}
         for (const record of this.messages) {
-          if (this.conversations.some((conversation) => conversation.id === record.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) {
+          if ((ids === null || ids.has(record.conversationId)) && this.conversations.some((conversation) => conversation.id === record.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) {
             counts[record.conversationId] = (counts[record.conversationId] ?? 0) + 1
           }
         }
@@ -406,9 +420,10 @@ class FakeTauriLocalDataBridge {
       }
       case 'conversations.listFirstUserMessages': {
         this.assertScope(operation)
+        const ids = operation.conversationIds === undefined ? null : new Set(operation.conversationIds)
         const firstByConversation = new Map<string, ConversationMessageRecord>()
         for (const record of this.messages) {
-          if (record.role !== 'user' || !this.conversations.some((conversation) => conversation.id === record.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) continue
+          if (record.role !== 'user' || (ids !== null && !ids.has(record.conversationId)) || !this.conversations.some((conversation) => conversation.id === record.conversationId && conversation.profileId === this.profileId && conversation.localNodeId === this.localNodeId)) continue
           const current = firstByConversation.get(record.conversationId)
           if (current === undefined || record.sequence < current.sequence || (record.sequence === current.sequence && record.id < current.id)) firstByConversation.set(record.conversationId, record)
         }
@@ -417,7 +432,14 @@ class FakeTauriLocalDataBridge {
       case 'conversations.listMessages':
         this.assertScope(operation)
         if (!this.conversations.some((record) => record.id === operation.conversationId && record.profileId === this.profileId && record.localNodeId === this.localNodeId)) return []
-        return this.messages.filter((record) => record.conversationId === operation.conversationId)
+        {
+          const options = operation.options ?? {}
+          const rows = this.messages.filter((record) => record.conversationId === operation.conversationId && (options.beforeSequence === undefined || record.sequence < options.beforeSequence) && (options.afterSequence === undefined || record.sequence > options.afterSequence)).sort((a, b) => (options.direction === 'desc' ? b.sequence - a.sequence : a.sequence - b.sequence) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+          return options.limit === undefined ? rows : rows.slice(0, options.limit)
+        }
+      case 'conversations.getLatestMessageSequence':
+        this.assertScope(operation)
+        return this.messages.filter((record) => record.conversationId === operation.conversationId).reduce<number | null>((latest, record) => latest === null || record.sequence > latest ? record.sequence : latest, null)
       case 'memory.upsertMemoryItem':
         this.assertScope(operation.record)
         upsert(this.memory, operation.record)
@@ -561,6 +583,61 @@ function requireDeleteLimit(limit: number): number {
   if (!Number.isSafeInteger(limit) || limit < 1) throw { code: 'invalid_record', detail: { reason: 'delete_limit' } }
   return limit
 }
+
+describe('native history query forwarding', () => {
+  it('rejects unsafe query arguments before invoking Tauri', async () => {
+    const calls: string[] = []
+    const backend = new TauriSqliteLocalDataBackend({ invokeCommand: async (command) => { calls.push(command); return { kind: 'sqlite-tauri', persistent: true, sqlite: true, profileId: 'profile-1', schemaVersion: 3, migrationState: 'idle' } } })
+    const session = await backend.open('profile-1', 'node-1')
+    for (const query of [
+      { limit: 0 },
+      { limit: Number.MAX_SAFE_INTEGER + 1 },
+      { limit: -1 },
+      { limit: 1.5 },
+      { includeArchived: 'yes' },
+      { cursor: { updatedAtMs: -1, id: 'conversation-1' } },
+      { cursor: { updatedAtMs: 1, id: 'bad id' } }
+    ]) await expect(session.conversations.listConversations(query as never)).rejects.toMatchObject({ code: 'invalid_record' })
+    await expect(session.conversations.listMessageCounts(Array.from({ length: 501 }, (_, index) => `conversation-${index}`))).rejects.toMatchObject({ metadata: { reason: 'conversation_id_set_limit' } })
+    await expect(session.conversations.listMessages('conversation-1', { beforeSequence: 1, afterSequence: 2 })).rejects.toMatchObject({ metadata: { reason: 'ambiguous_message_cursor' } })
+    expect(calls).toEqual(['aurora_local_data_open'])
+  })
+
+  it('forwards positive history operations and preserves structured versus unknown errors', async () => {
+    const bridge = new FakeTauriLocalDataBridge()
+    const session = await new TauriSqliteLocalDataBackend({ invokeCommand: bridge.invoke }).open('profile-1', 'node-1')
+    await session.conversations.getConversation('conversation-1')
+    await session.conversations.getMessage('conversation-1', 'message-1')
+    await session.conversations.getLatestMessageSequence('conversation-1')
+    await session.conversations.listMessageCounts(['conversation-1', 'conversation-1'])
+    await session.conversations.listFirstUserMessages([])
+    await session.conversations.listConversations({ limit: 2, includeArchived: false, cursor: { updatedAtMs: 10, id: 'conversation-0' } })
+    await session.conversations.listMessages('conversation-1', { limit: 2, beforeSequence: 10, direction: 'desc' })
+    const operations = bridge.calls.filter((call) => call.command === 'aurora_local_data_repository_operation').map((call) => (call.args.request as { operation: unknown }).operation as Record<string, unknown>)
+    expect(operations).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'conversations.getConversation', profileId: 'profile-1', localNodeId: 'node-1' }),
+      expect.objectContaining({ kind: 'conversations.getMessage', profileId: 'profile-1', localNodeId: 'node-1' }),
+      expect.objectContaining({ kind: 'conversations.getLatestMessageSequence', profileId: 'profile-1', localNodeId: 'node-1' }),
+      expect.objectContaining({ kind: 'conversations.listMessageCounts', conversationIds: ['conversation-1', 'conversation-1'] }),
+      expect.objectContaining({ kind: 'conversations.listFirstUserMessages', conversationIds: [] }),
+      expect.objectContaining({ kind: 'conversations.listConversations', options: { limit: 2, includeArchived: false, cursor: { updatedAtMs: 10, id: 'conversation-0' } } }),
+      expect.objectContaining({ kind: 'conversations.listMessages', options: { limit: 2, beforeSequence: 10, direction: 'desc' } })
+    ]))
+
+    const known = { code: 'invalid_record', message: 'duplicate', detail: { reason: 'duplicate_message_id' } }
+    const unknown = { code: 'invalid_record', message: 'other', detail: { reason: 'other_reason' } }
+    const knownBridge = new TauriSqliteLocalDataBackend({ invokeCommand: async (command) => command === 'aurora_local_data_open' ? { kind: 'sqlite-tauri', persistent: true, sqlite: true, profileId: 'profile-1', schemaVersion: 3, migrationState: 'idle' } : Promise.reject(known) })
+    const knownSession = await knownBridge.open('profile-1', 'node-1')
+    await expect(knownSession.conversations.getConversation('conversation-1')).rejects.toMatchObject({ metadata: { reason: 'duplicate_message_id' } })
+    const unknownBridge = new TauriSqliteLocalDataBackend({ invokeCommand: async (command) => command === 'aurora_local_data_open' ? { kind: 'sqlite-tauri', persistent: true, sqlite: true, profileId: 'profile-1', schemaVersion: 3, migrationState: 'idle' } : Promise.reject(unknown) })
+    const unknownSession = await unknownBridge.open('profile-1', 'node-1')
+    await expect(unknownSession.conversations.getConversation('conversation-1')).rejects.toBe(unknown)
+    const generic = { code: 'local_data_error', message: 'generic' }
+    const genericBridge = new TauriSqliteLocalDataBackend({ invokeCommand: async (command) => command === 'aurora_local_data_open' ? { kind: 'sqlite-tauri', persistent: true, sqlite: true, profileId: 'profile-1', schemaVersion: 3, migrationState: 'idle' } : Promise.reject(generic) })
+    const genericSession = await genericBridge.open('profile-1', 'node-1')
+    await expect(genericSession.conversations.getConversation('conversation-1')).rejects.toBe(generic)
+  })
+})
 
 function walk(directory: string): string[] {
   const files: string[] = []

@@ -82,10 +82,13 @@ def mark_wakeword_ready(service: WakeWordService) -> None:
 
 
 @pytest.fixture
-def service(mock_bus, mock_config):
+def service(mock_bus, mock_config, monkeypatch):
     """Create WakeWordService instance with mocked dependencies."""
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
-        yield WakeWordService()
+        svc = WakeWordService()
+        # ConfigService availability is independent of these service tests.
+        monkeypatch.setattr(svc, "_is_runtime_enabled", AsyncMock(return_value=True))
+        yield svc
 
 
 # ============================================================================
