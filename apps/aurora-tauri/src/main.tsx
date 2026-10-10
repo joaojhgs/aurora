@@ -32,6 +32,12 @@ if (import.meta.env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === '1') {
   })
 }
 
+if (import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST === '1') {
+  void import('./ios-voice-main-flow').then(({ installIosVoiceMainFlow }) => {
+    installIosVoiceMainFlow(import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST_CONTROL_ORIGIN)
+  })
+}
+
 if (isOverlaySurface) {
   document.documentElement.classList.add('aurora-overlay-surface')
   document.documentElement.dataset.auroraSurface = 'overlay'

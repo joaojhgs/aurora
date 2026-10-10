@@ -75,7 +75,7 @@ This index separates current documentation from historical/provenance material. 
 
 | Document | Status | Boundary |
 | --- | --- | --- |
-| [`AMBIENT_TRANSCRIPTION.md`](AMBIENT_TRANSCRIPTION.md) | Partial | Config and coordinator behavior exist; durable ambient logging service is not implemented. |
+| [`AMBIENT_TRANSCRIPTION.md`](AMBIENT_TRANSCRIPTION.md) | Partial | Encrypted transcript archive and revisioned node-policy foundation; native notification/background capture connection remains pending. |
 | [`MESH_GAP_E2E_HARNESS.md`](MESH_GAP_E2E_HARNESS.md) | Current bounded harness | Transport E2E harness, not a full physical-device proof. |
 | [`MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md`](MESH_SERVICE_ROUTING_AND_TOOL_SHARING_OPERATIONS.md) | Current | Mesh v2 migration, RBAC review, fail-closed reverse migration, rollback, and rollout diagnostics. |
 | [`mesh/THIN-CLIENT-MESH-PARITY-PLAN.md`](mesh/THIN-CLIENT-MESH-PARITY-PLAN.md) | Current bounded check | Completed mesh parity workstreams, local acceptance evidence, and the remaining physical-device release gate. |

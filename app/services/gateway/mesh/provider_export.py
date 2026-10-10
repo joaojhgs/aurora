@@ -23,6 +23,10 @@ from app.shared.contracts.mesh_surface import (
     validate_callable_method_surface,
 )
 from app.shared.contracts.models.speech import SpeechMethodConstraints
+from app.shared.contracts.models.speech_runtime import (
+    SpeechStageCapabilityExportV1,
+    SpeechStageCapabilityV1,
+)
 
 LEGACY_MANIFEST_PROTOCOL = "legacy-unfiltered-v0"
 ACTIVE_MANIFEST_PROTOCOL = "projection-v1"
@@ -179,6 +183,36 @@ def _speech_constraints_mapping(value: Any | None) -> Mapping[str, Any] | None:
     return _mapping_proxy(constraints.model_dump(mode="json"))
 
 
+def _validated_speech_stage_capabilities(
+    values: Any,
+    field_name: str,
+) -> tuple[SpeechStageCapabilityExportV1, ...]:
+    if not isinstance(values, list | tuple):
+        raise ProviderExportError(f"{field_name} must be a list or tuple")
+
+    normalized: list[SpeechStageCapabilityExportV1] = []
+    try:
+        for value in values:
+            if isinstance(value, SpeechStageCapabilityExportV1):
+                item = SpeechStageCapabilityExportV1.model_validate(value.model_dump(mode="json"))
+            elif isinstance(value, Mapping):
+                item = SpeechStageCapabilityExportV1.model_validate(dict(value))
+            else:
+                raise ProviderExportError(
+                    f"{field_name} items must be typed speech capability exports or mappings"
+                )
+            normalized.append(item)
+    except ValidationError as exc:
+        raise ProviderExportError(f"invalid {field_name}: {exc}") from exc
+
+    return tuple(
+        sorted(
+            normalized,
+            key=lambda item: canonical_bytes(item.model_dump(mode="json")),
+        )
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class NormalizedMethodSnapshot:
     """Normalized immutable method metadata relevant to shadow provider export."""
@@ -292,6 +326,7 @@ class NormalizedServiceSnapshot:
     tags: tuple[str, ...] = ()
     capacity: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
     feature_members: Mapping[str, tuple[str, ...]] | None = None
+    speech_stage_capabilities: tuple[SpeechStageCapabilityExportV1, ...] = ()
     capacity_present: bool = field(default=False, init=False)
 
     def __post_init__(self) -> None:
@@ -325,9 +360,17 @@ class NormalizedServiceSnapshot:
         object.__setattr__(self, "capacity_present", raw_capacity is not None)
         object.__setattr__(self, "capacity", _mapping_proxy(raw_capacity))
         object.__setattr__(self, "feature_members", MappingProxyType(members))
+        object.__setattr__(
+            self,
+            "speech_stage_capabilities",
+            _validated_speech_stage_capabilities(
+                self.speech_stage_capabilities,
+                "normalized speech_stage_capabilities",
+            ),
+        )
 
     def to_canonical(self) -> dict[str, Any]:
-        return {
+        value = {
             "capacity": _to_plain(self.capacity),
             "capacity_present": self.capacity_present,
             "feature_members": _to_plain(self.feature_members),
@@ -336,6 +379,11 @@ class NormalizedServiceSnapshot:
             "tags": list(self.tags),
             "version": self.version,
         }
+        if self.speech_stage_capabilities:
+            value["speech_stage_capabilities"] = [
+                item.model_dump(mode="json") for item in self.speech_stage_capabilities
+            ]
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -701,6 +749,7 @@ class ExportedService:
     tags: tuple[str, ...] = ()
     capacity: Mapping[str, Any] | None = field(default=None, repr=False, compare=False)
     feature_ids: tuple[str, ...] = ()
+    speech_stage_capabilities: tuple[SpeechStageCapabilityExportV1, ...] = ()
 
     def __post_init__(self) -> None:
         object.__setattr__(
@@ -713,9 +762,17 @@ class ExportedService:
         object.__setattr__(
             self, "feature_ids", _validated_sorted_unique(self.feature_ids, "export feature_ids")
         )
+        object.__setattr__(
+            self,
+            "speech_stage_capabilities",
+            _validated_speech_stage_capabilities(
+                self.speech_stage_capabilities,
+                "export speech_stage_capabilities",
+            ),
+        )
 
     def to_canonical(self) -> dict[str, Any]:
-        return {
+        value = {
             "capacity": _to_plain(self.capacity),
             "feature_ids": list(self.feature_ids),
             "methods": [method.to_canonical() for method in self.methods],
@@ -723,6 +780,11 @@ class ExportedService:
             "tags": list(self.tags),
             "version": self.version,
         }
+        if self.speech_stage_capabilities:
+            value["speech_stage_capabilities"] = [
+                item.model_dump(mode="json") for item in self.speech_stage_capabilities
+            ]
+        return value
 
 
 @dataclass(frozen=True, slots=True)
@@ -1129,6 +1191,12 @@ def project_provider_export(
                 tags=service.tags,
                 capacity=_project_service_capacity(service, service_policy),
                 feature_ids=available_features,
+                speech_stage_capabilities=_project_speech_stage_capabilities(
+                    provider_peer_id=provider_peer_id,
+                    service_id=service.service_id,
+                    capabilities=service.speech_stage_capabilities,
+                    surviving_methods=tuple(surviving_methods),
+                ),
             )
         )
 
@@ -1172,6 +1240,72 @@ def _project_service_capacity(
     if capacity:
         return capacity
     return {} if service.capacity_present or service_policy.max_concurrent is not None else None
+
+
+def _project_speech_stage_capabilities(
+    *,
+    provider_peer_id: str,
+    service_id: str,
+    capabilities: tuple[SpeechStageCapabilityExportV1, ...],
+    surviving_methods: tuple[NormalizedMethodSnapshot, ...],
+) -> tuple[SpeechStageCapabilityExportV1, ...]:
+    methods_by_topic = {method.topic: method for method in surviving_methods}
+    exported: list[SpeechStageCapabilityExportV1] = []
+
+    for wrapper in capabilities:
+        capability = wrapper.capability
+        if (
+            capability.readiness != "ready"
+            or not capability.exported
+            or capability.peer_id != provider_peer_id
+        ):
+            continue
+
+        method_ids = tuple(capability.method_ids)
+        if not method_ids or any(topic not in methods_by_topic for topic in method_ids):
+            continue
+
+        permissions: set[str] = set()
+        permissions_are_known = True
+        for topic in method_ids:
+            method_permissions = methods_by_topic[topic].required_permissions
+            if not method_permissions:
+                permissions_are_known = False
+                break
+            permissions.update(method_permissions)
+        if not permissions_are_known:
+            continue
+
+        declared_permissions = set(capability.required_permissions)
+        if not declared_permissions.issubset(permissions):
+            continue
+
+        remote_resource_id = f"remote:{provider_peer_id}:{service_id}"
+        try:
+            normalized_capability = SpeechStageCapabilityV1.model_validate(
+                capability.model_dump(mode="json")
+                | {
+                    "method_ids": sorted(method_ids),
+                    "required_permissions": sorted(permissions),
+                    "resource_id": remote_resource_id,
+                }
+            )
+            normalized_wrapper = SpeechStageCapabilityExportV1.model_validate(
+                wrapper.model_dump(mode="json")
+                | {"capability": normalized_capability.model_dump(mode="json")}
+            )
+        except ValidationError as exc:
+            raise ProviderExportError(f"invalid projected speech stage capability: {exc}") from exc
+        exported.append(normalized_wrapper)
+
+    normalized = _validated_speech_stage_capabilities(
+        exported,
+        "projected speech_stage_capabilities",
+    )
+    canonical_wrappers = {
+        canonical_bytes(item.model_dump(mode="json")): item for item in normalized
+    }
+    return tuple(canonical_wrappers[key] for key in sorted(canonical_wrappers))
 
 
 def _method_exclusion_reason(

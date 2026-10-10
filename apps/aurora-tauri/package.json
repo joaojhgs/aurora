@@ -46,6 +46,7 @@
     "ios:build:client:simulator": "node ./scripts/build-ios-client-bundle.mjs",
     "ios:build:thin:simulator": "pnpm ios:build:client:simulator",
     "ios:smoke:simulator": "node ./scripts/ios-simulator-smoke.mjs",
+    "ios:voice:main:live": "node ./scripts/ios-voice-main-flow.mjs",
     "ios:webrtc:interop": "vitest run --environment node --no-file-parallelism tests/ios/ios-python-webrtc.e2e.test.ts",
     "ios:webrtc:mobile-browser": "vitest run --environment node tests/ios/ios-python-webrtc.e2e.test.ts -t MobileSafari",
     "ios:webrtc:wkwebview": "vitest run --environment node tests/ios/ios-python-webrtc.e2e.test.ts -t \"packaged Tauri WKWebView\"",

@@ -13,6 +13,7 @@ import {
   normalizeNativeAuroraEvent,
   prepareNativeEventSubscribeRequest
 } from './native-events.js'
+import type { AuroraNativeNodeConfigCompareAndSwapRequest } from './native-node-config.js'
 import type { AuroraTransport, AuroraTransportRequest, AuroraTransportResponse } from './transport.js'
 import type {
   AndroidAssistantRoleRequestResult,
@@ -59,6 +60,7 @@ export interface TauriCommandNames {
   androidVoiceForegroundServiceStatus: string
   androidVoiceForegroundServiceStart: string
   androidVoiceForegroundServiceStop: string
+  androidBackgroundTranscriptionSync: string
   androidEntrypointPayload: string
   iosEntrypointPayload: string
   nativePermissionStatus: string
@@ -103,12 +105,8 @@ export interface TauriCommandNames {
   secureStorageGet: string
   secureStorageSet: string
   secureStorageDelete: string
-  nodeConfigGet: string
-  nodeConfigSet: string
-  nodeConfigDelete: string
-  nodeConfigV2Get: string
-  nodeConfigV2Set: string
-  nodeConfigV2Delete: string
+  nodeConfigPolicyRead: string
+  nodeConfigPolicyCompareAndSwap: string
   iosSecureStorageStatus: string
   iosVoiceCredentialSet: string
   iosVoiceCredentialStatus: string
@@ -133,6 +131,7 @@ export interface TauriLocalTransportOptions {
   listen?: TauriListen
   commands?: Partial<TauriCommandNames>
   requestArgName?: string
+  requestJsonArgName?: string
   defaultTimeoutMs?: number
 }
 
@@ -519,8 +518,9 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   androidLocalLightInferenceStatus: 'localLightInferenceStatus',
   androidPermissionRequest: 'requestAndroidPermission',
   androidVoiceForegroundServiceStatus: 'voiceForegroundServiceStatus',
-  androidVoiceForegroundServiceStart: 'startVoiceForegroundService',
+  androidVoiceForegroundServiceStart: 'aurora_android_voice_foreground_service_start',
   androidVoiceForegroundServiceStop: 'stopVoiceForegroundService',
+  androidBackgroundTranscriptionSync: 'aurora_android_background_transcription_sync',
   androidEntrypointPayload: 'entrypointPayload',
   iosEntrypointPayload: 'aurora_ios_entrypoint_payload',
   nativePermissionStatus: 'aurora_native_permission_status',
@@ -565,12 +565,8 @@ const DEFAULT_COMMANDS: TauriCommandNames = {
   secureStorageGet: 'aurora_secure_storage_get',
   secureStorageSet: 'aurora_secure_storage_set',
   secureStorageDelete: 'aurora_secure_storage_delete',
-  nodeConfigGet: 'aurora_node_config_get',
-  nodeConfigSet: 'aurora_node_config_set',
-  nodeConfigDelete: 'aurora_node_config_delete',
-  nodeConfigV2Get: 'aurora_node_config_v2_get',
-  nodeConfigV2Set: 'aurora_node_config_v2_set',
-  nodeConfigV2Delete: 'aurora_node_config_v2_delete',
+  nodeConfigPolicyRead: 'aurora_node_config_policy_read',
+  nodeConfigPolicyCompareAndSwap: 'aurora_node_config_policy_compare_and_swap',
   iosSecureStorageStatus: 'aurora_ios_secure_storage_status',
   iosVoiceCredentialSet: 'aurora_ios_voice_credential_set',
   iosVoiceCredentialStatus: 'aurora_ios_voice_credential_status',
@@ -596,6 +592,7 @@ export class TauriLocalTransport implements AuroraTransport {
   private readonly invokeImpl: TauriInvoke
   private readonly listenImpl: TauriListen | null
   private readonly requestArgName: string
+  private readonly requestJsonArgName: string
   private readonly defaultTimeoutMs: number
   private sidecarSession: Promise<TauriSidecarSession | null> | null = null
 
@@ -604,6 +601,7 @@ export class TauriLocalTransport implements AuroraTransport {
     this.listenImpl = options.listen ?? resolveTauriListen()
     this.commands = { ...DEFAULT_COMMANDS, ...options.commands }
     this.requestArgName = options.requestArgName ?? 'request'
+    this.requestJsonArgName = options.requestJsonArgName ?? 'requestJson'
     this.defaultTimeoutMs = options.defaultTimeoutMs ?? 30_000
   }
 
@@ -612,7 +610,21 @@ export class TauriLocalTransport implements AuroraTransport {
   ): Promise<AuroraTransportResponse<TData>> {
     const timeoutMs = request.timeoutMs ?? this.defaultTimeoutMs
     const sidecarSession = await this.getSidecarSession()
-    const args = { [this.requestArgName]: withSidecarSessionHeader(request, sidecarSession) }
+    let requestJson: string
+    try {
+      const requestWithSession = withSidecarSessionHeader(request, sidecarSession)
+      const wireRequest: Record<string, unknown> = { method: requestWithSession.method }
+      if (requestWithSession.path !== undefined) wireRequest.path = requestWithSession.path
+      if (requestWithSession.httpMethod !== undefined) wireRequest.httpMethod = requestWithSession.httpMethod
+      if (requestWithSession.payload !== undefined) wireRequest.payload = requestWithSession.payload
+      if (requestWithSession.headers !== undefined) wireRequest.headers = requestWithSession.headers
+      const encoded = JSON.stringify(wireRequest)
+      if (typeof encoded !== 'string') throw new Error('non-string JSON encoding')
+      requestJson = encoded
+    } catch {
+      throw new AuroraError({ code: 'validation', message: 'Invalid request' })
+    }
+    const args = { [this.requestJsonArgName]: requestJson }
     const context: TauriInvokeContext = { timeoutMs, method: request.method }
     if (request.signal !== undefined) context.signal = request.signal
     if (request.busTopic !== undefined) context.busTopic = request.busTopic
@@ -671,8 +683,15 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<AndroidVoiceForegroundServiceStatus>(this.commands.androidVoiceForegroundServiceStatus)
   }
 
+  /** Reconcile recording against the native owner's current saved policy. */
+  synchronizeAndroidBackgroundTranscription(): Promise<AndroidVoiceForegroundServiceStatus> {
+    return this.invokeCommand<AndroidVoiceForegroundServiceStatus>(this.commands.androidBackgroundTranscriptionSync)
+  }
+
   startAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
-    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStart)
+    return this.invokeCommand<AndroidVoiceForegroundServiceRequestResult>(this.commands.androidVoiceForegroundServiceStart, {
+      request: { remoteAudioConsent: false, backgroundSession: false }
+    })
   }
 
   stopAndroidVoiceForegroundService(): Promise<AndroidVoiceForegroundServiceRequestResult> {
@@ -905,28 +924,19 @@ export class TauriLocalTransport implements AuroraTransport {
     return this.invokeCommand<SecureStorageWriteResult>(this.commands.secureStorageDelete, { key })
   }
 
-  nodeConfigGet(): Promise<SecureStorageGetResult> {
-    return this.invokeCommand<SecureStorageGetResult>(this.commands.nodeConfigGet)
+  /** Requires the current document's bootstrap-issued native policy token. */
+  nodeConfigPolicyRead(documentToken: string): Promise<unknown> {
+    return this.invokeCommand<unknown>(this.commands.nodeConfigPolicyRead, { documentToken })
   }
 
-  nodeConfigSet(value: string): Promise<SecureStorageWriteResult> {
-    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigSet, { value })
-  }
-
-  nodeConfigDelete(): Promise<SecureStorageWriteResult> {
-    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigDelete)
-  }
-
-  nodeConfigV2Get(): Promise<SecureStorageGetResult> {
-    return this.invokeCommand<SecureStorageGetResult>(this.commands.nodeConfigV2Get)
-  }
-
-  nodeConfigV2Set(value: string): Promise<SecureStorageWriteResult> {
-    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigV2Set, { value })
-  }
-
-  nodeConfigV2Delete(): Promise<SecureStorageWriteResult> {
-    return this.invokeCommand<SecureStorageWriteResult>(this.commands.nodeConfigV2Delete)
+  /** Echoes the exact read token; no caller-selected profile or storage key. */
+  nodeConfigPolicyCompareAndSwap(request: AuroraNativeNodeConfigCompareAndSwapRequest): Promise<unknown> {
+    return this.invokeCommand<unknown>(this.commands.nodeConfigPolicyCompareAndSwap, {
+      documentToken: request.documentToken,
+      draftHandle: request.draftHandle,
+      expectedRevision: request.expectedRevision,
+      draftJson: request.draftJson
+    })
   }
 
   getIosSecureStorageStatus(): Promise<TauriNativeFeatureStatus> {

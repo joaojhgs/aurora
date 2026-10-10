@@ -8,6 +8,11 @@ on:
         required: false
         default: ""
         type: string
+      native_voice_main_flow:
+        description: "Run the prepared native voice main flow"
+        required: false
+        default: false
+        type: boolean
   pull_request:
     paths:
       - "apps/aurora-tauri/**"
@@ -29,6 +34,7 @@ on:
       - "packages/aurora-voice-web/**"
       - "rust/crates/**"
       - "tools/voice-runtime/**"
+      - "tools/local-inference/**"
       - "tests/e2e/webrtc_interop/**"
       - "scripts/webrtc_interop_gateway.py"
       - "scripts/webrtc_interop_scan.py"
@@ -41,6 +47,12 @@ on:
       - ".github/scripts/ios_entrypoint_payload_smoke.swift"
       - ".github/workflows/tauri-ios.yml"
   workflow_dispatch:
+    inputs:
+      native_voice_main_flow:
+        description: "Run native voice on a simulator with saved profile and speech packs prepared"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -140,6 +152,20 @@ jobs:
           echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
           echo "CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
+      - name: Restore pinned iOS offline assistant runtime
+        id: llama-cache
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/local-inference/runtime/ios-simulator-arm64
+          key: llama-native-${{ runner.os }}-ios-simulator-arm64-${{ hashFiles('tools/local-inference/**') }}
+
+      - name: Build pinned iOS offline assistant runtime
+        if: steps.llama-cache.outputs.cache-hit != 'true'
+        run: python tools/local-inference/build_llama_native.py --target ios-simulator-arm64 --jobs 2
+
+      - name: Configure pinned iOS offline assistant runtime
+        run: echo "AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-simulator-arm64" >> "$GITHUB_ENV"
+
       - name: Run iOS CI harness regression tests
         run: >-
           pnpm --filter @aurora/tauri-ui exec vitest run --environment node
@@ -201,6 +227,14 @@ jobs:
 
       - name: Install, launch, and screenshot the client app in an iOS simulator
         run: pnpm --filter @aurora/tauri-ui ios:smoke:simulator
+
+      - name: Run native iOS speech and Assistant main flow
+        if: inputs.native_voice_main_flow == true
+        env:
+          CODE_SIGN_IDENTITY: ""
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGNING_REQUIRED: "NO"
+        run: node apps/aurora-tauri/scripts/ios-voice-main-flow-ci.mjs
 
       - name: Pair iOS MobileSafari with the external Python peer over WebRTC
         env:

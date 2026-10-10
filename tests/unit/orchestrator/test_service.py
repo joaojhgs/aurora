@@ -137,6 +137,7 @@ class TestOrchestratorServiceTranscriptionHandling:
                 request_id="test-session",
                 correlation_id="test-session",
                 stream=True,
+                trusted_local_origin=True,
             )
 
         rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
@@ -635,6 +636,7 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_selector=None,
                 inference_provider_id=None,
                 inference_model_id=None,
+                trusted_local_origin=True,
             )
 
     @pytest.mark.asyncio
@@ -685,6 +687,7 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_provider_id=None,
                 inference_model_id=None,
                 response_metadata={"client_tts_playback": True},
+                trusted_local_origin=True,
             )
 
     @pytest.mark.asyncio
@@ -741,6 +744,7 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_selector=None,
                 inference_provider_id=None,
                 inference_model_id=None,
+                trusted_local_origin=False,
             )
 
     @pytest.mark.asyncio
@@ -800,6 +804,7 @@ class TestOrchestratorServiceUserInputHandling:
             inference_selector=None,
             inference_provider_id=None,
             inference_model_id=None,
+            trusted_local_origin=False,
         )
 
     @pytest.mark.asyncio
@@ -822,7 +827,8 @@ class TestOrchestratorServiceUserInputHandling:
 
             # Returns OrchestratorResponse with error info
             assert isinstance(response, OrchestratorResponse)
-            assert "Processing error" in response.text
+            assert response.text == "Error: Aurora could not complete this request."
+            assert "Processing error" not in response.text
             assert response.metadata.get("error") is True
 
 

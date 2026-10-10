@@ -6,6 +6,7 @@ import type { WebRtcPeerConnectionProfile } from '@aurora/client/webrtc'
 
 import { MeshPeersView, type MeshPeersSnapshot } from '../src/mesh-peers-view'
 import { buildLocalMeshNodeSnapshot } from '../src/index'
+import { getAuroraSurfaceProfile } from '../src/platform-surface'
 import { HomeNodeConnectionPanel } from '../src/web-thin-connection-panel'
 import { webRtcProfileFromInvite, type BrowserDiscoveredDevice, type BrowserWebRtcSnapshot } from '../src/web-thin-runtime'
 import { encodeMeshInviteToken } from '../src/mesh-invite'
@@ -187,6 +188,31 @@ function route(): RouteAvailability {
 }
 
 describe('W5 device discovery and selection', () => {
+  it('opens an authorized Android invitation when server management is unavailable', async () => {
+    const container = render(
+      <MeshPeersView
+        snapshot={meshSnapshot()}
+        route={{ ...route(), disabled: true, routeable: false }}
+        surfaceProfile={getAuroraSurfaceProfile({
+          runtimeMode: 'mobile-native',
+          nativePlatform: 'android',
+          nodeMode: 'mesh-node',
+          runtimeTier: 'lightweight-ts',
+        })}
+        ownsLocalNodeState
+        canManageMeshInvites
+        canManageLocalServiceConfiguration={false}
+        thinPeerSnapshot={thinSnapshot()}
+      />,
+    )
+
+    expect(findButton(container, 'Refresh').disabled).toBe(true)
+    const connect = findButton(container, 'Connect device')
+    expect(connect.disabled).toBe(false)
+    await act(async () => { connect.click() })
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull()
+  })
+
   it('lists every device found with its name, code and setup state', () => {
     const container = renderConnectPanel(new FakeDiscoveryPeer(thinSnapshot()))
 

@@ -1125,6 +1125,7 @@ function fakeMeshNodeServices(close: () => Promise<void>): BrowserMeshNodeServic
     registeredToolIds: ['aurora.local.native.get_device_status.v1'],
     storageBackendKind: 'indexeddb',
     grantStorePersistent: true,
+    refreshSpeechPolicy: async () => undefined,
     close,
   }
 }

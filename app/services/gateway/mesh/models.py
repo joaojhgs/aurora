@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_serializer, model_validator
 
 from app.shared.contracts.mesh_compatibility import (
     MeshCompatibilityReasonCode,
@@ -20,6 +20,7 @@ from app.shared.contracts.mesh_compatibility import (
 from app.shared.contracts.models.gateway import MethodInfo
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.speech import SpeechRouteBinding
+from app.shared.contracts.models.speech_runtime import SpeechStageCapabilityExportV1
 from app.shared.contracts.registry import CallableFeatureContract
 
 
@@ -41,8 +42,16 @@ class PeerServiceInfo(BaseModel):
     callable_features: list[CallableFeatureContract] = Field(default_factory=list)
     available_feature_ids: list[str] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
+    speech_stage_capabilities: list[SpeechStageCapabilityExportV1] | None = None
     max_concurrent: int = 10
     digest: str = ""
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_speech_stage_capabilities(self, handler):
+        value = handler(self)
+        if self.speech_stage_capabilities is None and isinstance(value, dict):
+            value.pop("speech_stage_capabilities", None)
+        return value
 
 
 class ManifestGrantEvidence(BaseModel):

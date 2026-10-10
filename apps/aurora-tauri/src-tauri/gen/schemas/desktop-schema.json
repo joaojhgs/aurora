@@ -615,40 +615,16 @@
           "markdownDescription": "Enables the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
         },
         {
-          "description": "Enables the aurora_node_config_delete command without any pre-configured scope.",
+          "description": "Enables the aurora_node_config_policy_compare_and_swap command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-aurora-node-config-delete",
-          "markdownDescription": "Enables the aurora_node_config_delete command without any pre-configured scope."
+          "const": "allow-aurora-node-config-policy-compare-and-swap",
+          "markdownDescription": "Enables the aurora_node_config_policy_compare_and_swap command without any pre-configured scope."
         },
         {
-          "description": "Enables the aurora_node_config_get command without any pre-configured scope.",
+          "description": "Enables the aurora_node_config_policy_read command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-aurora-node-config-get",
-          "markdownDescription": "Enables the aurora_node_config_get command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_node_config_set command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-node-config-set",
-          "markdownDescription": "Enables the aurora_node_config_set command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_node_config_v2_delete command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-node-config-v2-delete",
-          "markdownDescription": "Enables the aurora_node_config_v2_delete command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_node_config_v2_get command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-node-config-v2-get",
-          "markdownDescription": "Enables the aurora_node_config_v2_get command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the aurora_node_config_v2_set command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-aurora-node-config-v2-set",
-          "markdownDescription": "Enables the aurora_node_config_v2_set command without any pre-configured scope."
+          "const": "allow-aurora-node-config-policy-read",
+          "markdownDescription": "Enables the aurora_node_config_policy_read command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
@@ -921,10 +897,10 @@
           "markdownDescription": "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
         },
         {
-          "description": "Allow the node-owned, nonsecret routing policy document through its fixed platform storage namespace. This does not expose generic credential storage or arbitrary keys.",
+          "description": "Allow read and compare-and-swap access to the selected local profile's node policy. Caller-bound handles and native profile state select the app-private storage namespace.",
           "type": "string",
           "const": "aurora-node-config",
-          "markdownDescription": "Allow the node-owned, nonsecret routing policy document through its fixed platform storage namespace. This does not expose generic credential storage or arbitrary keys."
+          "markdownDescription": "Allow read and compare-and-swap access to the selected local profile's node policy. Caller-bound handles and native profile state select the app-private storage namespace."
         },
         {
           "description": "Allow notification status checks and structured denied send responses without granting notification delivery by default.",
@@ -1449,40 +1425,16 @@
           "markdownDescription": "Denies the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
         },
         {
-          "description": "Denies the aurora_node_config_delete command without any pre-configured scope.",
+          "description": "Denies the aurora_node_config_policy_compare_and_swap command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-aurora-node-config-delete",
-          "markdownDescription": "Denies the aurora_node_config_delete command without any pre-configured scope."
+          "const": "deny-aurora-node-config-policy-compare-and-swap",
+          "markdownDescription": "Denies the aurora_node_config_policy_compare_and_swap command without any pre-configured scope."
         },
         {
-          "description": "Denies the aurora_node_config_get command without any pre-configured scope.",
+          "description": "Denies the aurora_node_config_policy_read command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-aurora-node-config-get",
-          "markdownDescription": "Denies the aurora_node_config_get command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_node_config_set command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-node-config-set",
-          "markdownDescription": "Denies the aurora_node_config_set command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_node_config_v2_delete command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-node-config-v2-delete",
-          "markdownDescription": "Denies the aurora_node_config_v2_delete command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_node_config_v2_get command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-node-config-v2-get",
-          "markdownDescription": "Denies the aurora_node_config_v2_get command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the aurora_node_config_v2_set command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-aurora-node-config-v2-set",
-          "markdownDescription": "Denies the aurora_node_config_v2_set command without any pre-configured scope."
+          "const": "deny-aurora-node-config-policy-read",
+          "markdownDescription": "Denies the aurora_node_config_policy_read command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",

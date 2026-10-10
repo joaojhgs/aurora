@@ -504,6 +504,18 @@ class UnusedSession implements LocalDataSession {
     appendAudit: async () => undefined,
     listAudit: async () => []
   }
+  readonly transcripts: LocalDataRepositories['transcripts'] = {
+    createSession: async () => { throw new Error('unused') },
+    startSession: async () => { throw new Error('unused') },
+    appendSegment: async () => { throw new Error('unused') },
+    getSession: async () => { throw new Error('unused') },
+    listSessions: async () => { throw new Error('unused') },
+    listSegments: async () => { throw new Error('unused') },
+    finalizeSession: async () => { throw new Error('unused') },
+    recoverActiveSessions: async () => { throw new Error('unused') },
+    deleteSession: async () => { throw new Error('unused') },
+    deleteExpiredSessions: async () => { throw new Error('unused') }
+  }
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
     return await work(this)
   }

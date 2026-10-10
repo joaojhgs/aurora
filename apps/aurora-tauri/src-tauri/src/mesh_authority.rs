@@ -24,13 +24,14 @@ use aurora_mesh_authority::authority::{
 };
 use aurora_mesh_authority::authorization::PeerAuthorityHostAuthorizationStore;
 use aurora_mesh_authority::grant_management::{PeerGrantManager, PeerGrantSelection};
-use aurora_mesh_authority::types::{
-    PeerHostAuthorizationStore, PeerHostAuthorizeRequest, PeerHostManifestAuthorityRequest,
-};
+use aurora_mesh_authority::types::{PeerHostAuthorizationStore, PeerHostManifestAuthorityRequest};
 use serde::Deserialize;
 use serde_json::Value;
 use tauri::Manager;
 use tokio::sync::Mutex;
+
+#[path = "mesh_authority_request_json.rs"]
+mod mesh_authority_request_json;
 
 /// Bytes from the OS CSPRNG.
 ///
@@ -137,8 +138,9 @@ pub async fn aurora_mesh_authority_hydrate(
 #[tauri::command]
 pub async fn aurora_mesh_authority_authorize(
     state: tauri::State<'_, MeshAuthorityState>,
-    request: PeerHostAuthorizeRequest,
+    request_json: String,
 ) -> Result<Value, String> {
+    let request = mesh_authority_request_json::parse_authorize_request_json(&request_json)?;
     let mut authority = state.0.lock().await;
     let decision = authority.authorize(&request).await.map_err(to_error)?;
     to_value(&decision)
@@ -399,6 +401,7 @@ async fn revoke_peer_authority_inner(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aurora_mesh_authority::types::PeerHostAuthorizeRequest;
 
     fn selector() -> PeerRelationshipSelector {
         PeerRelationshipSelector {

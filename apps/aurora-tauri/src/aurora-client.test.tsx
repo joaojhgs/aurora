@@ -1689,6 +1689,37 @@ describe("Aurora Tauri runtime wrapper", () => {
     expect(recreateRuntime).not.toHaveBeenCalled();
   });
 
+  it("keeps opted-in Android offline chat available without native action services", async () => {
+    vi.stubGlobal("navigator", {
+      userAgent: "Mozilla/5.0 (Linux; Android 14; Aurora Tauri WebView)",
+    });
+    Object.defineProperty(window, "__TAURI__", { value: {}, configurable: true });
+    const base = meshRuntimeProfile();
+    const profile = meshRuntimeProfile({
+      localNode: { ...base.localNode, enabledCapabilityPacks: ["local-inference"] },
+    });
+    const store = createMemoryRuntimeProfileStore({
+      version: 2, activeProfileId: profile.id, profiles: [profile],
+    });
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileStore: store, runtimeProfileDocument: await store.load(),
+    });
+    try {
+      expect(runtime.mode).toBe("mobile-native");
+      expect(runtime.nodeMode).toBe("mesh-node");
+      expect(runtime.runtimeTier).toBe("lightweight-ts");
+      expect(runtime.localAssistant?.provider).toBeDefined();
+      expect(runtime.localAssistant?.remoteTools).toEqual([]);
+      expect(runtime.localInference).toBeDefined();
+      expect(runtime.thinFeatures?.lightweightOrchestratorEnabled).toBe(false);
+      expect(runtime.localFeatureSharing).toBeUndefined();
+      expect(runtime.localToolProvider).toBeUndefined();
+      expect(runtime.localToolApprovals).toBeUndefined();
+    } finally {
+      await runtime.dispose();
+    }
+  });
+
   it("persists exact local speech selection on the active runtime profile", async () => {
     const profile = meshRuntimeProfile({
       localNode: {

@@ -79,6 +79,10 @@ function validateThinWebRtcContract() {
     'utf8'
   )
   const rustBridge = readFileSync(join(appDir, 'src-tauri', 'src', 'lib.rs'), 'utf8')
+  const rustProfileAdapter = readFileSync(
+    join(appDir, 'src-tauri', 'src', 'native_node_config.rs'),
+    'utf8'
+  )
   const runtime = readFileSync(join(appDir, 'src', 'aurora-client.ts'), 'utf8')
   const packageJson = readJson(join(appDir, 'package.json'))
   const prepareClientBundle = readFileSync(
@@ -109,8 +113,20 @@ function validateThinWebRtcContract() {
     'thinProfileSet'
   ]) {
     assert(swiftPlugin.includes(`@objc public func ${command}`), `iOS native plugin is missing ${command}`)
-    assert(rustBridge.includes(`"${command}"`), `Rust iOS bridge is missing ${command}`)
+    if (command === 'thinProfileGet' || command === 'thinProfileSet') {
+      const routedByProfileAdapter = new RegExp(
+        `run_ios_plugin_command\\(\\s*native,\\s*"${command}"`
+      ).test(rustProfileAdapter)
+      assert(routedByProfileAdapter, `iOS profile adapter is missing ${command}`)
+    } else {
+      assert(rustBridge.includes(`"${command}"`), `Rust iOS bridge is missing ${command}`)
+    }
   }
+  assert(rustBridge.includes('fn run_ios_plugin_command('), 'Rust iOS plugin dispatcher is missing')
+  assert(
+    rustBridge.includes('.run_mobile_plugin::<Value>(command, payload)'),
+    'Rust iOS plugin dispatcher must forward commands to the native plugin'
+  )
   for (const invariant of [
     'kSecClassGenericPassword',
     'kSecAttrAccessibleWhenUnlockedThisDeviceOnly',

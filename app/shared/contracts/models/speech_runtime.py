@@ -14,6 +14,11 @@ from typing import Literal
 from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from app.shared.contracts.io_model import IOModel
+from app.shared.contracts.models.speech import (
+    MAX_READY_VOICE_IDS,
+    LogicalVoiceId,
+    validate_logical_voice_id,
+)
 
 MAX_SPEECH_STAGE_METHODS = 16
 MAX_SPEECH_STAGE_LIST = 16
@@ -179,6 +184,43 @@ class SpeechStageCapabilityV1(_SpeechSchemaModel):
         if self.max_chunk_bytes > self.max_input_bytes:
             raise ValueError("max_chunk_bytes cannot exceed max_input_bytes")
         return self
+
+
+class SpeechStageCapabilityExportV1(IOModel):
+    """Detached, bounded wrapper for an exported speech capability."""
+
+    capability: SpeechStageCapabilityV1
+    voice_ids: tuple[LogicalVoiceId, ...] = Field(
+        default_factory=tuple, max_length=MAX_READY_VOICE_IDS
+    )
+    requires_remote_audio_egress: bool = False
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    @field_validator("capability", mode="before")
+    @classmethod
+    def _detach_capability(cls, value: object) -> object:
+        if isinstance(value, SpeechStageCapabilityV1):
+            return value.model_copy(deep=True)
+        return value
+
+    @field_validator("voice_ids", mode="before")
+    @classmethod
+    def _validate_voice_ids(cls, value: object) -> tuple[LogicalVoiceId, ...]:
+        if not isinstance(value, (list, tuple)):
+            raise ValueError("voice_ids must be a list or tuple")
+        voice_ids = tuple(validate_logical_voice_id(item) for item in value)
+        if len(voice_ids) != len(set(voice_ids)):
+            raise ValueError("voice_ids must be unique")
+        if len(voice_ids) > MAX_READY_VOICE_IDS:
+            raise ValueError("voice_ids exceed limit")
+        return voice_ids
+
+    def __getattribute__(self, name: str) -> object:
+        value = super().__getattribute__(name)
+        if name == "capability" and isinstance(value, SpeechStageCapabilityV1):
+            return value.model_copy(deep=True)
+        return value
 
 
 class SpeechExecutionContextV1(_SpeechSchemaModel):
@@ -455,6 +497,78 @@ class SpeechObserverEventV1(IOModel):
     redacted: Literal[True] = True
 
     model_config = ConfigDict(extra="forbid")
+
+
+class SpeechLifecycleObservationV1(IOModel):
+    """Payload-free observation at a real speech lifecycle boundary."""
+
+    event: Literal[
+        "action_admitted",
+        "config_applied",
+        "route_decided",
+        "admission_started",
+        "admission_ended",
+        "queue_enter",
+        "queue_leave",
+        "model_load_start",
+        "model_load_end",
+        "model_warm_start",
+        "model_warm_end",
+        "model_invoke_start",
+        "model_invoke_end",
+        "model_unload_start",
+        "model_unload_end",
+        "preprocess_start",
+        "preprocess_end",
+        "postprocess_start",
+        "postprocess_end",
+        "stream_first_input",
+        "stream_first_output",
+        "finish_requested",
+        "cancel_requested",
+        "terminal",
+        "playback_first",
+        "playback_drained",
+        "playback_aborted",
+        "lifecycle_suspend",
+        "lifecycle_resume",
+    ]
+    operation_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    attempt_id: str = Field(
+        min_length=1, max_length=MAX_SPEECH_STAGE_ID_LENGTH, pattern=_ID_PATTERN
+    )
+    generation: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
+    stage: Literal[
+        "capture", "stt", "assistant_transport", "tts", "playback", "cleanup", "kws", "vad", "tool"
+    ]
+    monotonic_ns: str = Field(min_length=1, max_length=32, pattern=r"^(0|[1-9][0-9]*)$")
+    boot_id: str = Field(min_length=32, max_length=32, pattern=r"^[0-9a-f]{32}$")
+    clock_domain: Literal["python_process_monotonic", "native_process_start_monotonic"] = (
+        "python_process_monotonic"
+    )
+    route_revision: str | None = Field(default=None, max_length=256, pattern=_ID_PATTERN)
+    config_revision: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
+    outcome: Literal["started", "completed", "canceled", "failed"]
+    reason_code: (
+        Literal[
+            "accepted",
+            "input_ended",
+            "user_cancelled",
+            "provider_failure",
+            "output_failure",
+            "cleanup_failure",
+        ]
+        | None
+    ) = None
+    byte_count: int | None = Field(default=None, ge=0, le=MAX_SPEECH_STAGE_INPUT_BYTES)
+    sample_count: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
+    chunk_count: int | None = Field(default=None, ge=0, le=MAX_JS_SAFE_INTEGER)
+    dropped_count: int = Field(default=0, ge=0, le=MAX_JS_SAFE_INTEGER)
+    redacted: Literal[True] = True
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 _NO_FALLBACK_OUTCOMES = {

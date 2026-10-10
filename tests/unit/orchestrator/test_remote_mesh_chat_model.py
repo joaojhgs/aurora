@@ -312,9 +312,15 @@ async def test_remote_peer_caller_params_are_not_forwarded_as_llm_kwargs():
         messages=[OrchestratorChatMessage(role="user", content="hi")],
         params={"temperature": 0.1, "max_tokens": 8, "context_window": 1024},
     )
+    binding = service._native_request_binding(
+        principal_id=None,
+        peer_id=None,
+        session_id=None,
+        trusted_local_origin=True,
+    )
 
     await service._invoke_inference_llm(request)
-    chunks = [chunk async for chunk in service._stream_inference_llm(request)]
+    chunks = [chunk async for chunk in service._stream_inference_llm(request, binding=binding)]
 
     assert chunks[-1].metadata["caller_params_ignored"] is True
     assert llm.ainvoke_calls[0][1] == {}

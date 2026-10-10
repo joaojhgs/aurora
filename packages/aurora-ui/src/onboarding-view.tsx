@@ -18,6 +18,7 @@ export interface OnboardingViewProps {
   snapshot: AuroraShellSnapshot
   modePreferenceStore?: OnboardingModePreferenceStore | undefined
   onApplyModePreference?: (() => Promise<void>) | undefined
+  onUseOfflineProfile?: (() => Promise<void>) | undefined
   onUseManualAddress?: ((address: string) => Promise<void>) | undefined
   thinConnectionPanel?: ReactNode
   renderThinConnectionPanel?: ((modeId: OnboardingProductModeId) => ReactNode)
@@ -91,6 +92,7 @@ export function OnboardingView({
   snapshot,
   modePreferenceStore,
   onApplyModePreference,
+  onUseOfflineProfile,
   onUseManualAddress,
   thinConnectionPanel,
   renderThinConnectionPanel,
@@ -340,6 +342,19 @@ export function OnboardingView({
     }
   }
 
+  async function onUseOfflineDevice() {
+    if (!onUseOfflineProfile || busy) return
+    setBusy('offline-profile')
+    setMessage(null)
+    try {
+      await onUseOfflineProfile()
+    } catch {
+      setMessage('Aurora could not finish setup on this device. Try again.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function onManualAddress() {
     const address = endpoint.trim()
     if (!address || busy) return
@@ -437,6 +452,18 @@ export function OnboardingView({
             <div className="flex flex-col gap-3" data-step="home-node-connection">
               {activeThinConnectionPanel}
             </div>
+          ) : null}
+
+          {onUseOfflineProfile && selectedProductModeId === 'make-this-device-available' ? (
+            <section className="flex flex-col gap-2.5" aria-labelledby="offline-device-title">
+              <h2 id="offline-device-title" className="text-sm font-semibold">Use Aurora on this device</h2>
+              <p className="text-[13px] text-muted-foreground">
+                Keep answers and conversations on this device. You can connect other devices later.
+              </p>
+              <Button variant="outline" disabled={busy !== null} onClick={() => void onUseOfflineDevice()}>
+                {busy === 'offline-profile' ? 'Setting up…' : 'Continue on this device'}
+              </Button>
+            </section>
           ) : null}
 
           {showFirstRunInviteFlow ? (

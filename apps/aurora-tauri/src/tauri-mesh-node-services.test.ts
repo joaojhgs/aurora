@@ -177,6 +177,75 @@ describe("Tauri mesh node services", () => {
     await services.close();
   });
 
+  it("registers only native speech stages reported ready by the confirmed Tauri policy snapshot", async () => {
+    const authorityInvoke = fakeAuthorityInvoke(sequentialIds("id"));
+    let policyChangeListener: (() => void) | undefined;
+    let speechSnapshotCalls = 0;
+    const setupOrder: string[] = [];
+    const invokeCommand = vi.fn(async (command: string, args?: Record<string, unknown>) => {
+      if (command === "aurora_native_speech_host_snapshot") {
+        expect(args).toBeUndefined();
+        speechSnapshotCalls += 1;
+        setupOrder.push("snapshot");
+        if (speechSnapshotCalls > 1) {
+          return { revision: 10, stt: null, tts: null };
+        }
+        return {
+          revision: 9,
+          stt: {
+            enabled: true,
+            modelId: "stt:whisper:tiny.en",
+            language: "en",
+            voiceId: null,
+            implementation: "native",
+          },
+          tts: null,
+        };
+      }
+      return authorityInvoke(command, args);
+    });
+    const services = await createTauriMeshNodeServices({
+      profile: profile(),
+      rolloutFlags,
+      nativeTransport: nativeTransport({ manifest: readyDesktopShareManifest() }),
+      backend: new FakeLocalDataBackend(),
+      crypto: new FakeEnvelopeCrypto(),
+      verifierSecretStorage: new MemorySecretStorage(),
+      invokeCommand,
+      subscribeNativeNodeConfigPolicyChanges: async (listener) => {
+        setupOrder.push("subscribe");
+        policyChangeListener = listener;
+        return () => undefined;
+      },
+      randomBytes: randomBytes(10),
+      randomId: sequentialIds("id"),
+      now: () => 1_000,
+    });
+
+    expect(services.enabled).toBe(true);
+    if (!services.enabled) throw new Error("expected enabled services");
+    expect(setupOrder.slice(0, 2)).toEqual(["subscribe", "snapshot"]);
+    expect(invokeCommand).toHaveBeenCalledWith("aurora_native_speech_host_snapshot");
+    expect(services.localToolProvider.speechHost?.capabilities()).toMatchObject([
+      {
+        capability: {
+          stage: "stt",
+          implementation: "native",
+          peer_id: "node-1",
+          model_ids: ["stt:whisper:tiny.en"],
+          supported_languages: ["en"],
+        },
+      },
+    ]);
+    expect(services.localToolProvider.peerHostRegistry.get("Transcription.Transcribe")).toBeDefined();
+    expect(services.localToolProvider.peerHostRegistry.get("TTS.Synthesize")).toBeUndefined();
+    policyChangeListener?.();
+    await vi.waitFor(() => expect(speechSnapshotCalls).toBe(2));
+    expect(services.localToolProvider.speechHost?.capabilities()).toEqual([]);
+    expect(services.localToolProvider.peerHostRegistry.get("Transcription.Transcribe")).toBeUndefined();
+    await services.close();
+  });
+
   it("does not claim enabled when native evidence yields no tools", async () => {
     const backend = new FakeLocalDataBackend();
     const services = await createTauriMeshNodeServices({
@@ -675,6 +744,18 @@ class FakeLocalDataSession implements LocalDataSession {
   readonly localTools = emptyLocalToolRepository();
   readonly peerGrants = new MemoryPeerGrantMetadataRepository();
   readonly localAudit: MemoryLocalAuditRepository;
+  readonly transcripts: LocalDataSession["transcripts"] = {
+    createSession: async () => { throw new Error("not used"); },
+    startSession: async () => { throw new Error("not used"); },
+    appendSegment: async () => { throw new Error("not used"); },
+    getSession: async () => { throw new Error("not used"); },
+    listSessions: async () => { throw new Error("not used"); },
+    listSegments: async () => { throw new Error("not used"); },
+    finalizeSession: async () => { throw new Error("not used"); },
+    recoverActiveSessions: async () => { throw new Error("not used"); },
+    deleteSession: async () => { throw new Error("not used"); },
+    deleteExpiredSessions: async () => { throw new Error("not used"); },
+  };
   closed = false;
 
   constructor(localAudit = new MemoryLocalAuditRepository()) {

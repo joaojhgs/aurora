@@ -1,9 +1,17 @@
 import type { ReactNode, RefObject } from 'react'
-import { Button, Card } from './primitives'
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '#components/ui/field'
+import { Button, Card, Switch } from './primitives'
+import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '#components/ui/field'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
 import type { AuroraLocalSpeechCatalogPort } from './browser-speech-pack'
 import { RouteStateNotice } from './state-surface'
 import type { LocalSpeechAssetRow } from './voice-settings-local-speech-model'
+import type { AuroraBackgroundTranscriptionPolicy } from '@aurora/client'
+import {
+  ROUTING_CHOICES,
+  type NativeBackgroundTranscriptionStatus,
+  type NativeSpeechPolicyState,
+  type SpeechRoutingChoice,
+} from './native-speech-policy'
 
 export interface VoiceSettingsChoiceOption {
   id: string
@@ -47,6 +55,16 @@ export interface LocalSpeechSettingsSectionProps {
   referenceEditor: VoiceSettingsLocalSpeechRow | null
   pendingReferenceEditorKey: string | null
   localSpeechCatalog: AuroraLocalSpeechCatalogPort | null
+  nativeSpeechPolicyState?: NativeSpeechPolicyState | undefined
+  nativeSpeechPolicyMessage?: string | null | undefined
+  nativeSttRoutingChoice?: SpeechRoutingChoice | undefined
+  nativeTtsRoutingChoice?: SpeechRoutingChoice | undefined
+  onNativeSpeechRoutingChange?: ((stage: 'stt' | 'tts', choice: SpeechRoutingChoice) => void) | undefined
+  onSaveNativeSpeechRouting?: (() => void) | undefined
+  backgroundTranscription: AuroraBackgroundTranscriptionPolicy
+  backgroundTranscriptionStatus: NativeBackgroundTranscriptionStatus
+  onBackgroundTranscriptionChange?: ((update: Partial<Pick<AuroraBackgroundTranscriptionPolicy, 'ambient' | 'notification' | 'retentionDays'>>) => void) | undefined
+  onRequestTranscriptionMicrophonePermission?: (() => void) | undefined
   referenceFileInputRef: RefObject<HTMLInputElement | null>
   SearchableChoice: (props: {
     id: string
@@ -100,6 +118,16 @@ export function LocalSpeechSettingsSection({
   referenceEditor,
   pendingReferenceEditorKey,
   localSpeechCatalog,
+  nativeSpeechPolicyState = 'hidden',
+  nativeSpeechPolicyMessage = null,
+  nativeSttRoutingChoice = 'local_first',
+  nativeTtsRoutingChoice = 'local_first',
+  onNativeSpeechRoutingChange,
+  onSaveNativeSpeechRouting,
+  backgroundTranscription,
+  backgroundTranscriptionStatus,
+  onBackgroundTranscriptionChange,
+  onRequestTranscriptionMicrophonePermission,
   referenceFileInputRef,
   SearchableChoice,
   onChoosePrimaryLanguage,
@@ -118,6 +146,120 @@ export function LocalSpeechSettingsSection({
   return (
     <Card title="Listening and speaking" description="Choose how Aurora listens, understands, and speaks.">
       <FieldGroup>
+        {nativeSpeechPolicyState !== 'hidden' ? (
+          <div className="grid gap-3 rounded-md border border-border p-3">
+            <div>
+              <h3 className="text-sm font-medium">Where speech is processed</h3>
+              <p className="text-xs text-muted-foreground">Choose which device processes speech. These choices apply to your next conversation.</p>
+            </div>
+            {nativeSpeechPolicyState === 'loading' ? (
+              <RouteStateNotice state="loading" title="Loading speech settings" message="Loading choices for this device." />
+            ) : null}
+            {nativeSpeechPolicyState === 'unavailable' ? (
+              <RouteStateNotice state="error" title="Speech settings unavailable" message={nativeSpeechPolicyMessage ?? 'Speech settings could not be loaded on this device.'} />
+            ) : null}
+            {nativeSpeechPolicyState === 'ready' || nativeSpeechPolicyState === 'saving' ? (
+              <>
+                <Field>
+                  <FieldLabel htmlFor="speech-stt-routing">Understanding speech</FieldLabel>
+                  <select
+                    id="speech-stt-routing"
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    value={nativeSttRoutingChoice}
+                    disabled={nativeSpeechPolicyState === 'saving'}
+                    onChange={(event) => onNativeSpeechRoutingChange?.('stt', event.currentTarget.value as SpeechRoutingChoice)}
+                  >
+                    {ROUTING_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                  </select>
+                  <FieldDescription>Choose where Aurora understands what you say.</FieldDescription>
+                </Field>
+                <Field>
+                  <FieldLabel htmlFor="speech-tts-routing">Speaking aloud</FieldLabel>
+                  <select
+                    id="speech-tts-routing"
+                    className="h-9 rounded-md border border-input bg-background px-3 text-sm"
+                    value={nativeTtsRoutingChoice}
+                    disabled={nativeSpeechPolicyState === 'saving'}
+                    onChange={(event) => onNativeSpeechRoutingChange?.('tts', event.currentTarget.value as SpeechRoutingChoice)}
+                  >
+                    {ROUTING_CHOICES.map((choice) => <option key={choice.value} value={choice.value}>{choice.label}</option>)}
+                  </select>
+                  <FieldDescription>Choose where Aurora creates its speaking voice.</FieldDescription>
+                </Field>
+              </>
+            ) : null}
+            {nativeSpeechPolicyState === 'ready' || nativeSpeechPolicyState === 'saving' ? (
+              <div className="grid gap-3 border-t border-border pt-3">
+                <div>
+                  <h3 className="text-sm font-medium">Transcription while you’re away</h3>
+                  <p className="text-xs text-muted-foreground">Transcripts are encrypted on this device. Microphone audio is not saved.</p>
+                </div>
+                <p className="text-xs text-muted-foreground">These choices apply when a new transcription session starts.</p>
+                <FieldSet className="gap-2">
+                  <FieldLegend variant="label">When Aurora can transcribe</FieldLegend>
+                  <FieldGroup className="gap-2">
+                    <Switch
+                      id="background-transcription-ambient"
+                      label="Continuous transcription"
+                      checked={backgroundTranscription.ambient}
+                      disabled={nativeSpeechPolicyState === 'saving' || (!backgroundTranscription.ambient && !canConfigureAmbientTranscription(backgroundTranscriptionStatus))}
+                      disabledReason={transcriptionOptionDisabledReason(backgroundTranscriptionStatus, 'ambient')}
+                      onChange={(ambient) => onBackgroundTranscriptionChange?.({ ambient })}
+                    />
+                    <Switch
+                      id="background-transcription-notification"
+                      label="Notification sessions"
+                      checked={backgroundTranscription.notification}
+                      disabled={nativeSpeechPolicyState === 'saving' || (!backgroundTranscription.notification && !canConfigureNotificationTranscription(backgroundTranscriptionStatus))}
+                      disabledReason={transcriptionOptionDisabledReason(backgroundTranscriptionStatus, 'notification')}
+                      onChange={(notification) => onBackgroundTranscriptionChange?.({ notification })}
+                    />
+                  </FieldGroup>
+                </FieldSet>
+                <Field>
+                  <FieldLabel htmlFor="background-transcription-retention">Keep transcripts</FieldLabel>
+                  <Select
+                    value={String(backgroundTranscription.retentionDays)}
+                    disabled={nativeSpeechPolicyState === 'saving'}
+                    onValueChange={(value) => onBackgroundTranscriptionChange?.({ retentionDays: Number(value) })}
+                  >
+                    <SelectTrigger id="background-transcription-retention" className="w-full" disabled={nativeSpeechPolicyState === 'saving'}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {retentionOptions(backgroundTranscription.retentionDays)
+                        .map((days) => <SelectItem key={days} value={String(days)}>{retentionLabel(days)}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  <FieldDescription>Older transcripts are removed automatically.</FieldDescription>
+                </Field>
+                <div className="grid gap-2">
+                  <p role="status" className="text-xs text-muted-foreground">{transcriptionStatusLabel(backgroundTranscriptionStatus)}</p>
+                  {backgroundTranscriptionStatus.facts
+                    && backgroundTranscriptionStatus.facts.permission !== 'granted'
+                    && backgroundTranscriptionStatus.availability === 'available' ? (
+                      <Button
+                        variant="outline"
+                        className="h-8 w-fit px-3 text-xs"
+                        disabled={nativeSpeechPolicyState === 'saving'}
+                        onClick={() => void onRequestTranscriptionMicrophonePermission?.()}
+                      >
+                        Allow microphone access
+                      </Button>
+                    ) : null}
+                </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="outline" className="h-8 px-3 text-xs" onClick={() => void onSaveNativeSpeechRouting?.()} disabled={nativeSpeechPolicyState === 'saving'}>
+                    {nativeSpeechPolicyState === 'saving' ? 'Saving…' : 'Save choices'}
+                  </Button>
+                  {nativeSpeechPolicyMessage && nativeSpeechPolicyState === 'ready' ? (
+                    <p role="status" className="text-xs text-muted-foreground">{nativeSpeechPolicyMessage}</p>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         {browserCatalogState === 'loading' ? (
           <RouteStateNotice state="loading" title="Loading speech choices" message="Loading listening and speaking choices." />
         ) : null}
@@ -315,4 +457,78 @@ export function LocalSpeechSettingsSection({
       </FieldGroup>
     </Card>
   )
+}
+
+function retentionOptions(current: number): number[] {
+  return [...new Set([7, 30, 90, 365, 3650, current])].sort((left, right) => left - right)
+}
+
+function retentionLabel(days: number): string {
+  if (days === 365) return '1 year'
+  if (days === 3650) return '10 years'
+  return `${days} days`
+}
+
+function canConfigureAmbientTranscription(status: NativeBackgroundTranscriptionStatus): boolean {
+  return status.availability === 'available' && status.facts?.capability === 'supported'
+}
+
+function canConfigureNotificationTranscription(status: NativeBackgroundTranscriptionStatus): boolean {
+  return status.availability === 'available'
+    && (status.facts?.capability === 'supported' || status.facts?.capability === 'foreground_only')
+}
+
+function transcriptionOptionDisabledReason(
+  status: NativeBackgroundTranscriptionStatus,
+  mode: 'ambient' | 'notification',
+): string {
+  if (status.availability === 'loading') return 'Waiting for this device.'
+  if (status.availability === 'unavailable') return 'Transcription availability could not be confirmed.'
+  if (status.availability === 'unsupported' || status.facts?.capability === 'unsupported') {
+    return 'Background transcription is not available on this device.'
+  }
+  if (mode === 'ambient' && status.facts?.capability === 'foreground_only') {
+    return 'Continuous transcription is not available on this device.'
+  }
+  return 'This choice is not available on this device.'
+}
+
+function transcriptionStatusLabel(status: NativeBackgroundTranscriptionStatus): string {
+  if (status.availability === 'loading') return 'Checking transcription availability.'
+  if (status.reason === 'notification_permission_missing') {
+    return 'Allow Aurora notifications in device settings to start a recording from the notification.'
+  }
+  if (status.availability === 'unavailable') return status.message ?? 'Aurora could not confirm whether transcription is active.'
+  if (status.availability === 'unsupported') return status.message ?? 'Transcription is not available on this device.'
+  if (status.reason === 'unsupported' || status.facts?.capability === 'unsupported') {
+    return 'Transcription is not available on this device.'
+  }
+  if (status.reason === 'permission_denied' || status.facts?.permission === 'denied') {
+    return 'Microphone access is off in device settings.'
+  }
+  if (status.reason === 'permission_required' || status.facts?.permission === 'not_requested') {
+    return 'Allow microphone access to use transcription.'
+  }
+  if (status.reason === 'speech_unavailable' || status.facts?.sttAvailable === false) {
+    return 'Speech recognition is not ready on this device.'
+  }
+  if (status.reason === 'storage_unavailable' || status.facts?.archiveAvailable === false) {
+    return 'Transcripts cannot be saved on this device right now.'
+  }
+  if (status.reason === 'foreground_required') {
+    return 'Open Aurora before starting a notification session.'
+  }
+  if (status.reason === 'disabled') {
+    return 'Not listening. Saved choices apply when a session starts.'
+  }
+  switch (status.captureState) {
+    case 'starting': return 'Transcription is starting.'
+    case 'listening': return 'Transcription is active.'
+    case 'transcribing': return 'Transcription is being saved.'
+    case 'completed': return 'The last transcription session finished.'
+    case 'failed': return 'Transcription could not start.'
+    case 'idle':
+      return 'Not listening. Saved choices apply when a session starts.'
+    default: return 'Aurora could not confirm whether transcription is active.'
+  }
 }

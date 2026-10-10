@@ -32,6 +32,9 @@ import type {
   VerifyReconnectProofResult
 } from './authority-types.js'
 
+const MAX_AUTHORIZATION_REQUEST_BYTES = 65_536
+const INVALID_AUTHORIZATION_REQUEST = 'Invalid authorization request'
+
 /**
  * The `PeerHostAuthorizationStore` backed by the Rust mesh authority.
  *
@@ -180,8 +183,20 @@ export function createTauriAuthorityPort(invoke: TauriInvoke): RustAuthorityPort
       })
     },
     async authorize(request) {
+      let requestJson: unknown
+      try {
+        requestJson = JSON.stringify(request)
+      } catch {
+        throw new Error(INVALID_AUTHORIZATION_REQUEST)
+      }
+      if (
+        typeof requestJson !== 'string' ||
+        new TextEncoder().encode(requestJson).byteLength > MAX_AUTHORIZATION_REQUEST_BYTES
+      ) {
+        throw new Error(INVALID_AUTHORIZATION_REQUEST)
+      }
       return (await invoke(MESH_AUTHORITY_COMMANDS.authorize, {
-        request
+        requestJson
       })) as PeerHostAuthorizationDecision
     },
     async snapshotManifestAuthority(request) {

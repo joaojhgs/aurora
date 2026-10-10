@@ -83,7 +83,13 @@ def mock_bus():
     bus.subscribe = MagicMock()
     bus.subscribe_event = AsyncMock()
     bus.publish = AsyncMock()
-    bus.request = AsyncMock(return_value=MagicMock(ok=False, error="not flushed"))
+
+    async def request(topic, payload, **kwargs):
+        if topic == TranscriptionMethods.CONTROL and payload.action == "pause":
+            return MagicMock(ok=True, error=None)
+        return MagicMock(ok=False, error="not flushed")
+
+    bus.request = AsyncMock(side_effect=request)
     bus.start = AsyncMock()
     bus.stop = AsyncMock()
     return bus
@@ -606,6 +612,28 @@ async def test_capture_prepare_stops_python_before_native_grant(service):
 
 
 @pytest.mark.asyncio
+async def test_capture_prepare_does_not_grant_when_transcription_drain_is_unconfirmed(
+    service, mock_bus
+):
+    mock_bus.request = AsyncMock(return_value=MagicMock(ok=False, error="drain timed out"))
+
+    response = await service._on_capture_prepare(STTCapturePrepareRequest(owner_id="tauri-local"))
+
+    assert not response.granted
+    assert response.status == "unavailable"
+    assert response.owner == "python"
+    assert response.message == "transcription_release_failed"
+    assert service._capture_owner == "python"
+    assert service._capture_lease_id is None
+    mock_bus.request.assert_awaited_once_with(
+        TranscriptionMethods.CONTROL,
+        TranscriptionControl(action="pause"),
+        timeout=7.0,
+        priority=ANY,
+    )
+
+
+@pytest.mark.asyncio
 async def test_capture_prepare_renews_same_owner_lease_without_rotating_identity(service):
     """Same-owner prepare renews the deadline while keeping lease identity stable."""
     first = await service._on_capture_prepare(
@@ -942,8 +970,11 @@ async def test_capture_prepare_quiesces_active_session_and_ignores_late_transcri
     assert response.granted
     assert service._state == STTState.IDLE
     assert service._current_session_id is None
-    mock_bus.publish.assert_any_call(
-        TranscriptionTopics.CONTROL, TranscriptionControl(action="pause"), event=False
+    mock_bus.request.assert_any_await(
+        TranscriptionTopics.CONTROL,
+        TranscriptionControl(action="pause"),
+        timeout=7.0,
+        priority=ANY,
     )
 
     mock_bus.publish.reset_mock()

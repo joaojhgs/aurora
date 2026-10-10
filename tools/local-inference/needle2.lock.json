@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "publisher": "Cactus-Compute/needle2",
+  "revision": "2d7361c8f50785502a131ae2159bfa3a62687746",
+  "model": {
+    "path": "needle2.cact",
+    "bytes": 13737679,
+    "sha256": "ca7950ac8aef26ed22d17f92c733c9374aa7f59f6c2abb0fe2ac320a04f3c3d8"
+  },
+  "header": {
+    "name": "needle.h",
+    "bytes": 562,
+    "sha256": "cb7a720eba7bc895b5bbfa5d6f6fc635906938fdc569eb2520a2c09ba06d9eed"
+  },
+  "targets": {
+    "linux-aarch64": {
+      "directory": "linux-arm64",
+      "libraryBytes": 19914600,
+      "librarySha256": "2fe03ae4562c0b177a0741d982edb4642f5fec9e300dcdcc45f4a9658647e8d8"
+    },
+    "android-arm64": {
+      "directory": "android-arm64",
+      "libraryBytes": 20408144,
+      "librarySha256": "b681bfc9eedd23e384b7629d3b462588ba951b1a7ba3d4cd9af6a23deac882c3"
+    },
+    "ios-arm64": {
+      "directory": "ios-arm64",
+      "libraryBytes": 14154696,
+      "librarySha256": "e2456ae0944b4ed74c4db7fe70275bf049c5184e860d24d528d1b31b3dc38471"
+    },
+    "ios-simulator-arm64": {
+      "directory": "ios-sim-arm64",
+      "libraryBytes": 14161528,
+      "librarySha256": "34fb50e6841c1a5008b6ad84afda94a1ada86fb3719c2881c0d21101b80df912"
+    }
+  },
+  "licenseContext": "Preserve the user's personal, educational and nonprofit use basis. The Needle2 model card declares Apache-2.0; public redistribution requires separate runtime-license review."
+}

@@ -32,6 +32,7 @@
       "import": "./src/local-assistant/index.ts",
       "default": "./src/local-assistant/index.ts"
     },
+    "./local-inference-settings-view": "./src/local-inference-settings-view.tsx",
     "./admin-audit-view": "./src/admin-audit-view.tsx",
     "./admin-devices-view": "./src/admin-devices-view.tsx",
     "./admin-plugins-view": "./src/admin-plugins-view.tsx",

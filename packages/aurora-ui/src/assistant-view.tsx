@@ -10,14 +10,15 @@ export type {
   VoiceEventRow,
 } from './assistant-voice-model'
 
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import type { AttachmentContextPrivacyClass, AssistantMessage as SdkAssistantMessage } from '@aurora/client'
 import type { AssistantStreamState, AssistantViewProps } from './assistant-view-types'
-import { routePolicyFromRoute, useAssistantExecution } from './use-assistant-execution'
+import { useAssistantExecution } from './use-assistant-execution'
 import { assistantConversationRows, useAssistantHistory } from './use-assistant-history'
 import type { AssistantSessionSnapshot } from './assistant-session-persistence'
 import { AuroraQueryProvider, useAuroraQueryScope, useAuroraStateScopeId } from './query'
 import { useAssistantTts } from './use-assistant-tts'
+import { useNativeSpeechPolicy } from './native-speech-policy'
 import { useAssistantSessionActions } from './use-assistant-session-actions'
 import { useAssistantAttachments } from './use-assistant-attachments'
 import { useAssistantTurns } from './use-assistant-turns'
@@ -171,6 +172,7 @@ function AssistantQueryView({
     formatError: productAssistantErrorCopy,
   })
   const surfaceProfile = useAssistantSurfaceProfile({ client, nativePlatform, providedSurfaceProfile })
+  const nativeSpeechPolicy = useNativeSpeechPolicy(surfaceProfile, assistantStreamScopeId)
   const voiceLifecycleCallbacks = assistantVoiceLifecycleCallbacks({
     setText,
     setLastError,
@@ -430,6 +432,11 @@ function AssistantQueryView({
     setVoiceCaptureStatus,
     setStreamState,
   })
+  const speechRoutePolicy = useCallback((stage: 'stt' | 'tts', speechRoute: typeof voiceModel.speechRoute) => {
+    const basePolicy = defaultVoiceRoutePolicy(speechRoute)
+    if (!basePolicy) return null
+    return nativeSpeechPolicy.routePolicy(stage, speechRoute)
+  }, [defaultVoiceRoutePolicy, nativeSpeechPolicy.routePolicy])
   const {
     speakingMessageId: speakingMessageIdState,
     speakingMessageIdRef,
@@ -447,7 +454,7 @@ function AssistantQueryView({
     sessionId: session.sessionId,
     usesLocalSidecar: surfaceProfile.usesLocalSidecar,
     browserLocalTtsVoiceId,
-    resolveReadAloudRoutePolicy: () => defaultVoiceRoutePolicy(voiceModel.speechRoute),
+    resolveReadAloudRoutePolicy: () => speechRoutePolicy('tts', voiceModel.speechRoute),
     browserVoiceRuntime: assistantBridge.browserVoiceRuntime,
     cancelBrowserVoiceRuntime: assistantBridge.cancelBrowserVoiceRuntime,
     setStreamState,
@@ -553,7 +560,11 @@ function AssistantQueryView({
       setNativeMobileBackgroundWakeActive: assistantVoice.setNativeMobileBackgroundWakeActive,
       remoteAudioConsentForCurrentRoute: assistantVoice.remoteAudioConsentForCurrentRoute,
       defaultVoiceRoutePolicy,
-      routePolicyFromRoute,
+      routePolicyFromRoute: (speechRoute) => {
+        const policy = speechRoutePolicy('stt', speechRoute)
+        if (!policy) throw new Error('Choose a connected speech device before continuing.')
+        return policy
+      },
       productAssistantErrorCopy,
       applyNativeDesktopVoiceStatus: assistantBridge.applyNativeDesktopVoiceStatus,
       interruptTtsForVoiceCapture,

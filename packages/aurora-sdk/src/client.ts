@@ -1587,6 +1587,8 @@ export class AssistantClient {
       speed: input.speed ?? 1.0,
       format: input.format ?? 'wav'
     }
+    if (input.model_id !== undefined) payload.model_id = input.model_id
+    if (input.language !== undefined) payload.language = input.language
     if (input.sample_rate !== undefined) payload.sample_rate = input.sample_rate
     if (selector) {
       payload.mesh_selector = { ...selector }

@@ -49,14 +49,61 @@ def test_host_target_resolution_is_explicit() -> None:
     builder = load_builder()
 
     linux = builder.resolve_target("host", "Linux", "x86_64")
+    linux_arm64 = builder.resolve_target("host", "Linux", "AARCH64")
+    linux_arm64_alias = builder.resolve_target("host", "Linux", "ARM64")
     macos = builder.resolve_target("host", "Darwin", "arm64")
     windows = builder.resolve_target("host", "Windows", "AMD64")
 
     assert linux.target == "x86_64-unknown-linux-gnu"
+    assert linux_arm64.target == "aarch64-unknown-linux-gnu"
+    assert linux_arm64_alias == linux_arm64
     assert macos.target == "aarch64-apple-darwin"
     assert windows.target == "x86_64-pc-windows-msvc"
     with pytest.raises(builder.NativeBuildError, match="unsupported native Sherpa host"):
         builder.resolve_target("host", "Linux", "riscv64")
+
+
+def test_explicit_linux_targets_reject_cross_host_or_machine_requests() -> None:
+    builder = load_builder()
+
+    with pytest.raises(builder.NativeBuildError, match="requires Linux"):
+        builder.resolve_target("aarch64-unknown-linux-gnu", "Darwin", "arm64")
+    with pytest.raises(builder.NativeBuildError, match="got Linux/x86_64"):
+        builder.resolve_target("aarch64-unknown-linux-gnu", "Linux", "x86_64")
+    with pytest.raises(builder.NativeBuildError, match="got Linux/aarch64"):
+        builder.resolve_target("x86_64-unknown-linux-gnu", "Linux", "aarch64")
+
+
+def test_linux_arm64_uses_exact_pinned_ort_and_existing_static_tts_configuration(
+    tmp_path: Path,
+) -> None:
+    builder = load_builder()
+    plan = builder.TARGETS["aarch64-unknown-linux-gnu"]
+    expected_filename = "onnxruntime-linux-aarch64-static_lib-1.27.1-glibc2_17.zip"
+    assert plan.host_system == "Linux"
+    assert plan.host_machine == ("aarch64", "arm64")
+    assert not plan.is_ios
+    assert plan.cmake_args == ()
+    assert builder.static_library_filename("onnxruntime", plan.target) == "libonnxruntime.a"
+    assert plan.ort_pin == (
+        f"{builder.ORT_RELEASE_ROOT}/{expected_filename}",
+        "051131cfe80d07257631311f0b1f726b7302e85e1c7e2176cb84e461eea1fe27",
+        expected_filename,
+    )
+
+    artifact_root = tmp_path / "artifacts"
+    source = artifact_root / "sources/extracted/sherpa-onnx-1.13.5"
+    command = builder.configure_command(
+        plan,
+        artifact_root,
+        source,
+        artifact_root / "build",
+        artifact_root / "install",
+    )
+    assert "--allow-aurora-pockettts-patches" in command
+    assert "-DBUILD_SHARED_LIBS=OFF" in command
+    assert "-DSHERPA_ONNX_ENABLE_TTS=ON" in command
+    assert "-DSHERPA_ONNX_USE_PRE_INSTALLED_ONNXRUNTIME_IF_AVAILABLE=OFF" in command
 
 
 def test_ios_configuration_uses_pinned_static_slice(tmp_path: Path) -> None:

@@ -34,6 +34,7 @@ from app.shared.contracts.models.speech import (
     SpeechLanguageRequirement,
     SpeechMethodConstraints,
 )
+from app.shared.contracts.models.speech_runtime import SpeechStageCapabilityExportV1
 from app.shared.contracts.models.tooling import (
     ToolingGetExportCatalogRequest,
     ToolingGetExportCatalogResponse,
@@ -141,6 +142,7 @@ class ServiceAnnouncement(IOModel):
     summary: str = ""
     capabilities: list[str] = Field(default_factory=list)
     callable_features: list[CallableFeatureContract] = Field(default_factory=list)
+    speech_stage_capabilities: list[SpeechStageCapabilityExportV1] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     # Unique instance ID (for multiple instances of same service)

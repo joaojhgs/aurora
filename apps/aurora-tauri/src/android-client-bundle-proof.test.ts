@@ -44,6 +44,49 @@ function writeNativeSpeechRuntime(directory: string) {
   }
 }
 
+function writePinnedLlamaRuntime(directory: string, target: string) {
+  const repoRoot = resolve(packageRoot, '..', '..')
+  const lock = JSON.parse(readFileSync(join(repoRoot, 'tools/local-inference/llama.cpp.lock.json'), 'utf8'))
+  const libraries = [
+    'libllama-common.a',
+    'libllama-common-base.a',
+    'libllama.a',
+    'libggml.a',
+    'libggml-cpu.a',
+    'libggml-base.a',
+    'libcpp-httplib.a',
+  ]
+  mkdirSync(join(directory, 'include/llama-common'), { recursive: true })
+  mkdirSync(join(directory, 'include/vendor'), { recursive: true })
+  const fileSha: Record<string, string> = {}
+  for (const library of libraries) {
+    const bytes = Buffer.from('!<arch>\nfixture')
+    writeFileSync(join(directory, library), bytes)
+    fileSha[library] = createHash('sha256').update(bytes).digest('hex')
+  }
+  for (const header of ['include/llama.h', 'include/llama-common/chat.h', 'include/llama-common/json.h', 'include/vendor/json.hpp']) {
+    const path = join(directory, header)
+    mkdirSync(dirname(path), { recursive: true })
+    const bytes = Buffer.from(`fixture:${header}`)
+    writeFileSync(path, bytes)
+    fileSha[header] = createHash('sha256').update(bytes).digest('hex')
+  }
+  writeFileSync(join(directory, 'aurora-llama-runtime.json'), JSON.stringify({
+    format: 1,
+    link_kind: 'static',
+    source: {
+      version: lock.source.version,
+      commit: lock.source.commit,
+      archive_sha256: lock.source.archive_sha256,
+      archive_bytes: lock.source.archive_bytes,
+    },
+    target,
+    static_libraries: libraries,
+    include_dirs: ['include', 'include/llama-common', 'include/vendor'],
+    file_sha256: fileSha,
+  }))
+}
+
 interface AndroidClientProofContext {
   root: string
   buildOutputRoot: string
@@ -318,6 +361,8 @@ describeIfNode('Android client bundle artifact proof', () => {
     const stubDir = mkdtempSync(join(tmpdir(), 'aurora-android-thin-build-pnpm-'))
     const arm64NativeLibDir = join(stubDir, 'native', 'arm64-v8a')
     const x86_64NativeLibDir = join(stubDir, 'native', 'x86_64')
+    const llamaArm64Runtime = join(stubDir, 'llama', 'android-arm64')
+    const llamaX86_64Runtime = join(stubDir, 'llama', 'android-x86_64')
     const jdkHome = join(stubDir, 'jdk', 'temurin-17.0.20+8')
     const jdkBin = join(jdkHome, 'bin')
     const callsPath = join(stubDir, 'calls.jsonl')
@@ -326,6 +371,8 @@ describeIfNode('Android client bundle artifact proof', () => {
     const asdfStub = join(stubDir, 'asdf')
     writeNativeSpeechRuntime(arm64NativeLibDir)
     writeNativeSpeechRuntime(x86_64NativeLibDir)
+    writePinnedLlamaRuntime(llamaArm64Runtime, 'android-arm64')
+    writePinnedLlamaRuntime(llamaX86_64Runtime, 'android-x86_64')
     mkdirSync(jdkBin, { recursive: true })
     writeFileSync(join(jdkBin, 'java'), '#!/usr/bin/env sh\nexit 0\n')
     chmodSync(join(jdkBin, 'java'), 0o755)
@@ -359,6 +406,8 @@ fs.appendFileSync(callsPath, JSON.stringify({
   androidNativeTargets: process.env.AURORA_ANDROID_NATIVE_TARGETS,
   arm64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR,
   x86_64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR,
+  llamaArm64Runtime: process.env.AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR,
+  llamaX86_64Runtime: process.env.AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR,
 }) + '\\n')
 if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
   const configPath = argv[argv.indexOf('--config') + 1]
@@ -397,6 +446,8 @@ if (argv[0] === 'build:frontend:android-client') {
         JAVA_HOME: undefined,
         AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
         AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+        AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR: llamaArm64Runtime,
+        AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR: llamaX86_64Runtime,
         AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: 'https://gateway.example.invalid wss://signaling.example.invalid',
       }),
     })
@@ -416,6 +467,8 @@ if (argv[0] === 'build:frontend:android-client') {
       androidNativeTargets: 'aarch64,x86_64',
       arm64NativeLibDir,
       x86_64NativeLibDir,
+      llamaArm64Runtime,
+      llamaX86_64Runtime,
     })
     expect(calls[2]).toMatchObject({
       androidNativeTargets: 'aarch64,x86_64',
@@ -439,6 +492,14 @@ if (argv[0] === 'build:frontend:android-client') {
         libraries: requiredNativeSpeechLibraries.slice(1),
         sourceDirectoriesRedacted: true,
       },
+      llamaCppRuntime: {
+        targets: [
+          { target: 'android-arm64', linkKind: 'static' },
+          { target: 'android-x86_64', linkKind: 'static' },
+        ],
+        staticLink: true,
+        sourceDirectoriesRedacted: true,
+      },
     })
     expect(provenance.artifactRoot).toBe(context.buildOutputRoot)
     expect(provenance.config.app.security.capabilities).toEqual([
@@ -458,6 +519,7 @@ if (argv[0] === 'build:frontend:android-client') {
           ASDF_JAVA_VERSION: undefined,
           JAVA_HOME: undefined,
           AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+          AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR: llamaArm64Runtime,
         }),
       },
     )
@@ -467,6 +529,7 @@ if (argv[0] === 'build:frontend:android-client') {
       'tauri android build --apk --target aarch64 --config ' + releaseCalls[3].argv.at(-1),
     )
     expect(releaseCalls[3].argv).not.toContain('--debug')
+    expect(releaseCalls[3].llamaArm64Runtime).toBe(llamaArm64Runtime)
     expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
       buildMode: 'release',
       kind: 'apk',
@@ -484,6 +547,7 @@ if (argv[0] === 'build:frontend:android-client') {
           PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
           JAVA_HOME: jdkHome,
           AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+          AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR: llamaX86_64Runtime,
         }),
       },
     )
@@ -493,6 +557,7 @@ if (argv[0] === 'build:frontend:android-client') {
       'tauri', 'android', 'build', '--debug', '--features', 'android-voice-live-test',
       '--apk', '--target', 'x86_64', '--config', liveCalls[3].argv.at(-1),
     ])
+    expect(liveCalls[3].llamaX86_64Runtime).toBe(llamaX86_64Runtime)
     expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
       bundleMode: 'android-client-voice-live-test',
       buildMode: 'debug',

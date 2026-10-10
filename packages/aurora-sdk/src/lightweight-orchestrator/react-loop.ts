@@ -30,6 +30,7 @@ interface PendingConfirmation {
   readonly providerId: string | null
   readonly modelId: string | null
   readonly controller: AbortController
+  readonly turnController: AbortController
   readonly timeoutHandle: unknown
   readonly expiresAtMs: number
   readonly startedAtMs: number
@@ -96,7 +97,9 @@ export class LightweightOrchestrator {
 
   async runTurn(input: LightweightTurnInput): Promise<LightweightTurnResult> {
     const conversationId = input.conversationId ?? `lw-conv-${this.ids()}`
-    const controller = this.turnController(input.signal)
+    const turnController = this.lifetimeController(input.signal)
+    const controller = this.turnController(turnController.signal)
+    let awaitingConfirmation = false
     let conversationReady = false
     try {
       assertTextBound(input.text, this.limits.maxPromptBytes, 'prompt_too_large')
@@ -113,7 +116,8 @@ export class LightweightOrchestrator {
           messages,
           controller.signal,
           input.providerId ?? null,
-          input.modelId ?? null
+          input.modelId ?? null,
+          turnController.signal
         )
         if (providerResponse.type === 'message') {
           assertTextBound(providerResponse.content, this.limits.maxProviderResponseBytes, 'provider_response_too_large')
@@ -128,9 +132,11 @@ export class LightweightOrchestrator {
           providerResponse,
           controller,
           input.providerId ?? null,
-          input.modelId ?? null
+          input.modelId ?? null,
+          turnController
         )
         if ('confirmation' in preparedMessages) {
+          awaitingConfirmation = true
           return {
             status: 'awaiting_confirmation',
             conversationId,
@@ -151,6 +157,7 @@ export class LightweightOrchestrator {
       throw error
     } finally {
       controller.abort()
+      if (!awaitingConfirmation) turnController.abort()
     }
   }
 
@@ -169,6 +176,7 @@ export class LightweightOrchestrator {
     if (input.decision === 'deny') {
       await this.denyApproval(pending, input.grantScope ?? 'deny_once')
       pending.controller.abort()
+      pending.turnController.abort()
       await this.appendState(pending.conversationId, 'tool', 'cancelled', { tool: { type: 'tool_cancelled', toolCall: persistedToolCall(pending.toolCall), secretsRedacted: true } })
       return {
         status: 'cancelled',
@@ -177,8 +185,9 @@ export class LightweightOrchestrator {
         diagnostics: redactedDiagnostic('confirmation_denied')
       }
     }
-    const controller = this.turnController(input.signal)
+    const controller = this.turnController(input.signal, pending.turnController.signal)
     try {
+      throwIfAborted(pending.turnController.signal)
       const approval = await this.confirmApproval(
         pending,
         controller.signal,
@@ -190,7 +199,8 @@ export class LightweightOrchestrator {
         messages,
         controller.signal,
         pending.providerId,
-        pending.modelId
+        pending.modelId,
+        pending.turnController.signal
       )
       if (providerResponse.type !== 'message') {
         throw new LightweightOrchestratorError('provider_nested_confirmation_not_supported')
@@ -212,6 +222,7 @@ export class LightweightOrchestrator {
       throw error
     } finally {
       controller.abort()
+      pending.turnController.abort()
     }
   }
 
@@ -219,12 +230,14 @@ export class LightweightOrchestrator {
     if (token !== undefined) {
       const pending = this.pending.get(token)
       pending?.controller.abort()
+      pending?.turnController.abort()
       if (pending) this.timers.clearTimeout(pending.timeoutHandle)
       this.pending.delete(token)
       return
     }
     for (const pending of this.pending.values()) {
       pending.controller.abort()
+      pending.turnController.abort()
       this.timers.clearTimeout(pending.timeoutHandle)
     }
     this.pending.clear()
@@ -236,7 +249,8 @@ export class LightweightOrchestrator {
     providerResponse: Extract<LightweightProviderResponse, { type: 'tool_calls' }>,
     controller: AbortController,
     providerId: string | null,
-    modelId: string | null
+    modelId: string | null,
+    turnController: AbortController
   ): Promise<{ messages: LightweightProviderMessage[] } | { confirmation: NonNullable<LightweightTurnResult['confirmation']> }> {
     if (providerResponse.toolCalls.length === 0 || providerResponse.toolCalls.length > this.limits.maxToolsPerIteration) {
       throw new LightweightOrchestratorError('tool_iteration_limit_exceeded')
@@ -271,6 +285,7 @@ export class LightweightOrchestrator {
           providerId,
           modelId,
           controller,
+          turnController,
           timeoutHandle: this.timers.setTimeout(() => {
             void this.expirePending(token)
           }, Math.max(0, expiresAtMs - this.nowMs())),
@@ -406,6 +421,7 @@ export class LightweightOrchestrator {
     if (!pending || pending.used) return
     pending.used = true
     pending.controller.abort()
+    pending.turnController.abort()
     this.pending.delete(token)
     this.expiredTokens.add(token)
     this.timers.clearTimeout(pending.timeoutHandle)
@@ -416,7 +432,8 @@ export class LightweightOrchestrator {
     messages: LightweightProviderMessage[],
     parentSignal: AbortSignal,
     providerId: string | null,
-    modelId: string | null
+    modelId: string | null,
+    turnSignal: AbortSignal
   ): Promise<LightweightProviderResponse> {
     assertSerializedBound(messages.slice(-this.limits.maxHistoryMessages), this.limits.maxPromptBytes, 'history_too_large')
     const controller = this.timeoutController(parentSignal, this.limits.providerCallTimeoutMs, 'provider_call_timeout')
@@ -427,6 +444,7 @@ export class LightweightOrchestrator {
         maxToolCalls: this.limits.maxToolsPerIteration,
         providerId,
         modelId,
+        turnSignal,
         signal: controller.signal
       })
       assertSerializedBound(response, this.limits.maxProviderResponseBytes, 'provider_response_too_large')
@@ -596,20 +614,34 @@ export class LightweightOrchestrator {
     )
   }
 
-  private turnController(signal: AbortSignal | undefined): AbortController {
-    return this.timeoutController(signal, this.limits.turnTimeoutMs, 'turn_timeout')
+  private lifetimeController(parentSignal: AbortSignal | undefined): AbortController {
+    const controller = new AbortController()
+    const abort = () => controller.abort()
+    controller.signal.addEventListener('abort', () => {
+      parentSignal?.removeEventListener('abort', abort)
+    }, { once: true })
+    if (parentSignal?.aborted) abort()
+    else parentSignal?.addEventListener('abort', abort, { once: true })
+    return controller
   }
 
-  private timeoutController(parentSignal: AbortSignal | undefined, ms: number, reason: string): AbortController {
+  private turnController(signal: AbortSignal | undefined, turnSignal?: AbortSignal): AbortController {
+    return this.timeoutController(signal, this.limits.turnTimeoutMs, 'turn_timeout', turnSignal)
+  }
+
+  private timeoutController(parentSignal: AbortSignal | undefined, ms: number, reason: string, turnSignal?: AbortSignal): AbortController {
     const controller = new AbortController()
     const abort = () => controller.abort(new DOMException(reason, 'AbortError'))
     const handle = this.timers.setTimeout(abort, ms)
-    if (parentSignal?.aborted === true) abort()
-    else parentSignal?.addEventListener('abort', abort, { once: true })
     controller.signal.addEventListener('abort', () => {
       this.timers.clearTimeout(handle)
       parentSignal?.removeEventListener('abort', abort)
+      turnSignal?.removeEventListener('abort', abort)
     }, { once: true })
+    for (const signal of [parentSignal, turnSignal]) {
+      if (signal?.aborted === true) abort()
+      else signal?.addEventListener('abort', abort, { once: true })
+    }
     return controller
   }
 }

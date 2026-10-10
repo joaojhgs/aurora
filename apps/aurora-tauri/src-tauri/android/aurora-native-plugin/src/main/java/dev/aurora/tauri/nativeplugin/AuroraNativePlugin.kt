@@ -81,9 +81,6 @@ private const val AURORA_ACTION_NOTIFICATION_ID = 4208
 private const val SECURE_STORAGE_PREFS = "aurora_secure_storage"
 private const val THIN_PROFILE_PREFS = "aurora_thin_profile"
 private const val THIN_PROFILE_KEY = "aurora.session.android-thin-connection-profile.v1"
-private const val NODE_CONFIG_PREFS = "aurora_node_config"
-private const val NODE_CONFIG_KEY = "aurora.nodeConfig.v1"
-private const val NODE_CONFIG_V2_KEY = "aurora.nodeConfig.v2"
 private const val SECURE_STORAGE_KEY_ALIAS = "aurora_secure_storage_v1"
 private const val VOICE_PACK_PREFS = "aurora_voice_pack_cache"
 private const val VOICE_PACK_CATALOG_KEY = "catalog"
@@ -136,6 +133,16 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             VOICE_PACK_INSTALL_STACK_SIZE_BYTES,
         )
     }
+    private val localInferenceExecutor = Executors.newSingleThreadExecutor { runnable ->
+        Thread(runnable, "aurora-local-inference").apply {
+            priority = Thread.NORM_PRIORITY - 1
+        }
+    }
+    private val liteRtLock = Any()
+    private var liteRtAdapter: AuroraLiteRtLmAdapter? = null
+    private var liteRtActiveRequestId: String? = null
+    private var liteRtOwnerDestroyed: Boolean = false
+    private var liteRtDestroyQueued: Boolean = false
     private var clearBackgroundStopOnNextResume: Boolean = true
     private val packCatalogIdRegex = Regex("[A-Za-z0-9._:-]+")
     private data class VoicePackDownloadState(
@@ -222,6 +229,30 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         focused = false
         backgroundVoiceAutoStartGeneration.incrementAndGet()
         backgroundVoiceAutoStartExecutor.shutdownNow()
+        synchronized(liteRtLock) {
+            liteRtOwnerDestroyed = true
+            if (liteRtActiveRequestId != null) liteRtAdapter?.cancel()
+            try {
+                localInferenceExecutor.execute {
+                    val adapter = synchronized(liteRtLock) { liteRtAdapter }
+                    try {
+                        adapter?.close()
+                    } catch (_: Exception) {
+                        // Teardown must still release the executor and owner references.
+                    } finally {
+                        synchronized(liteRtLock) {
+                            if (liteRtAdapter === adapter) liteRtAdapter = null
+                            liteRtActiveRequestId = null
+                            liteRtDestroyQueued = false
+                        }
+                    }
+                }
+            } catch (_: RejectedExecutionException) {
+                // The executor has already stopped; there is no queued native work to race.
+            } finally {
+                localInferenceExecutor.shutdown()
+            }
+        }
         denyPendingMicRequests()
         emitLifecycle("destroy")
     }
@@ -469,7 +500,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("thinPeerCredentialStorage", thinPeerCredentialStorageStatusObject())
         ret.put("inboundVerifierStorage", inboundVerifierStatusObject())
         ret.put("thinProfileStorage", thinProfileStatusObject())
-        ret.put("nodeConfigStorage", nodeConfigStatusObject())
         ret.put("webviewMicrophonePolicy", webviewMicrophonePolicyStatusObject())
         ret.put("lifecycle", lifecycleStatusObject())
         ret.put("fallbackEntrypoints", fallbackEntrypointsArray())
@@ -537,6 +567,151 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun localLightInferenceStatus(invoke: Invoke) {
         invoke.resolve(localLightInferenceStatusObject())
+    }
+
+    @Command
+    fun localInferenceLiteRtLoad(invoke: Invoke) {
+        val args = invoke.parseArgs(AuroraLiteRtLoadArgs::class.java)
+        if (args.modelId != "chat-qwen3-06b-litert") {
+            invoke.reject("model_unavailable")
+            return
+        }
+        synchronized(liteRtLock) {
+            if (liteRtOwnerDestroyed || liteRtDestroyQueued) {
+                invoke.reject("model_unavailable")
+                return
+            }
+            try {
+                localInferenceExecutor.execute {
+                    try {
+                        val root = File(activity.applicationInfo.dataDir, "local-inference").canonicalFile
+                        val model = File(args.modelPath).canonicalFile
+                        val cache = File(args.cachePath).canonicalFile
+                        require(model.parentFile == root && model.name == "Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm")
+                        require(cache == File(root, "cache/chat-qwen3-06b-litert").canonicalFile)
+                        require(model.isFile && model.length() == 344_671_744L)
+                        synchronized(liteRtLock) {
+                            check(liteRtAdapter == null) { "An offline model is already loaded." }
+                            val adapter = AuroraLiteRtLmAdapter()
+                            adapter.load(args.modelId, model, cache)
+                            liteRtAdapter = adapter
+                        }
+                        invoke.resolve(JSObject().put("loaded", true))
+                    } catch (_: Exception) {
+                        invoke.reject("model_unavailable")
+                    }
+                }
+            } catch (_: RejectedExecutionException) {
+                invoke.reject("model_unavailable")
+            }
+        }
+    }
+
+    @Command
+    fun localInferenceLiteRtComplete(invoke: Invoke) {
+        val args = invoke.parseArgs(AuroraLiteRtCompleteArgs::class.java)
+        if (args.requestId.isBlank()) {
+            invoke.reject("request_invalid")
+            return
+        }
+        synchronized(liteRtLock) {
+            if (liteRtOwnerDestroyed || liteRtDestroyQueued) {
+                invoke.reject("model_unavailable")
+                return
+            }
+            if (liteRtActiveRequestId != null) {
+                invoke.reject("session_busy")
+                return
+            }
+            val loaded = liteRtAdapter
+            if (loaded == null) {
+                invoke.reject("model_unavailable")
+                return
+            }
+            liteRtActiveRequestId = args.requestId
+            try {
+                localInferenceExecutor.execute {
+                    val adapter = synchronized(liteRtLock) { liteRtAdapter }
+                    try {
+                        check(!synchronized(liteRtLock) { liteRtOwnerDestroyed })
+                        val result = checkNotNull(adapter).complete(JSONObject(args.requestJson))
+                        invoke.resolve(JSObject(result.toString()))
+                    } catch (_: Exception) {
+                        invoke.reject("inference_failed")
+                    } finally {
+                        synchronized(liteRtLock) {
+                            if (liteRtActiveRequestId == args.requestId) liteRtActiveRequestId = null
+                        }
+                    }
+                }
+            } catch (_: RejectedExecutionException) {
+                liteRtActiveRequestId = null
+                invoke.reject("model_unavailable")
+            }
+        }
+    }
+
+    @Command
+    fun localInferenceLiteRtCancel(invoke: Invoke) {
+        val args = invoke.parseArgs(AuroraLiteRtCancelArgs::class.java)
+        val cancelled = synchronized(liteRtLock) {
+            if (liteRtActiveRequestId != args.requestId) false else liteRtAdapter?.cancel() == true
+        }
+        invoke.resolve(JSObject().put("cancelled", cancelled))
+    }
+
+    @Command
+    fun localInferenceLiteRtReset(invoke: Invoke) {
+        val result = synchronized(liteRtLock) {
+            if (liteRtOwnerDestroyed || liteRtDestroyQueued) {
+                invoke.reject("session_unavailable")
+                return
+            }
+            liteRtAdapter?.reset() ?: run {
+                invoke.reject("session_unavailable")
+                return
+            }
+        }
+        invoke.resolve(JSObject().put("reset", result))
+    }
+
+    @Command
+    fun localInferenceLiteRtDestroy(invoke: Invoke) {
+        synchronized(liteRtLock) {
+            if (liteRtOwnerDestroyed || liteRtDestroyQueued) {
+                invoke.reject("session_unavailable")
+                return
+            }
+            if (liteRtActiveRequestId != null) {
+                invoke.reject("session_busy")
+                return
+            }
+            val current = liteRtAdapter
+            if (current == null) {
+                invoke.reject("session_unavailable")
+                return
+            }
+            liteRtDestroyQueued = true
+            try {
+                localInferenceExecutor.execute {
+                    val adapter = synchronized(liteRtLock) { liteRtAdapter }
+                    try {
+                        adapter?.close()
+                        synchronized(liteRtLock) {
+                            if (liteRtAdapter === adapter) liteRtAdapter = null
+                            liteRtDestroyQueued = false
+                        }
+                        invoke.resolve(JSObject().put("destroyed", true))
+                    } catch (_: Exception) {
+                        synchronized(liteRtLock) { liteRtDestroyQueued = false }
+                        invoke.reject("session_unavailable")
+                    }
+                }
+            } catch (_: RejectedExecutionException) {
+                liteRtDestroyQueued = false
+                invoke.reject("session_unavailable")
+            }
+        }
     }
 
     /**
@@ -622,6 +797,9 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
             return
         }
 
+        if (Manifest.permission.RECORD_AUDIO in missing) {
+            AuroraRuntimeForegroundService.noteMicrophonePermissionRequested(activity)
+        }
         ActivityCompat.requestPermissions(activity, missing, ANDROID_PERMISSION_REQUEST_CODE)
         val ret = JSObject()
         ret.put("started", true)
@@ -654,9 +832,33 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     @Command
+    fun syncBackgroundTranscription(invoke: Invoke) {
+        val args = invoke.parseArgs(AndroidBackgroundTranscriptionSyncArgs::class.java)
+        val accepted = AuroraRuntimeForegroundService.syncBackgroundTranscription(
+            activity,
+            args.policyJson,
+            args.confirmedProfileDocumentJson,
+            args.profileGeneration,
+        )
+        if (accepted == null) {
+            invoke.reject("transcription_settings_unavailable")
+            return
+        }
+        invoke.resolve(voiceForegroundServiceStatusWithRouteSync())
+    }
+
+    @Command
     fun startVoiceForegroundService(invoke: Invoke) {
         val args = invoke.parseArgs(AndroidVoiceForegroundServiceStartArgs::class.java)
-        syncNativeVoiceRoute()
+        val confirmedProfileDocumentJson = args.confirmedProfileDocumentJson
+            .takeIf { it.isNotBlank() }
+        val confirmedProfile = confirmedProfileDocumentJson
+            ?.let { raw -> runCatching { JSONObject(raw) }.getOrNull() }
+        if (confirmedProfile == null || voiceRouteCandidate(confirmedProfile) == null) {
+            invoke.reject("voice_profile_unavailable")
+            return
+        }
+        syncNativeVoiceRoute(confirmedProfile)
         AuroraVoiceNativeConfigStore.setRemoteAudioConsent(activity, args.remoteAudioConsent)
         val status = voiceForegroundServiceStatusObject()
         if (
@@ -690,6 +892,30 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
             if (args.backgroundSession) action = AuroraRuntimeForegroundService.ACTION_START_BACKGROUND
             else action = AuroraRuntimeForegroundService.ACTION_START_ASSISTANT
+            putExtra(
+                AuroraRuntimeForegroundService.EXTRA_SPEECH_STAGES_JSON,
+                args.speechStagesJson,
+            )
+            putExtra(
+                AuroraRuntimeForegroundService.EXTRA_PROFILE_DOCUMENT_JSON,
+                confirmedProfileDocumentJson,
+            )
+            putExtra(
+                AuroraRuntimeForegroundService.EXTRA_STT_PACK_ID,
+                activePackId(AuroraSpeechPackTask.STT),
+            )
+            putExtra(
+                AuroraRuntimeForegroundService.EXTRA_TTS_PACK_ID,
+                activePackId(AuroraSpeechPackTask.TTS),
+            )
+            putExtra(
+                AuroraRuntimeForegroundService.EXTRA_VAD_PACK_ID,
+                activePackId(AuroraSpeechPackTask.VAD),
+            )
+            putExtra(
+                AuroraRuntimeForegroundService.EXTRA_KWS_PACK_ID,
+                activePackId(AuroraSpeechPackTask.KWS),
+            )
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             activity.startForegroundService(intent)
@@ -1139,6 +1365,24 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     }
 
     @Command
+    fun releaseVoiceSessionForProfileChange(invoke: Invoke) {
+        AuroraRuntimeForegroundService.releaseVoiceSessionForProfileChange(activity) { released ->
+            val ret = JSObject()
+            ret.put("released", released)
+            ret.put("secretsRedacted", true)
+            invoke.resolve(ret)
+        }
+    }
+
+    @Command
+    fun completeVoiceProfileChange(invoke: Invoke) {
+        val ret = JSObject()
+        ret.put("completed", AuroraRuntimeForegroundService.completeVoiceProfileChange())
+        ret.put("secretsRedacted", true)
+        invoke.resolve(ret)
+    }
+
+    @Command
     fun finishVoiceForegroundService(invoke: Invoke) {
         val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
             action = AuroraRuntimeForegroundService.ACTION_FINISH
@@ -1537,112 +1781,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("ok", true)
         ret.put("voiceRoute", syncNativeVoiceRoute())
         scheduleBackgroundVoiceAutoStart()
-        invoke.resolve(ret)
-    }
-
-    @Command
-    fun nodeConfigGet(invoke: Invoke) {
-        try {
-            val ret = nodeConfigStatusObject()
-            val stored = activity
-                .getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
-                .getString(NODE_CONFIG_KEY, null)
-            ret.put("key", NODE_CONFIG_KEY)
-            ret.put("value", stored ?: JSONObject.NULL)
-            invoke.resolve(ret)
-        } catch (error: Exception) {
-            invoke.reject(error.message ?: "node_config_get_failed")
-        }
-    }
-
-    @Command
-    fun nodeConfigSet(invoke: Invoke) {
-        val args = invoke.parseArgs(NodeConfigSetArgs::class.java)
-        if (args.value.toByteArray(Charsets.UTF_8).size > 65536) {
-            invoke.reject("node config value length must be <= 65536 bytes")
-            return
-        }
-        val committed = activity.getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(NODE_CONFIG_KEY, args.value)
-            .commit()
-        if (!committed) {
-            invoke.reject("node_config_set_failed")
-            return
-        }
-        val ret = nodeConfigStatusObject()
-        ret.put("key", NODE_CONFIG_KEY)
-        ret.put("ok", true)
-        invoke.resolve(ret)
-    }
-
-    @Command
-    fun nodeConfigDelete(invoke: Invoke) {
-        val committed = activity.getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .remove(NODE_CONFIG_KEY)
-            .commit()
-        if (!committed) {
-            invoke.reject("node_config_delete_failed")
-            return
-        }
-        val ret = nodeConfigStatusObject()
-        ret.put("key", NODE_CONFIG_KEY)
-        ret.put("ok", true)
-        ret.put("persisted", false)
-        invoke.resolve(ret)
-    }
-
-    @Command
-    fun nodeConfigV2Get(invoke: Invoke) {
-        try {
-            val ret = nodeConfigStatusObject()
-            val stored = activity
-                .getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
-                .getString(NODE_CONFIG_V2_KEY, null)
-            ret.put("key", NODE_CONFIG_V2_KEY)
-            ret.put("value", stored ?: JSONObject.NULL)
-            invoke.resolve(ret)
-        } catch (error: Exception) {
-            invoke.reject(error.message ?: "node_config_v2_get_failed")
-        }
-    }
-
-    @Command
-    fun nodeConfigV2Set(invoke: Invoke) {
-        val args = invoke.parseArgs(NodeConfigSetArgs::class.java)
-        if (args.value.toByteArray(Charsets.UTF_8).size > 65536) {
-            invoke.reject("node config value length must be <= 65536 bytes")
-            return
-        }
-        val committed = activity.getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .putString(NODE_CONFIG_V2_KEY, args.value)
-            .commit()
-        if (!committed) {
-            invoke.reject("node_config_v2_set_failed")
-            return
-        }
-        val ret = nodeConfigStatusObject()
-        ret.put("key", NODE_CONFIG_V2_KEY)
-        ret.put("ok", true)
-        invoke.resolve(ret)
-    }
-
-    @Command
-    fun nodeConfigV2Delete(invoke: Invoke) {
-        val committed = activity.getSharedPreferences(NODE_CONFIG_PREFS, Context.MODE_PRIVATE)
-            .edit()
-            .remove(NODE_CONFIG_V2_KEY)
-            .commit()
-        if (!committed) {
-            invoke.reject("node_config_v2_delete_failed")
-            return
-        }
-        val ret = nodeConfigStatusObject()
-        ret.put("key", NODE_CONFIG_V2_KEY)
-        ret.put("ok", true)
-        ret.put("persisted", false)
         invoke.resolve(ret)
     }
 
@@ -2963,6 +3101,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         ret.put("notificationReady", notificationReady)
         ret.put("notificationsSuppressed", !notificationReady || AuroraRuntimeForegroundService.notificationsSuppressed)
         ret.put("foregroundReasons", org.json.JSONArray(foregroundReasons))
+        ret.put("transcription", AuroraRuntimeForegroundService.transcriptionStatus(activity))
         ret.put("foregroundServiceReady", foregroundServiceReady)
         ret.put("manifestReady", manifestReady)
         ret.put("nativeSessionReady", nativeRouteReady)
@@ -3288,17 +3427,6 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         return ret
     }
 
-    private fun nodeConfigStatusObject(): JSObject {
-        val ret = JSObject()
-        ret.put("platform", "android")
-        ret.put("backend", "android-private-shared-preferences")
-        ret.put("persisted", true)
-        ret.put("privacyClass", "nonsecret-node-config")
-        ret.put("secretsRedacted", true)
-        ret.put("allowedGenericSecureStorage", false)
-        return ret
-    }
-
     /**
      * Resolve the native voice route from the active runtime profile and the
      * native peer credential store. Both remote-console and mesh-node profiles
@@ -3306,8 +3434,8 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
      * or gate a role; it only mirrors the route already authorized by
      * onboarding/profile state.
      */
-    private fun syncNativeVoiceRoute(): JSObject {
-        val profile = activity
+    private fun syncNativeVoiceRoute(confirmedProfile: JSONObject? = null): JSObject {
+        val profile = confirmedProfile ?: activity
             .getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
             .getString(THIN_PROFILE_KEY, null)
             ?.let { raw -> runCatching { JSONObject(raw) }.getOrNull() }
@@ -3438,11 +3566,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun scheduleBackgroundVoiceAutoStart() {
         if (!foreground || !focused || activity.isFinishing || activity.isDestroyed) return
         if (AuroraRuntimeForegroundService.backgroundStoppedByUser(activity)) return
+        val profileDocument = currentBackgroundVoiceProfileDocument() ?: return
+        if (!AuroraRuntimeForegroundService.canRestoreBackgroundSession(activity, profileDocument)) return
         val generation = backgroundVoiceAutoStartGeneration.incrementAndGet()
         try {
             backgroundVoiceAutoStartExecutor.execute {
                 val ready = runCatching {
-                    voiceForegroundServiceStatusObject().getBoolean("backgroundStartable")
+                    val status = voiceForegroundServiceStatusObject()
+                    status.getBoolean("backgroundStartable") && status.getBoolean("nativeSessionReady")
                 }.getOrDefault(false)
                 if (!ready || generation != backgroundVoiceAutoStartGeneration.get()) return@execute
                 activity.runOnUiThread {
@@ -3453,10 +3584,32 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
                         activity.isFinishing ||
                         activity.isDestroyed ||
                         AuroraRuntimeForegroundService.backgroundStoppedByUser(activity) ||
+                        currentBackgroundVoiceProfileDocument() != profileDocument ||
+                        !AuroraRuntimeForegroundService.canRestoreBackgroundSession(activity, profileDocument) ||
                         AuroraRuntimeForegroundService.backgroundSessionActive
                     ) return@runOnUiThread
                     val intent = Intent(activity, AuroraRuntimeForegroundService::class.java).apply {
-                        action = AuroraRuntimeForegroundService.ACTION_START_BACKGROUND
+                        action = AuroraRuntimeForegroundService.ACTION_RESTORE_BACKGROUND
+                        putExtra(
+                            AuroraRuntimeForegroundService.EXTRA_PROFILE_DOCUMENT_JSON,
+                            profileDocument,
+                        )
+                        putExtra(
+                            AuroraRuntimeForegroundService.EXTRA_STT_PACK_ID,
+                            activePackId(AuroraSpeechPackTask.STT),
+                        )
+                        putExtra(
+                            AuroraRuntimeForegroundService.EXTRA_TTS_PACK_ID,
+                            activePackId(AuroraSpeechPackTask.TTS),
+                        )
+                        putExtra(
+                            AuroraRuntimeForegroundService.EXTRA_VAD_PACK_ID,
+                            activePackId(AuroraSpeechPackTask.VAD),
+                        )
+                        putExtra(
+                            AuroraRuntimeForegroundService.EXTRA_KWS_PACK_ID,
+                            activePackId(AuroraSpeechPackTask.KWS),
+                        )
                     }
                     runCatching {
                         ContextCompat.startForegroundService(activity, intent)
@@ -3471,6 +3624,14 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
         } catch (_: RejectedExecutionException) {
             // The Activity and its plugin are already being destroyed.
         }
+    }
+
+    private fun currentBackgroundVoiceProfileDocument(): String? {
+        val raw = activity.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+            .getString(THIN_PROFILE_KEY, null)
+            ?: return null
+        val document = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        return raw.takeIf { voiceRouteCandidate(document) != null }
     }
 
     private fun requestFocusedVoiceReleaseOnBackground(): Boolean {
@@ -4108,6 +4269,7 @@ class AuroraNativePlugin(private val activity: Activity) : Plugin(activity) {
     private fun requestMicrophonePermission() {
         if (microphonePermissionRequestInFlight) return
         microphonePermissionRequestInFlight = true
+        AuroraRuntimeForegroundService.noteMicrophonePermissionRequested(activity)
         try {
             PluginManager.requestPermissions(
                 arrayOf(Manifest.permission.RECORD_AUDIO),
@@ -4352,6 +4514,24 @@ class AssistantRoleResultArgs {
 }
 
 @InvokeArg
+class AuroraLiteRtLoadArgs {
+    var modelId: String = ""
+    var modelPath: String = ""
+    var cachePath: String = ""
+}
+
+@InvokeArg
+class AuroraLiteRtCompleteArgs {
+    var requestId: String = ""
+    var requestJson: String = "{}"
+}
+
+@InvokeArg
+class AuroraLiteRtCancelArgs {
+    var requestId: String = ""
+}
+
+@InvokeArg
 class MeshDeviceLinkUpdateArgs {
     var peers: Array<MeshNotificationPeerArgs> = emptyArray()
 }
@@ -4372,12 +4552,21 @@ class AndroidPermissionRequestArgs {
 class AndroidVoiceForegroundServiceStartArgs {
     var remoteAudioConsent: Boolean = false
     var backgroundSession: Boolean = false
+    var speechStagesJson: String? = null
+    var confirmedProfileDocumentJson: String = ""
 }
 
 @InvokeArg
 class AndroidVoiceForegroundServiceStatusArgs {
     var takeFocusedResult: Boolean = false
     var takeBackgroundResult: Boolean = false
+}
+
+@InvokeArg
+class AndroidBackgroundTranscriptionSyncArgs {
+    var policyJson: String = ""
+    var confirmedProfileDocumentJson: String = ""
+    var profileGeneration: Long = -1L
 }
 
 @InvokeArg
@@ -4468,11 +4657,6 @@ class AndroidShowNotificationArgs {
 @InvokeArg
 class SecureStorageArgs {
     var key: String = ""
-    var value: String = ""
-}
-
-@InvokeArg
-class NodeConfigSetArgs {
     var value: String = ""
 }
 

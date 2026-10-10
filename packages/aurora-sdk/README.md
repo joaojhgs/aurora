@@ -150,6 +150,8 @@ Generated peer-host registration derives input/output schemas, projection method
 
 ## Tauri Local
 
+Generic Gateway IPC calls use a text-only wire argument: the bundled `aurora_command` and compatibility alias `aurora_request` require `requestJson` containing JSON text. The public `AuroraClient` request API is unchanged. Custom generic request commands can choose a different string argument with `requestJsonArgName`; `requestArgName` still names the object argument used by event subscribe, snapshot, acknowledgement, and unsubscribe commands. Direct raw-command callers must migrate from an object-valued `request` argument to the JSON string argument; the generic commands do not accept an object fallback.
+
 ```ts
 import { AuroraClient, TauriLocalTransport, buildCapabilityGraph } from '@aurora/client'
 

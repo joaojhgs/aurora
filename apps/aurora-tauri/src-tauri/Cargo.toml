@@ -22,6 +22,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 desktop-live-webdriver = ["dep:tauri-plugin-wdio-webdriver"]
 desktop-native-voice-e2e = []
 android-voice-live-test = ["aurora-voice-native/android-voice-live-test"]
+ios-voice-live-test = []
 
 [build-dependencies]
 swift-rs = { version = "1.0.7", features = ["build"] }
@@ -32,6 +33,7 @@ aes-gcm = { version = "=0.10.3", default-features = false, features = ["aes", "a
 aurora-mesh-authority = { path = "../../../rust/crates/aurora-mesh-authority" }
 aurora-mesh-session = { path = "../../../rust/crates/aurora-mesh-session" }
 aurora-contracts = { path = "../../../rust/crates/aurora-contracts" }
+aurora-local-inference = { path = "../../../rust/crates/aurora-local-inference" }
 aurora-voice-core = { path = "../../../rust/crates/aurora-voice-core" }
 base64 = "=0.22.1"
 getrandom = "=0.2.17"
@@ -69,6 +71,7 @@ webrtc = "0.11.0"
 
 [target.'cfg(any(target_os = "android", target_os = "ios"))'.dependencies]
 tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
+aurora-local-inference = { path = "../../../rust/crates/aurora-local-inference", features = ["native-llamacpp"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }

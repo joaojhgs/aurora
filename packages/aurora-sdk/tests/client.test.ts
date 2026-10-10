@@ -3815,17 +3815,15 @@ describe('AuroraClient', () => {
 
     expect(registry.digest).toBe('fixture')
     expect(calls[0]).toEqual({ command: 'aurora_sidecar_session', args: undefined })
-    expect(calls[1]).toEqual({
-      command: 'aurora_command',
-      args: {
-        request: expect.objectContaining({
-          method: 'Gateway.GetRegistry',
-          busTopic: 'Gateway.GetRegistry',
-          path: '/api/registry',
-          httpMethod: 'GET',
-          headers: { 'x-aurora-sidecar-token': 'session-token' }
-        })
-      }
+    expect(calls[1]?.command).toBe('aurora_command')
+    expect(Object.keys(calls[1]?.args ?? {})).toEqual(['requestJson'])
+    const encodedRequest = calls[1]?.args?.requestJson
+    expect(typeof encodedRequest).toBe('string')
+    expect(JSON.parse(encodedRequest as string)).toEqual({
+      method: 'Gateway.GetRegistry',
+      path: '/api/registry',
+      httpMethod: 'GET',
+      headers: { 'x-aurora-sidecar-token': 'session-token' }
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -3837,6 +3835,202 @@ describe('AuroraClient', () => {
           transport: 'tauri-local'
         })
       )
+    }
+  })
+
+  it('projects generic Tauri requests to JSON text while preserving opaque payload shapes and local audit state', async () => {
+    const markerPayload = {
+      nested: {
+        number: { '$serde_json::private::Number': '7' },
+        raw: { '$serde_json::private::RawValue': '{"answer":42}' },
+        items: ['ordinary', 3, { '$serde_json::private::RawValue': 'not-json' }],
+        escaped: JSON.parse(
+          '{"number":{"$serde_json\\u003a\\u003aprivate\\u003a\\u003aNumber":"8"},' +
+          '"raw":{"$serde_json\\u003a\\u003aprivate\\u003a\\u003aRawValue":"not-json"}}'
+        )
+      }
+    }
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        return {
+          data: { accepted: true },
+          status: 202,
+          audit: { correlationId: 'corr-text-request' }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const result = await client.requestResult('Gateway.GetRegistry', markerPayload, {
+      path: '/api/registry',
+      httpMethod: 'POST',
+      busTopic: 'Gateway.CustomTopic',
+      headers: { 'x-client': 'webview' },
+      timeoutMs: 12_000,
+      signal: controller.signal
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.audit).toEqual(expect.objectContaining({
+        correlationId: 'corr-text-request',
+        method: 'Gateway.GetRegistry',
+        busTopic: 'Gateway.CustomTopic',
+        transport: 'tauri-local'
+      }))
+    }
+    expect(calls.map((call) => call.command)).toEqual(['aurora_sidecar_session', 'aurora_command'])
+    expect(Object.keys(calls[1]?.args ?? {})).toEqual(['requestJson'])
+    const encoded = calls[1]?.args?.requestJson
+    expect(typeof encoded).toBe('string')
+    const parsed: unknown = JSON.parse(encoded as string)
+    expect(parsed).toEqual({
+      method: 'Gateway.GetRegistry',
+      path: '/api/registry',
+      httpMethod: 'POST',
+      payload: markerPayload,
+      headers: {
+        'x-client': 'webview',
+        'x-aurora-sidecar-token': 'session-token'
+      }
+    })
+    expect(JSON.stringify(parsed)).not.toContain('Gateway.CustomTopic')
+    expect(JSON.stringify(parsed)).not.toContain('timeoutMs')
+    expect(JSON.stringify(parsed)).not.toContain('signal')
+  })
+
+  it('keeps request text naming separate from event object argument naming and forwards the request alias', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      commands: { request: 'aurora_request' },
+      requestJsonArgName: 'wireBody',
+      requestArgName: 'eventRequest',
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') return []
+        return { data: { ok: true }, status: 200 }
+      }
+    })
+
+    await transport.request({
+      method: 'TTS.Synthesize',
+      busTopic: 'TTS.Synthesize',
+      path: '/api/tts/synthesize',
+      httpMethod: 'POST',
+      payload: ['text', 4, { '$serde_json::private::Number': '1' }],
+      headers: { 'x-client': 'integration' },
+      timeoutMs: 4_000,
+      audit: { correlationId: 'local-only' }
+    })
+    await transport.subscribe({ stream: 'health', topics: ['Gateway.StatusChanged'], kinds: ['service.announced'] })
+
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_sidecar_session',
+      'aurora_request',
+      'aurora_subscribe'
+    ])
+    expect(Object.keys(calls[1]?.args ?? {})).toEqual(['wireBody'])
+    expect(JSON.parse(calls[1]?.args?.wireBody as string)).toEqual({
+      method: 'TTS.Synthesize',
+      path: '/api/tts/synthesize',
+      httpMethod: 'POST',
+      payload: ['text', 4, { '$serde_json::private::Number': '1' }],
+      headers: {
+        'x-client': 'integration',
+        'x-aurora-sidecar-token': 'session-token'
+      }
+    })
+    expect(calls[2]?.args).toEqual({
+      eventRequest: expect.objectContaining({
+        stream: 'health',
+        topics: ['Gateway.StatusChanged'],
+        kinds: ['service.announced'],
+        headers: { 'x-aurora-sidecar-token': 'session-token' }
+      })
+    })
+  })
+
+  it.each([
+    ['string', 'plain text'],
+    ['number', 17],
+    ['boolean', false],
+    ['array', [null, 'value', 2]]
+  ] as const)('preserves a non-null JSON %s payload through the Tauri request text', async (_label, payload) => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return null
+        return { data: null, status: 200 }
+      }
+    })
+    const result = await new AuroraClient({ transport }).requestResult('Gateway.GetRegistry', payload)
+
+    expect(result.ok).toBe(true)
+    expect(calls).toHaveLength(2)
+    expect(JSON.parse(calls[1]?.args?.requestJson as string)).toEqual({
+      method: 'Gateway.GetRegistry',
+      payload
+    })
+  })
+
+  const serializationFailureCases: Array<[string, () => unknown]> = [
+    ['circular payload', () => {
+      const payload: { self?: unknown } = {}
+      payload.self = payload
+      return payload
+    }],
+    ['BigInt payload', () => ({ value: BigInt(1) })],
+    ['throwing toJSON', () => ({ toJSON() { throw new Error('private serialization detail') } })]
+  ]
+
+  it.each(serializationFailureCases)('rejects %s with a fixed error before invoking the generic command', async (_label, makePayload) => {
+    const calls: string[] = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command) => {
+        calls.push(command)
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        return { data: {} }
+      }
+    })
+    const result = await new AuroraClient({ transport }).requestResult('Gateway.GetRegistry', makePayload())
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toMatchObject({ code: 'validation', message: 'Invalid request' })
+      expect(result.error.cause).toBeUndefined()
+      expect(result.error.detail).toBeUndefined()
+      expect(result.error.message).not.toContain('private serialization detail')
+    }
+    expect(calls).toContain('aurora_sidecar_session')
+    expect(calls).not.toContain('aurora_command')
+  })
+
+  it('rejects a non-string JSON encoder result without invoking the generic command', async () => {
+    const stringify = vi.spyOn(JSON, 'stringify').mockReturnValueOnce(undefined as never)
+    const calls: string[] = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command) => {
+        calls.push(command)
+        if (command === 'aurora_sidecar_session') return null
+        return { data: {} }
+      }
+    })
+
+    try {
+      const result = await new AuroraClient({ transport }).requestResult('Gateway.GetRegistry', { safe: true })
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toMatchObject({ code: 'validation', message: 'Invalid request' })
+        expect(result.error.cause).toBeUndefined()
+      }
+      expect(calls).not.toContain('aurora_command')
+    } finally {
+      stringify.mockRestore()
     }
   })
 
@@ -4146,7 +4340,7 @@ describe('AuroraClient', () => {
             }
           case 'voiceForegroundServiceStatus':
             return androidNativeCapabilityManifestFixture.voiceForegroundService
-          case 'startVoiceForegroundService':
+          case 'aurora_android_voice_foreground_service_start':
             return {
               started: false,
               reason: 'microphone_permission_missing',
@@ -4332,11 +4526,12 @@ describe('AuroraClient', () => {
       'localLightInferenceStatus',
       'requestAndroidPermission',
       'voiceForegroundServiceStatus',
-      'startVoiceForegroundService',
+      'aurora_android_voice_foreground_service_start',
       'stopVoiceForegroundService',
       'entrypointPayload'
     ])
     expect(calls[5]?.args).toEqual({ permission: 'aurora.android.microphone' })
+    expect(calls[7]?.args).toEqual({ request: { remoteAudioConsent: false, backgroundSession: false } })
   })
 
   it('exposes iOS Swift native plugin manifest, status, and action invocation through the Tauri transport', async () => {
@@ -4995,6 +5190,8 @@ describe('AuroraClient', () => {
     const result = await client.assistant.synthesizeReadAloud({
       text: 'hello from Aurora',
       voice: 'default',
+      model_id: 'piper:model-a:sha256:1234',
+      language: 'en',
       speed: 1.1
     })
 
@@ -5011,6 +5208,8 @@ describe('AuroraClient', () => {
     expect(capturedPayload).toEqual({
       text: 'hello from Aurora',
       voice: 'default',
+      model_id: 'piper:model-a:sha256:1234',
+      language: 'en',
       speed: 1.1,
       format: 'wav',
     })

@@ -59,3 +59,8 @@ tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "speech_stt_main_flow"
+path = "examples/speech_stt_main_flow.rs"
+required-features = ["native-sherpa"]

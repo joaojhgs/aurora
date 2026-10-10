@@ -279,7 +279,7 @@ function stableHash(value: string): string {
   return hash.toString(16).padStart(8, '0')
 }
 
-function serializeProviderMessages(
+export function serializeProviderMessages(
   messages: readonly LightweightProviderMessage[],
   aliases: OpenAIToolAliasMap
 ): OrchestratorInferChatRequest['messages'] {

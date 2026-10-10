@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { createAuroraBrowserVoiceRuntime } from '../src/browser-runtime.js'
 import { AuroraWasmVoiceBridge } from '../src/wasm-bridge.js'
+import type { AuroraSherpaVoiceEngine } from '../src/sherpa-engine.js'
 import type { AuroraPcmFrameEnvelope, AuroraVoiceWebSession } from '../src/types.js'
 import type * as AuroraVoiceWasmModule from '../src/wasm/aurora_voice_wasm.js'
 
@@ -61,6 +62,25 @@ describe('AuroraWasmVoiceBridge', () => {
       redacted: true
     })
     expect([...audio.pcm]).toEqual([11, -12, 13])
+  })
+
+  it('routes finite STT to the initialized local engine without entering Rust capture', async () => {
+    const runtime = new FakeWasmRuntime({ nextGeneration: 1 })
+    const sttCalls: unknown[] = []
+    const engine = {
+      initialize: async () => ({ vad: false, kws: false, stt: true, tts: false }),
+      transcribeSpeech: async (request: unknown) => {
+        sttCalls.push(request)
+        return 'local result'
+      }
+    } as unknown as AuroraSherpaVoiceEngine
+    const bridge = new AuroraWasmVoiceBridge({ bindings: bindingsFor(runtime), sherpaEngine: engine })
+    const pcm = new Int16Array([2, -3])
+    await bridge.initialize(undefined)
+
+    await expect(bridge.transcribeSpeech({ generation: 9, pcm })).resolves.toBe('local result')
+    expect(sttCalls).toEqual([{ generation: 9, pcm }])
+    expect(runtime.calls).toEqual([])
   })
 
   it('keeps stopped ownership pending when completion fails, then allows repeat after successful completion', async () => {

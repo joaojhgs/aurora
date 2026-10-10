@@ -41,6 +41,7 @@ export interface BrowserMeshNodeServices {
   readonly registeredToolIds: readonly string[]
   readonly storageBackendKind: LocalDataBackend['kind']
   readonly grantStorePersistent: true
+  refreshSpeechPolicy(): Promise<void>
   close(): Promise<void>
 }
 
@@ -165,6 +166,8 @@ export async function createBrowserMeshNodeServices(
   let backend: LocalDataBackend | null = null
   let crypto: (EnvelopeCryptoPort & { close?: () => Promise<void> }) | null = null
   let wasmAuthority: WasmPeerHostAuthorizationStore | null = null
+  let unsubscribeNodeConfigV2: () => void = () => undefined
+  let browserSpeechHost: import('@aurora/ui').BrowserSpeechHost | null = null
   try {
     const authority = await options.localDataBackendFactory(profileId, localNodeId)
     backend = authority.backend
@@ -259,6 +262,64 @@ export async function createBrowserMeshNodeServices(
       registry: localFeatureSharing,
     })
 
+    let scheduleProviderRefresh: () => void = () => undefined
+    let refreshSpeechPolicy: () => Promise<void> = async () => undefined
+    let refreshingSpeechPolicy = false
+    let speechPolicyRefreshReady = false
+    let speechPolicyInvalidatedDuringInitialization = false
+    let speechPolicyGeneration = 0
+    let currentSpeechSource: import('@aurora/ui').BrowserSpeechHost['source'] | null = null
+    unsubscribeNodeConfigV2 = options.credentialStore.subscribeNodeConfigDocumentV2(() => {
+      speechPolicyGeneration += 1
+      currentSpeechSource?.setVisible(false)
+      if (!speechPolicyRefreshReady) {
+        speechPolicyInvalidatedDuringInitialization = true
+        return
+      }
+      void refreshSpeechPolicy().catch(() => {
+        scheduleProviderRefresh()
+      })
+    })
+    try {
+      const ui = await import('@aurora/ui')
+      for (;;) {
+        const generation = speechPolicyGeneration
+        speechPolicyInvalidatedDuringInitialization = false
+        const nodeConfig = await options.credentialStore.loadNodeConfigDocumentV2()
+        if (generation !== speechPolicyGeneration) continue
+        const candidate = nodeConfig === null ? null : await ui.createBrowserSpeechHost({
+          profile,
+          nodeConfig,
+          localPeerId: localNodeId,
+          onAvailabilityChange: () => {
+            if (!refreshingSpeechPolicy) scheduleProviderRefresh()
+          },
+        })
+        if (generation !== speechPolicyGeneration || speechPolicyInvalidatedDuringInitialization) {
+          await candidate?.close()
+          continue
+        }
+        browserSpeechHost = candidate
+        currentSpeechSource = candidate?.source ?? null
+        break
+      }
+    } catch {
+      // Speech sharing stays unavailable when its saved policy/model selection cannot be read.
+      browserSpeechHost = null
+      currentSpeechSource = null
+    }
+    const speechHostAdapter: import('@aurora/ui').BrowserSpeechHost['source'] = {
+      register(registry) { currentSpeechSource?.register(registry) },
+      capabilities() { return currentSpeechSource?.capabilities() ?? [] },
+      setReady(readiness) { currentSpeechSource?.setReady(readiness) },
+      setVisible(visible) { currentSpeechSource?.setVisible(visible) },
+      async close() {
+        const source = currentSpeechSource
+        currentSpeechSource = null
+        await source?.close()
+      },
+    }
+
     const provider = localTools.createMeshNodeLocalToolProvider({
       nodeMode: 'mesh-node',
       localPeerId: localNodeId,
@@ -272,6 +333,7 @@ export async function createBrowserMeshNodeServices(
       },
       cursorSecret: options.cursorSecret ?? randomSecret(options.crypto ?? safeGlobalCrypto()),
       providerEnabled: true,
+      speechHost: speechHostAdapter,
       approvalPolicy: localFeatureSharing,
       clock: options.nowMs ?? Date.now,
       randomId: options.randomId,
@@ -283,9 +345,9 @@ export async function createBrowserMeshNodeServices(
     let providerRefreshQueue = Promise.resolve()
     const reportProviderRefreshFailure = options.reportProviderRefreshFailure
       ?? reportBrowserProviderRefreshFailure
-    const scheduleProviderRefresh = () => {
+    scheduleProviderRefresh = () => {
       providerRefreshQueue = providerRefreshQueue.then(async () => {
-        if (providerRefreshClosed) return
+        if (providerRefreshClosed || !browserPageForeground()) return
         for (let attempt = 1; attempt <= 2; attempt += 1) {
           try {
             await provider.peerHost.resumeLocalProvider()
@@ -305,6 +367,53 @@ export async function createBrowserMeshNodeServices(
         }
       })
     }
+    let speechRefreshQueue: Promise<void> = Promise.resolve()
+    refreshSpeechPolicy = () => {
+      const next = speechRefreshQueue.then(async () => {
+        if (providerRefreshClosed) return
+        refreshingSpeechPolicy = true
+        try {
+          const generation = speechPolicyGeneration
+          const nodeConfig = await options.credentialStore.loadNodeConfigDocumentV2()
+          if (providerRefreshClosed || generation !== speechPolicyGeneration) return
+          const previous = browserSpeechHost
+          browserSpeechHost = null
+          currentSpeechSource = null
+          await previous?.close()
+          if (nodeConfig !== null) {
+            const ui = await import('@aurora/ui')
+            const replacement = await ui.createBrowserSpeechHost({
+              profile,
+              nodeConfig,
+              localPeerId: localNodeId,
+              onAvailabilityChange: () => {
+                if (!refreshingSpeechPolicy) scheduleProviderRefresh()
+              },
+            })
+            if (providerRefreshClosed || generation !== speechPolicyGeneration) {
+              await replacement?.close()
+              return
+            }
+            browserSpeechHost = replacement
+            currentSpeechSource = replacement?.source ?? null
+            if (currentSpeechSource) currentSpeechSource.register(provider.peerHostRegistry)
+          }
+        } finally {
+          refreshingSpeechPolicy = false
+          if (!providerRefreshClosed) scheduleProviderRefresh()
+        }
+      }).catch((error: unknown) => {
+        currentSpeechSource?.setVisible(false)
+        throw error
+      })
+      speechRefreshQueue = next.catch(() => undefined)
+      return next
+    }
+    speechPolicyRefreshReady = true
+    if (speechPolicyInvalidatedDuringInitialization) {
+      speechPolicyInvalidatedDuringInitialization = false
+      void refreshSpeechPolicy().catch(() => scheduleProviderRefresh())
+    }
     let initialFeatureSnapshotSeen = false
     const unsubscribeFeatureSharing = localFeatureSharing.subscribe(() => {
       if (!initialFeatureSnapshotSeen) {
@@ -321,7 +430,6 @@ export async function createBrowserMeshNodeServices(
       }
       scheduleProviderRefresh()
     })
-
     return {
       enabled: true,
       peerHost: provider.peerHost as unknown as import('@aurora/ui').BrowserThinRuntimeConfig['peerHost'],
@@ -339,10 +447,17 @@ export async function createBrowserMeshNodeServices(
       registeredToolIds: provider.registeredToolIds,
       storageBackendKind: backend.kind,
       grantStorePersistent: true,
+      refreshSpeechPolicy,
       async close() {
         providerRefreshClosed = true
+        unsubscribeNodeConfigV2()
         unsubscribeFeatureSharing()
         unsubscribeApprovalPolicy()
+        await speechRefreshQueue
+        await provider.peerHost.suspendLocalProvider('provider_unavailable').catch(() => undefined)
+        await browserSpeechHost?.close()
+        browserSpeechHost = null
+        currentSpeechSource = null
         await providerRefreshQueue
         wasmAuthority?.free()
         wasmAuthority = null
@@ -351,6 +466,8 @@ export async function createBrowserMeshNodeServices(
       },
     }
   } catch (error) {
+    unsubscribeNodeConfigV2()
+    await browserSpeechHost?.close()
     wasmAuthority?.free()
     await crypto?.close?.().catch(() => undefined)
     await backend?.close().catch(() => undefined)
@@ -534,6 +651,10 @@ function randomAuditId(cryptoImpl: Crypto | null | undefined): string {
 
 function browserNavigator(): import('@aurora/ui').BrowserNavigatorPort | null {
   return typeof navigator === 'undefined' ? null : navigator
+}
+
+function browserPageForeground(): boolean {
+  return typeof document === 'undefined' || document.visibilityState === 'visible'
 }
 
 function browserWindow(): import('@aurora/ui').BrowserWindowPort | null {

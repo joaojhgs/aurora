@@ -642,11 +642,21 @@ async def test_stop_service(service):
     mock_backend = AsyncMock()
     mock_backend.cleanup = AsyncMock()
     service._backend = mock_backend
-    service._running = True
-    service._enabled = True
-    service._started = True
+    service._backend_type = WakeWordBackendType.OPENWAKEWORD
 
-    await service.stop()
+    load_config = AsyncMock(spec=service._load_config)
+    initialize_backend = AsyncMock(spec=service._initialize_backend)
+
+    with (
+        patch.object(service, "_load_config", new=load_config),
+        patch.object(service, "_initialize_backend", new=initialize_backend),
+    ):
+        try:
+            await asyncio.wait_for(service.start(), timeout=1)
+            assert service._runtime_state == "active"
+            assert service._runtime_resource_generation == service._runtime_generation
+        finally:
+            await asyncio.wait_for(service.stop(), timeout=1)
 
     assert service._running is False
     assert service._enabled is False
@@ -657,13 +667,23 @@ async def test_stop_service(service):
 @pytest.mark.asyncio
 async def test_stop_service_without_backend(service):
     """Test stopping service when no backend is initialized."""
-    service._running = True
-    service._enabled = True
+    service._backend_type = WakeWordBackendType.OPENWAKEWORD
     service._backend = None
-    service._started = True
 
-    # Should not raise error
-    await service.stop()
+    load_config = AsyncMock(spec=service._load_config)
+    initialize_backend = AsyncMock(spec=service._initialize_backend)
+
+    with (
+        patch.object(service, "_load_config", new=load_config),
+        patch.object(service, "_initialize_backend", new=initialize_backend),
+    ):
+        try:
+            await asyncio.wait_for(service.start(), timeout=1)
+            assert service._runtime_state == "active"
+            assert service._runtime_resource_generation == service._runtime_generation
+        finally:
+            # Should not raise error, including cleanup after a failed setup assertion.
+            await asyncio.wait_for(service.stop(), timeout=1)
 
     assert service._running is False
     assert service._enabled is False

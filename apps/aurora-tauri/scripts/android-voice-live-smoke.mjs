@@ -63,6 +63,7 @@ export const ANDROID_NATIVE_TURN_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_TURN_AC
 export const AUTHORIZED_NATIVE_ASSISTANT_METHOD = 'Orchestrator.ExternalUserInput'
 const NATIVE_EVENT_BRIDGE_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_EVENT_BRIDGE_ACCEPTANCE'
 const NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE_ENV = 'AURORA_ANDROID_NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE'
+const ANDROID_MAIN_FLOW_ONLY_ENV = 'AURORA_ANDROID_MAIN_FLOW_ONLY'
 const NATIVE_EVENT_BRIDGE_HIDE_DELAY_MS = 1_500
 const NATIVE_ASSISTANT_EVENT_KINDS = [
   'assistant.delta',
@@ -206,6 +207,7 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
         nodeName: 'Android voice device',
         stablePeerId: profileId,
         enabledCapabilityPacks: [],
+        meshMembership: androidVoiceLiveTestMeshMembership(),
         localSpeechPackState: 'ready',
         localSpeechSelection: {
           stt: speechSelection(packs.stt),
@@ -244,6 +246,21 @@ export function mergeAndroidVoiceRuntimeProfile(existingDocument, packs, options
     localSpeechSelection: voiceProfile.localNode.localSpeechSelection,
   }
   return existing
+}
+
+function androidVoiceLiveTestMeshMembership() {
+  // The offline voice-profile fixture needs the required mesh-node wire shape;
+  // its reserved example endpoint is not a real peer or connection.
+  return {
+    signalingUrl: 'wss://signal.example.test',
+    webrtcProfile: {
+      mode: 'webrtc-only',
+      appId: 'aurora',
+      room: 'family-room',
+      roomSecretRef: 'ref:memory:family-room',
+      signalingBrokers: ['wss://signal.example.test'],
+    },
+  }
 }
 
 function cloneRuntimeProfileDocument(value) {
@@ -381,10 +398,21 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       throw new Error('Android voice profile has no active wake phrase after preserving device identity.')
     }
     if (pairing) {
+      const pairingAndroid = {
+        get client() {
+          return webview?.client
+        },
+      }
       const paired = await pairFreshPythonWithAndroid({
-        android: webview,
+        android: pairingAndroid,
         invoke: (command, args) => invokeTauri(webview.client, command, args),
-        navigateToMesh: (client) => navigateAndroidToMesh(client),
+        navigateToMesh: async () => {
+          webview.close()
+          adbRun(context, ['shell', 'am', 'force-stop', '--user', 'current', context.appId])
+          launchApp(context)
+          webview = await connectInstalledWebview(context)
+          await navigateAndroidToMesh(webview.client)
+        },
         request: pairing.request,
         gatewayUrl: pairing.gatewayUrl,
         gatewayApiKey: pairing.gatewayApiKey,
@@ -399,6 +427,90 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     fixtures = prepareVoiceFixtures({
       wakeText: activeProfile.localNode.localSpeechSelection.wakePhrase.phrase,
     })
+    if (process.env[ANDROID_MAIN_FLOW_ONLY_ENV] === '1') {
+      if (!successfulNativeTurnAcceptance || !nativeEventBridgeAcceptance || nativeEventBridgeStallAcceptance) {
+        throw new Error('Android main-flow-only mode requires the successful authorized native turn and event bridge, with slow-consumer acceptance disabled.')
+      }
+      await stopVoiceAndRequireRelease(context, invoke)
+      const start = await invoke('aurora_android_voice_foreground_service_start', {
+        request: { remoteAudioConsent: false, backgroundSession: true },
+      })
+      if (start?.started !== true) {
+        throw new Error(`Explicit Android background voice start was rejected: ${JSON.stringify(start)}`)
+      }
+      const started = await pollVoiceStatus(
+        invoke,
+        backgroundMicrophoneReadyForInjection,
+        'explicit background voice start',
+        { allowRecoverableBackgroundErrors: true },
+      )
+      assertReadyVoiceStatus(started, { background: true })
+      const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm, {
+        successful: true,
+        activeProfile,
+        pairingEvidence,
+        modelFixture,
+        mainFlowOnly: true,
+        nativeEventBridge: ({ active, runTurn }) => proveNativeEventBridgeAcceptance(context, webview, invoke, {
+          active,
+          activeProfile,
+          runTurn,
+          modelFixture,
+          reopenForTurnUi: async () => {
+            launchApp(context)
+            return await connectInstalledWebview(context)
+          },
+          mainFlowOnly: true,
+          slowConsumer: false,
+        }),
+      })
+      if (background.attachedWebview) {
+        webview = background.attachedWebview
+        invoke = (command, args) => invokeTauri(webview.client, command, args)
+      }
+      const notificationStop = await proveNotificationStop(context, invoke, {
+        interactionMode: notificationInteractionMode(),
+      })
+      delete notificationStop.remainedStoppedUntilReopen
+      delete notificationStop.restartedOnReopen
+      notificationStop.postStopReopenMeasured = false
+      const result = {
+        ok: true,
+        device: deviceMetadata(context, devicesOutput),
+        apk: { path: apk, sha256: sha256File(apk) },
+        packs: Object.fromEntries(TASKS.map((task) => [task, readyPacks[task].packId])),
+        explicitBackgroundStart: { accepted: true, backgroundSession: true, remoteAudioConsent: false },
+        background: {
+          acceptedSamples: background.status.acceptedSamples,
+          microphoneSignalDetected: background.status.microphoneSignalDetected,
+          completedTurns: background.status.completedTurns,
+          failedTurns: background.status.failedTurns,
+          serviceVisible: background.serviceVisible,
+          notificationVisible: background.notificationVisible,
+          nativeEventBridge: background.nativeEventBridge,
+        },
+        successfulNativeTurnEvidence: background.acceptanceEvidence,
+        notificationStop,
+        captureAndServiceReleased: notificationStop.stopped === true
+          && notificationStop.serviceStopped === true
+          && notificationStop.notificationDismissed === true,
+        unmeasuredScenarios: [
+          'automaticStart',
+          'failureRecovery',
+          'repeatedReopen',
+          'stickyProcessRestart',
+          'forceStopRestart',
+          'forcedDoze',
+          'slowConsumer',
+          'foregroundCapture',
+          'physicalMicrophoneCapture',
+        ],
+        acceptanceMode: 'connected-native-main-flow',
+        finalStatus: summarizeVoiceStatus(await invoke('aurora_android_voice_foreground_service_status')),
+      }
+      console.log(JSON.stringify(result, null, 2))
+      return result
+    }
     const automaticBackgroundStart = await proveAutomaticBackgroundStart(invoke)
     const notificationStop = await proveNotificationStop(context, invoke, {
       interactionMode: notificationInteractionMode(),
@@ -818,6 +930,7 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm, {
   activeProfile = null,
   pairingEvidence = null,
   modelFixture = null,
+  mainFlowOnly = false,
 } = {}) {
   const before = await invoke('aurora_android_voice_foreground_service_status')
   assertReadyVoiceStatus(before, { background: true })
@@ -843,8 +956,10 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm, {
   const acceptanceEvidence = successful
     ? assertSuccessfulNativeTurn({ active, completed, pairingEvidence, modelFixture, failedTurnsBefore: Number(active.failedTurns ?? 0) })
     : null
-  adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
-  await sleep(1_500)
+  if (!mainFlowOnly) {
+    adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
+    await sleep(1_500)
+  }
   const serviceVisible = serviceIsVisible(context)
   const notificationVisible = notificationIsVisible(context)
   const wakeLockHeld = wakeLockIsHeld(context)
@@ -853,8 +968,8 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm, {
       `Background voice lost durable OS state after HOME: service=${serviceVisible}, notification=${notificationVisible}, wakeLock=${wakeLockHeld}`,
     )
   }
-  const doze = await exerciseScreenOffAndDoze(context)
-  if (!serviceIsVisible(context) || !wakeLockIsHeld(context)) {
+  const doze = mainFlowOnly ? null : await exerciseScreenOffAndDoze(context)
+  if (!mainFlowOnly && (!serviceIsVisible(context) || !wakeLockIsHeld(context))) {
     throw new Error('Background voice did not retain its service and wake lock through screen-off.')
   }
   return {
@@ -863,6 +978,7 @@ async function proveBackgroundVoice(context, invoke, backgroundPcm, {
     notificationVisible,
     wakeLockHeld,
     doze,
+    ...(observedTurn.attachedWebview ? { attachedWebview: observedTurn.attachedWebview } : {}),
     ...(observedTurn.report ? { nativeEventBridge: observedTurn.report } : {}),
     ...(acceptanceEvidence ? { acceptanceEvidence } : {}),
   }
@@ -883,6 +999,7 @@ async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
   modelFixture = null,
   reopenForTurnUi = null,
   slowConsumer = false,
+  mainFlowOnly = false,
 }) {
   if (!webview?.client) throw new Error('Native event bridge acceptance requires an attached Android WebView.')
   const localDataScope = localDataScopeFromRuntimeProfile(activeProfile)
@@ -891,6 +1008,7 @@ async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
   const beforePlaybackCounters = await nativePlaybackCounterSnapshot(invoke, 'beforeTurn')
   const afterSequence = nativeEventSequenceFromCursor(beforeSnapshot?.lastSequenceId)
   let collector = null
+  let collectorWebview = webview
   let completed
   let uiHiddenDuringTurn = false
   let reopenedWebview = null
@@ -900,6 +1018,10 @@ async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
       afterSequence,
       acknowledgeEvents: slowConsumer !== true,
     })
+    if (mainFlowOnly) {
+      await stopNativeEventCollector(webview, collector, { verify: true })
+      collector = null
+    }
     adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
     uiHiddenDuringTurn = true
     const turn = runTurn()
@@ -935,7 +1057,13 @@ async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
       })
     }
     const replayInvoke = (command, args) => invokeTauri(reopenedWebview.client, command, args)
-    const liveCollector = await readNativeEventCollector(webview)
+    if (mainFlowOnly) {
+      collectorWebview = reopenedWebview
+      collector = await startNativeEventCollector(reopenedWebview, { afterSequence })
+    }
+    const liveCollector = mainFlowOnly
+      ? await waitForNativeEventCollectorTurn(reopenedWebview, completed)
+      : await readNativeEventCollector(webview)
     const replaySnapshot = await nativeEventSnapshot(replayInvoke, { afterSequence })
     const afterFirstReopenLocalData = await nativeTurnLocalDataSnapshot(replayInvoke, localDataScope, 'afterFirstReopen')
     const afterFirstReopenPlaybackCounters = await nativePlaybackCounterSnapshot(replayInvoke, 'afterFirstReopen')
@@ -950,6 +1078,36 @@ async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
       allowGapEvents: slowConsumer === true,
       allowIncompleteReplay: slowConsumer === true,
     })
+    if (mainFlowOnly) {
+      report.repeatedReopen = { measured: false, reason: 'Skipped by main-flow-only selection.' }
+      report.slowConsumer = { measured: false, reason: 'Skipped by main-flow-only selection.' }
+      report.localDataSnapshots = assertNativeTurnLocalDataRecovery({
+        beforeTurn: beforeLocalData,
+        afterHiddenCompletion: afterHiddenLocalData,
+        afterFirstReopen: afterFirstReopenLocalData,
+        expectedConversationId: report.correlation?.conversationId,
+        assistantResultExpected: nativeTurnRequiresPersistedAssistantResult(report, null),
+        verifySecondReopen: false,
+      })
+      report.persistedResultUniquenessMeasured = true
+      report.duplicatePersistedResult = false
+      delete report.persistedResultUnsupportedReason
+      report.nativePlaybackCounters = assertNativePlaybackNoReplay({
+        beforeTurn: beforePlaybackCounters,
+        afterHiddenCompletion: afterHiddenPlaybackCounters,
+        afterFirstReopen: afterFirstReopenPlaybackCounters,
+        verifySecondReopen: false,
+      })
+      report.ttsReplayMeasured = true
+      report.nativeTtsPlaybackMeasured = true
+      delete report.ttsReplayUnsupportedReason
+      delete report.nativeTtsPlaybackUnsupportedReason
+      report.ownedEventCollectorDetachedDuringTurn = true
+      await stopNativeEventCollector(reopenedWebview, collector, { verify: true })
+      collector = null
+      webview.close()
+      return { completed, report, attachedWebview: reopenedWebview }
+    }
     adbRun(context, ['shell', 'input', 'keyevent', 'HOME'])
     await sleep(500)
     launchApp(context)
@@ -996,7 +1154,7 @@ async function proveNativeEventBridgeAcceptance(context, webview, invoke, {
     reopenedWebview = null
     return { completed, report }
   } catch (error) {
-    await stopNativeEventCollector(webview, collector).catch(() => {})
+    await stopNativeEventCollector(collectorWebview, collector).catch(() => {})
     reopenedWebview?.close()
     secondReopenedWebview?.close()
     throw error
@@ -1021,11 +1179,33 @@ async function waitForRenderedNativeTurn(client, { partialText, completedText, p
 }
 
 async function navigateAndroidToMesh(client) {
+  // Profile writes do not rebuild the live Tauri runtime. The caller opens a
+  // fresh app process so the normal startup path hydrates the persisted role.
+  await waitForTauriInvoke(client, Date.now() + DEFAULT_WEBVIEW_TIMEOUT_MS)
   await client.send('Runtime.evaluate', {
     expression: "window.history.pushState({}, '', '/mesh'); window.dispatchEvent(new PopStateEvent('popstate'));",
     returnByValue: true,
   }, COMMAND_TIMEOUT_MS)
   await waitForWebviewPath(client, '/mesh')
+  await waitForRenderedAndroidMeshControls(client)
+}
+
+async function waitForRenderedAndroidMeshControls(client, timeoutMs = DEFAULT_WEBVIEW_TIMEOUT_MS) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const state = await evaluateWebviewJson(client, `JSON.stringify({
+      path: window.location.pathname,
+      connectedDevicesHeading: [...document.querySelectorAll('h1')]
+        .some((heading) => heading.textContent?.trim() === 'Connected devices'),
+      connectDevice: [...document.querySelectorAll('button')].some((button) =>
+        button.textContent?.trim() === 'Connect device'
+        && !button.disabled
+        && button.getClientRects().length > 0),
+    })`)
+    if (state.path === '/mesh' && state.connectedDevicesHeading && state.connectDevice) return state
+    await sleep(250)
+  }
+  throw new Error('Android mesh screen did not render the enabled Connect device control after profile reload.')
 }
 
 async function waitForWebviewPath(client, expectedPath, timeoutMs = DEFAULT_WEBVIEW_TIMEOUT_MS) {
@@ -1116,14 +1296,15 @@ export function assertNativeTurnLocalDataRecovery({
   afterSecondReopen,
   expectedConversationId = null,
   assistantResultExpected = false,
+  verifySecondReopen = true,
 }) {
   assertLocalDataSnapshotShape(beforeTurn, 'beforeTurn')
   assertLocalDataSnapshotShape(afterHiddenCompletion, 'afterHiddenCompletion')
   assertLocalDataSnapshotShape(afterFirstReopen, 'afterFirstReopen')
-  assertLocalDataSnapshotShape(afterSecondReopen, 'afterSecondReopen')
+  if (verifySecondReopen) assertLocalDataSnapshotShape(afterSecondReopen, 'afterSecondReopen')
   assertExistingLocalDataRowsUnchanged(beforeTurn, afterHiddenCompletion)
   assertLocalDataSnapshotsEqual(afterHiddenCompletion, afterFirstReopen, 'first UI recovery')
-  assertLocalDataSnapshotsEqual(afterHiddenCompletion, afterSecondReopen, 'second UI recovery')
+  if (verifySecondReopen) assertLocalDataSnapshotsEqual(afterHiddenCompletion, afterSecondReopen, 'second UI recovery')
 
   const nativeDelta = localDataMessageDelta(beforeTurn, afterHiddenCompletion)
   const userRows = nativeDelta.newRows.filter((row) => row.role === 'user')
@@ -1170,10 +1351,9 @@ export function assertNativeTurnLocalDataRecovery({
       ...redactedLocalDataSnapshot(afterFirstReopen),
       sameAsAfterHiddenCompletion: true,
     },
-    afterSecondReopen: {
-      ...redactedLocalDataSnapshot(afterSecondReopen),
-      sameAsAfterHiddenCompletion: true,
-    },
+    ...(verifySecondReopen
+      ? { afterSecondReopen: { ...redactedLocalDataSnapshot(afterSecondReopen), sameAsAfterHiddenCompletion: true } }
+      : { afterSecondReopen: null, secondReopenMeasured: false }),
     persistedResultUniquenessMeasured: true,
     duplicatePersistedResult: false,
     assistantResultExpected: assistantResultExpected === true,
@@ -1375,18 +1555,19 @@ export function assertNativePlaybackNoReplay({
   afterHiddenCompletion,
   afterFirstReopen,
   afterSecondReopen,
+  verifySecondReopen = true,
 }) {
   for (const [label, snapshot] of Object.entries({
     beforeTurn,
     afterHiddenCompletion,
     afterFirstReopen,
-    afterSecondReopen,
+    ...(verifySecondReopen ? { afterSecondReopen } : {}),
   })) {
     assertNativePlaybackSnapshot(snapshot, label)
   }
   assertPlaybackAdvanced(beforeTurn, afterHiddenCompletion)
   assertPlaybackStable(afterHiddenCompletion, afterFirstReopen, 'first UI recovery')
-  assertPlaybackStable(afterHiddenCompletion, afterSecondReopen, 'second UI recovery')
+  if (verifySecondReopen) assertPlaybackStable(afterHiddenCompletion, afterSecondReopen, 'second UI recovery')
   if (afterHiddenCompletion.globalFailureCount !== 0) {
     throw new Error(`Native playback counters reported failures after hidden completion: ${afterHiddenCompletion.globalFailureCount}`)
   }
@@ -1397,10 +1578,9 @@ export function assertNativePlaybackNoReplay({
       ...redactNativePlaybackSnapshot(afterFirstReopen),
       sameAsAfterHiddenCompletion: true,
     },
-    afterSecondReopen: {
-      ...redactNativePlaybackSnapshot(afterSecondReopen),
-      sameAsAfterHiddenCompletion: true,
-    },
+    ...(verifySecondReopen
+      ? { afterSecondReopen: { ...redactNativePlaybackSnapshot(afterSecondReopen), sameAsAfterHiddenCompletion: true } }
+      : { afterSecondReopen: null, secondReopenMeasured: false }),
     measured: true,
     replayedDuringRecovery: false,
     advancedDuringHiddenCompletion: playbackAdvancedFields(beforeTurn, afterHiddenCompletion),
@@ -1590,6 +1770,31 @@ async function startNativeEventCollector(webview, { afterSequence, acknowledgeEv
   })()`, COMMAND_TIMEOUT_MS)
 }
 
+async function waitForNativeEventCollectorTurn(webview, completed, timeoutMs = DEFAULT_STATUS_TIMEOUT_MS) {
+  const generation = nativeTurnGeneration(completed)
+  if (generation == null) throw new Error('Native event replay requires a completed turn generation.')
+  const deadline = Date.now() + timeoutMs
+  let collector = null
+  while (Date.now() < deadline) {
+    collector = await readNativeEventCollector(webview)
+    const observedEvents = normalizeNativeCollectedEvents(collector.events)
+    const events = observedEvents.filter((event) => nativeVoiceObservationMatchesGeneration(event, generation))
+    if ((collector.errors ?? []).length > 0) {
+      throw new Error(`Native event replay acknowledgement failed: ${nativeBridgeSummaryJson({ generation, collector })}`)
+    }
+    const acknowledgedIds = new Set((collector.acknowledged ?? []).map((entry) => entry.eventId))
+    const acksComplete = collector.acknowledgeEvents === true && observedEvents.every((event) => {
+      const id = nativeEventAckId(event)
+      return id == null || acknowledgedIds.has(id)
+    })
+    const hasTurnEvent = events.some((event) => nativeEventKind(event)?.startsWith?.('voice.turn.'))
+    const hasTerminalEvent = events.some((event) => NATIVE_TERMINAL_EVENT_KINDS.has(nativeEventKind(event)))
+    if (collector.ready === true && hasTurnEvent && hasTerminalEvent && acksComplete) return collector
+    await sleep(250)
+  }
+  throw new Error(`Fresh native event subscriber did not replay the completed turn and terminal event: ${nativeBridgeSummaryJson({ generation, collector })}`)
+}
+
 async function readNativeEventCollector(webview) {
   return await evaluateWebviewJson(webview.client, `(async () => {
     const state = globalThis.__auroraNativeEventSmoke;
@@ -1607,18 +1812,38 @@ async function readNativeEventCollector(webview) {
   })()`, COMMAND_TIMEOUT_MS)
 }
 
-async function stopNativeEventCollector(webview, collector) {
-  if (!webview?.client || !collector?.descriptor?.subscriptionId) return
+async function stopNativeEventCollector(webview, collector, { verify = false } = {}) {
+  if (!webview?.client || !collector?.descriptor?.subscriptionId) {
+    if (verify) throw new Error('Cannot detach the owned native event collector without its WebView and subscription id.')
+    return
+  }
   await evaluateWebviewJson(webview.client, `(async () => {
     const invoke = window.__TAURI_INTERNALS__?.invoke;
     const state = globalThis.__auroraNativeEventSmoke;
-    if (state?.unlistenEvents) await state.unlistenEvents().catch(() => {});
-    if (state?.unlistenClosed) await state.unlistenClosed().catch(() => {});
-    if (typeof invoke === 'function') {
-      await invoke('aurora_unsubscribe', { request: { subscriptionId: ${JSON.stringify(collector.descriptor.subscriptionId)} } }).catch(() => {});
+    const subscriptionId = ${JSON.stringify(collector.descriptor.subscriptionId)};
+    if (${JSON.stringify(verify)} && state?.descriptor?.subscriptionId !== subscriptionId) {
+      throw new Error('owned_native_event_collector_mismatch');
+    }
+    if (state?.unlistenEvents) {
+      if (${JSON.stringify(verify)}) await state.unlistenEvents();
+      else await state.unlistenEvents().catch(() => {});
+    }
+    if (state?.unlistenClosed) {
+      if (${JSON.stringify(verify)}) await state.unlistenClosed();
+      else await state.unlistenClosed().catch(() => {});
+    }
+    if (typeof invoke !== 'function') {
+      if (${JSON.stringify(verify)}) throw new Error('tauri_invoke_unavailable');
+    } else if (${JSON.stringify(verify)}) {
+      const result = await invoke('aurora_unsubscribe', { request: { subscriptionId } });
+      if (result?.closed !== true || result?.subscriptionId !== subscriptionId) {
+        throw new Error('owned_native_event_unsubscribe_unconfirmed');
+      }
+    } else {
+      await invoke('aurora_unsubscribe', { request: { subscriptionId } }).catch(() => {});
     }
     globalThis.__auroraNativeEventSmoke = null;
-    return JSON.stringify({ stopped: true });
+    return JSON.stringify({ stopped: true, subscriptionId, unsubscribeVerified: ${JSON.stringify(verify)} });
   })()`, COMMAND_TIMEOUT_MS)
 }
 
@@ -3134,16 +3359,16 @@ function installApk(context, apk) {
 }
 
 function grantVoicePermissions(context) {
-  adbRun(context, ['shell', 'pm', 'grant', context.appId, 'android.permission.RECORD_AUDIO'])
+  adbRun(context, ['shell', 'pm', 'grant', '--user', 'current', context.appId, 'android.permission.RECORD_AUDIO'])
   const sdk = Number(adbOutput(context, ['shell', 'getprop', 'ro.build.version.sdk']).trim())
   if (sdk >= 33) {
-    adbRun(context, ['shell', 'pm', 'grant', context.appId, 'android.permission.POST_NOTIFICATIONS'])
+    adbRun(context, ['shell', 'pm', 'grant', '--user', 'current', context.appId, 'android.permission.POST_NOTIFICATIONS'])
   }
 }
 
 function launchApp(context) {
   const activity = `${context.appId}/.MainActivity`
-  adbRun(context, ['shell', 'am', 'start', '-W', '-n', activity])
+  adbRun(context, ['shell', 'am', 'start', '--user', 'current', '-W', '-n', activity])
 }
 
 function appPid(context) {

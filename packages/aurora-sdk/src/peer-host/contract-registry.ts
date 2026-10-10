@@ -86,6 +86,17 @@ export class PeerHostContractRegistry {
     return this
   }
 
+  replace<TInput, TOutput>(descriptor: PeerHostMethodDescriptor<TInput, TOutput>): this {
+    this.methods.set(descriptor.methodId, descriptor as PeerHostMethodDescriptor)
+    return this
+  }
+
+  unregister(methodId: string, expected?: object): boolean {
+    const current = this.methods.get(methodId)
+    if (!current || (expected !== undefined && current !== expected)) return false
+    return this.methods.delete(methodId)
+  }
+
   registerEvent<TEvent>(descriptor: PeerHostEventDescriptor<TEvent>): this {
     if (this.events.has(descriptor.topic)) throw new Error(`duplicate peer-host event topic: ${descriptor.topic}`)
     this.events.set(descriptor.topic, descriptor as PeerHostEventDescriptor)

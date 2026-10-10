@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, createRef } from 'react'
 import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,6 +9,8 @@ import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
 import { getAuroraSurfaceProfile } from '../src/platform-surface'
 import { SettingsView } from '../src/settings-view'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
+import { LocalSpeechSettingsSection, type LocalSpeechSettingsSectionProps } from '../src/voice-settings-local-speech-section'
+import type { NativeBackgroundTranscriptionStatus } from '../src/native-speech-policy'
 import type { AuroraShellSnapshot, RouteAvailability } from '../src/shell-data'
 import { buildCapabilityGraph, capabilityGraphCatalogFixture, gatewayRegistryFixture } from '@aurora/client'
 import { snapshotFromGraph } from '../src/shell-data'
@@ -2509,6 +2511,8 @@ function desktopLocalWakeSurfaceProfile(): NonNullable<VoiceSettingsViewProps['s
 function browserCatalogSurfaceProfile(): NonNullable<VoiceSettingsViewProps['surfaceProfile']> {
   return {
     physicalKind: 'hosted-web',
+    canManageLocalAssistant: false,
+    localInferenceEnabled: false,
     kind: 'web',
     legacyKind: 'web',
     deploymentKind: 'web',
@@ -2529,9 +2533,11 @@ function browserCatalogSurfaceProfile(): NonNullable<VoiceSettingsViewProps['sur
     prefersWebRtcTransport: false,
     trustsNativeWebViewOrigin: false,
     canManageLocalServiceConfiguration: false,
+    canManageMeshInvites: false,
     nodeMode: 'mesh-node',
     runtimeTier: 'lightweight-ts',
     ownsLocalNodeState: true,
+    canManageNativeSpeechPolicy: false,
     isRemoteConsole: false,
     usesBrowserVoiceRuntime: true,
     localSpeechPack: {
@@ -2733,3 +2739,92 @@ function deferred<T>() {
   })
   return { promise, resolve, reject }
 }
+
+describe('LocalSpeechSettingsSection', () => {
+  it('lets a user turn off saved transcription choices when live status is unavailable', async () => {
+    const onBackgroundTranscriptionChange = vi.fn()
+    const props: LocalSpeechSettingsSectionProps = {
+      browserCatalogState: 'ready',
+      actionPending: false,
+      speechLanguageValue: 'auto',
+      speechLanguageOptions: [],
+      voiceLanguageValue: 'auto',
+      voiceLanguageOptions: [],
+      listeningStartRows: [],
+      wakeWordRows: [],
+      transcriptionRows: [],
+      spokenVoiceRows: [],
+      listeningStartOptions: [],
+      wakeWordOptions: [],
+      transcriptionOptions: [],
+      spokenVoiceOptions: [],
+      defaultListeningStartKey: null,
+      defaultWakeWordsKey: null,
+      defaultTranscriptionKey: null,
+      defaultSpokenVoiceKey: null,
+      canConfigureBackgroundWake: false,
+      selectedWakePhraseId: null,
+      wakePhraseOptions: [],
+      canChooseWakePhrase: false,
+      selectedSpokenVoice: null,
+      referenceEditor: null,
+      pendingReferenceEditorKey: null,
+      localSpeechCatalog: null,
+      nativeSpeechPolicyState: 'ready',
+      nativeSttRoutingChoice: 'local_first',
+      nativeTtsRoutingChoice: 'local_first',
+      backgroundTranscription: {
+        version: 1,
+        enabled: true,
+        ambient: true,
+        notification: true,
+        retentionDays: 30,
+      },
+      backgroundTranscriptionStatus: {
+        availability: 'unavailable',
+        captureState: null,
+        facts: null,
+        policyState: null,
+        reason: 'notification_permission_missing',
+        message: 'Aurora could not confirm whether transcription is active.',
+      } satisfies NativeBackgroundTranscriptionStatus,
+      onBackgroundTranscriptionChange,
+      referenceFileInputRef: createRef<HTMLInputElement>(),
+      SearchableChoice: () => null,
+      onChoosePrimaryLanguage: vi.fn(),
+      onChooseVoiceLanguage: vi.fn(),
+      onSelectListeningStart: vi.fn(),
+      onSelectWakeWords: vi.fn(),
+      onSelectTranscription: vi.fn(),
+      onSelectSpokenVoice: vi.fn(),
+      onChooseWakePhrase: vi.fn(),
+      onOpenReferenceEditor: vi.fn(),
+      onDeleteReferenceVoiceSample: vi.fn(),
+      onReferenceFileChange: vi.fn(),
+      onSaveReferenceVoiceSample: vi.fn(),
+      onCancelReferenceEditor: vi.fn(),
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<LocalSpeechSettingsSection {...props} />))
+      const ambient = container.querySelector<HTMLButtonElement>('#background-transcription-ambient')
+      const notification = container.querySelector<HTMLButtonElement>('#background-transcription-notification')
+      expect(ambient?.disabled).toBe(false)
+      expect(notification?.disabled).toBe(false)
+      expect(container.textContent).toContain('Allow Aurora notifications in device settings to start a recording from the notification.')
+
+      await act(async () => {
+        ambient?.click()
+        notification?.click()
+      })
+
+      expect(onBackgroundTranscriptionChange).toHaveBeenNthCalledWith(1, { ambient: false })
+      expect(onBackgroundTranscriptionChange).toHaveBeenNthCalledWith(2, { notification: false })
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+})

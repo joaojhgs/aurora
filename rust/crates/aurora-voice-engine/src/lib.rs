@@ -3,6 +3,7 @@
 #![forbid(unsafe_code)]
 
 pub mod catalog;
+pub mod json_text;
 pub mod model_pack;
 pub mod speech_catalog;
 

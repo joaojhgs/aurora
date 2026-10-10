@@ -51,6 +51,26 @@ describe("createTauriNativeIosVoicePort", () => {
     expect(callNative.mock.calls[2]?.[1]).toBeUndefined();
   });
 
+  it("exposes the foreground finish transcript once and clears it on the next capture", async () => {
+    const callNative = vi.fn<NativeCommand>(async (command) => {
+      if (command === "aurora_ios_voice_foreground_capture_finish") {
+        return { available: true, transcript: "  turn transcript  " };
+      }
+      if (command === "aurora_ios_voice_status") return { available: true };
+      return { available: true, running: false };
+    });
+    const port = createTauriNativeIosVoicePort(callNative);
+
+    await port.start({ remoteAudioConsent: true });
+    await expect(port.finish()).resolves.toMatchObject({ available: true, phase: "idle" });
+    await expect(port.takeTranscript!()).resolves.toBe("turn transcript");
+    await expect(port.takeTranscript!()).resolves.toBeNull();
+
+    await port.finish();
+    await port.start({ remoteAudioConsent: true });
+    await expect(port.takeTranscript!()).resolves.toBeNull();
+  });
+
   it("routes user-started background capture through the iOS background command and status gate", async () => {
     const callNative = vi.fn<NativeCommand>(async (command) => {
       if (command === "aurora_ios_voice_status") {

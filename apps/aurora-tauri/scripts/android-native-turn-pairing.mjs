@@ -31,14 +31,25 @@ export async function androidEvaluate(client, expression) {
 export async function clickAndroidControl(client, label) {
   return await androidEvaluate(client, `(() => {
     const button = [...document.querySelectorAll('button')]
-      .find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(label)} && !candidate.disabled);
+      .find((candidate) => candidate.textContent?.trim() === ${JSON.stringify(label)}
+        && !candidate.disabled
+        && candidate.getClientRects().length > 0);
     if (!button) return false;
     button.click();
     return true;
   })()`)
 }
 
-export async function enterAndroidInvite(client, inviteText) {
+export async function enterAndroidInvite(client, inviteText, timeoutMs = DEFAULT_TIMEOUT_MS) {
+  await waitFor(
+    async () => await androidEvaluate(client, `(() => {
+      const field = document.querySelector('#mesh-join-invite');
+      return field instanceof HTMLTextAreaElement && field.getClientRects().length > 0;
+    })()`),
+    (value) => value === true,
+    'Android invite field',
+    timeoutMs,
+  )
   const entered = await androidEvaluate(client, `(() => {
     const field = document.querySelector('#mesh-join-invite');
     if (!(field instanceof HTMLTextAreaElement)) return false;
@@ -49,7 +60,94 @@ export async function enterAndroidInvite(client, inviteText) {
     return field.value === ${JSON.stringify(inviteText.trim())};
   })()`)
   if (entered !== true) throw new Error('Android invite field was not available.')
-  if (await clickAndroidControl(client, 'Apply invite') !== true) throw new Error('Android Apply invite control was not available.')
+  await waitFor(
+    async () => await clickAndroidControl(client, 'Apply invite'),
+    (value) => value === true,
+    'Android Apply invite control',
+    timeoutMs,
+  )
+  await waitFor(
+    async () => await androidEvaluate(client, `(() => document.body?.innerText?.includes('Invite applied') === true)()`),
+    (value) => value === true,
+    'Android invite application',
+    timeoutMs,
+  )
+}
+
+async function readAndroidPairReadiness(client) {
+  const expression = `(() => {
+    const safeLabel = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,64}$/iu.test(value) ? value : null;
+    const anchor = [...document.querySelectorAll('button')].slice(0, 2000)
+      .find((button) => button.textContent?.trim() === 'Connect device');
+    if (!anchor) return { available: false, reason: 'mesh-anchor-absent' };
+    const fiberKey = Object.keys(anchor).find((key) => key.startsWith('__reactFiber$'));
+    if (!fiberKey) return { available: false, reason: 'react-fiber-getter-absent' };
+    let fiber = anchor[fiberKey];
+    for (let depth = 0; fiber && depth < 80; depth += 1, fiber = fiber.return) {
+      const thinPeer = fiber.memoizedProps?.thinPeer;
+      if (!thinPeer || typeof thinPeer.snapshot !== 'function') continue;
+      let snapshot;
+      try { snapshot = thinPeer.snapshot(); } catch { return { available: false, reason: 'snapshot-getter-failed' }; }
+      if (!snapshot || typeof snapshot !== 'object') return { available: false, reason: 'snapshot-unavailable' };
+      let selectedSignalingBrokerOrigin = null;
+      if (typeof snapshot.selectedSignalingBrokerOrigin === 'string') {
+        try {
+          const broker = new URL(snapshot.selectedSignalingBrokerOrigin);
+          if (['ws:', 'wss:', 'http:', 'https:'].includes(broker.protocol)) selectedSignalingBrokerOrigin = broker.origin;
+        } catch {}
+      }
+      const rawError = snapshot.lastRedactedError;
+      const errorCode = safeLabel(rawError?.code);
+      const rawMessage = typeof rawError?.message === 'string' ? rawError.message : '';
+      // Classify only fixed SDK source messages; never return message text, URL, or credentials.
+      const errorCategory = rawMessage.includes('Production MQTT signaling requires wss:// broker URLs')
+        ? 'broker_policy_wss_required'
+        : rawMessage.includes('ws:// signaling is only allowed for explicit loopback development')
+          ? 'broker_policy_loopback_opt_in_required'
+          : rawMessage.includes('ws:// signaling is restricted to loopback development brokers')
+            ? 'broker_policy_loopback_host_required'
+            : rawMessage.includes('Browser MQTT signaling requires ws:// or wss:// broker URLs')
+              ? 'broker_policy_unsupported_scheme'
+              : rawMessage.startsWith('MQTT signaling failed to connect to ') && rawMessage.includes('Timed out connecting to')
+                ? 'mqtt_connect_timeout'
+                : rawMessage.startsWith('MQTT signaling failed to connect to ')
+                  ? 'mqtt_signaling_all_brokers_failed'
+                  : rawMessage ? 'unclassified_peer_session_error' : null;
+      const lastRedactedError = errorCode && rawMessage
+        ? { code: errorCode, messagePresent: true, category: errorCategory }
+        : null;
+      return {
+        available: true,
+        status: safeLabel(snapshot.status),
+        state: safeLabel(snapshot.state),
+        diagnosticCode: errorCode,
+        lastRedactedError,
+        selectedSignalingBrokerOrigin,
+        expectedPeerIdentityPresent: typeof snapshot.expectedStablePeerId === 'string' && snapshot.expectedStablePeerId.length > 0,
+        connectedPeerIdentityPresent: typeof snapshot.connectedStablePeerId === 'string' && snapshot.connectedStablePeerId.length > 0,
+        pairingSessionIdPresent: typeof snapshot.pairingSessionId === 'string' && snapshot.pairingSessionId.length > 0,
+        verificationCodePresent: typeof snapshot.pairingVerificationCode === 'string' && snapshot.pairingVerificationCode.length > 0,
+      };
+    }
+    return { available: false, reason: 'thin-peer-prop-getter-absent' };
+  })()`
+  let timeout
+  try {
+    const response = await Promise.race([
+      client.send('Runtime.evaluate', {
+        expression,
+        returnByValue: true,
+        awaitPromise: false,
+        timeout: 1_500,
+      }),
+      new Promise((resolve) => { timeout = setTimeout(() => resolve(null), 1_900) }),
+    ])
+    const value = response?.result?.result?.value
+    if (!value || typeof value !== 'object') return { available: false, reason: 'react-owner-lookup-unavailable' }
+    return value
+  } finally {
+    if (timeout) clearTimeout(timeout)
+  }
 }
 
 export function activeAndroidProfileDocument(rawValue) {
@@ -164,15 +262,36 @@ export async function pairFreshPythonWithAndroid({
   const cleanup = createPairingCleanup({ invoke, originalProfileValue, pythonPeerId, previousCredential })
   try {
     if (navigateToMesh) await navigateToMesh(android.client)
-    if (await clickAndroidControl(android.client, 'Connect device') !== true) throw new Error('Android Connect device control was not available.')
-    if (await clickAndroidControl(android.client, 'Join from an invite') !== true) throw new Error('Android Join from an invite control was not available.')
-    await enterAndroidInvite(android.client, inviteText)
     await waitFor(
-      async () => await clickAndroidControl(android.client, 'Review & approve'),
+      async () => await clickAndroidControl(android.client, 'Connect device'),
       (value) => value === true,
-      'Android Review & approve control',
+      'Android Connect device control',
       timeoutMs,
     )
+    await waitFor(
+      async () => await clickAndroidControl(android.client, 'Join from an invite'),
+      (value) => value === true,
+      'Android Join from an invite control',
+      timeoutMs,
+    )
+    await enterAndroidInvite(android.client, inviteText, timeoutMs)
+    try {
+      await waitFor(
+        async () => await clickAndroidControl(android.client, 'Review & approve'),
+        (value) => value === true,
+        'Android Review & approve control',
+        timeoutMs,
+      )
+    } catch (error) {
+      let readiness
+      try {
+        readiness = await readAndroidPairReadiness(android.client)
+      } catch {
+        readiness = { available: false, reason: 'diagnostic-unavailable' }
+      }
+      console.log('AURORA_ANDROID_PAIR_READINESS_FAILURE ' + JSON.stringify(readiness))
+      throw error
+    }
     const verificationCode = await waitFor(
       async () => await androidEvaluate(android.client, `(() => {
         const code = document.querySelector('[role="dialog"] [aria-label^="Verification code "]');

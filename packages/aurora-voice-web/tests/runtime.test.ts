@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { createAuroraBrowserVoiceRuntime } from '../src/browser-runtime.js'
+import type { AuroraBrowserPageLifecyclePort, AuroraBrowserPageLifecycleListener } from '../src/browser-lifecycle.js'
+import type { AuroraBrowserWorkerPort } from '../src/worker-rpc.js'
 
 import {
   AURORA_VOICE_WORKER_PROTOCOL_VERSION,
@@ -11,9 +14,10 @@ import {
   type AuroraVoiceWebEvent,
   type AuroraVoiceWebSession,
   type AuroraVoiceWorkerCommand,
-  type AuroraVoiceWorkerHost,
+  type AuroraVoiceWorkerRequestEnvelope,
   type AuroraVoiceWorkerRequestOptions,
-  type AuroraVoiceWorkerResponse
+  type AuroraVoiceWorkerResponse,
+  type AuroraVoiceWorkerResponseEnvelope
 } from '../src/index.js'
 import { capturedAudio, RecordingVoiceWorkerHost, synthesizedAudio } from '../src/test-doubles/worker-host.js'
 
@@ -114,6 +118,114 @@ describe('AuroraVoiceWebRuntime', () => {
     const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-no-tts', worker: new RecordingVoiceWorkerHost() })
 
     await expect(runtime.synthesizeSpeech({ text: 'hello' })).rejects.toMatchObject({ code: 'tts_unavailable' })
+  })
+
+  it('transcribes bounded local PCM through the worker and fences output after cancellation', async () => {
+    const worker = new DeferredSttWorkerHost()
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-stt', worker })
+    const pcm = new Int16Array([1, -2, 3])
+
+    const transcription = runtime.transcribeSpeech({ pcm, language: 'en' })
+    await worker.waitForSttPost()
+    expect(worker.timeoutByType('transcribe_stt')).toEqual([60_000])
+    expect(worker.commandsOf('transcribe_stt')[0]).toMatchObject({ type: 'transcribe_stt', generation: 1, pcm, language: 'en' })
+    expect(worker.transfers.at(-1)).toHaveLength(1)
+
+    await expect(runtime.start()).rejects.toMatchObject({ code: 'inference_busy' })
+    await runtime.cancel()
+    worker.releaseStt()
+
+    await expect(transcription).rejects.toMatchObject({ code: 'stale_generation' })
+    expect(worker.commandsOf('cancel')).toEqual([{ type: 'cancel', sessionId: null, generation: 1, reason: 'cancelled' }])
+  })
+
+  it('rejects finite STT capture while a capture session owns the voice runtime', async () => {
+    const runtime = new AuroraVoiceWebRuntime({ ownerId: 'owner-stt-capture', worker: new RecordingVoiceWorkerHost() })
+    await runtime.start()
+
+    await expect(runtime.transcribeSpeech({ pcm: new Int16Array([1]) })).rejects.toMatchObject({ code: 'session_active' })
+    await runtime.cancel()
+  })
+
+  it('cancels finite STT and fences its response when foreground eligibility is lost', async () => {
+    const worker = new DeferredSttWorkerHost()
+    let eligible = true
+    const runtime = new AuroraVoiceWebRuntime({
+      ownerId: 'owner-stt-hidden',
+      worker,
+      lifecycle: () => eligible ? visibleLifecycle() : hiddenLifecycle('hidden'),
+    })
+    const transcription = runtime.transcribeSpeech({ pcm: new Int16Array([7, 8]) })
+    await worker.waitForSttPost()
+
+    eligible = false
+    await runtime.refreshLifecycle()
+    worker.releaseStt()
+
+    await expect(transcription).rejects.toMatchObject({ code: 'stale_generation' })
+    expect(worker.commandsOf('cancel')).toHaveLength(1)
+  })
+
+  it('fences hidden STT synchronously and lets resumed STT survive its delayed cancel acknowledgement', async () => {
+    const worker = new DeferredLifecycleSttWorkerHost()
+    const pageLifecycle = new ControllablePageLifecycle()
+    const runtime = createAuroraBrowserVoiceRuntime({ ownerId: 'browser-lifecycle-stt', worker, pageLifecycle })
+    let resolveCancelled: (() => void) | undefined
+    const cancelled = new Promise<void>((resolve) => { resolveCancelled = resolve })
+    runtime.onEvent((event) => {
+      if (event.kind === 'session_cancelled') resolveCancelled?.()
+    })
+
+    const first = runtime.transcribeSpeech({ pcm: new Int16Array([11]) })
+    await worker.waitForSttCount(1)
+    pageLifecycle.set(hiddenLifecycle('hidden'))
+    await worker.waitForCancelCount(1)
+
+    pageLifecycle.set(visibleLifecycle())
+    worker.releaseStt(0)
+    await expect(first).rejects.toMatchObject({ code: 'stale_generation' })
+
+    const resumed = runtime.transcribeSpeech({ pcm: new Int16Array([22]) })
+    await worker.waitForSttCount(2)
+
+    worker.releaseCancel(0)
+    await cancelled
+    worker.releaseStt(1)
+    await expect(resumed).resolves.toMatchObject({ text: 'result-3', generation: 3 })
+    await runtime.dispose()
+  })
+
+  it('cleans only the hidden capture when TTS completes before its cancel acknowledgement', async () => {
+    const worker = new DeferredLifecycleSttWorkerHost()
+    const pageLifecycle = new ControllablePageLifecycle()
+    const runtime = createAuroraBrowserVoiceRuntime({
+      ownerId: 'browser-lifecycle-capture-tts',
+      worker,
+      pageLifecycle,
+      pcmSource: { async start() {}, async stop() {}, async cancel() {} },
+    })
+    let resolveCancelled: (() => void) | undefined
+    const cancelled = new Promise<void>((resolve) => { resolveCancelled = resolve })
+    runtime.onEvent((event) => {
+      if (event.kind === 'session_cancelled') resolveCancelled?.()
+    })
+
+    try {
+      const capture = await runtime.start()
+      pageLifecycle.set(hiddenLifecycle('hidden'))
+      await worker.waitForCancelCount(1)
+      pageLifecycle.set(visibleLifecycle())
+
+      await expect(runtime.synthesizeSpeech({ text: 'resumed speech' })).resolves.toMatchObject({ sampleCount: 3 })
+      worker.releaseCancel(0)
+      await cancelled
+
+      await expect(runtime.start()).resolves.toMatchObject({ generation: capture.generation + 1 })
+    } finally {
+      worker.acknowledgePendingCancels()
+      worker.autoAcknowledgeCancels()
+      await runtime.dispose().catch(() => undefined)
+    }
   })
 
   it('discards stale TTS audio after cancellation', async () => {
@@ -719,6 +831,170 @@ class TimeoutRecordingWorkerHost extends RecordingVoiceWorkerHost {
   }
 }
 
+class DeferredSttWorkerHost extends TimeoutRecordingWorkerHost {
+  private sttSeen: (() => void) | null = null
+  private release: (() => void) | null = null
+  private readonly sttSeenPromise = new Promise<void>((resolve) => { this.sttSeen = resolve })
+  private readonly releasePromise = new Promise<void>((resolve) => { this.release = resolve })
+
+  override async request(command: AuroraVoiceWorkerCommand, options?: AuroraVoiceWorkerRequestOptions): Promise<AuroraVoiceWorkerResponse> {
+    if (command.type === 'init') {
+      this.transfers.push([...(options?.transfer ?? [])])
+      this.commands.push(command)
+      return {
+        type: 'ready',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        capabilities: { vad: false, kws: false, stt: true, tts: false },
+        maxFrameSamples: command.maxFrameSamples,
+        maxQueuedBytes: command.maxQueuedBytes
+      }
+    }
+    if (command.type === 'transcribe_stt') {
+      this.timeouts.push({
+        type: command.type,
+        ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {})
+      })
+      this.transfers.push([...(options?.transfer ?? [])])
+      this.commands.push({ ...command, pcm: new Int16Array(command.pcm) })
+      this.sttSeen?.()
+      await this.releasePromise
+      return { type: 'stt_result', generation: command.generation, text: 'late transcript' }
+    }
+    return super.request(command, options)
+  }
+
+  waitForSttPost(): Promise<void> { return this.sttSeenPromise }
+  releaseStt(): void { this.release?.() }
+}
+
+class ControllablePageLifecycle implements AuroraBrowserPageLifecyclePort {
+  private eligibility = visibleLifecycle()
+  private readonly listeners = new Set<AuroraBrowserPageLifecycleListener>()
+
+  current(): ReturnType<typeof visibleLifecycle> | ReturnType<typeof hiddenLifecycle> { return this.eligibility }
+
+  subscribe(listener: AuroraBrowserPageLifecycleListener): () => void {
+    this.listeners.add(listener)
+    return () => this.listeners.delete(listener)
+  }
+
+  set(eligibility: ReturnType<typeof visibleLifecycle> | ReturnType<typeof hiddenLifecycle>): void {
+    this.eligibility = eligibility
+    for (const listener of this.listeners) listener(eligibility)
+  }
+}
+
+class DeferredLifecycleSttWorkerHost implements AuroraBrowserWorkerPort {
+  readonly commands: AuroraVoiceWorkerRequestEnvelope['command'][] = []
+  readonly transfers: Transferable[][] = []
+  private messageListener: ((event: MessageEvent<unknown>) => void) | null = null
+  private readonly stt: Array<{
+    readonly requestId: number
+    readonly generation: number
+  }> = []
+  private readonly cancels: Array<{
+    readonly requestId: number
+    readonly command: Extract<AuroraVoiceWorkerCommand, { type: 'cancel' }>
+  }> = []
+  private readonly sttWaiters = new Map<number, () => void>()
+  private readonly cancelWaiters = new Map<number, () => void>()
+  private readonly releasedCancels = new Set<number>()
+  private acknowledgeCancelsImmediately = false
+
+  postMessage(message: AuroraVoiceWorkerRequestEnvelope, transfer: readonly Transferable[] = []): void {
+    this.transfers.push([...transfer])
+    const command = message.command
+    this.commands.push(command.type === 'transcribe_stt' ? { ...command, pcm: new Int16Array(command.pcm) } : command)
+    if (command.type === 'init') {
+      this.respond(message.requestId, {
+        type: 'ready',
+        protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+        capabilities: { vad: false, kws: false, stt: true, tts: true },
+        maxFrameSamples: command.maxFrameSamples,
+        maxQueuedBytes: command.maxQueuedBytes
+      })
+    } else if (command.type === 'start' || command.type === 'synthesize_tts') {
+      this.respond(message.requestId, defaultResponseFor(command))
+    } else if (command.type === 'transcribe_stt') {
+      this.stt.push({ requestId: message.requestId, generation: command.generation })
+      this.notifyWaiters(this.stt.length, this.sttWaiters)
+    } else if (command.type === 'cancel') {
+      this.cancels.push({ requestId: message.requestId, command })
+      this.notifyWaiters(this.cancels.length, this.cancelWaiters)
+      if (this.acknowledgeCancelsImmediately) this.releaseCancel(this.cancels.length - 1)
+    } else if (command.type === 'shutdown') {
+      this.respond(message.requestId, { type: 'ack', sessionId: '', generation: command.generation, sequence: null })
+    }
+  }
+
+  addEventListener(type: 'message' | 'messageerror' | 'error', listener: ((event: MessageEvent<unknown>) => void) | ((event: Event) => void)): void {
+    if (type === 'message') this.messageListener = listener as (event: MessageEvent<unknown>) => void
+  }
+
+  removeEventListener(type: 'message' | 'messageerror' | 'error', listener: ((event: MessageEvent<unknown>) => void) | ((event: Event) => void)): void {
+    if (type === 'message' && this.messageListener === listener) this.messageListener = null
+  }
+
+  terminate(): void {}
+
+  waitForSttCount(count: number): Promise<void> {
+    return this.waitForCount(count, this.stt.length, this.sttWaiters)
+  }
+
+  waitForCancelCount(count: number): Promise<void> {
+    return this.waitForCount(count, this.cancels.length, this.cancelWaiters)
+  }
+
+  releaseStt(index: number): void {
+    const request = this.stt[index]
+    if (!request) throw new Error(`missing deferred STT request ${index}`)
+    this.respond(request.requestId, { type: 'stt_result', generation: request.generation, text: `result-${request.generation}` })
+  }
+
+  releaseCancel(index: number): void {
+    const request = this.cancels[index]
+    if (!request) throw new Error(`missing deferred cancel request ${index}`)
+    if (this.releasedCancels.has(index)) return
+    this.releasedCancels.add(index)
+    this.respond(request.requestId, {
+      type: 'ack',
+      sessionId: request.command.sessionId ?? '',
+      generation: request.command.generation,
+      sequence: null
+    })
+  }
+
+  acknowledgePendingCancels(): void {
+    for (let index = 0; index < this.cancels.length; index += 1) this.releaseCancel(index)
+  }
+
+  autoAcknowledgeCancels(): void {
+    this.acknowledgeCancelsImmediately = true
+  }
+
+  private waitForCount(count: number, current: number, waiters: Map<number, () => void>): Promise<void> {
+    if (current >= count) return Promise.resolve()
+    return new Promise((resolve) => waiters.set(count, resolve))
+  }
+
+  private notifyWaiters(current: number, waiters: Map<number, () => void>): void {
+    for (const [count, resolve] of waiters) {
+      if (current < count) continue
+      waiters.delete(count)
+      resolve()
+    }
+  }
+
+  private respond(requestId: number, response: AuroraVoiceWorkerResponse): void {
+    const envelope: AuroraVoiceWorkerResponseEnvelope = {
+      protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
+      requestId,
+      response
+    }
+    queueMicrotask(() => this.messageListener?.({ data: envelope } as MessageEvent<unknown>))
+  }
+}
+
 function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerResponse {
   switch (command.type) {
     case 'init':
@@ -751,6 +1027,8 @@ function defaultResponseFor(command: AuroraVoiceWorkerCommand): AuroraVoiceWorke
           redacted: true
         }
       }
+    case 'transcribe_stt':
+      return { type: 'stt_result', generation: command.generation, text: '' }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':

@@ -776,6 +776,7 @@ describe('desktop-thin live connection profiles', () => {
 
     const runtime = createAuroraTauriRuntime({
       runtimeProfileDocument: meshOnlyDocument,
+      runtimeProfileStore: createMemoryRuntimeProfileStore(meshOnlyDocument),
       consumeThinInvite: false,
     })
 
@@ -792,6 +793,9 @@ describe('desktop-thin live connection profiles', () => {
         room: 'office-room',
       }),
     })
+    expect(runtime.thinProfileController?.document.activeProfileId).toBe('mesh-only')
+    expect(runtime.thinProfileController?.document.profiles[0]?.localStablePeerId)
+      .toBe(meshOnlyDocument.profiles[0]?.localNode.stablePeerId)
     expect(await runtime.sidecarStatus()).toBeNull()
     await runtime.dispose()
   })
@@ -1206,6 +1210,36 @@ describe('desktop-thin live connection profiles', () => {
     await expect(runtime.stopSidecar()).resolves.toBeNull()
     await runtime.dispose()
     await initial.dispose()
+  })
+
+  it('provides Android offline settings before native tools are enabled', async () => {
+    Object.defineProperty(window, '__TAURI__', { value: {}, configurable: true })
+    Object.defineProperty(window.navigator, 'userAgent', {
+      value: 'Mozilla/5.0 (Linux; Android 15) Aurora',
+      configurable: true,
+    })
+    const saved: AuroraRuntimeProfileDocument = {
+      ...runtimeDocument,
+      profiles: [{
+        ...runtimeDocument.profiles[0]!,
+        homeConnection: undefined,
+        localNode: {
+          ...runtimeDocument.profiles[0]!.localNode,
+          enabledCapabilityPacks: [],
+        },
+      }],
+    }
+    const runtime = createAuroraTauriRuntime({
+      runtimeProfileDocument: saved,
+      runtimeProfileStore: createMemoryRuntimeProfileStore(saved),
+      consumeThinInvite: false,
+    })
+
+    expect(runtime.localInference).toBeDefined()
+    expect(runtime.localAssistant).toBeUndefined()
+    expect(runtime.localToolProvider).toBeUndefined()
+    expect(runtime.localToolApprovals).toBeUndefined()
+    await runtime.dispose()
   })
 
   it('persists a fresh Android device-sharing choice in the saved runtime profile before rebuilding', async () => {

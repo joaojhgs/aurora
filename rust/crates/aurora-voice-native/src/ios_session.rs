@@ -4,22 +4,29 @@
 //! queue. This module owns the shared Rust voice runtime, typed Gateway
 //! transport, generations, cancellation, and redacted lifecycle status.
 
-use crate::{GatewayAuth, MicrophoneAudioPolicy, NativeGatewayTransport, TransportLimits};
-#[cfg(not(feature = "ios-sherpa"))]
+use crate::mobile_session_close::{
+    rollback_failed_join_driver, start_join_driver, MobileSessionCloseError, MobileSessionLifecycle,
+};
+use crate::{emit_native_speech_lifecycle, native_speech_lifecycle_observer_enabled};
 use crate::{
-    NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTtsConfig,
-    NativeGatewayTtsSynthesizer,
+    GatewayAuth, MicrophoneAudioPolicy, NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig,
+    NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, TransportLimits,
 };
 use async_trait::async_trait;
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
-    CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, RedactedSnapshot,
-    RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, VoiceCaptureLease,
-    VoiceCoreError, VoiceRuntime, VoiceState,
+    AudioInput, AudioOutput, CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation,
+    RedactedSnapshot, RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechLifecycleEventV1,
+    SpeechTransport, TimestampMicros, VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
 };
-#[cfg(not(feature = "ios-sherpa"))]
-use aurora_voice_core::{RouteFiniteSttBinding, RouteTtsBinding};
+use aurora_voice_engine::{
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttPort,
+    FiniteSttProviderBinding, FiniteSttResult, FiniteSttRouteScope, ModelPackError,
+    ModelStoreScope, PackTask, RouteFiniteSttBinding, RouteTtsBinding, TtsSynthesisPort,
+    TtsSynthesisProviderBinding, TtsSynthesisResult, TtsVoiceCatalog, MAX_FINITE_STT_SAMPLES,
+    VAD_SAMPLE_RATE_HZ,
+};
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{
     BoundKwsRequest, BoundStreamSession, BoundTaskRequest, BoundVadRequest, EngineError,
@@ -27,11 +34,8 @@ use aurora_voice_engine::{
     StreamingAudioFrame, TaskCapability, TaskProvider, TaskReadiness, VadAcceptResult,
     VadStreamProvider,
 };
-#[cfg(not(feature = "ios-sherpa"))]
-use aurora_voice_engine::{FiniteSttRouteScope, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ};
 #[cfg(feature = "ios-sherpa")]
 use aurora_voice_engine::{KwsConfig, TaskPackBinding, VadConfig, VoiceTask};
-use aurora_voice_engine::{ModelPackError, ModelStoreScope, PackTask, TtsVoiceCatalog};
 use aurora_voice_ios_bridge::{
     AuroraIosAudioInput, AuroraIosAudioOutput, AuroraIosAudioState, AuroraIosCaptureControl,
 };
@@ -77,14 +81,107 @@ const MAX_IOS_REFERENCE_AUDIO_BYTES: u64 = 16 * 1024 * 1024;
 #[cfg(feature = "ios-sherpa")]
 const MAX_IOS_REFERENCE_AUDIO_SAMPLES: usize = 48_000 * 30;
 
+#[cfg(feature = "ios-sherpa")]
+enum IosFiniteSttProvider {
+    Local(SherpaFiniteSttEngine<NativeSttBackend>),
+    Gateway(NativeGatewayFiniteStt),
+}
 #[cfg(not(feature = "ios-sherpa"))]
 type IosFiniteSttProvider = NativeGatewayFiniteStt;
 #[cfg(feature = "ios-sherpa")]
-type IosFiniteSttProvider = SherpaFiniteSttEngine<NativeSttBackend>;
+enum IosTtsProvider {
+    Local(SherpaTtsProvider<NativeTtsBackend>),
+    Gateway(NativeGatewayTtsSynthesizer),
+}
 #[cfg(not(feature = "ios-sherpa"))]
 type IosTtsProvider = NativeGatewayTtsSynthesizer;
+
 #[cfg(feature = "ios-sherpa")]
-type IosTtsProvider = SherpaTtsProvider<NativeTtsBackend>;
+#[async_trait(?Send)]
+impl FiniteSttPort for IosFiniteSttProvider {
+    fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+        match self {
+            Self::Local(provider) => provider.finite_stt_binding(),
+            Self::Gateway(provider) => provider.finite_stt_binding(),
+        }
+    }
+
+    async fn warm_finite_stt(
+        &mut self,
+        binding: FiniteSttProviderBinding,
+    ) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.warm_finite_stt(binding).await,
+            Self::Gateway(provider) => provider.warm_finite_stt(binding).await,
+        }
+    }
+
+    async fn transcribe_finite(
+        &mut self,
+        request: BoundFiniteSttRequest,
+        audio: FiniteSttAudio,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<FiniteSttResult, EngineError> {
+        match self {
+            Self::Local(provider) => {
+                provider
+                    .transcribe_finite(request, audio, cancellation)
+                    .await
+            }
+            Self::Gateway(provider) => {
+                provider
+                    .transcribe_finite(request, audio, cancellation)
+                    .await
+            }
+        }
+    }
+
+    async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.cancel_finite_stt_generation(generation).await,
+            Self::Gateway(provider) => provider.cancel_finite_stt_generation(generation).await,
+        }
+    }
+}
+
+#[cfg(feature = "ios-sherpa")]
+#[async_trait(?Send)]
+impl TtsSynthesisPort for IosTtsProvider {
+    fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+        match self {
+            Self::Local(provider) => provider.synthesis_binding(),
+            Self::Gateway(provider) => provider.synthesis_binding(),
+        }
+    }
+
+    async fn warm_synthesis(
+        &mut self,
+        binding: TtsSynthesisProviderBinding,
+    ) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.warm_synthesis(binding).await,
+            Self::Gateway(provider) => provider.warm_synthesis(binding).await,
+        }
+    }
+
+    async fn synthesize_text(
+        &mut self,
+        request: BoundTtsSynthesisRequest,
+        cancellation: &dyn Fn() -> bool,
+    ) -> Result<TtsSynthesisResult, EngineError> {
+        match self {
+            Self::Local(provider) => provider.synthesize_text(request, cancellation).await,
+            Self::Gateway(provider) => provider.synthesize_text(request, cancellation).await,
+        }
+    }
+
+    async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
+        match self {
+            Self::Local(provider) => provider.cancel_synthesis_generation(generation).await,
+            Self::Gateway(provider) => provider.cancel_synthesis_generation(generation).await,
+        }
+    }
+}
 
 type RuntimeCore = VoiceRuntime<
     AuroraIosAudioInput,
@@ -94,6 +191,64 @@ type RuntimeCore = VoiceRuntime<
     AuroraIosAudioOutput,
     IosSessionSink,
 >;
+
+trait IosSessionRuntime {
+    fn has_active_capture(&self) -> bool;
+    fn next_capture_generation(&self) -> Result<Generation, VoiceCoreError>;
+    fn invoke_turn<'a>(
+        &'a mut self,
+        mode: IosVoiceStartMode,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>>;
+    fn cleanup_report_for_generation(
+        &self,
+        generation: Generation,
+    ) -> Option<aurora_voice_core::VoiceCleanupReport>;
+}
+
+impl<A, E, P, T, O, S> IosSessionRuntime for VoiceRuntime<A, E, P, T, O, S>
+where
+    A: AudioInput,
+    E: FiniteSttPort,
+    P: TtsSynthesisPort,
+    T: SpeechTransport,
+    O: AudioOutput,
+    S: RuntimeEventSink,
+{
+    fn has_active_capture(&self) -> bool {
+        VoiceRuntime::has_active_capture(self)
+    }
+
+    fn next_capture_generation(&self) -> Result<Generation, VoiceCoreError> {
+        VoiceRuntime::next_capture_generation(self)
+    }
+
+    fn invoke_turn<'a>(
+        &'a mut self,
+        mode: IosVoiceStartMode,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> {
+        match mode {
+            IosVoiceStartMode::PushToTalk => {
+                Box::pin(self.run_push_to_talk_transcription(lease, at, cancellation))
+            }
+            IosVoiceStartMode::BackgroundSession => {
+                Box::pin(self.run_background_turn(lease, at, cancellation))
+            }
+        }
+    }
+
+    fn cleanup_report_for_generation(
+        &self,
+        generation: Generation,
+    ) -> Option<aurora_voice_core::VoiceCleanupReport> {
+        VoiceRuntime::cleanup_report_for_generation(self, generation)
+    }
+}
 
 /// Credentials and route policy for one iOS native session.
 #[derive(Clone, PartialEq, Eq)]
@@ -562,6 +717,10 @@ enum Command {
         generation: Generation,
         reply: mpsc::Sender<Result<(), IosVoiceSessionCommandError>>,
     },
+    FinishWithTranscript {
+        generation: Generation,
+        reply: mpsc::Sender<Result<String, IosVoiceSessionCommandError>>,
+    },
     Cancel {
         generation: Generation,
         reply: mpsc::Sender<Result<(), IosVoiceSessionCommandError>>,
@@ -582,7 +741,7 @@ pub struct IosVoiceSession {
     capture_control: AuroraIosCaptureControl,
     commands: tokio_mpsc::UnboundedSender<Command>,
     status: Arc<Mutex<IosVoiceSessionStatus>>,
-    join: Mutex<Option<thread::JoinHandle<()>>>,
+    lifecycle: MobileSessionLifecycle,
 }
 
 impl IosVoiceSession {
@@ -601,6 +760,27 @@ impl IosVoiceSession {
         max_input_chunk_samples: usize,
         output_capacity_chunks: usize,
     ) -> Result<Self, IosVoiceSessionCommandError> {
+        Self::new_with_join_driver(
+            config,
+            input_capacity_chunks,
+            max_input_chunk_samples,
+            output_capacity_chunks,
+            start_join_driver,
+            || {},
+        )
+    }
+
+    fn new_with_join_driver(
+        config: IosVoiceSessionConfig,
+        input_capacity_chunks: usize,
+        max_input_chunk_samples: usize,
+        output_capacity_chunks: usize,
+        start_driver: impl FnOnce(
+            &MobileSessionLifecycle,
+            thread::JoinHandle<()>,
+        ) -> Result<(), thread::JoinHandle<()>>,
+        worker_exit: impl FnOnce() + Send + 'static,
+    ) -> Result<Self, IosVoiceSessionCommandError> {
         let audio_state =
             AuroraIosAudioState::new(input_capacity_chunks.max(1), max_input_chunk_samples.max(1));
         let output = AuroraIosAudioOutput::new(output_capacity_chunks.max(1));
@@ -608,11 +788,13 @@ impl IosVoiceSession {
         let capture_control = input.control();
         let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
         let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let lifecycle = MobileSessionLifecycle::new();
         let (ready_tx, ready_rx) = mpsc::channel();
         let thread_status = Arc::clone(&status);
         let thread_control = capture_control.clone();
         let thread_output = output.clone();
-        let join = thread::Builder::new()
+        let thread_lifecycle = lifecycle.clone();
+        let worker = thread::Builder::new()
             .name("aurora-ios-voice".to_owned())
             .spawn(move || {
                 let sink = IosSessionSink {
@@ -627,17 +809,38 @@ impl IosVoiceSession {
                     ready: ready_tx,
                     status: thread_status,
                     control: thread_control,
-                })
+                    lifecycle: thread_lifecycle,
+                });
+                worker_exit();
             })
             .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+        if let Err(worker) = start_driver(&lifecycle, worker) {
+            rollback_failed_join_driver(
+                &lifecycle,
+                worker,
+                || commands.send(Command::Shutdown).is_ok(),
+                |generation| capture_control.interrupt(generation),
+                || {
+                    audio_state.close();
+                    output.close();
+                },
+            );
+            return Err(IosVoiceSessionCommandError::Unavailable);
+        }
         match ready_rx
             .recv()
             .unwrap_or(Err(IosVoiceSessionCommandError::Closed))
         {
             Ok(()) => {}
             Err(error) => {
-                let _ = commands.send(Command::Shutdown);
-                let _ = join.join();
+                let generation =
+                    lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok());
+                if let Some(generation) = generation {
+                    capture_control.interrupt(generation);
+                }
+                audio_state.close();
+                output.close();
+                let _ = lifecycle.close_checked();
                 return Err(error);
             }
         }
@@ -647,7 +850,7 @@ impl IosVoiceSession {
             capture_control,
             commands,
             status,
-            join: Mutex::new(Some(join)),
+            lifecycle,
         })
     }
 
@@ -687,9 +890,9 @@ impl IosVoiceSession {
         mode: IosVoiceStartMode,
     ) -> Result<Generation, IosVoiceSessionCommandError> {
         let (reply, response) = mpsc::channel();
-        self.commands
-            .send(Command::Start { mode, reply })
-            .map_err(|_| IosVoiceSessionCommandError::Closed)?;
+        self.lifecycle
+            .admit(|| self.commands.send(Command::Start { mode, reply }).is_ok())
+            .map_err(map_close_command_error)?;
         response
             .recv()
             .unwrap_or(Err(IosVoiceSessionCommandError::Closed))
@@ -697,6 +900,28 @@ impl IosVoiceSession {
 
     pub fn finish(&self, generation: u64) -> Result<(), IosVoiceSessionCommandError> {
         self.send_generation_command(generation, false)
+    }
+
+    /// Finishes the foreground turn and returns the transcript from that same
+    /// generation after native transcription has completed.
+    pub fn finish_with_transcript(
+        &self,
+        generation: u64,
+    ) -> Result<String, IosVoiceSessionCommandError> {
+        let (reply, response) = mpsc::channel();
+        self.lifecycle
+            .admit(|| {
+                self.commands
+                    .send(Command::FinishWithTranscript {
+                        generation: Generation(generation),
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .map_err(map_close_command_error)?;
+        response
+            .recv()
+            .unwrap_or(Err(IosVoiceSessionCommandError::Closed))
     }
 
     pub fn cancel(&self, generation: u64) -> Result<(), IosVoiceSessionCommandError> {
@@ -720,29 +945,65 @@ impl IosVoiceSession {
                 reply,
             }
         };
-        self.commands
-            .send(command)
-            .map_err(|_| IosVoiceSessionCommandError::Closed)?;
+        self.lifecycle
+            .admit(|| self.commands.send(command).is_ok())
+            .map_err(map_close_command_error)?;
         response
             .recv()
             .unwrap_or(Err(IosVoiceSessionCommandError::Closed))
     }
 
     pub fn close(&self) {
-        let _ = self.commands.send(Command::Shutdown);
+        self.request_close();
+        let _ = self.lifecycle.close_checked();
+    }
+
+    /// Requests terminal retirement without waiting for the native worker.
+    pub fn request_close(&self) {
+        let generation = self
+            .lifecycle
+            .request_retirement(|| self.commands.send(Command::Shutdown).is_ok());
+        if let Some(generation) = generation {
+            self.capture_control.interrupt(generation);
+        }
         self.audio_state.close();
         self.output.close();
-        if let Ok(mut join) = self.join.lock() {
-            if let Some(handle) = join.take() {
-                let _ = handle.join();
-            }
-        }
+    }
+
+    /// Waits for the shared terminal result without requiring a Tokio runtime.
+    pub fn wait_closed(
+        &self,
+    ) -> impl Future<Output = Result<(), MobileSessionCloseError>> + 'static {
+        self.lifecycle.wait_closed()
+    }
+
+    /// Requests closure and blocks until the worker thread has actually joined.
+    ///
+    /// Call this only from a thread that may block, never from UI or audio callbacks.
+    pub fn close_checked(&self) -> Result<(), MobileSessionCloseError> {
+        self.request_close();
+        self.lifecycle.close_checked()
+    }
+
+    /// Requests closure and records a sticky failure if the join deadline expires.
+    ///
+    /// The worker and join driver continue after this observer returns on timeout.
+    pub fn close_checked_timeout(&self, timeout: Duration) -> Result<(), MobileSessionCloseError> {
+        self.request_close();
+        self.lifecycle.close_checked_timeout(timeout)
     }
 }
 
 impl Drop for IosVoiceSession {
     fn drop(&mut self) {
-        self.close();
+        self.request_close();
+    }
+}
+
+fn map_close_command_error(error: MobileSessionCloseError) -> IosVoiceSessionCommandError {
+    match error {
+        MobileSessionCloseError::ShutdownFailed => IosVoiceSessionCommandError::Closed,
+        _ => IosVoiceSessionCommandError::Unavailable,
     }
 }
 
@@ -779,23 +1040,36 @@ fn build_local_ios_runtime(
     verified: BTreeMap<PackTask, IosVoicePackBinding>,
 ) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
     let policy = microphone_policy(config)?;
-    if !matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
-        return Err(IosVoiceSessionCommandError::Unavailable);
-    }
     let transport_for_assistant = assistant_transport(config, policy)?;
-    let vad_binding = verified_binding(&verified, PackTask::Vad)?;
+    let stt = match verified.get(&PackTask::Stt) {
+        Some(binding) => build_local_ios_stt(binding)?,
+        None => build_gateway_ios_stt(config, policy)?,
+    };
+    let tts = match verified.get(&PackTask::Tts) {
+        Some(binding) => build_local_ios_tts(binding)?,
+        None => build_gateway_ios_tts(config, policy)?,
+    };
+    let runtime = VoiceRuntime::new(
+        input,
+        stt,
+        tts,
+        transport_for_assistant,
+        output,
+        sink,
+        IOS_SURFACE,
+        IOS_RUNTIME_ID,
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+
+    let Some(vad_binding) = verified.get(&PackTask::Vad) else {
+        return Ok(runtime);
+    };
     let kws_binding = verified
         .get(&PackTask::Kws)
         .or_else(|| verified.get(&PackTask::Wakeword))
         .ok_or(IosVoiceSessionCommandError::Unavailable)?;
-    let stt_binding = verified_binding(&verified, PackTask::Stt)?;
-    let tts_binding = verified_binding(&verified, PackTask::Tts)?;
-
     let vad_task = task_pack_binding(vad_binding, VoiceTask::VoiceActivityDetection)?;
     let kws_task = task_pack_binding(kws_binding, VoiceTask::KeywordSpotting)?;
-    let stt_task = task_pack_binding(stt_binding, VoiceTask::SpeechToText)?;
-    let tts_task = task_pack_binding(tts_binding, VoiceTask::TextToSpeech)?;
-
     let vad_config = VadConfig::default();
     let vad_model = required_file(vad_binding, "model")?;
     let vad = IosWakeVad::new(
@@ -805,7 +1079,6 @@ fn build_local_ios_runtime(
         vad_config.clone(),
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-
     let kws_files = IosWakeKwsFiles {
         encoder_file_id: "encoder-int8".to_owned(),
         encoder_path: required_file(kws_binding, "encoder-int8")?.path().clone(),
@@ -822,81 +1095,8 @@ fn build_local_ios_runtime(
             .map_err(|_| IosVoiceSessionCommandError::Unavailable)?],
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let kws = IosWakeKws::new(kws_task.clone(), phrase_set.clone(), kws_files)
+    let kws = IosWakeKws::new(kws_task.clone(), phrase_set, kws_files)
         .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-
-    let stt_decoder = stt_decoder_file(stt_binding)?;
-    let stt_files = NativeSttModelFiles {
-        encoder_file_id: "encoder".to_owned(),
-        encoder_path: required_file(stt_binding, "encoder")?.path().clone(),
-        decoder_file_id: stt_decoder.file_id().to_owned(),
-        decoder_path: stt_decoder.path().clone(),
-        tokens_file_id: "tokens".to_owned(),
-        tokens_path: required_file(stt_binding, "tokens")?.path().clone(),
-        language: Some(stt_binding.language().to_owned()),
-    };
-    let stt_backend = NativeSttBackend::from_selected_model_files(&stt_task, stt_files)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let stt = SherpaFiniteSttEngine::new(stt_task, stt_backend)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-
-    let tts_backend = match tts_task.catalog_model_family() {
-        Some("vits_piper") => {
-            let tts_files = NativeTtsVitsPiperModelFiles {
-                model_file_id: "model".to_owned(),
-                model_path: required_file(tts_binding, "model")?.path().clone(),
-                tokens_file_id: "tokens".to_owned(),
-                tokens_path: required_file(tts_binding, "tokens")?.path().clone(),
-                espeak_data_file_id: "espeak-ng-data".to_owned(),
-                espeak_data_dir: required_file(tts_binding, "espeak-ng-data")?.path().clone(),
-                lexicon_file_id: optional_file(tts_binding, "lexicon")
-                    .map(|file| file.file_id().to_owned()),
-                lexicon_path: optional_file(tts_binding, "lexicon").map(|file| file.path().clone()),
-            };
-            NativeTtsBackend::from_catalog_vits_piper_model(&tts_task, tts_files)
-        }
-        Some("pockettts") => {
-            let reference_audio_required = ios_pockettts_requires_user_profile(tts_binding);
-            let (reference_audio, reference_text) = if reference_audio_required {
-                let reference = tts_binding
-                    .tts_reference()
-                    .ok_or(IosVoiceSessionCommandError::Unavailable)?;
-                (
-                    Some(load_ios_tts_reference_audio(reference)?),
-                    reference.reference_text_for_sherpa().map(str::to_owned),
-                )
-            } else {
-                (None, None)
-            };
-            let tts_files = NativeTtsPocketModelFiles {
-                lm_flow_file_id: "lm-flow".to_owned(),
-                lm_flow_path: required_file(tts_binding, "lm-flow")?.path().clone(),
-                lm_main_file_id: "lm-main".to_owned(),
-                lm_main_path: required_file(tts_binding, "lm-main")?.path().clone(),
-                encoder_file_id: "encoder".to_owned(),
-                encoder_path: required_file(tts_binding, "encoder")?.path().clone(),
-                decoder_file_id: "decoder".to_owned(),
-                decoder_path: required_file(tts_binding, "decoder")?.path().clone(),
-                text_conditioner_file_id: "text-conditioner".to_owned(),
-                text_conditioner_path: required_file(tts_binding, "text-conditioner")?
-                    .path()
-                    .clone(),
-                vocab_file_id: "vocab".to_owned(),
-                vocab_path: required_file(tts_binding, "vocab")?.path().clone(),
-                token_scores_file_id: "token-scores".to_owned(),
-                token_scores_path: required_file(tts_binding, "token-scores")?.path().clone(),
-                reference_audio,
-                reference_text,
-                reference_audio_required,
-            };
-            NativeTtsBackend::from_catalog_pockettts_model(&tts_task, tts_files)
-        }
-        _ => Err(aurora_voice_engine::EngineError::InvalidRequest),
-    }
-    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let tts = SherpaTtsProvider::new(tts_task, tts_backend)
-        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-
     let wake_config = WakeOrchestrationConfig::new(
         vad_task,
         kws_task,
@@ -913,19 +1113,93 @@ fn build_local_ios_runtime(
         16_000 * 60,
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    runtime
+        .with_wake_providers(Box::new(vad), Box::new(kws), wake_config)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+}
 
-    VoiceRuntime::new(
-        input,
-        stt,
-        tts,
-        transport_for_assistant,
-        output,
-        sink,
-        IOS_SURFACE,
-        IOS_RUNTIME_ID,
-    )
-    .and_then(|runtime| runtime.with_wake_providers(Box::new(vad), Box::new(kws), wake_config))
-    .map_err(|_| IosVoiceSessionCommandError::Unavailable)
+#[cfg(feature = "ios-sherpa")]
+fn build_local_ios_stt(
+    binding: &IosVoicePackBinding,
+) -> Result<IosFiniteSttProvider, IosVoiceSessionCommandError> {
+    let task = task_pack_binding(binding, VoiceTask::SpeechToText)?;
+    let decoder = stt_decoder_file(binding)?;
+    let files = NativeSttModelFiles {
+        encoder_file_id: "encoder".to_owned(),
+        encoder_path: required_file(binding, "encoder")?.path().clone(),
+        decoder_file_id: decoder.file_id().to_owned(),
+        decoder_path: decoder.path().clone(),
+        tokens_file_id: "tokens".to_owned(),
+        tokens_path: required_file(binding, "tokens")?.path().clone(),
+        language: Some(binding.language().to_owned()),
+    };
+    let backend = NativeSttBackend::from_selected_model_files(&task, files)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let provider = SherpaFiniteSttEngine::new(task, backend)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    Ok(IosFiniteSttProvider::Local(provider))
+}
+
+#[cfg(feature = "ios-sherpa")]
+fn build_local_ios_tts(
+    binding: &IosVoicePackBinding,
+) -> Result<IosTtsProvider, IosVoiceSessionCommandError> {
+    let task = task_pack_binding(binding, VoiceTask::TextToSpeech)?;
+    let backend = match task.catalog_model_family() {
+        Some("vits_piper") => {
+            let files = NativeTtsVitsPiperModelFiles {
+                model_file_id: "model".to_owned(),
+                model_path: required_file(binding, "model")?.path().clone(),
+                tokens_file_id: "tokens".to_owned(),
+                tokens_path: required_file(binding, "tokens")?.path().clone(),
+                espeak_data_file_id: "espeak-ng-data".to_owned(),
+                espeak_data_dir: required_file(binding, "espeak-ng-data")?.path().clone(),
+                lexicon_file_id: optional_file(binding, "lexicon")
+                    .map(|file| file.file_id().to_owned()),
+                lexicon_path: optional_file(binding, "lexicon").map(|file| file.path().clone()),
+            };
+            NativeTtsBackend::from_catalog_vits_piper_model(&task, files)
+        }
+        Some("pockettts") => {
+            let reference_audio_required = ios_pockettts_requires_user_profile(binding);
+            let (reference_audio, reference_text) = if reference_audio_required {
+                let reference = binding
+                    .tts_reference()
+                    .ok_or(IosVoiceSessionCommandError::Unavailable)?;
+                (
+                    Some(load_ios_tts_reference_audio(reference)?),
+                    reference.reference_text_for_sherpa().map(str::to_owned),
+                )
+            } else {
+                (None, None)
+            };
+            let files = NativeTtsPocketModelFiles {
+                lm_flow_file_id: "lm-flow".to_owned(),
+                lm_flow_path: required_file(binding, "lm-flow")?.path().clone(),
+                lm_main_file_id: "lm-main".to_owned(),
+                lm_main_path: required_file(binding, "lm-main")?.path().clone(),
+                encoder_file_id: "encoder".to_owned(),
+                encoder_path: required_file(binding, "encoder")?.path().clone(),
+                decoder_file_id: "decoder".to_owned(),
+                decoder_path: required_file(binding, "decoder")?.path().clone(),
+                text_conditioner_file_id: "text-conditioner".to_owned(),
+                text_conditioner_path: required_file(binding, "text-conditioner")?.path().clone(),
+                vocab_file_id: "vocab".to_owned(),
+                vocab_path: required_file(binding, "vocab")?.path().clone(),
+                token_scores_file_id: "token-scores".to_owned(),
+                token_scores_path: required_file(binding, "token-scores")?.path().clone(),
+                reference_audio,
+                reference_text,
+                reference_audio_required,
+            };
+            NativeTtsBackend::from_catalog_pockettts_model(&task, files)
+        }
+        _ => Err(EngineError::InvalidRequest),
+    }
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let provider = SherpaTtsProvider::new(task, backend)
+        .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    Ok(IosTtsProvider::Local(provider))
 }
 
 #[cfg(feature = "ios-sherpa")]
@@ -1253,35 +1527,8 @@ impl KwsStreamProvider for IosWakeKws {
     }
 }
 
-#[cfg(not(feature = "ios-sherpa"))]
-fn build_gateway_runtime(
-    config: &IosVoiceSessionConfig,
-    input: AuroraIosAudioInput,
-    output: AuroraIosAudioOutput,
-    sink: IosSessionSink,
-) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
-    let policy = microphone_policy(config)?;
-    let scope = if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
-        FiniteSttRouteScope::LoopbackSidecar
-    } else {
-        FiniteSttRouteScope::RemoteGateway
-    };
-    let stt_route = RouteFiniteSttBinding::new(
-        "gateway.default",
-        scope,
-        VAD_SAMPLE_RATE_HZ,
-        MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
-        ROUTE_REVISION,
-    )
-    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let tts_route = RouteTtsBinding::new(
-        "gateway.default",
-        "voice.default",
-        VAD_SAMPLE_RATE_HZ,
-        ROUTE_REVISION,
-    )
-    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let limits = TransportLimits {
+fn gateway_limits(policy: MicrophoneAudioPolicy) -> TransportLimits {
+    TransportLimits {
         max_request_bytes: 2 * 1024 * 1024,
         max_response_bytes: 8 * 1024 * 1024,
         max_event_bytes: 2 * 1024 * 1024,
@@ -1289,27 +1536,86 @@ fn build_gateway_runtime(
         stream_idle_timeout: STREAM_IDLE_TIMEOUT,
         allow_loopback_http: matches!(policy, MicrophoneAudioPolicy::LoopbackOnly),
         microphone_audio_policy: policy,
-    };
-    let transport_for_stt =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
-            .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let transport_for_tts =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
-            .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let transport_for_assistant =
-        NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
-            .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let stt = NativeGatewayFiniteStt::new(
-        transport_for_stt,
-        NativeGatewayFiniteSttConfig::realtime(stt_route, policy)
+    }
+}
+
+fn build_gateway_ios_stt(
+    config: &IosVoiceSessionConfig,
+    policy: MicrophoneAudioPolicy,
+) -> Result<IosFiniteSttProvider, IosVoiceSessionCommandError> {
+    let route = RouteFiniteSttBinding::new(
+        "gateway.default",
+        if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
+            FiniteSttRouteScope::LoopbackSidecar
+        } else {
+            FiniteSttRouteScope::RemoteGateway
+        },
+        VAD_SAMPLE_RATE_HZ,
+        MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+        ROUTE_REVISION,
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let transport = NativeGatewayTransport::new(
+        config.gateway.clone(),
+        config.auth.clone(),
+        gateway_limits(policy),
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let provider = NativeGatewayFiniteStt::new(
+        transport,
+        NativeGatewayFiniteSttConfig::realtime(route, policy)
             .map_err(|_| IosVoiceSessionCommandError::Unavailable)?,
     )
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
-    let tts = NativeGatewayTtsSynthesizer::new(
-        transport_for_tts,
-        NativeGatewayTtsConfig::new(tts_route, None, 1.0, 16_000 * 30)
+    #[cfg(feature = "ios-sherpa")]
+    return Ok(IosFiniteSttProvider::Gateway(provider));
+    #[cfg(not(feature = "ios-sherpa"))]
+    Ok(provider)
+}
+
+fn build_gateway_ios_tts(
+    config: &IosVoiceSessionConfig,
+    policy: MicrophoneAudioPolicy,
+) -> Result<IosTtsProvider, IosVoiceSessionCommandError> {
+    let route = RouteTtsBinding::new(
+        "gateway.default",
+        "voice.default",
+        VAD_SAMPLE_RATE_HZ,
+        ROUTE_REVISION,
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let transport = NativeGatewayTransport::new(
+        config.gateway.clone(),
+        config.auth.clone(),
+        gateway_limits(policy),
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
+    let provider = NativeGatewayTtsSynthesizer::new(
+        transport,
+        NativeGatewayTtsConfig::new(route, None, 1.0, 16_000 * 30)
             .map_err(|_| IosVoiceSessionCommandError::Unavailable)?,
     );
+    #[cfg(feature = "ios-sherpa")]
+    return Ok(IosTtsProvider::Gateway(provider));
+    #[cfg(not(feature = "ios-sherpa"))]
+    Ok(provider)
+}
+
+fn build_gateway_runtime(
+    config: &IosVoiceSessionConfig,
+    input: AuroraIosAudioInput,
+    output: AuroraIosAudioOutput,
+    sink: IosSessionSink,
+) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
+    let policy = microphone_policy(config)?;
+    let stt = build_gateway_ios_stt(config, policy)?;
+    let tts = build_gateway_ios_tts(config, policy)?;
+    let transport_for_assistant = NativeGatewayTransport::new(
+        config.gateway.clone(),
+        config.auth.clone(),
+        gateway_limits(policy),
+    )
+    .map_err(|_| IosVoiceSessionCommandError::Unavailable)?;
     VoiceRuntime::new(
         input,
         stt,
@@ -1323,16 +1629,6 @@ fn build_gateway_runtime(
     .map_err(|_| IosVoiceSessionCommandError::Unavailable)
 }
 
-#[cfg(feature = "ios-sherpa")]
-fn build_gateway_runtime(
-    _config: &IosVoiceSessionConfig,
-    _input: AuroraIosAudioInput,
-    _output: AuroraIosAudioOutput,
-    _sink: IosSessionSink,
-) -> Result<RuntimeCore, IosVoiceSessionCommandError> {
-    Err(IosVoiceSessionCommandError::Unavailable)
-}
-
 fn verify_ios_pack_bindings(
     bindings: &IosVoicePackBindings,
 ) -> Result<BTreeMap<PackTask, IosVoicePackBinding>, IosVoiceSessionCommandError> {
@@ -1344,13 +1640,10 @@ fn verify_ios_pack_bindings(
         }
         verified.insert(binding.task(), binding.clone());
     }
-    if !verified.is_empty()
-        && !(verified.contains_key(&PackTask::Vad)
-            && (verified.contains_key(&PackTask::Kws)
-                || verified.contains_key(&PackTask::Wakeword))
-            && verified.contains_key(&PackTask::Stt)
-            && verified.contains_key(&PackTask::Tts))
-    {
+    let has_vad = verified.contains_key(&PackTask::Vad);
+    let has_kws =
+        verified.contains_key(&PackTask::Kws) || verified.contains_key(&PackTask::Wakeword);
+    if has_vad != has_kws {
         return Err(IosVoiceSessionCommandError::Unavailable);
     }
     Ok(verified)
@@ -1426,16 +1719,6 @@ fn assistant_transport(
     };
     NativeGatewayTransport::new(config.gateway.clone(), config.auth.clone(), limits)
         .map_err(|_| IosVoiceSessionCommandError::Unavailable)
-}
-
-#[cfg(feature = "ios-sherpa")]
-fn verified_binding(
-    verified: &BTreeMap<PackTask, IosVoicePackBinding>,
-    task: PackTask,
-) -> Result<&IosVoicePackBinding, IosVoiceSessionCommandError> {
-    verified
-        .get(&task)
-        .ok_or(IosVoiceSessionCommandError::Unavailable)
 }
 
 fn ios_pockettts_requires_user_profile(binding: &IosVoicePackBinding) -> bool {
@@ -1719,18 +2002,32 @@ struct SessionThreadInputs {
     ready: mpsc::Sender<Result<(), IosVoiceSessionCommandError>>,
     status: Arc<Mutex<IosVoiceSessionStatus>>,
     control: AuroraIosCaptureControl,
+    lifecycle: MobileSessionLifecycle,
 }
 
 fn run_session_thread(inputs: SessionThreadInputs) {
+    run_session_thread_with_builder(inputs, build_runtime);
+}
+
+fn run_session_thread_with_builder(
+    inputs: SessionThreadInputs,
+    build: impl FnOnce(
+        &IosVoiceSessionConfig,
+        AuroraIosAudioInput,
+        AuroraIosAudioOutput,
+        IosSessionSink,
+    ) -> Result<RuntimeCore, IosVoiceSessionCommandError>,
+) {
     let SessionThreadInputs {
         config,
         input,
         output,
         sink,
-        mut commands,
+        commands,
         ready,
         status,
         control,
+        lifecycle,
     } = inputs;
     let remote_audio_consent = config.remote_audio_consent;
     let tokio_runtime = match TokioRuntimeBuilder::new_current_thread()
@@ -1739,107 +2036,183 @@ fn run_session_thread(inputs: SessionThreadInputs) {
     {
         Ok(runtime) => runtime,
         Err(_) => {
+            lifecycle.record_failure(MobileSessionCloseError::Unavailable);
             set_fault(&status, "runtime_unavailable");
             let _ = ready.send(Err(IosVoiceSessionCommandError::Unavailable));
             return;
         }
     };
-    let mut voice_runtime = match build_runtime(&config, input, output, sink) {
+    let voice_runtime = match build(&config, input, output, sink) {
         Ok(runtime) => runtime,
         Err(error) => {
+            lifecycle.record_failure(MobileSessionCloseError::Unavailable);
             set_fault(&status, "runtime_unavailable");
             let _ = ready.send(Err(error));
             return;
         }
     };
     let _ = ready.send(Ok(()));
-    tokio_runtime.block_on(async move {
-        loop {
-            let Some(command) = commands.recv().await else {
-                break;
-            };
-            match command {
-                Command::Start { mode, reply } => {
-                    if voice_runtime.has_active_capture() {
-                        let _ = reply.send(Err(IosVoiceSessionCommandError::AlreadyActive));
-                        continue;
-                    }
-                    let generation = match voice_runtime.next_capture_generation() {
-                        Ok(generation) => generation,
-                        Err(_) => {
-                            let _ = reply.send(Err(IosVoiceSessionCommandError::Unavailable));
-                            continue;
-                        }
-                    };
-                    let now = now_micros();
-                    let lease = VoiceCaptureLease {
-                        owner: CaptureOwnerKind::Native,
-                        surface: IOS_SURFACE.to_owned(),
-                        device_route: "default".to_owned(),
-                        start_reason: capture_start_reason(mode),
-                        generation,
-                        created_at: now,
-                        route_revision: RouteRevision(ROUTE_REVISION),
-                        background_eligible: background_eligible(mode),
-                        consent_revision: if remote_audio_consent { 1 } else { 0 },
-                        heartbeat_at: now,
-                        stop_deadline: None,
-                    };
-                    let cancellation = CancellationToken::new();
-                    set_active(&status, generation);
-                    let _ = reply.send(Ok(generation));
-                    let result = run_turn(
-                        &mut voice_runtime,
-                        &mut commands,
-                        mode,
-                        lease,
-                        now,
-                        cancellation,
-                        control.clone(),
-                    )
-                    .await;
-                    finish_status(&status, result);
-                }
-                Command::Shutdown => {
-                    if let Some(generation) = active_generation(&status) {
-                        control.interrupt(generation);
-                    }
-                    break;
-                }
-                Command::Finish { reply, .. } | Command::Cancel { reply, .. } => {
-                    let _ = reply.send(Err(IosVoiceSessionCommandError::NotActive));
-                }
-            }
-        }
-    });
+    tokio_runtime.block_on(run_session_loop(
+        voice_runtime,
+        commands,
+        status,
+        control,
+        lifecycle,
+        remote_audio_consent,
+    ));
 }
 
-async fn run_turn<'a>(
-    runtime: &'a mut RuntimeCore,
-    commands: &'a mut tokio_mpsc::UnboundedReceiver<Command>,
+async fn run_session_loop<R: IosSessionRuntime>(
+    mut voice_runtime: R,
+    mut commands: tokio_mpsc::UnboundedReceiver<Command>,
+    status: Arc<Mutex<IosVoiceSessionStatus>>,
+    control: AuroraIosCaptureControl,
+    lifecycle: MobileSessionLifecycle,
+    remote_audio_consent: bool,
+) {
+    loop {
+        if lifecycle.is_retired() {
+            reject_queued_commands(&mut commands);
+            break;
+        }
+        let Some(command) = commands.recv().await else {
+            if let Some(generation) = lifecycle.unexpected_channel_close() {
+                control.interrupt(generation);
+            }
+            break;
+        };
+        match command {
+            Command::Start { mode, reply } => {
+                if lifecycle.is_retired() {
+                    let _ = reply.send(Err(IosVoiceSessionCommandError::Unavailable));
+                    continue;
+                }
+                if voice_runtime.has_active_capture() {
+                    let _ = reply.send(Err(IosVoiceSessionCommandError::AlreadyActive));
+                    continue;
+                }
+                let generation = match voice_runtime.next_capture_generation() {
+                    Ok(generation) => generation,
+                    Err(_) => {
+                        let _ = reply.send(Err(IosVoiceSessionCommandError::Unavailable));
+                        continue;
+                    }
+                };
+                let now = now_micros();
+                let lease = VoiceCaptureLease {
+                    owner: CaptureOwnerKind::Native,
+                    surface: IOS_SURFACE.to_owned(),
+                    device_route: "default".to_owned(),
+                    start_reason: capture_start_reason(mode),
+                    generation,
+                    created_at: now,
+                    route_revision: RouteRevision(ROUTE_REVISION),
+                    background_eligible: background_eligible(mode),
+                    consent_revision: if remote_audio_consent { 1 } else { 0 },
+                    heartbeat_at: now,
+                    stop_deadline: None,
+                };
+                let cancellation = CancellationToken::new();
+                if lifecycle
+                    .begin_generation(generation, cancellation.clone())
+                    .is_err()
+                {
+                    let _ = reply.send(Err(IosVoiceSessionCommandError::Unavailable));
+                    continue;
+                }
+                set_active(&status, generation);
+                let _ = reply.send(Ok(generation));
+                let mut transcript_reply = None;
+                let result = run_turn(
+                    &mut voice_runtime,
+                    &mut commands,
+                    &mut transcript_reply,
+                    IosTurnContext {
+                        mode,
+                        lease,
+                        at: now,
+                        cancellation,
+                        control: control.clone(),
+                        lifecycle: lifecycle.clone(),
+                    },
+                )
+                .await;
+                lifecycle.record_cleanup(
+                    generation,
+                    voice_runtime.cleanup_report_for_generation(generation),
+                );
+                finish_status(&status, &result);
+                if let Some(reply) = transcript_reply {
+                    let transcript_result =
+                        result.map_err(|_| IosVoiceSessionCommandError::Unavailable);
+                    let _ = reply.send(transcript_result);
+                }
+                if lifecycle.is_retired() {
+                    reject_queued_commands(&mut commands);
+                    break;
+                }
+            }
+            Command::Shutdown => {
+                if let Some(generation) = lifecycle.worker_retire() {
+                    control.interrupt(generation);
+                }
+                reject_queued_commands(&mut commands);
+                break;
+            }
+            Command::Finish { reply, .. } | Command::Cancel { reply, .. } => {
+                let _ = reply.send(Err(IosVoiceSessionCommandError::NotActive));
+            }
+            Command::FinishWithTranscript { reply, .. } => {
+                let _ = reply.send(Err(IosVoiceSessionCommandError::NotActive));
+            }
+        }
+    }
+}
+
+struct IosTurnContext {
     mode: IosVoiceStartMode,
     lease: VoiceCaptureLease,
     at: TimestampMicros,
     cancellation: CancellationToken,
     control: AuroraIosCaptureControl,
+    lifecycle: MobileSessionLifecycle,
+}
+
+async fn run_turn<'a, R: IosSessionRuntime>(
+    runtime: &'a mut R,
+    commands: &'a mut tokio_mpsc::UnboundedReceiver<Command>,
+    transcript_reply: &'a mut Option<mpsc::Sender<Result<String, IosVoiceSessionCommandError>>>,
+    context: IosTurnContext,
 ) -> Result<String, VoiceCoreError> {
+    let IosTurnContext {
+        mode,
+        lease,
+        at,
+        cancellation,
+        control,
+        lifecycle,
+    } = context;
     let generation = lease.generation;
-    let mut turn: Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> = match mode {
-        IosVoiceStartMode::PushToTalk => {
-            Box::pin(runtime.run_push_to_talk_turn(lease, at, cancellation.clone()))
-        }
-        IosVoiceStartMode::BackgroundSession => {
-            Box::pin(runtime.run_background_turn(lease, at, cancellation.clone()))
-        }
-    };
+    let mut turn = runtime.invoke_turn(mode, lease, at, cancellation.clone());
+    let mut retiring = false;
     loop {
         tokio::select! {
             result = &mut turn => return result,
-            command = commands.recv() => {
+            command = commands.recv(), if !retiring => {
                 match command {
                     Some(Command::Finish { generation: requested, reply }) if requested == generation => {
                         control.finish(generation);
                         let _ = reply.send(Ok(()));
+                    }
+                    Some(Command::FinishWithTranscript { generation: requested, reply })
+                        if requested == generation && mode == IosVoiceStartMode::PushToTalk =>
+                    {
+                        if transcript_reply.is_some() {
+                            let _ = reply.send(Err(IosVoiceSessionCommandError::NotActive));
+                        } else {
+                            control.finish(generation);
+                            *transcript_reply = Some(reply);
+                        }
                     }
                     Some(Command::Cancel { generation: requested, reply }) if requested == generation => {
                         cancellation.cancel();
@@ -1849,16 +2222,43 @@ async fn run_turn<'a>(
                     Some(Command::Finish { reply, .. }) | Some(Command::Cancel { reply, .. }) => {
                         let _ = reply.send(Err(IosVoiceSessionCommandError::NotActive));
                     }
+                    Some(Command::FinishWithTranscript { reply, .. }) => {
+                        let _ = reply.send(Err(IosVoiceSessionCommandError::NotActive));
+                    }
                     Some(Command::Start { reply, .. }) => {
                         let _ = reply.send(Err(IosVoiceSessionCommandError::AlreadyActive));
                     }
-                    Some(Command::Shutdown) | None => {
+                    Some(Command::Shutdown) => {
+                        lifecycle.worker_retire();
                         cancellation.cancel();
                         control.interrupt(generation);
-                        return Err(VoiceCoreError::Cancelled);
+                        retiring = true;
+                    }
+                    None => {
+                        lifecycle.unexpected_channel_close();
+                        cancellation.cancel();
+                        control.interrupt(generation);
+                        retiring = true;
                     }
                 }
             }
+        }
+    }
+}
+
+fn reject_queued_commands(commands: &mut tokio_mpsc::UnboundedReceiver<Command>) {
+    while let Ok(command) = commands.try_recv() {
+        match command {
+            Command::Start { reply, .. } => {
+                let _ = reply.send(Err(IosVoiceSessionCommandError::Unavailable));
+            }
+            Command::Finish { reply, .. } | Command::Cancel { reply, .. } => {
+                let _ = reply.send(Err(IosVoiceSessionCommandError::Closed));
+            }
+            Command::FinishWithTranscript { reply, .. } => {
+                let _ = reply.send(Err(IosVoiceSessionCommandError::Closed));
+            }
+            Command::Shutdown => {}
         }
     }
 }
@@ -1870,6 +2270,25 @@ struct IosSessionSink {
 
 #[async_trait(?Send)]
 impl RuntimeEventSink for IosSessionSink {
+    fn wants_speech_lifecycle(&self) -> bool {
+        native_speech_lifecycle_observer_enabled()
+    }
+
+    fn speech_lifecycle_callback(
+        &self,
+    ) -> Option<Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync>> {
+        if !native_speech_lifecycle_observer_enabled() {
+            return None;
+        }
+        let callback: Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync> =
+            Arc::new(emit_native_speech_lifecycle);
+        Some(callback)
+    }
+
+    fn speech_lifecycle(&mut self, event: SpeechLifecycleEventV1) {
+        emit_native_speech_lifecycle(event);
+    }
+
     async fn snapshot(&mut self, snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
         if let Ok(mut status) = self.status.lock() {
             status.phase = phase_for_state(snapshot.state);
@@ -1919,13 +2338,9 @@ fn set_active(status: &Arc<Mutex<IosVoiceSessionStatus>>, generation: Generation
     }
 }
 
-fn active_generation(status: &Arc<Mutex<IosVoiceSessionStatus>>) -> Option<Generation> {
-    status.lock().ok().and_then(|status| status.generation)
-}
-
 fn finish_status(
     status: &Arc<Mutex<IosVoiceSessionStatus>>,
-    result: Result<String, VoiceCoreError>,
+    result: &Result<String, VoiceCoreError>,
 ) {
     if let Ok(mut status) = status.lock() {
         status.active = false;
@@ -1976,6 +2391,643 @@ fn now_micros() -> TimestampMicros {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aurora_voice_core::{AudioPlaybackContext, AudioPlaybackReceipt};
+    use aurora_voice_engine::{
+        BoundFiniteSttRequest, BoundTtsSynthesisRequest, EngineError, FiniteSttAudio,
+        FiniteSttResult, FiniteSttRouteScope, RouteFiniteSttBinding, RouteTtsBinding,
+        TtsSynthesisResult, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
+    };
+    use std::sync::mpsc;
+    use std::task::{Context, Poll, Wake, Waker};
+
+    struct CloseTestAudioInput {
+        started: Option<mpsc::Sender<()>>,
+        start_entered: Option<mpsc::Sender<()>>,
+        release_start: Option<tokio::sync::oneshot::Receiver<()>>,
+        stop_entered: Option<mpsc::Sender<()>>,
+        release_stop: Option<tokio::sync::oneshot::Receiver<()>>,
+    }
+
+    struct ReportTestAudioInput {
+        started: mpsc::Sender<Generation>,
+        fail_first_stop: Arc<std::sync::atomic::AtomicBool>,
+        generation: Option<Generation>,
+        frame_pending: bool,
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for ReportTestAudioInput {
+        async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            self.generation = Some(lease.generation);
+            self.frame_pending = true;
+            let _ = self.started.send(lease.generation);
+            Ok(())
+        }
+
+        async fn stop(
+            &mut self,
+            _reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            if self
+                .fail_first_stop
+                .swap(false, std::sync::atomic::Ordering::SeqCst)
+            {
+                Err(VoiceCoreError::TransportFault {
+                    code: "report_test_capture_stop_failed".to_owned(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn next_frame(
+            &mut self,
+        ) -> Result<Option<aurora_voice_core::PcmFrame>, VoiceCoreError> {
+            if !std::mem::take(&mut self.frame_pending) {
+                return Ok(None);
+            }
+            let generation = self.generation.ok_or(VoiceCoreError::InvalidTransition)?;
+            Ok(Some(
+                aurora_voice_core::PcmFrame::new(
+                    vec![0.1, -0.1],
+                    TimestampMicros(generation.0),
+                    1,
+                    false,
+                    RouteRevision(ROUTE_REVISION),
+                    generation,
+                )
+                .map_err(|_| VoiceCoreError::InvalidTransition)?,
+            ))
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            RouteRevision(ROUTE_REVISION)
+        }
+    }
+
+    struct SuccessfulReportTestStt;
+
+    #[async_trait(?Send)]
+    impl FiniteSttPort for SuccessfulReportTestStt {
+        fn finite_stt_binding(
+            &self,
+        ) -> Result<aurora_voice_engine::FiniteSttProviderBinding, EngineError> {
+            Ok(aurora_voice_engine::FiniteSttProviderBinding::Route(
+                RouteFiniteSttBinding::new(
+                    "route.stt.ios-cleanup-report-success",
+                    FiniteSttRouteScope::LoopbackSidecar,
+                    VAD_SAMPLE_RATE_HZ,
+                    MAX_FINITE_STT_SAMPLES,
+                    ROUTE_REVISION,
+                )?,
+            ))
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: aurora_voice_engine::FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            request: BoundFiniteSttRequest,
+            audio: FiniteSttAudio,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            FiniteSttResult::new(&request, &audio, "recognized")
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    struct SuccessfulReportTestTransport;
+
+    #[async_trait(?Send)]
+    impl SpeechTransport for SuccessfulReportTestTransport {
+        async fn assistant_turn(
+            &mut self,
+            _request: aurora_voice_core::AssistantTurnRequest,
+            cancellation: CancellationToken,
+        ) -> Result<aurora_voice_core::AssistantTurnResponse, VoiceCoreError> {
+            cancellation.check()?;
+            Ok(aurora_voice_core::AssistantTurnResponse {
+                text: "A controlled reply.".to_owned(),
+                session_id: None,
+                request_id: None,
+                correlation_id: None,
+            })
+        }
+
+        async fn cancel_session(&mut self, _generation: Generation) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    struct SuccessfulReportTestTts;
+
+    #[async_trait(?Send)]
+    impl TtsSynthesisPort for SuccessfulReportTestTts {
+        fn synthesis_binding(
+            &self,
+        ) -> Result<aurora_voice_engine::TtsSynthesisProviderBinding, EngineError> {
+            Ok(aurora_voice_engine::TtsSynthesisProviderBinding::Route(
+                RouteTtsBinding::new(
+                    "route.tts.ios-cleanup-report-success",
+                    "voice.ios-cleanup-report-success",
+                    VAD_SAMPLE_RATE_HZ,
+                    ROUTE_REVISION,
+                )?,
+            ))
+        }
+
+        async fn warm_synthesis(
+            &mut self,
+            _binding: aurora_voice_engine::TtsSynthesisProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn synthesize_text(
+            &mut self,
+            request: BoundTtsSynthesisRequest,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<TtsSynthesisResult, EngineError> {
+            let chunk = aurora_voice_engine::TtsAudioChunk::new(
+                &request,
+                1,
+                VAD_SAMPLE_RATE_HZ,
+                1,
+                vec![0; 64],
+                true,
+            )?;
+            TtsSynthesisResult::new(&request, vec![chunk], false)
+        }
+
+        async fn cancel_synthesis_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for CloseTestAudioInput {
+        async fn start(&mut self, _lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            if let Some(started) = self.started.as_ref() {
+                let _ = started.send(());
+            }
+            if let Some(entered) = self.start_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_start.take() {
+                let _ = release.await;
+            }
+            Ok(())
+        }
+
+        async fn stop(
+            &mut self,
+            _reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.stop_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_stop.take() {
+                let _ = release.await;
+            }
+            Err(VoiceCoreError::TransportFault {
+                code: "private_cleanup_failure".to_owned(),
+            })
+        }
+
+        async fn next_frame(
+            &mut self,
+        ) -> Result<Option<aurora_voice_core::PcmFrame>, VoiceCoreError> {
+            Ok(None)
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            RouteRevision(ROUTE_REVISION)
+        }
+    }
+
+    struct GatedIosAudioInput {
+        inner: AuroraIosAudioInput,
+        start_entered: Option<mpsc::Sender<()>>,
+        release_start: Option<tokio::sync::oneshot::Receiver<()>>,
+        stop_entered: Option<mpsc::Sender<()>>,
+        release_stop: Option<tokio::sync::oneshot::Receiver<()>>,
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for GatedIosAudioInput {
+        async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.start_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_start.take() {
+                let _ = release.await;
+            }
+            self.inner.start(lease).await
+        }
+
+        async fn stop(
+            &mut self,
+            reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.stop_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_stop.take() {
+                let _ = release.await;
+            }
+            self.inner.stop(reason).await
+        }
+
+        async fn next_frame(
+            &mut self,
+        ) -> Result<Option<aurora_voice_core::PcmFrame>, VoiceCoreError> {
+            self.inner.next_frame().await
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            self.inner.current_route_revision()
+        }
+    }
+
+    struct CloseTestEngine;
+
+    #[async_trait(?Send)]
+    impl FiniteSttPort for CloseTestEngine {
+        fn finite_stt_binding(
+            &self,
+        ) -> Result<aurora_voice_engine::FiniteSttProviderBinding, EngineError> {
+            Ok(aurora_voice_engine::FiniteSttProviderBinding::Route(
+                RouteFiniteSttBinding::new(
+                    "route.stt.close-test",
+                    FiniteSttRouteScope::LoopbackSidecar,
+                    VAD_SAMPLE_RATE_HZ,
+                    MAX_FINITE_STT_SAMPLES,
+                    ROUTE_REVISION,
+                )?,
+            ))
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: aurora_voice_engine::FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            _request: BoundFiniteSttRequest,
+            _audio: FiniteSttAudio,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TtsSynthesisPort for CloseTestEngine {
+        fn synthesis_binding(
+            &self,
+        ) -> Result<aurora_voice_engine::TtsSynthesisProviderBinding, EngineError> {
+            Ok(aurora_voice_engine::TtsSynthesisProviderBinding::Route(
+                RouteTtsBinding::new(
+                    "route.tts.close-test",
+                    "voice.close-test",
+                    VAD_SAMPLE_RATE_HZ,
+                    ROUTE_REVISION,
+                )?,
+            ))
+        }
+
+        async fn warm_synthesis(
+            &mut self,
+            _binding: aurora_voice_engine::TtsSynthesisProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn synthesize_text(
+            &mut self,
+            _request: BoundTtsSynthesisRequest,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<TtsSynthesisResult, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn cancel_synthesis_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    struct CloseTestTransport;
+
+    #[async_trait(?Send)]
+    impl SpeechTransport for CloseTestTransport {
+        async fn assistant_turn(
+            &mut self,
+            _request: aurora_voice_core::AssistantTurnRequest,
+            _cancellation: CancellationToken,
+        ) -> Result<aurora_voice_core::AssistantTurnResponse, VoiceCoreError> {
+            Err(VoiceCoreError::Cancelled)
+        }
+
+        async fn cancel_session(&mut self, _generation: Generation) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    struct CloseTestOutput;
+
+    #[async_trait(?Send)]
+    impl AudioOutput for CloseTestOutput {
+        async fn play(
+            &mut self,
+            context: AudioPlaybackContext,
+            _audio: TtsSynthesisResult,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+            Ok(AudioPlaybackReceipt::new(context, 0, 0, context.started_at))
+        }
+
+        async fn stop(
+            &mut self,
+            _generation: Generation,
+            _reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    struct CloseTestSink;
+
+    #[async_trait(?Send)]
+    impl RuntimeEventSink for CloseTestSink {
+        async fn snapshot(&mut self, _snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+
+        async fn event(&mut self, _event: RuntimeEvent) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    fn close_test_runtime(
+        started: mpsc::Sender<()>,
+        stop_entered: mpsc::Sender<()>,
+        release_stop: tokio::sync::oneshot::Receiver<()>,
+    ) -> VoiceRuntime<
+        CloseTestAudioInput,
+        CloseTestEngine,
+        CloseTestEngine,
+        CloseTestTransport,
+        CloseTestOutput,
+        CloseTestSink,
+    > {
+        VoiceRuntime::new(
+            CloseTestAudioInput {
+                started: Some(started),
+                start_entered: None,
+                release_start: None,
+                stop_entered: Some(stop_entered),
+                release_stop: Some(release_stop),
+            },
+            CloseTestEngine,
+            CloseTestEngine,
+            CloseTestTransport,
+            CloseTestOutput,
+            CloseTestSink,
+            IOS_SURFACE,
+            IOS_RUNTIME_ID,
+        )
+        .expect("real core runtime")
+    }
+
+    struct ReportTestSession {
+        lifecycle: MobileSessionLifecycle,
+        commands: tokio_mpsc::UnboundedSender<Command>,
+        reports: mpsc::Receiver<(Generation, Option<aurora_voice_core::VoiceCleanupReport>)>,
+        started: mpsc::Receiver<Generation>,
+        status: Arc<Mutex<IosVoiceSessionStatus>>,
+    }
+
+    fn start_report_test_session(fail_first_stop: bool) -> ReportTestSession {
+        let lifecycle = MobileSessionLifecycle::new();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (reports_tx, reports_rx) = mpsc::channel();
+        lifecycle.set_after_cleanup_hook(move |generation, report| {
+            reports_tx
+                .send((generation, report))
+                .expect("actual iOS loop reports cleanup");
+        });
+        let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
+        let control = AuroraIosCaptureControl::default();
+        let worker_status = Arc::clone(&status);
+        let worker_control = control.clone();
+        let worker_lifecycle = lifecycle.clone();
+        let fail_first_stop = Arc::new(std::sync::atomic::AtomicBool::new(fail_first_stop));
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            let core = VoiceRuntime::new(
+                ReportTestAudioInput {
+                    started: started_tx,
+                    fail_first_stop,
+                    generation: None,
+                    frame_pending: false,
+                },
+                SuccessfulReportTestStt,
+                SuccessfulReportTestTts,
+                SuccessfulReportTestTransport,
+                CloseTestOutput,
+                CloseTestSink,
+                IOS_SURFACE,
+                IOS_RUNTIME_ID,
+            )
+            .expect("actual iOS core runtime");
+            let tokio_runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            tokio_runtime.block_on(run_session_loop(
+                core,
+                command_rx,
+                worker_status,
+                worker_control,
+                worker_lifecycle,
+                false,
+            ));
+        });
+        start_join_driver(&lifecycle, worker).expect("actual iOS worker join driver");
+        ReportTestSession {
+            lifecycle,
+            commands,
+            reports: reports_rx,
+            started: started_rx,
+            status,
+        }
+    }
+
+    fn start_report_test_generation(session: &mut ReportTestSession) -> Generation {
+        let (reply, response) = mpsc::channel();
+        session
+            .lifecycle
+            .admit(|| {
+                session
+                    .commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("actual iOS production start admitted");
+        let generation = response
+            .recv_timeout(Duration::from_secs(5))
+            .expect("start response")
+            .expect("generation");
+        assert_eq!(
+            session.started.recv_timeout(Duration::from_secs(5)),
+            Ok(generation),
+            "actual AudioInput::start ran for this generation"
+        );
+        generation
+    }
+
+    fn retire_report_test_session(
+        session: &ReportTestSession,
+    ) -> Result<(), MobileSessionCloseError> {
+        assert_eq!(
+            session
+                .lifecycle
+                .request_retirement(|| session.commands.send(Command::Shutdown).is_ok()),
+            None,
+            "the completed generation released its active binding"
+        );
+        session
+            .lifecycle
+            .close_checked_timeout(Duration::from_secs(5))
+    }
+
+    #[test]
+    fn ios_cleanup_failure_stays_sticky_after_a_later_clean_generation() {
+        let mut session = start_report_test_session(true);
+        for (expected, expected_stop) in [
+            (
+                Generation(1),
+                aurora_voice_core::CleanupCallbackOutcome::ReturnedError,
+            ),
+            (
+                Generation(2),
+                aurora_voice_core::CleanupCallbackOutcome::ReturnedOk,
+            ),
+        ] {
+            assert_eq!(start_report_test_generation(&mut session), expected);
+            let (reported, report) = session
+                .reports
+                .recv_timeout(Duration::from_secs(5))
+                .expect("iOS production loop cleanup report");
+            let report = report.expect("actual core cleanup report");
+            assert_eq!(reported, expected);
+            assert_eq!(report.generation(), expected);
+            assert_eq!(report.capture_stop(), expected_stop);
+            assert_eq!(
+                report.state_reset(),
+                aurora_voice_core::CleanupCallbackOutcome::NotAttempted
+            );
+        }
+        assert_eq!(
+            retire_report_test_session(&session),
+            Err(MobileSessionCloseError::CleanupFailed),
+            "the first actual cleanup failure remains sticky after generation two"
+        );
+    }
+
+    #[test]
+    fn ios_successful_primary_cleanup_accepts_unattempted_state_reset() {
+        let mut session = start_report_test_session(false);
+        assert_eq!(start_report_test_generation(&mut session), Generation(1));
+        let (reported, report) = session
+            .reports
+            .recv_timeout(Duration::from_secs(5))
+            .expect("successful iOS production loop cleanup report");
+        let report = report.expect("actual core cleanup report");
+        assert_eq!(reported, Generation(1));
+        assert_eq!(report.generation(), Generation(1));
+        assert_eq!(
+            report.capture_stop(),
+            aurora_voice_core::CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(
+            report.state_reset(),
+            aurora_voice_core::CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(retire_report_test_session(&session), Ok(()));
+        let status = session.status.lock().expect("iOS status after worker join");
+        assert_eq!(status.completed_turns, 1);
+        assert_eq!(status.failed_turns, 0);
+    }
+
+    #[test]
+    fn ios_cleanup_created_final_error_retains_failure_with_unattempted_reset() {
+        let mut session = start_report_test_session(true);
+        assert_eq!(start_report_test_generation(&mut session), Generation(1));
+        let (reported, report) = session
+            .reports
+            .recv_timeout(Duration::from_secs(5))
+            .expect("failed iOS production loop cleanup report");
+        let report = report.expect("actual core cleanup report");
+        assert_eq!(reported, Generation(1));
+        assert_eq!(
+            report.capture_stop(),
+            aurora_voice_core::CleanupCallbackOutcome::ReturnedError
+        );
+        assert_eq!(
+            report.state_reset(),
+            aurora_voice_core::CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(
+            retire_report_test_session(&session),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+        assert_eq!(
+            session
+                .status
+                .lock()
+                .expect("iOS status after worker join")
+                .failed_turns,
+            1,
+            "capture-stop failure becomes the final core error"
+        );
+    }
+
+    struct CloseTestWake;
+
+    impl Wake for CloseTestWake {
+        fn wake(self: Arc<Self>) {}
+    }
 
     #[test]
     fn config_debug_redacts_endpoint_and_auth_material() {
@@ -2300,19 +3352,55 @@ mod tests {
     }
 
     #[test]
-    fn ios_session_rejects_incomplete_cached_pack_binding_set() {
+    fn ios_session_accepts_independent_speech_stage_bindings() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let bindings = IosVoicePackBindings::new(vec![test_pack_binding(
+        let stt_only = IosVoicePackBindings::new(vec![test_pack_binding(
             dir.path(),
             PackTask::Stt,
             "stt",
             &["encoder", "decoder", "tokens"],
         )])
         .expect("bindings");
+        assert!(verify_ios_pack_bindings(&stt_only)
+            .expect("independent STT binding")
+            .contains_key(&PackTask::Stt));
+
+        let tts_only = IosVoicePackBindings::new(vec![test_pack_binding(
+            dir.path(),
+            PackTask::Tts,
+            "tts",
+            &["model", "tokens", "espeak-ng-data"],
+        )])
+        .expect("bindings");
+        assert!(verify_ios_pack_bindings(&tts_only)
+            .expect("independent TTS binding")
+            .contains_key(&PackTask::Tts));
+
+        let incomplete_wake = IosVoicePackBindings::new(vec![test_pack_binding(
+            dir.path(),
+            PackTask::Vad,
+            "vad",
+            &["model"],
+        )])
+        .expect("bindings");
         assert!(matches!(
-            verify_ios_pack_bindings(&bindings),
+            verify_ios_pack_bindings(&incomplete_wake),
             Err(IosVoiceSessionCommandError::Unavailable)
         ));
+    }
+
+    #[cfg(feature = "ios-sherpa")]
+    #[test]
+    fn ios_gateway_stage_ports_construct_without_network_access() {
+        let config = IosVoiceSessionConfig::new(
+            Url::parse("https://gateway.example.test").expect("gateway URL"),
+            GatewayAuth::None,
+            true,
+        );
+        let policy = microphone_policy(&config).expect("consented remote route");
+
+        assert!(build_gateway_ios_stt(&config, policy).is_ok());
+        assert!(build_gateway_ios_tts(&config, policy).is_ok());
     }
 
     #[test]
@@ -2581,5 +3669,502 @@ mod tests {
         assert!(!status.active);
         assert_eq!(status.failed_turns, 1);
         assert_eq!(status.last_error.as_deref(), Some("cancelled"));
+        // The loopback Gateway has no active assistant request to interrupt. Keep
+        // this strict cleanup failure visible rather than treating local turn
+        // cancellation as proof that transport cleanup succeeded.
+        assert_eq!(
+            session.close_checked(),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+    }
+
+    #[test]
+    fn production_command_loop_waits_for_actual_core_cleanup_before_worker_join() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let (loop_exited_tx, loop_exited_rx) = mpsc::channel();
+        let (allow_worker_exit_tx, allow_worker_exit_rx) = mpsc::channel();
+        let lifecycle = MobileSessionLifecycle::new();
+        let control = AuroraIosCaptureControl::default();
+        let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let thread_status = Arc::clone(&status);
+        let thread_lifecycle = lifecycle.clone();
+        let thread_control = control.clone();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime(started_tx, stop_tx, release_rx);
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(
+                core,
+                command_rx,
+                thread_status,
+                thread_control,
+                thread_lifecycle,
+                false,
+            ));
+            loop_exited_tx.send(()).expect("loop exited after report");
+            allow_worker_exit_rx
+                .recv()
+                .expect("release worker after retained report");
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        let (reply, response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("start admitted");
+        assert_eq!(
+            response.recv().expect("start reply").expect("generation"),
+            Generation(1)
+        );
+        started_rx.recv().expect("core capture started");
+        stop_rx.recv().expect("core cleanup entered audio stop");
+
+        assert_eq!(
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok()),
+            Some(Generation(1))
+        );
+        control.interrupt(Generation(1));
+        let waker = Waker::from(Arc::new(CloseTestWake));
+        let mut context = Context::from_waker(&waker);
+        let mut wait = Box::pin(lifecycle.wait_closed());
+        assert!(matches!(wait.as_mut().poll(&mut context), Poll::Pending));
+        assert_eq!(
+            lifecycle.admit(|| commands.send(Command::Shutdown).is_ok()),
+            Err(MobileSessionCloseError::ShutdownFailed)
+        );
+        release_tx.send(()).expect("release actual core cleanup");
+        loop_exited_rx
+            .recv()
+            .expect("production loop recorded cleanup and returned");
+        assert!(matches!(wait.as_mut().poll(&mut context), Poll::Pending));
+        allow_worker_exit_tx
+            .send(())
+            .expect("allow actual worker exit");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+        assert!(matches!(
+            wait.as_mut().poll(&mut context),
+            Poll::Ready(Err(MobileSessionCloseError::CleanupFailed))
+        ));
+        assert!(!status.lock().expect("status lock").active);
+    }
+
+    #[test]
+    fn terminal_close_preserves_missing_transport_cleanup_as_failure() {
+        let config = IosVoiceSessionConfig::new(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+        );
+        let session = IosVoiceSession::new_default(config).expect("session");
+        let generation = session.start().expect("start");
+        session.request_close();
+        assert_eq!(session.start(), Err(IosVoiceSessionCommandError::Closed));
+        assert_eq!(
+            session.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+        assert!(!session.status().active);
+        assert_eq!(generation.0, 1);
+    }
+
+    #[test]
+    fn production_worker_startup_failure_is_retained_until_join() {
+        let config = IosVoiceSessionConfig::new(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+        );
+        let audio_state = AuroraIosAudioState::new(1, 128);
+        let output = AuroraIosAudioOutput::new(1);
+        let input = AuroraIosAudioInput::new(audio_state.clone());
+        let control = input.control();
+        let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
+        let lifecycle = MobileSessionLifecycle::new();
+        let (ready, ready_rx) = mpsc::channel();
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker_lifecycle = lifecycle.clone();
+        let inputs = SessionThreadInputs {
+            config,
+            input,
+            output: output.clone(),
+            sink: IosSessionSink {
+                status: Arc::clone(&status),
+            },
+            commands: command_rx,
+            ready,
+            status: Arc::clone(&status),
+            control: control.clone(),
+            lifecycle: worker_lifecycle,
+        };
+        let worker = thread::spawn(move || {
+            run_session_thread_with_builder(inputs, |_config, _input, _output, _sink| {
+                Err(IosVoiceSessionCommandError::Unavailable)
+            });
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+        assert_eq!(
+            ready_rx.recv().expect("startup reply"),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        );
+        lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok());
+        audio_state.close();
+        output.close();
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(2)),
+            Err(MobileSessionCloseError::Unavailable)
+        );
+        assert_eq!(
+            status.lock().expect("startup status").phase,
+            IosVoiceSessionPhase::Faulted
+        );
+    }
+
+    #[test]
+    fn constructor_driver_spawn_failure_joins_the_actual_ios_worker() {
+        let config = IosVoiceSessionConfig::new(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+        );
+        let worker_exited = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observed_exit = Arc::clone(&worker_exited);
+        assert_eq!(
+            IosVoiceSession::new_with_join_driver(
+                config,
+                1,
+                128,
+                1,
+                |_lifecycle, worker| Err(worker),
+                move || observed_exit.store(true, std::sync::atomic::Ordering::SeqCst),
+            )
+            .map(|_| ()),
+            Err(IosVoiceSessionCommandError::Unavailable)
+        );
+        assert!(worker_exited.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn retirement_before_real_input_control_reset_cannot_admit_another_capture() {
+        let (start_entered_tx, start_entered_rx) = mpsc::channel();
+        let (release_start_tx, release_start_rx) = tokio::sync::oneshot::channel();
+        let (stop_tx, stop_rx) = mpsc::channel::<()>();
+        let (release_stop_tx, release_stop_rx) = tokio::sync::oneshot::channel();
+        let lifecycle = MobileSessionLifecycle::new();
+        let audio_state = AuroraIosAudioState::new(1, 128);
+        let inner = AuroraIosAudioInput::new(audio_state);
+        let control = inner.control();
+        let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker_status = Arc::clone(&status);
+        let worker_control = control.clone();
+        let worker_lifecycle = lifecycle.clone();
+        let worker = thread::spawn(move || {
+            let core = VoiceRuntime::new(
+                GatedIosAudioInput {
+                    inner,
+                    start_entered: Some(start_entered_tx),
+                    release_start: Some(release_start_rx),
+                    stop_entered: Some(stop_tx),
+                    release_stop: Some(release_stop_rx),
+                },
+                CloseTestEngine,
+                CloseTestEngine,
+                CloseTestTransport,
+                CloseTestOutput,
+                CloseTestSink,
+                IOS_SURFACE,
+                IOS_RUNTIME_ID,
+            )
+            .expect("real core runtime");
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(
+                core,
+                command_rx,
+                worker_status,
+                worker_control,
+                worker_lifecycle,
+                false,
+            ));
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        let (reply, response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("first start admitted");
+        assert_eq!(
+            response.recv().expect("start reply").expect("generation"),
+            Generation(1)
+        );
+        start_entered_rx.recv().expect("before inner input reset");
+
+        let (queued_reply, queued_response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply: queued_reply,
+                    })
+                    .is_ok()
+            })
+            .expect("active-loop start enqueued for rejection");
+        assert_eq!(
+            queued_response.recv().expect("queued start reply"),
+            Err(IosVoiceSessionCommandError::AlreadyActive)
+        );
+
+        assert_eq!(
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok()),
+            Some(Generation(1))
+        );
+        control.interrupt(Generation(1));
+        let mut enqueue_ran = false;
+        assert_eq!(
+            lifecycle.admit(|| {
+                enqueue_ran = true;
+                true
+            }),
+            Err(MobileSessionCloseError::ShutdownFailed)
+        );
+        assert!(!enqueue_ran);
+
+        release_start_tx
+            .send(())
+            .expect("release actual input start");
+        stop_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("cancelled capture entered cleanup");
+        release_stop_tx.send(()).expect("finish actual cleanup");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn queued_start_loses_to_retirement_after_cleanup_and_finish_cancel_match_generation() {
+        let lifecycle = MobileSessionLifecycle::new();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_entered_tx, stop_entered_rx) = mpsc::channel();
+        let (release_stop_tx, release_stop_rx) = tokio::sync::oneshot::channel();
+        let (cleanup_boundary_tx, cleanup_boundary_rx) = mpsc::channel();
+        let (release_boundary_tx, release_boundary_rx) = mpsc::channel();
+        lifecycle.set_after_cleanup_hook(move |generation, _report| {
+            if generation == Generation(1) {
+                cleanup_boundary_tx
+                    .send(())
+                    .expect("actual cleanup reached loop boundary");
+                let _ = release_boundary_rx.recv_timeout(Duration::from_secs(5));
+            }
+        });
+        let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
+        let control = AuroraIosCaptureControl::default();
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker_status = Arc::clone(&status);
+        let worker_control = control.clone();
+        let worker_lifecycle = lifecycle.clone();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime(started_tx, stop_entered_tx, release_stop_rx);
+            TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime")
+                .block_on(run_session_loop(
+                    core,
+                    command_rx,
+                    worker_status,
+                    worker_control,
+                    worker_lifecycle,
+                    false,
+                ));
+        });
+        start_join_driver(&lifecycle, worker).expect("actual worker join driver");
+
+        let (start_reply, start_response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply: start_reply,
+                    })
+                    .is_ok()
+            })
+            .expect("first start admitted");
+        assert_eq!(
+            start_response
+                .recv()
+                .expect("start response")
+                .expect("generation"),
+            Generation(1)
+        );
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("first actual capture started");
+        stop_entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("core is blocked in cleanup");
+
+        for (generation, matching) in [(Generation(9), false), (Generation(1), true)] {
+            let (reply, response) = mpsc::channel();
+            lifecycle
+                .admit(|| commands.send(Command::Finish { generation, reply }).is_ok())
+                .expect("finish command admitted");
+            assert_eq!(
+                response.recv_timeout(Duration::from_secs(2)),
+                if matching {
+                    Ok(Ok(()))
+                } else {
+                    Ok(Err(IosVoiceSessionCommandError::NotActive))
+                }
+            );
+        }
+        for (generation, matching) in [(Generation(9), false), (Generation(1), true)] {
+            let (reply, response) = mpsc::channel();
+            lifecycle
+                .admit(|| commands.send(Command::Cancel { generation, reply }).is_ok())
+                .expect("cancel command admitted");
+            assert_eq!(
+                response.recv_timeout(Duration::from_secs(2)),
+                if matching {
+                    Ok(Ok(()))
+                } else {
+                    Ok(Err(IosVoiceSessionCommandError::NotActive))
+                }
+            );
+        }
+
+        release_stop_tx.send(()).expect("release core cleanup");
+        cleanup_boundary_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("generation cleanup finished before next command");
+        let (queued_reply, queued_response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply: queued_reply,
+                    })
+                    .is_ok()
+            })
+            .expect("start queued before retirement wins");
+        assert_eq!(
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok()),
+            None,
+            "generation cleanup already released the active binding"
+        );
+        release_boundary_tx
+            .send(())
+            .expect("resume production command loop");
+        assert_eq!(
+            queued_response.recv_timeout(Duration::from_secs(2)),
+            Ok(Err(IosVoiceSessionCommandError::Unavailable))
+        );
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+        assert_eq!(
+            started_rx.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected),
+            "no second capture was admitted"
+        );
+        assert!(!status.lock().expect("final status").active);
+    }
+
+    #[test]
+    fn production_command_loop_drains_on_channel_close_and_fails_closed() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let lifecycle = MobileSessionLifecycle::new();
+        let (channel_closed_tx, channel_closed_rx) = mpsc::channel();
+        lifecycle.set_unexpected_channel_close_hook(channel_closed_tx);
+        let control = AuroraIosCaptureControl::default();
+        let status = Arc::new(Mutex::new(IosVoiceSessionStatus::default()));
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker_status = Arc::clone(&status);
+        let worker_control = control.clone();
+        let worker_lifecycle = lifecycle.clone();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime(started_tx, stop_tx, release_rx);
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(
+                core,
+                command_rx,
+                worker_status,
+                worker_control,
+                worker_lifecycle,
+                false,
+            ));
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        let (reply, response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: IosVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("start admitted");
+        assert_eq!(
+            response.recv().expect("start reply").expect("generation"),
+            Generation(1)
+        );
+        started_rx.recv().expect("core capture started");
+        drop(commands);
+        stop_rx.recv().expect("core cleanup entered audio stop");
+        channel_closed_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("production loop retained ShutdownFailed after channel close");
+
+        let waker = Waker::from(Arc::new(CloseTestWake));
+        let mut context = Context::from_waker(&waker);
+        let mut wait = Box::pin(lifecycle.wait_closed());
+        assert!(matches!(wait.as_mut().poll(&mut context), Poll::Pending));
+        release_tx.send(()).expect("release actual core cleanup");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::ShutdownFailed)
+        );
+        assert!(matches!(
+            wait.as_mut().poll(&mut context),
+            Poll::Ready(Err(MobileSessionCloseError::ShutdownFailed))
+        ));
+        assert!(!status.lock().expect("status lock").active);
     }
 }

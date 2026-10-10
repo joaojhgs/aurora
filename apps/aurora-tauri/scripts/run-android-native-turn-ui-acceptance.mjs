@@ -14,6 +14,7 @@ const DEFAULTS = resolve(WORKSPACE_ROOT, 'app/services/config/config_defaults.js
 export const AUTHORIZED_NATIVE_ASSISTANT_METHOD = 'Orchestrator.ExternalUserInput'
 
 export function acceptanceEnvironment(environment = process.env) {
+  const mainFlowOnly = environment.AURORA_ANDROID_MAIN_FLOW_ONLY === '1'
   const required = ['AURORA_THREE_NODE_BROKER_URL']
   const missing = required.filter((key) => !environment[key])
   if (missing.length > 0) throw new Error(`Successful native turn acceptance requires authorized three-node configuration: ${missing.join(', ')}.`)
@@ -22,7 +23,7 @@ export function acceptanceEnvironment(environment = process.env) {
     AURORA_ANDROID_NATIVE_TURN_ACCEPTANCE: '1',
     AURORA_MODEL_FIXTURE_LABEL: 'deterministic OpenAI-compatible model fixture',
     AURORA_ANDROID_NATIVE_EVENT_BRIDGE_ACCEPTANCE: '1',
-    AURORA_ANDROID_NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE: '1',
+    AURORA_ANDROID_NATIVE_EVENT_BRIDGE_STALL_ACCEPTANCE: mainFlowOnly ? '0' : '1',
     AURORA_NATIVE_ASSISTANT_METHOD: AUTHORIZED_NATIVE_ASSISTANT_METHOD,
     LLM_PROVIDER: 'openai',
     OPENAI_MODEL: 'aurora-ui-acceptance-fixture',
@@ -239,7 +240,7 @@ export async function runAcceptance() {
     fixtureUrl = await readFixtureReady(fixture)
     const runEnvironment = {
       ...environment,
-      OPENAI_BASE_URL: fixtureUrl,
+      OPENAI_BASE_URL: `${fixtureUrl}/v1`,
     }
     const gatewayPort = await allocateLocalPort()
     const appId = `aurora-native-turn-${randomUUID().slice(0, 8)}`
@@ -268,7 +269,7 @@ export async function runAcceptance() {
         AURORA_DATA_DIR: configDir,
         AURORA_GATEWAY_API_KEYS: runEnvironment.AURORA_THREE_NODE_GATEWAY_API_KEY,
         AURORA_WEBRTC_PASSWORD: roomPassword,
-        OPENAI_BASE_URL: fixtureUrl,
+        OPENAI_BASE_URL: `${fixtureUrl}/v1`,
         PYTHONUNBUFFERED: '1',
       },
       stdio: 'inherit',
@@ -289,7 +290,18 @@ export async function runAcceptance() {
       completedText: fixtureCompletedText,
     })
     const request = {
-      post: async (url, options = {}) => await fetch(url, { method: 'POST', headers: options.headers, body: JSON.stringify(options.data ?? {}) }),
+      post: async (url, options = {}) => {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: options.headers,
+          body: JSON.stringify(options.data ?? {}),
+        })
+        return {
+          ok: () => response.ok,
+          status: () => response.status,
+          json: () => response.json(),
+        }
+      },
     }
     await runAndroidVoiceLiveSmoke({
       environment: runEnvironment,

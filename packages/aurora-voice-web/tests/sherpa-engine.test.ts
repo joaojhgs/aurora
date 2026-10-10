@@ -92,6 +92,72 @@ describe('AuroraSherpaWasmVoiceEngine', () => {
     ])
   })
 
+  it('decodes finite STT on a fresh offline stream and leaves capture stream available', async () => {
+    const calls: string[] = []
+    const recognizerRef: { current: FakeRecognizer | null } = { current: null }
+    const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: engineAssets(),
+      loadModule: async () => ({ FS_createDataFile: () => undefined }),
+      loadHelpers: async () => ({
+        createOfflineRecognizer: () => {
+          recognizerRef.current = new FakeRecognizer(calls)
+          return recognizerRef.current
+        }
+      })
+    })
+    const selectedBindings = bindings([
+      modelFile('stt', 'moonshine-encoder.ort', [1]),
+      modelFile('stt', 'moonshine-merged-decoder.ort', [2]),
+      modelFile('stt', 'moonshine-tokens.txt', [3])
+    ])
+    await engine.initialize({
+      ...selectedBindings,
+      models: selectedBindings.models.map((model) => model.task === 'stt' ? { ...model, config: { language: 'en' } } : model)
+    })
+
+    await expect(engine.transcribeSpeech({ generation: 11, pcm: new Int16Array([0, 32767, -32768]), language: 'en' })).resolves.toBe('hello')
+    expect(calls).toEqual([
+      'stream:accept:16000:3',
+      'stream:finished',
+      'recognizer:decode',
+      'recognizer:result',
+      'stream:free'
+    ])
+    await expect(engine.transcribeSpeech({ generation: 12, pcm: new Int16Array([1]), language: 'fr' }))
+      .rejects.toMatchObject({ code: 'unsupported_language' })
+    expect(recognizerRef.current?.streams).toHaveLength(2)
+    expect(recognizerRef.current?.streams[0]?.freed).toBe(false)
+    expect(recognizerRef.current?.streams[1]?.freed).toBe(true)
+    await engine.startSession()
+    await engine.stopSession()
+    engine.dispose()
+  })
+
+  it('suppresses finite STT output when its generation is cancelled during synchronous decode', async () => {
+    const calls: string[] = []
+    let cancel: () => void = () => undefined
+    const engine = new AuroraSherpaWasmVoiceEngine({
+      engineAssets: engineAssets(),
+      loadModule: async () => ({ FS_createDataFile: () => undefined }),
+      loadHelpers: async () => ({
+        createOfflineRecognizer: () => new FakeRecognizer(calls, () => cancel())
+      })
+    })
+    cancel = () => engine.cancelFiniteSttGeneration(23)
+    await engine.initialize(bindings([
+      modelFile('stt', 'moonshine-encoder.ort', [1]),
+      modelFile('stt', 'moonshine-merged-decoder.ort', [2]),
+      modelFile('stt', 'moonshine-tokens.txt', [3])
+    ]))
+
+    await expect(engine.transcribeSpeech({ generation: 23, pcm: new Int16Array([1]) }))
+      .rejects.toMatchObject({ code: 'stale_generation' })
+    expect(calls).toContain('recognizer:decode')
+    expect(calls).not.toContain('recognizer:result')
+    expect(calls.at(-1)).toBe('stream:free')
+    engine.dispose()
+  })
+
   it('fails closed when selected files are present but matching engine assets are missing', async () => {
     const engine = new AuroraSherpaWasmVoiceEngine()
 
@@ -509,10 +575,15 @@ class FakeVad {
 }
 
 class FakeRecognizer {
-  constructor(private readonly calls: string[]) {}
-  createStream(): FakeStream { return new FakeStream(this.calls) }
+  readonly streams: FakeStream[] = []
+  constructor(private readonly calls: string[], private readonly onDecode: () => void = () => undefined) {}
+  createStream(): FakeStream {
+    const stream = new FakeStream(this.calls)
+    this.streams.push(stream)
+    return stream
+  }
   isReady(): boolean { return !this.calls.includes('recognizer:decode') }
-  decode(): void { this.calls.push('recognizer:decode') }
+  decode(): void { this.calls.push('recognizer:decode'); this.onDecode() }
   getResult(): unknown { this.calls.push('recognizer:result'); return { text: 'hello' } }
   free(): void { this.calls.push('recognizer:free') }
 }
@@ -557,9 +628,10 @@ class FakeTts {
 }
 
 class FakeStream {
+  freed = false
   constructor(private readonly calls: string[]) {}
   acceptWaveform(sampleRate: number, samples: Float32Array): void { this.calls.push(`stream:accept:${sampleRate}:${samples.length}`) }
   inputFinished(): void { this.calls.push('stream:finished') }
   reset(): void { this.calls.push('stream:reset') }
-  free(): void { this.calls.push('stream:free') }
+  free(): void { this.freed = true; this.calls.push('stream:free') }
 }

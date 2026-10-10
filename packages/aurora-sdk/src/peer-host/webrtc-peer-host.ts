@@ -78,6 +78,7 @@ const LEGACY_MANIFEST_PROTOCOL = 'legacy-unfiltered-v0'
 const ACTIVE_VERSION = 'v1'
 const ACTIVE_TIER = 'projection'
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
+const SPEECH_HOST_METHOD_IDS = new Set(['Transcription.Transcribe', 'TTS.Synthesize'])
 const MAX_STALE_MANIFEST_ACK_RETRIES = 3
 const DEFAULT_MAX_EVENT_BYTES = 64 * 1024
 const MAX_SUBSCRIPTION_EVENT_QUEUE = 32
@@ -440,11 +441,16 @@ export class WebRtcPeerHost {
     const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs, state)
     const grantedMethodIds = new Set(authority.grantedMethodIds)
     const registryMethods = this.options.registry.list()
-    const registryDigest = digest({ services: manifestServices(registryMethods) })
+    const speechStageCapabilities = this.options.speechStageCapabilities?.() ?? []
+    const readySpeechMethodIds = new Set(speechStageCapabilities.flatMap(({ capability }) => capability.method_ids))
+    const advertisedMethods = registryMethods.filter((method) =>
+      !SPEECH_HOST_METHOD_IDS.has(method.methodId) || readySpeechMethodIds.has(method.methodId)
+    )
+    const registryDigest = digest({ services: manifestServices(advertisedMethods, speechStageCapabilities) })
     const registryRevision = registryDigest
     const policyDigest = digest({ recipient_peer_id: authority.recipientPeerId ?? '', granted_method_ids: sortedUnique(authority.grantedMethodIds) })
     const policyRevision = policyDigest
-    const methods = registryMethods.filter((method) => grantedMethodIds.has(method.methodId))
+    const methods = advertisedMethods.filter((method) => grantedMethodIds.has(method.methodId))
     const projectionReady = authority.authGrantState === 'active'
       && authority.authGrantRevision >= 1
       && typeof authority.recipientPeerId === 'string'
@@ -472,11 +478,11 @@ export class WebRtcPeerHost {
     }
     const effectivePermissions = sortedUnique([
       ...effectivePermissionsForMethods(
-        registryMethods.filter((method) => grantedMethodIds.has(method.methodId))
+        advertisedMethods.filter((method) => grantedMethodIds.has(method.methodId))
       ),
       ...(authority.grantedPermissions ?? [])
     ])
-    const sharedServices = manifestServices(methods)
+    const sharedServices = manifestServices(methods, speechStageCapabilities)
     const projectionDigest = digest({
       provider_peer_id: this.options.localPeerId,
       services: sharedServices.map((item) => withoutDigest(item))
@@ -1206,7 +1212,10 @@ function identityFromAuthority(context: AuthenticatedPeerContext | undefined, fr
   }
 }
 
-function manifestServices(methods: readonly PeerHostMethodDescriptor[]): Array<Record<string, unknown>> {
+function manifestServices(
+  methods: readonly PeerHostMethodDescriptor[],
+  speechStageCapabilities: readonly import('../mesh.js').MeshSpeechStageCapabilityExportV1[] = []
+): Array<Record<string, unknown>> {
   const byModule = new Map<string, PeerHostMethodDescriptor[]>()
   for (const method of methods) {
     const module = methodModule(method)
@@ -1216,12 +1225,13 @@ function manifestServices(methods: readonly PeerHostMethodDescriptor[]): Array<R
   }
   return [...byModule.entries()]
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .map(([module, serviceMethods]) => manifestService(module, serviceMethods))
+    .map(([module, serviceMethods]) => manifestService(module, serviceMethods, speechStageCapabilities))
 }
 
 function manifestService(
   module: string,
-  descriptors: readonly PeerHostMethodDescriptor[]
+  descriptors: readonly PeerHostMethodDescriptor[],
+  speechStageCapabilities: readonly import('../mesh.js').MeshSpeechStageCapabilityExportV1[] = []
 ): Record<string, unknown> {
   const methods = descriptors
     .map((method) => manifestMethod(method))
@@ -1257,7 +1267,15 @@ function manifestService(
     ),
     available_feature_ids: availableFeatureIds,
     methods,
-    max_concurrent: concurrencyLimits.length > 0 ? Math.min(...concurrencyLimits) : 10
+    max_concurrent: concurrencyLimits.length > 0 ? Math.min(...concurrencyLimits) : 10,
+    ...(() => {
+      const registeredMethods = new Set(descriptors.map((descriptor) => descriptor.methodId))
+      const exported = speechStageCapabilities.filter(({ capability }) =>
+        capability.readiness === 'ready' && capability.exported &&
+        capability.method_ids.length > 0 && capability.method_ids.every((methodId) => registeredMethods.has(methodId))
+      )
+      return exported.length > 0 ? { speech_stage_capabilities: exported } : {}
+    })()
   }
   return { ...service, digest: digest(service) }
 }

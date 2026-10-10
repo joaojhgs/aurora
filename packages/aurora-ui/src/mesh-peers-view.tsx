@@ -24,7 +24,8 @@ import {
   localShareableServiceScopes,
 } from './local-feature-sharing'
 import type { RouteAvailability } from './shell-data'
-import type { BrowserWebRtcPeerController, BrowserWebRtcSnapshot } from './web-thin-runtime'
+import { parseWebRtcInvite, type BrowserWebRtcPeerController, type BrowserWebRtcSnapshot } from './web-thin-runtime'
+import type { ThinConnectionProfile, ThinProfileDocument } from './thin-connection-profile'
 import { AuroraQueryProvider, useAuroraQueryScope, useAuroraQueryScopeKey } from './query'
 import { usePeerRoster } from './use-peer-roster'
 import {
@@ -208,6 +209,14 @@ export interface MeshPeersResourceProps {
   surfaceProfile?: AuroraSurfaceProfile
   /** Thin WebRTC peer state used by the normal Mesh pairing workflow. */
   thinPeer?: BrowserWebRtcPeerController
+  /** Native-owned saved profile writer; supplied only by the Tauri shell. */
+  nativeProfileController?: {
+    document: ThinProfileDocument
+    saveProfile: (
+      profile: ThinConnectionProfile,
+      roomSecret?: { roomSecretRef: string; roomSecret: string },
+    ) => Promise<ThinProfileDocument>
+  }
   /** Invite text handed off through a scrubbed fragment/deep-link handoff; never read from query params. */
   initialInviteText?: string | null
   /** Native QR scanner (mobile shells); resolves to the scanned text or null when cancelled. */
@@ -259,6 +268,7 @@ export interface MeshPeersViewProps {
   onApplyInvite?: (invite: JsonObject) => void
   inviteImport?: MeshInviteImportOperation
   canManageLocalServiceConfiguration?: boolean
+  canManageMeshInvites?: boolean
   thinPeerSnapshot?: BrowserWebRtcSnapshot | null
   thinPeerEvidence?: SelectedCandidatePairEvidence | null
   thinPeerMutationError?: string | null
@@ -328,6 +338,7 @@ function MeshPeersResourceContent({
   route,
   surfaceProfile,
   thinPeer,
+  nativeProfileController,
   initialInviteText: initialInviteTextProp = null,
   onScanQr,
   localFeatureSharing,
@@ -363,6 +374,18 @@ function MeshPeersResourceContent({
   const runningActions = useRef<Set<string>>(new Set<string>())
   const canManageLocalServiceConfiguration =
     resolvedSurface.canManageLocalServiceConfiguration
+  const activeNativeProfile = nativeProfileController?.document.profiles.find(
+    (profile) => profile.id === nativeProfileController?.document.activeProfileId,
+  )
+  const canWriteNativeMeshMembership = resolvedSurface.isAndroid
+    && resolvedSurface.nodeMode === 'mesh-node'
+    && resolvedSurface.runtimeTier === 'lightweight-ts'
+    && Boolean(thinPeer)
+    && typeof nativeProfileController?.saveProfile === 'function'
+    && Boolean(activeNativeProfile?.localStablePeerId)
+    && activeNativeProfile?.localStablePeerId === localNode?.peerId
+  const canManageMeshInvites = resolvedSurface.canManageMeshInvites === true
+    && (canManageLocalServiceConfiguration || canWriteNativeMeshMembership)
   const ownsLocalNodeState = resolvedSurface.ownsLocalNodeState
   const [resolvedSessionIsAdmin, setResolvedSessionIsAdmin] = useState(
     () => resolveSessionIsAdmin(sessionIsAdmin, client),
@@ -537,22 +560,45 @@ function MeshPeersResourceContent({
     async (invite: JsonObject) => {
       setInviteImport({ pending: true, error: null, appliedChangeCount: null })
       try {
-        const changes = meshInviteConfigChanges(invite)
-        if (changes.length > 0) {
-          await commitMeshConfigChangeSet(
-            client,
-            changes,
-            `Join mesh from invite for ${snapshot.localNodeName}`,
-            'Invite configuration was not valid for this device.',
-          )
+        if (canWriteNativeMeshMembership && nativeProfileController && activeNativeProfile) {
+          const inviteText = encodeMeshInviteUrl(invite)
+          const parsed = parseWebRtcInvite(inviteText, {
+            nodeName: activeNativeProfile.nodeName,
+          })
+          if (!parsed) throw new Error('This invitation is incomplete. Ask the sender for a new one.')
+          const profile: ThinConnectionProfile = {
+            ...activeNativeProfile,
+            mode: activeNativeProfile.gatewayUrl ? 'webrtc-preferred' : 'webrtc-only',
+            signalingUrl: parsed.profile.signalingBrokers[0] || '',
+            webrtcProfile: parsed.profile,
+          }
+          await nativeProfileController.saveProfile(profile, {
+            roomSecretRef: parsed.profile.roomSecretRef,
+            roomSecret: parsed.roomSecret,
+          })
+          setInviteImport({ pending: false, error: null, appliedChangeCount: 1 })
+          try {
+            await thinPeer?.connect(parsed.profile)
+          } catch (error) {
+            setThinPeerMutationError(meshPeerErrorMessage(error))
+          }
+          await loadPeers()
+          return
         }
+        const changes = meshInviteConfigChanges(invite)
+        if (changes.length > 0) await commitMeshConfigChangeSet(
+          client,
+          changes,
+          `Join mesh from invite for ${snapshot.localNodeName}`,
+          'Invite configuration was not valid for this device.',
+        )
         setInviteImport({ pending: false, error: null, appliedChangeCount: changes.length })
         await loadPeers()
       } catch (error) {
         setInviteImport({ pending: false, error: meshPeerErrorMessage(error), appliedChangeCount: null })
       }
     },
-    [client.config, loadPeers],
+    [activeNativeProfile, canWriteNativeMeshMembership, client, loadPeers, nativeProfileController, snapshot.localNodeName, thinPeer],
   )
 
   const saveScopes = useCallback(
@@ -682,6 +728,7 @@ function MeshPeersResourceContent({
       onRevokeTokenChange={setRevokeToken}
       onRefresh={loadPeers}
       canManageLocalServiceConfiguration={canManageLocalServiceConfiguration}
+      canManageMeshInvites={canManageMeshInvites}
       ownsLocalNodeState={ownsLocalNodeState}
       sessionIsAdmin={resolvedSessionIsAdmin}
       thinPeerSnapshot={thinPeerSnapshot}
@@ -699,9 +746,9 @@ function MeshPeersResourceContent({
       {...(canManageLocalServiceConfiguration
         ? {
             onConfigChange: runConfigChange,
-            onApplyInvite: applyInvite,
           }
         : {})}
+      {...(canManageMeshInvites ? { onApplyInvite: applyInvite } : {})}
       {...(!ownsLocalNodeState
         ? {
             onApprovePeer: (peer: MeshPeerRow) => runAction(peer, 'approve'),
@@ -736,6 +783,7 @@ export function MeshPeersView({
   configMutationError = null,
   inviteImport = idleInviteImport,
   canManageLocalServiceConfiguration = true,
+  canManageMeshInvites: canManageMeshInvitesProp,
   thinPeerSnapshot = null,
   thinPeerEvidence = null,
   thinPeerMutationError = null,
@@ -838,6 +886,15 @@ export function MeshPeersView({
     ? snapshot.liveSessions.find((session) => session.stablePeerId === detailsPeer.peerId) ?? null
     : null
   const controlsDisabled = route.disabled || snapshot.loadState === 'loading' || snapshot.loadState === 'denied'
+  const connectDisabled = snapshot.loadState === 'loading'
+    || snapshot.loadState === 'denied'
+    || (route.disabled && !(
+      surfaceProfile?.isAndroid === true
+      && surfaceProfile.nodeMode === 'mesh-node'
+      && surfaceProfile.runtimeTier === 'lightweight-ts'
+      && ownsLocalNodeState
+      && canManageMeshInvitesProp === true
+    ))
   const mutationDisabled = controlsDisabled || Boolean(pendingPeerId) || !['available-local', 'available-remote', 'degraded'].includes(snapshot.mutationState)
   const homeServerConfigLocked = meshHomeServerConfigLocked({ sessionIsAdmin, ownsLocalNodeState })
   const homeServerMutationsDisabled = mutationDisabled || homeServerConfigLocked
@@ -868,6 +925,9 @@ export function MeshPeersView({
       transportKind: snapshot.transportKind,
       userAgent: typeof navigator === 'undefined' ? undefined : navigator.userAgent,
     })
+  const canManageMeshInvites = canManageMeshInvitesProp
+    ?? resolvedSurface.canManageMeshInvites
+    ?? canManageLocalServiceConfiguration
 
   return (
     <div
@@ -890,14 +950,14 @@ export function MeshPeersView({
             <RefreshCw data-icon="inline-start" /> Refresh
           </Button>
           {canManageLocalServiceConfiguration ? (
-            <>
-              <Button type="button" variant="outline" onClick={() => setSettingsOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
-                <Settings2 data-icon="inline-start" /> Device network settings
-              </Button>
-              <Button type="button" onClick={() => setConnectOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
-                <RadioTower data-icon="inline-start" /> Connect device
-              </Button>
-            </>
+            <Button type="button" variant="outline" onClick={() => setSettingsOpen(true)} disabled={controlsDisabled && snapshot.config.fields.length === 0}>
+              <Settings2 data-icon="inline-start" /> Device network settings
+            </Button>
+          ) : null}
+          {canManageMeshInvites ? (
+            <Button type="button" onClick={() => setConnectOpen(true)} disabled={connectDisabled}>
+              <RadioTower data-icon="inline-start" /> Connect device
+            </Button>
           ) : null}
         </div>
       </div>
@@ -1036,11 +1096,11 @@ export function MeshPeersView({
         onApprovePeer={onApprovePeer}
         onDenyPeer={onDenyPeer}
       />
+      {canManageMeshInvites ? (
+        <ConnectPeerDialog open={connectOpen} inviteUrl={inviteUrl} inviteReadiness={inviteReadiness} inviteImport={inviteImport} initialInviteText={initialInviteText} onScanQr={onScanQr} onApplyInvite={onApplyInvite} onOpenChange={setConnectOpen} />
+      ) : null}
       {canManageLocalServiceConfiguration ? (
-        <>
-          <ConnectPeerDialog open={connectOpen} inviteUrl={inviteUrl} inviteReadiness={inviteReadiness} inviteImport={inviteImport} initialInviteText={initialInviteText} onScanQr={onScanQr} onApplyInvite={onApplyInvite} onOpenChange={setConnectOpen} />
-          <MeshSettingsDialog open={settingsOpen} snapshot={snapshot} disabled={controlsDisabled} pendingKey={configPendingKey} mutationError={configMutationError} onConfigChange={onConfigChange} onOpenChange={setSettingsOpen} />
-        </>
+        <MeshSettingsDialog open={settingsOpen} snapshot={snapshot} disabled={controlsDisabled} pendingKey={configPendingKey} mutationError={configMutationError} onConfigChange={onConfigChange} onOpenChange={setSettingsOpen} />
       ) : null}
       <ThinPeerPairingDialog
         snapshot={thinPairingSnapshot}

@@ -173,6 +173,27 @@ describe('useAssistantTts lifecycle', () => {
     expect(fakeAudioInstances).toHaveLength(0)
   })
 
+  it('uses the selected connected-device route instead of local browser speech', async () => {
+    const client = assistantClient()
+    const browserVoiceRuntime = vi.fn(async () => ({ synthesizeSpeech: vi.fn(async () => ttsAudio()) }))
+    const harness = await renderTtsHarness({
+      client,
+      browserLocalTtsVoiceId: 'local-voice',
+      browserVoiceRuntime,
+      resolveReadAloudRoutePolicy: () => ({ ...routePolicy(), peerId: 'peer-a', providerId: 'remote:peer-a:tts' }),
+    })
+
+    await act(async () => {
+      await harness.result.readAssistantMessageAloud(assistantMessage('assistant-remote-read', 'Read this aloud.'))
+      await flushPromises()
+    })
+
+    expect(client.assistant.synthesizeReadAloud).toHaveBeenCalledWith(expect.objectContaining({
+      routePolicy: expect.objectContaining({ peerId: 'peer-a', providerId: 'remote:peer-a:tts' }),
+    }))
+    expect(browserVoiceRuntime).not.toHaveBeenCalled()
+  })
+
   it('uses the TTS playback cancellation scope when the user stops the same read-aloud message', async () => {
     const speechCancel = vi.fn()
     Object.defineProperty(window, 'speechSynthesis', { configurable: true, value: { cancel: speechCancel, speak: vi.fn() } })

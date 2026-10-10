@@ -160,12 +160,18 @@ export function useAssistantTts({
       await stopReadAloud('user_interrupt')
       return
     }
-    const routePolicy = resolveReadAloudRoutePolicy()
-    if (!routePolicy) return
     setLastError(null)
     setSpeakingMessageId(message.id)
     lastAssistantMessageIdRef.current = message.id
+    let routePolicy: AssistantRoutePolicy | null = null
+    let routeResolved = false
     try {
+      routePolicy = resolveReadAloudRoutePolicy()
+      routeResolved = true
+      if (!routePolicy) {
+        setSpeakingMessageId(null)
+        return
+      }
       if (usesLocalSidecar) {
         const result = await client.assistant.requestReadAloud({
           text: speakableText,
@@ -176,7 +182,7 @@ export function useAssistantTts({
         setStreamState((current) => ({ ...current, message: 'Reading assistant response through Aurora TTS.' }))
         return
       }
-      if (browserLocalTtsVoiceId) {
+      if (browserLocalTtsVoiceId && !routePolicy.peerId) {
         await synthesizeBrowserReadAloud(speakableText, message.id)
         setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
         return
@@ -194,7 +200,7 @@ export function useAssistantTts({
       }
       setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
     } catch (error) {
-      if (browserReadAloud(speakableText, message.id)) {
+      if (routeResolved && !routePolicy?.peerId && browserReadAloud(speakableText, message.id)) {
         setStreamState((current) => ({ ...current, message: 'Aurora is reading this response on this device.' }))
         return
       }

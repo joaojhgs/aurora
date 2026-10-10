@@ -40,7 +40,7 @@ import {
   toVoiceRow,
 } from './voice-settings-managed-voice-model'
 import { surfaceCanConfigureBackgroundWake, type AuroraSurfaceProfile } from './platform-surface'
-import { AuroraQueryProvider, useAuroraQueryScope, useAuroraQueryScopeKey } from './query'
+import { AuroraQueryProvider, useAuroraQueryScope, useAuroraQueryScopeKey, useAuroraStateScopeId } from './query'
 import {
   AUTO_LOCAL_VOICE_LANGUAGE,
   DEFAULT_LOCAL_PRIMARY_LANGUAGE,
@@ -53,6 +53,7 @@ import {
 import type { AuroraLocalSpeechCatalogPort } from './browser-speech-pack'
 import { useSpeechCatalog } from './use-speech-catalog'
 import { actionKeyFor, useVoiceSettingsOperations } from './use-voice-settings-operations'
+import { useNativeSpeechPolicy } from './native-speech-policy'
 
 
 type VoiceScopeToken = { scopeKey: string; generation: number; mounted: boolean }
@@ -95,6 +96,7 @@ function VoiceSettingsViewInner({
   const [speechLanguage, setSpeechLanguage] = useState<string | null>(null)
   const [voiceLanguage, setVoiceLanguage] = useState<string | null>(null)
   const voiceQueryScopeKey = JSON.stringify(useAuroraQueryScopeKey())
+  const nativeSpeechPolicyScopeId = useAuroraStateScopeId()
   const activeVoiceScopeRef = useRef({ scopeKey: voiceQueryScopeKey, generation: 0, mounted: true })
   if (activeVoiceScopeRef.current.scopeKey !== voiceQueryScopeKey) {
     activeVoiceScopeRef.current = {
@@ -149,6 +151,7 @@ function VoiceSettingsViewInner({
     adminReasonValue,
     adminReviewConfirmed,
   })
+  const nativeSpeechPolicy = useNativeSpeechPolicy(surfaceProfile, nativeSpeechPolicyScopeId)
 
   const {
     actionPending,
@@ -580,6 +583,16 @@ function VoiceSettingsViewInner({
           referenceEditor={referenceEditor}
           pendingReferenceEditorKey={referenceEditor && pendingActionKey === localSpeechActionKey(referenceEditor) ? pendingActionKey : null}
           localSpeechCatalog={localSpeechCatalog}
+          nativeSpeechPolicyState={nativeSpeechPolicy.state}
+          nativeSpeechPolicyMessage={nativeSpeechPolicy.message}
+          nativeSttRoutingChoice={nativeSpeechPolicy.sttChoice}
+          nativeTtsRoutingChoice={nativeSpeechPolicy.ttsChoice}
+          onNativeSpeechRoutingChange={nativeSpeechPolicy.changeChoice}
+          onSaveNativeSpeechRouting={nativeSpeechPolicy.save}
+          backgroundTranscription={nativeSpeechPolicy.backgroundTranscription}
+          backgroundTranscriptionStatus={nativeSpeechPolicy.backgroundTranscriptionStatus}
+          onBackgroundTranscriptionChange={nativeSpeechPolicy.changeBackgroundTranscription}
+          onRequestTranscriptionMicrophonePermission={() => void nativeSpeechPolicy.requestMicrophonePermission()}
           referenceFileInputRef={referenceFileInputRef}
           SearchableChoice={SearchableChoice}
           onChoosePrimaryLanguage={choosePrimaryLanguage}

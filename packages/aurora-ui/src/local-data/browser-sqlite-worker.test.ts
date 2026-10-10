@@ -13,7 +13,9 @@ import {
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalDataRepositories,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord
 } from '@aurora/client/local-data'
 
 import {
@@ -80,6 +82,15 @@ describe('browser sqlite worker protocol guardrails', () => {
       ])
       expect(executeForTest(state, { kind: 'conversations.listMessages', conversationId: 'conversation-a', options: { direction: 'desc', beforeSequence: 3 } })).toMatchObject([{ id: 'm-z' }, { id: 'm-a' }])
       expect(executeForTest(state, { kind: 'conversations.listMessageCounts', conversationIds: [] })).toEqual({})
+
+      const archive = transcriptSessionFixture()
+      const segment = transcriptSegmentFixture()
+      expect(executeForTest(state, { kind: 'transcripts.createSession', record: archive })).toEqual(archive)
+      expect(executeForTest(state, { kind: 'transcripts.appendSegment', record: segment })).toEqual({ appended: true, record: segment })
+      expect(executeForTest(state, { kind: 'transcripts.finalizeSession', input: { sessionId: archive.id, lifecycle: 'completed', endedAtMs: 1200, terminalReason: 'finished' } })).toMatchObject({ lifecycle: 'completed' })
+      expect(executeForTest(state, { kind: 'transcripts.appendSegment', record: segment })).toEqual({ appended: false, record: segment })
+      expect(() => executeForTest(state, { kind: 'transcripts.appendSegment', record: transcriptSegmentFixture({ id: 'segment-2', sequence: 1 }) })).toThrow()
+      expect(executeForTest(state, { kind: 'transcripts.listSegments', sessionId: archive.id })).toEqual([segment])
     } finally {
       db.close()
     }
@@ -180,7 +191,9 @@ describe('browser sqlite worker protocol guardrails', () => {
             memoryItems: [],
             localToolStates: [],
             peerGrantMetadata: [],
-            localAudit: []
+            localAudit: [],
+            transcriptSessions: [],
+            transcriptSegments: []
           }
         })
       },
@@ -276,7 +289,9 @@ describe('browser sqlite worker protocol guardrails', () => {
             memoryItems: [memoryFixture({ profileId: 'profile-2' })],
             localToolStates: [],
             peerGrantMetadata: [],
-            localAudit: []
+            localAudit: [],
+            transcriptSessions: [],
+            transcriptSegments: []
           }
         })
       },
@@ -694,7 +709,9 @@ function largeTransferDocument() {
         id: `audit-large-${index}`,
         redactedDetailJson: { note: 'A'.repeat(60 * 1024) },
         createdAtMs: 2000 + index
-      }))
+      })),
+      transcriptSessions: [],
+      transcriptSegments: []
     }
   })
 }
@@ -759,11 +776,29 @@ function stateWithRows(records: SnapshotSqliteState['records']): SnapshotSqliteS
       aurora_memory_items: ['id', 'profile_id', 'local_node_id'],
       aurora_local_tool_state: ['profile_id', 'local_node_id', 'tool_contract_id'],
       aurora_peer_grant_metadata: ['grant_id', 'profile_id', 'local_node_id'],
-      aurora_local_audit: ['id', 'profile_id', 'local_node_id']
+      aurora_local_audit: ['id', 'profile_id', 'local_node_id'],
+      aurora_transcript_sessions: ['id', 'profile_id', 'local_node_id', 'lifecycle'],
+      aurora_transcript_segments: ['id', 'session_id', 'sequence']
     },
     ledger: [],
     identity: { singleton_id: 1, local_node_id: 'node-1', created_at_ms: 1000 },
     records
+  }
+}
+
+function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-1', profileId: 'profile-1', localNodeId: 'node-1', captureMode: 'ambient',
+    createdAtMs: 1000, startedAtMs: 1000, endedAtMs: null, lifecycle: 'active', terminalReason: null,
+    expiresAtMs: 86_401_000, language: 'en', modelProvenance: { provider: 'local', modelId: 'stt-small', version: null },
+    diarizationState: 'not_requested', ...overrides
+  }
+}
+
+function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'segment-1', sessionId: 'transcript-1', sequence: 0, startAtMs: 1001, endAtMs: 1100,
+    textEnvelope: envelopeFixture, confidence: 0.9, speakerId: null, speakerLabel: null, createdAtMs: 1100, ...overrides
   }
 }
 

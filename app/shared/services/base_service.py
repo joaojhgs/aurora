@@ -13,14 +13,18 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 import uuid
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warning
 from app.shared.messaging.bus_init import get_bus_singleton
+
+if TYPE_CHECKING:
+    from app.shared.contracts.models.speech_runtime import SpeechStageCapabilityExportV1
 
 
 class ContractSubscriptionError(RuntimeError):
@@ -53,7 +57,20 @@ class BaseService(ABC):
         self._config_change_subscription: tuple[str, Any] | None = None
         self._contract_subscriptions: list[tuple[str, Any]] = []
         self._runtime_state = "created"
+        self._runtime_generation = 0
         self._started = False
+        self._runtime_transition_lock = asyncio.Lock()
+        self._runtime_transition_task: asyncio.Task | None = None
+        self._runtime_transition_kind: str | None = None
+        self._runtime_transition_tasks: set[asyncio.Task] = set()
+        self._runtime_owner_token: object | None = None
+        self._runtime_owner_task: asyncio.Task | None = None
+        self._runtime_retiring = False
+        self._runtime_retirement_generation: int | None = None
+        self._runtime_retirement_kind: str | None = None
+        self._runtime_resources_retired = True
+        self._runtime_resource_generation: int | None = None
+        self._enabled_event_sequence = 0
 
         # Unique instance ID for this service instance (for multiple instances)
         self._instance_id = str(uuid.uuid4())[:8]
@@ -142,71 +159,15 @@ class BaseService(ABC):
         3. Activates the service if its enabled path is true
         4. Leaves the service inactive, but alive, if disabled by config
         """
-        if self._started:
-            return
-
-        # Ensure bus is initialized
-        _ = self.bus
-
-        self._runtime_state = "starting"
-        self._set_started(True)
-        try:
-            await self._subscribe_to_config_changes()
-        except Exception:
-            self._set_started(False)
-            self._runtime_state = "inactive"
-            raise
-
-        if await self._is_runtime_enabled():
-            await self.activate(reason="startup")
-        else:
-            # Infrastructure sinks (always_available contracts) stay reachable so
-            # other services don't dead-letter into a lifecycle-disabled module.
-            await self._subscribe_registered_contracts(only_always_available=True)
-            self._runtime_state = "inactive"
-            log_info(f"{self.module} inactive because its enabled config is false")
+        await self._request_runtime_transition("start", reason="startup")
 
     async def activate(self, reason: str = "config_enabled") -> None:
         """Activate this service's runtime contract surface."""
-        if self._runtime_state == "active":
-            return
-
-        self._runtime_state = "starting"
-        try:
-            await self._subscribe_registered_contracts()
-            await self.on_start()
-        except Exception:
-            self._unsubscribe_registered_contracts()
-            self._runtime_state = "failed"
-            self._set_started(False)
-            raise
-
-        self._set_started(True)
-        self._runtime_state = "active"
-        log_info(f"{self.module} active ({reason})")
-
-        await self._publish_service_announcement()
-        self._start_gateway_announcement_loop()
+        await self._request_runtime_transition("activate", reason=reason)
 
     async def deactivate(self, reason: str = "config_disabled") -> None:
         """Deactivate this service without exiting the hosting process/container."""
-        if self._runtime_state != "active":
-            if self._started:
-                self._runtime_state = "inactive"
-            return
-
-        self._runtime_state = "stopping"
-        self._stop_gateway_announcement_loop()
-        await self._publish_service_departure(reason=reason)
-        self._unsubscribe_registered_contracts()
-        try:
-            await self.on_deactivate()
-        except Exception as e:
-            log_error(f"{self.module} deactivation hook failed: {e}", exc_info=True)
-        await self._subscribe_registered_contracts(only_always_available=True)
-        self._set_started(True)
-        self._runtime_state = "inactive"
-        log_info(f"{self.module} inactive ({reason})")
+        await self._request_runtime_transition("deactivate", reason=reason)
 
     async def stop(self) -> None:
         """Stop the service.
@@ -216,29 +177,422 @@ class BaseService(ABC):
         2. Unsubscribes config listeners
         3. Marks the service process lifecycle stopped
         """
-        if not self._started:
+        await self._request_runtime_transition("stop", reason="shutdown")
+
+    def _assert_not_lifecycle_reentry(self) -> None:
+        if (
+            self._runtime_owner_token is not None
+            and asyncio.current_task() is self._runtime_owner_task
+        ):
+            raise RuntimeError("reentrant lifecycle transition")
+
+    async def _request_runtime_transition(self, kind: str, *, reason: str) -> None:
+        """Reserve and await one serialized, cancellation-resistant lifecycle intent."""
+        self._assert_not_lifecycle_reentry()
+        task = self._runtime_transition_task
+        if task is not None and not task.done() and self._runtime_transition_kind == kind:
+            await asyncio.shield(task)
             return
 
-        if self._runtime_state == "active":
-            await self.deactivate(reason="shutdown")
+        pending = task is not None and not task.done()
+        if not pending and self._lifecycle_intent_satisfied(kind):
+            return
+
+        self._runtime_generation += 1
+        generation = self._runtime_generation
+        if kind in ("deactivate", "stop"):
+            self._runtime_retirement_generation = generation
+            self._runtime_retirement_kind = kind
+        self._runtime_transition_kind = kind
+        task = asyncio.create_task(self._run_runtime_transition(kind, reason, generation))
+        self._runtime_transition_task = task
+        self._runtime_transition_tasks.add(task)
+
+        def observe_completion(done_task: asyncio.Task) -> None:
+            if not done_task.cancelled():
+                with contextlib.suppress(BaseException):
+                    done_task.exception()
+            self._runtime_transition_tasks.discard(done_task)
+            if self._runtime_transition_task is done_task:
+                self._runtime_transition_task = None
+                self._runtime_transition_kind = None
+
+        task.add_done_callback(observe_completion)
+        await asyncio.shield(task)
+
+    def _lifecycle_intent_satisfied(self, kind: str) -> bool:
+        if kind == "start":
+            return (
+                self._started
+                and self._runtime_state in ("active", "inactive")
+                and self._runtime_retirement_generation is None
+                and not self._runtime_retiring
+                and (self._runtime_state == "active" or self._runtime_resources_retired)
+            )
+        if kind == "activate":
+            return (
+                self._runtime_state == "active"
+                and not self._runtime_retiring
+                and self._runtime_retirement_generation is None
+            )
+        if kind == "deactivate":
+            return (
+                self._runtime_state in ("created", "inactive", "stopped")
+                and self._runtime_retirement_generation is None
+                and self._runtime_resources_retired
+            )
+        return (
+            self._runtime_state in ("created", "stopped")
+            and not self._started
+            and self._runtime_resources_retired
+        )
+
+    async def _run_runtime_transition(self, kind: str, reason: str, generation: int) -> None:
+        async with self._runtime_transition_lock:
+            owner = object()
+            self._runtime_owner_token = owner
+            self._runtime_owner_task = asyncio.current_task()
+            try:
+                if generation != self._runtime_generation:
+                    return
+                if kind in ("start", "activate") and (
+                    self._runtime_retirement_generation is not None
+                    or self._runtime_retiring
+                    or not self._runtime_resources_retired
+                ):
+                    await self._retire_for_superseding_intent_locked(
+                        generation, "superseded_lifecycle_intent"
+                    )
+                    if not self._runtime_resources_retired:
+                        if generation == self._runtime_generation:
+                            self._runtime_state = "failed"
+                            self._set_started(False)
+                        raise RuntimeError("previous runtime resources could not be retired")
+                if kind == "start":
+                    await self._start_locked(generation)
+                elif kind == "activate":
+                    await self._activate_locked(generation, reason)
+                elif kind == "deactivate":
+                    await self._deactivate_locked(generation, reason)
+                else:
+                    await self._stop_locked(generation, reason)
+            finally:
+                self._runtime_owner_token = None
+                self._runtime_owner_task = None
+
+    async def _retire_for_superseding_intent_locked(self, generation: int, reason: str) -> None:
+        """Finish retiring an older resource owner before a newer activation can run."""
+        self._runtime_retiring = True
+        owner_generation = self._runtime_resource_generation
+        if self._runtime_state == "active" and not self._runtime_resources_retired:
+            await self._deactivate_locked(
+                owner_generation if owner_generation is not None else generation,
+                reason,
+                allow_always_available=False,
+            )
+        elif not self._runtime_resources_retired:
+            self._unsubscribe_registered_contracts()
+            try:
+                await self.on_stop()
+            except Exception as exc:
+                log_error(f"{self.module} retired startup cleanup failed: {exc}", exc_info=True)
+            else:
+                self._runtime_resources_retired = True
+                self._runtime_resource_generation = None
+        if not self._runtime_resources_retired:
+            raise RuntimeError("previous runtime resources could not be retired")
+
+        # Cleanup may have yielded while a newer intent was accepted. The
+        # cleanup result is still valid, but only its current owner may write
+        # terminal lifecycle state or clear the newer retirement reservation.
+        if generation != self._runtime_generation:
+            return
+
+        retirement_kind = self._runtime_retirement_kind
+        if retirement_kind == "stop":
+            self._runtime_state = "stopped"
+            self._set_started(False)
+        elif self._runtime_state in ("active", "stopping"):
+            self._runtime_state = "inactive"
+            self._set_started(True)
+        if self._runtime_retirement_generation is not None and (
+            self._runtime_retirement_generation <= generation
+        ):
+            self._runtime_retirement_generation = None
+            self._runtime_retirement_kind = None
+        if generation == self._runtime_generation and self._runtime_retirement_generation is None:
+            self._runtime_retiring = False
+
+    async def _start_locked(self, generation: int) -> None:
+        if generation != self._runtime_generation:
+            return
+        _ = self.bus
+        self._runtime_state = "starting"
+        self._set_started(True)
+        try:
+            await self._subscribe_to_config_changes()
+        except Exception:
+            if generation == self._runtime_generation:
+                self._unsubscribe_from_config_changes()
+                self._set_started(False)
+                self._runtime_state = "inactive"
+            raise
+        if generation != self._runtime_generation:
+            return
+        enabled = await self._is_runtime_enabled()
+        if generation != self._runtime_generation:
+            return
+        if enabled:
+            await self._activate_locked(generation, "startup")
+            return
+        try:
+            await self._subscribe_registered_contracts(only_always_available=True)
+        except Exception:
+            if generation == self._runtime_generation:
+                self._unsubscribe_registered_contracts()
+                self._unsubscribe_from_config_changes()
+                self._set_started(False)
+                self._runtime_state = "failed"
+            raise
+        if generation != self._runtime_generation:
+            self._unsubscribe_registered_contracts()
+            return
+        self._runtime_state = "inactive"
+        log_info(f"{self.module} inactive because its enabled config is false")
+
+    async def _activate_locked(self, generation: int, reason: str) -> None:
+        if generation != self._runtime_generation:
+            return
+        if (
+            self._runtime_state == "active"
+            and not self._runtime_retirement_pending()
+            and not self._runtime_retiring
+            and not self._runtime_resources_retired
+        ):
+            return
+        self._runtime_state = "starting"
+        self._set_started(True)
+        attempted_start = False
+        try:
+            await self._subscribe_registered_contracts()
+            if generation != self._runtime_generation:
+                self._unsubscribe_registered_contracts()
+                return
+            attempted_start = True
+            self._runtime_resources_retired = False
+            self._runtime_resource_generation = generation
+            await self.on_start()
+        except BaseException:
+            self._unsubscribe_registered_contracts()
+            self._runtime_retiring = attempted_start
+            if attempted_start:
+                try:
+                    await self.on_stop()
+                except Exception as cleanup_exc:
+                    log_error(
+                        f"{self.module} failed startup cleanup failed: {cleanup_exc}",
+                        exc_info=True,
+                    )
+                else:
+                    self._runtime_resources_retired = True
+                    self._runtime_resource_generation = None
+                finally:
+                    if (
+                        generation == self._runtime_generation
+                        and self._runtime_retirement_generation is None
+                    ):
+                        self._runtime_retiring = False
+            if generation == self._runtime_generation:
+                self._runtime_state = "failed"
+                self._set_started(False)
+            raise
+        if generation != self._runtime_generation:
+            self._unsubscribe_registered_contracts()
+            if attempted_start:
+                self._runtime_retiring = True
+                try:
+                    await self.on_stop()
+                except Exception as exc:
+                    log_error(f"{self.module} retired startup cleanup failed: {exc}", exc_info=True)
+                else:
+                    self._runtime_resources_retired = True
+                    self._runtime_resource_generation = None
+                finally:
+                    if (
+                        generation == self._runtime_generation
+                        and self._runtime_retirement_generation is None
+                    ):
+                        self._runtime_retiring = False
+            return
+        self._set_started(True)
+        self._runtime_state = "active"
+        self._runtime_resource_generation = generation
+        log_info(f"{self.module} active ({reason})")
+        await self._publish_service_announcement(runtime_generation=generation)
+        if generation == self._runtime_generation and self._runtime_state == "active":
+            self._start_gateway_announcement_loop(generation)
+        elif generation != self._runtime_generation:
+            # An activation superseded while publishing still owns the active
+            # resources until this serialized cleanup finishes.
+            self._runtime_retiring = True
+            await self._deactivate_locked(
+                generation, "superseded_activation", allow_always_available=False
+            )
+
+    async def _deactivate_locked(
+        self,
+        generation: int,
+        reason: str,
+        *,
+        allow_always_available: bool = True,
+    ) -> None:
+        self._runtime_retiring = True
+        was_started = self._started
+        if self._runtime_state != "active":
+            if not self._runtime_resources_retired:
+                self._unsubscribe_registered_contracts()
+                try:
+                    await self.on_stop()
+                except Exception as exc:
+                    log_error(f"{self.module} retired startup cleanup failed: {exc}", exc_info=True)
+                else:
+                    self._runtime_resources_retired = True
+                    self._runtime_resource_generation = None
+            if (
+                allow_always_available
+                and generation == self._runtime_generation
+                and self._started
+                and self._runtime_state not in ("created", "stopped")
+            ):
+                await self._subscribe_registered_contracts(only_always_available=True)
+                if generation != self._runtime_generation:
+                    self._unsubscribe_registered_contracts()
+                    return
+            if generation == self._runtime_generation:
+                self._set_started(was_started)
+                self._runtime_state = "inactive"
+                if (
+                    self._runtime_retirement_generation == generation
+                    and self._runtime_retirement_kind == "deactivate"
+                ):
+                    self._runtime_retirement_generation = None
+                    self._runtime_retirement_kind = None
+                if self._runtime_retirement_generation is None:
+                    self._runtime_retiring = False
+            return
+        resource_generation = self._runtime_resource_generation
+        if generation == self._runtime_generation:
+            self._runtime_state = "stopping"
+        self._stop_gateway_announcement_loop()
+        await self._publish_service_departure(reason=reason)
+        self._unsubscribe_registered_contracts()
+        cleanup_succeeded = True
+        try:
+            await self.on_deactivate()
+        except Exception as e:
+            cleanup_succeeded = False
+            log_error(f"{self.module} deactivation hook failed: {e}", exc_info=True)
+        self._runtime_resources_retired = cleanup_succeeded
+        if cleanup_succeeded and self._runtime_resource_generation == resource_generation:
+            self._runtime_resource_generation = None
+        if (
+            allow_always_available
+            and generation == self._runtime_generation
+            and self._runtime_transition_kind == "deactivate"
+            and was_started
+        ):
+            await self._subscribe_registered_contracts(only_always_available=True)
+            if generation != self._runtime_generation:
+                self._unsubscribe_registered_contracts()
+                return
+        if generation == self._runtime_generation:
+            self._set_started(True)
+            self._runtime_state = "inactive"
+            if (
+                self._runtime_retirement_generation == generation
+                and self._runtime_retirement_kind == "deactivate"
+            ):
+                self._runtime_retirement_generation = None
+                self._runtime_retirement_kind = None
+            if self._runtime_retirement_generation is None:
+                self._runtime_retiring = False
+            log_info(f"{self.module} inactive ({reason})")
+
+    async def _stop_locked(self, generation: int, reason: str) -> None:
+        if not self._started and self._runtime_state in ("created", "stopped"):
+            if generation == self._runtime_generation:
+                self._runtime_retirement_generation = None
+                self._runtime_retirement_kind = None
+                self._runtime_retiring = False
+            return
+        self._runtime_retiring = True
+        if self._runtime_state == "active" and not self._runtime_resources_retired:
+            await self._deactivate_locked(generation, reason, allow_always_available=False)
+            if generation != self._runtime_generation:
+                return
         elif self._runtime_state in ("created", "starting", "failed"):
-            await self.on_stop()
+            if not self._runtime_resources_retired:
+                self._unsubscribe_registered_contracts()
+                try:
+                    await self.on_stop()
+                except Exception:
+                    if generation == self._runtime_generation:
+                        self._runtime_state = "failed"
+                        self._set_started(False)
+                    raise
+                else:
+                    self._runtime_resources_retired = True
+                    self._runtime_resource_generation = None
         else:
             self._stop_gateway_announcement_loop()
             self._unsubscribe_registered_contracts()
-
+        if generation != self._runtime_generation:
+            return
+        if not self._runtime_resources_retired:
+            self._unsubscribe_registered_contracts()
+            try:
+                await self.on_stop()
+            except Exception:
+                if generation == self._runtime_generation:
+                    self._runtime_state = "failed"
+                    self._set_started(False)
+                raise
+            else:
+                self._runtime_resources_retired = True
+                self._runtime_resource_generation = None
+        self._unsubscribe_registered_contracts()
+        if generation != self._runtime_generation:
+            return
         self._unsubscribe_from_config_changes()
         self._runtime_state = "stopped"
         self._set_started(False)
+        self._runtime_retiring = False
+        self._runtime_retirement_generation = None
+        self._runtime_retirement_kind = None
         log_info(f"{self.module} stopped")
 
-    def _start_gateway_announcement_loop(self) -> None:
+    def _runtime_retirement_pending(self) -> bool:
+        """Whether runtime resources are being retired or a retirement is queued."""
+        return bool(
+            self._runtime_retiring
+            or self._runtime_retirement_generation is not None
+            or self._runtime_state in ("stopping", "stopped")
+            or (
+                self._runtime_state not in ("active", "starting")
+                and not self._runtime_resources_retired
+            )
+        )
+
+    def _start_gateway_announcement_loop(self, runtime_generation: int | None = None) -> None:
         """Periodically re-announce service metadata for gateway restarts."""
         if not self._announce_to_gateway or self.module == "Gateway":
             return
         if self._gateway_announcement_task and not self._gateway_announcement_task.done():
             return
-        self._gateway_announcement_task = asyncio.create_task(self._gateway_announcement_loop())
+        generation = self._runtime_generation if runtime_generation is None else runtime_generation
+        self._gateway_announcement_task = asyncio.create_task(
+            self._gateway_announcement_loop(generation)
+        )
 
     def _stop_gateway_announcement_loop(self) -> None:
         """Stop the periodic gateway announcement task."""
@@ -246,12 +600,14 @@ class BaseService(ABC):
             self._gateway_announcement_task.cancel()
             self._gateway_announcement_task = None
 
-    async def _gateway_announcement_loop(self) -> None:
+    async def _gateway_announcement_loop(self, runtime_generation: int) -> None:
         """Keep service discovery warm when Gateway restarts independently."""
         try:
-            while self._runtime_state == "active":
+            while (
+                self._runtime_state == "active" and self._runtime_generation == runtime_generation
+            ):
                 await asyncio.sleep(30)
-                await self._publish_service_announcement()
+                await self._publish_service_announcement(runtime_generation=runtime_generation)
         except asyncio.CancelledError:
             pass
 
@@ -396,7 +752,18 @@ class BaseService(ABC):
 
         enabled_path = self._enabled_config_path()
         if enabled_path and self._event_matches_enabled_path(event.key_path, enabled_path):
+            self._enabled_event_sequence += 1
+            event_sequence = self._enabled_event_sequence
+            runtime_generation = self._runtime_generation
             enabled = await self._is_runtime_enabled()
+            if (
+                event_sequence != self._enabled_event_sequence
+                or runtime_generation != self._runtime_generation
+                or not self._started
+                or self._runtime_state in ("stopping", "stopped")
+                or self._runtime_retirement_pending()
+            ):
+                return
             if enabled:
                 await self.activate(reason="config_enabled")
             else:
@@ -995,13 +1362,31 @@ class BaseService(ABC):
     # Gateway Announcement Protocol
     # =========================================================================
 
-    async def _publish_service_announcement(self) -> None:
+    async def _speech_stage_capabilities_for_announcement(
+        self,
+    ) -> list[SpeechStageCapabilityExportV1]:
+        """Return this service's current runtime-owned speech-stage exports.
+
+        Static service contracts do not prove that a speech model or voice is
+        ready. Speech services may override this hook to expose a detached
+        control-plane projection after their runtime has started.
+        """
+        return []
+
+    async def _publish_service_announcement(self, *, runtime_generation: int | None = None) -> None:
         """Announce this service to the gateway for discovery.
 
         Called automatically after on_start() completes.
         Publishes service metadata including all exposed methods.
         """
-        if not self._announce_to_gateway or self._runtime_state != "active":
+        expected_generation = (
+            self._runtime_generation if runtime_generation is None else runtime_generation
+        )
+        if (
+            not self._announce_to_gateway
+            or self._runtime_state != "active"
+            or expected_generation != self._runtime_generation
+        ):
             return
 
         # Skip announcement for Gateway itself
@@ -1014,6 +1399,7 @@ class BaseService(ABC):
                 MethodInfo,
                 ServiceAnnouncement,
             )
+            from app.shared.contracts.models.speech_runtime import SpeechStageCapabilityExportV1
             from app.shared.contracts.registry import list_modules
 
             # Get module information from registry
@@ -1022,6 +1408,21 @@ class BaseService(ABC):
 
             if module_contract is None:
                 log_debug(f"No module contract found for {self.module}, skipping announcement")
+                return
+
+            try:
+                runtime_projection = await self._speech_stage_capabilities_for_announcement()
+                if not isinstance(runtime_projection, list) or any(
+                    not isinstance(item, SpeechStageCapabilityExportV1)
+                    for item in runtime_projection
+                ):
+                    raise TypeError("speech stage hook must return typed exports")
+                speech_stage_capabilities = copy.deepcopy(runtime_projection)
+            except Exception as e:
+                log_warning(f"Speech capability announcement unavailable for {self.module}: {e}")
+                speech_stage_capabilities = []
+
+            if self._runtime_state != "active" or expected_generation != self._runtime_generation:
                 return
 
             # Build method info list with schemas
@@ -1073,6 +1474,7 @@ class BaseService(ABC):
                     else module_contract.capabilities
                 ),
                 callable_features=module_contract.callable_features,
+                speech_stage_capabilities=speech_stage_capabilities,
                 methods=methods,
                 instance_id=self._instance_id,
             )

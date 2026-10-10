@@ -1,4 +1,4 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fmt::Write as _;
 
 use base64::Engine as _;
@@ -6,6 +6,874 @@ use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
 const MAX_SCHEMA_DEPTH: usize = 128;
+
+const OPAQUE_JSON_MARKER: &str = "x-aurora-json-value";
+
+pub(crate) struct OpaqueBranchValidators {
+    by_pointer: HashMap<String, BranchValidatorSet>,
+}
+
+struct BranchValidatorSet {
+    any_of: Option<Vec<jsonschema::Validator>>,
+    one_of: Option<Vec<jsonschema::Validator>>,
+}
+
+#[derive(Default)]
+pub(crate) struct OpaqueJsonValues {
+    values: BTreeMap<String, Value>,
+    unions: Vec<UnionObservation>,
+}
+
+struct UnionObservation {
+    schema_pointer: String,
+    instance_pointer: String,
+    keyword: &'static str,
+    branches: Vec<usize>,
+}
+
+pub(crate) fn compile_opaque_branch_validators(
+    root: &Value,
+) -> Result<OpaqueBranchValidators, String> {
+    validate_supported_opaque_markers(root, root, "", &mut HashSet::new(), 0)?;
+    let mut output = HashMap::new();
+    let mut visited_refs = HashSet::new();
+    compile_branch_validators_at(root, root, "", &mut visited_refs, &mut output, 0)?;
+    Ok(OpaqueBranchValidators { by_pointer: output })
+}
+
+fn compile_branch_validators_at(
+    root: &Value,
+    schema: &Value,
+    schema_pointer: &str,
+    visited_refs: &mut HashSet<String>,
+    output: &mut HashMap<String, BranchValidatorSet>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err("contract schema reference depth exceeded".to_owned());
+    }
+    let Some(object) = schema.as_object() else {
+        return Ok(());
+    };
+
+    if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+        if let Some(target_pointer) = reference.strip_prefix('#') {
+            let target = resolve_reference(root, reference)?;
+            if schema_contains_opaque(root, target, &mut HashSet::new(), depth + 1)
+                && visited_refs.insert(target_pointer.to_owned())
+            {
+                compile_branch_validators_at(
+                    root,
+                    target,
+                    target_pointer,
+                    visited_refs,
+                    output,
+                    depth + 1,
+                )?;
+            }
+        }
+    }
+
+    let any_of =
+        compile_union_validators(root, object.get("anyOf"), "anyOf", schema_pointer, depth)?;
+    let one_of =
+        compile_union_validators(root, object.get("oneOf"), "oneOf", schema_pointer, depth)?;
+    if any_of.is_some() || one_of.is_some() {
+        output.insert(
+            schema_pointer.to_owned(),
+            BranchValidatorSet { any_of, one_of },
+        );
+    }
+
+    for (child_pointer, child) in schema_children(schema, schema_pointer)
+        .into_iter()
+        .filter(|(child_pointer, _)| schema_edge_is_supported(schema_pointer, child_pointer))
+    {
+        compile_branch_validators_at(root, child, &child_pointer, visited_refs, output, depth + 1)?;
+    }
+    Ok(())
+}
+
+fn compile_union_validators(
+    root: &Value,
+    branches: Option<&Value>,
+    keyword: &str,
+    schema_pointer: &str,
+    depth: usize,
+) -> Result<Option<Vec<jsonschema::Validator>>, String> {
+    let Some(branches) = branches.and_then(Value::as_array) else {
+        return Ok(None);
+    };
+    let has_opaque = branches
+        .iter()
+        .any(|branch| schema_contains_opaque(root, branch, &mut HashSet::new(), depth + 1));
+    if !has_opaque {
+        return Ok(None);
+    }
+
+    let union_pointer = pointer_child(schema_pointer, keyword);
+    branches
+        .iter()
+        .enumerate()
+        .map(|(index, branch)| {
+            let branch_pointer = pointer_child(&union_pointer, &index.to_string());
+            branch_validator(root, branch, &branch_pointer, schema_pointer)
+        })
+        .collect::<Result<Vec<_>, _>>()
+        .map(Some)
+        .map_err(|_| format!("cannot compile contract {keyword} branch"))
+}
+
+fn branch_validator(
+    root: &Value,
+    branch: &Value,
+    branch_pointer: &str,
+    union_schema_pointer: &str,
+) -> Result<jsonschema::Validator, String> {
+    reject_ancestor_resource_scope_changes(root, union_schema_pointer)?;
+    let mut references = Vec::new();
+    validate_branch_reference_closure(
+        root,
+        branch,
+        branch_pointer,
+        &mut HashSet::new(),
+        &mut HashSet::new(),
+        &mut references,
+        0,
+    )?;
+    for keyword in ["$defs", "definitions"] {
+        if let Some(definitions) = root.get(keyword).and_then(Value::as_object) {
+            let definitions_pointer = pointer_child("", keyword);
+            for (name, definition) in definitions {
+                reject_resource_scope_changes(
+                    definition,
+                    &pointer_child(&definitions_pointer, name),
+                    0,
+                )?;
+            }
+        }
+    }
+    let mut schema = Map::new();
+    for key in ["$schema", "$id", "$defs", "definitions"] {
+        if let Some(value) = root.get(key) {
+            schema.insert(key.to_owned(), value.clone());
+        }
+    }
+    schema.insert("allOf".to_owned(), Value::Array(vec![branch.clone()]));
+    let wrapped = Value::Object(schema);
+    for reference in references {
+        let pointer = reference
+            .strip_prefix('#')
+            .ok_or_else(|| "unsupported opaque branch reference".to_owned())?;
+        if root.pointer(pointer) != wrapped.pointer(pointer) {
+            return Err("opaque branch reference scope changed".to_owned());
+        }
+    }
+    jsonschema::validator_for(&wrapped).map_err(|_| "invalid contract branch".to_owned())
+}
+
+fn validate_supported_opaque_markers(
+    root: &Value,
+    schema: &Value,
+    schema_pointer: &str,
+    visited_refs: &mut HashSet<String>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err("contract schema reference depth exceeded".to_owned());
+    }
+    let Some(object) = schema.as_object() else {
+        return Ok(());
+    };
+    if object.get(OPAQUE_JSON_MARKER).and_then(Value::as_bool) == Some(true) {
+        return Ok(());
+    }
+    if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+        if let Some(target_pointer) = reference.strip_prefix('#') {
+            let target = resolve_reference(root, reference)?;
+            if visited_refs.insert(target_pointer.to_owned()) {
+                validate_supported_opaque_markers(
+                    root,
+                    target,
+                    target_pointer,
+                    visited_refs,
+                    depth + 1,
+                )?;
+            }
+        }
+    }
+    for (child_pointer, child) in schema_children(schema, schema_pointer) {
+        if schema_edge_is_supported(schema_pointer, &child_pointer) {
+            validate_supported_opaque_markers(
+                root,
+                child,
+                &child_pointer,
+                visited_refs,
+                depth + 1,
+            )?;
+        } else if schema_contains_opaque(root, child, &mut HashSet::new(), depth + 1) {
+            return Err("opaque contract marker uses an unsupported schema keyword".to_owned());
+        }
+    }
+    Ok(())
+}
+
+fn schema_edge_is_supported(parent_pointer: &str, child_pointer: &str) -> bool {
+    [
+        "$defs",
+        "definitions",
+        "properties",
+        "patternProperties",
+        "additionalProperties",
+        "allOf",
+        "anyOf",
+        "oneOf",
+        "items",
+        "prefixItems",
+    ]
+    .iter()
+    .any(|keyword| {
+        let prefix = pointer_child(parent_pointer, keyword);
+        child_pointer == prefix || child_pointer.starts_with(&format!("{prefix}/"))
+    })
+}
+
+#[allow(clippy::too_many_arguments)]
+fn validate_branch_reference_closure(
+    root: &Value,
+    schema: &Value,
+    schema_pointer: &str,
+    visited_nodes: &mut HashSet<String>,
+    visited_refs: &mut HashSet<String>,
+    references: &mut Vec<String>,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err("contract schema reference depth exceeded".to_owned());
+    }
+    if !visited_nodes.insert(schema_pointer.to_owned()) {
+        return Ok(());
+    }
+    let Some(object) = schema.as_object() else {
+        return Ok(());
+    };
+    if has_resource_scope_override(object) {
+        return Err("opaque branch changes JSON Schema resource scope".to_owned());
+    }
+    if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+        if !reference.starts_with("#/$defs/") {
+            return Err("unsupported opaque branch reference".to_owned());
+        }
+        let target_pointer = reference
+            .strip_prefix('#')
+            .ok_or_else(|| "unsupported opaque branch reference".to_owned())?;
+        let target = resolve_reference(root, reference)?;
+        references.push(reference.to_owned());
+        if visited_refs.insert(target_pointer.to_owned()) {
+            validate_branch_reference_closure(
+                root,
+                target,
+                target_pointer,
+                visited_nodes,
+                visited_refs,
+                references,
+                depth + 1,
+            )?;
+        }
+    }
+    for (child_pointer, child) in schema_children(schema, schema_pointer) {
+        validate_branch_reference_closure(
+            root,
+            child,
+            &child_pointer,
+            visited_nodes,
+            visited_refs,
+            references,
+            depth + 1,
+        )?;
+    }
+    Ok(())
+}
+
+fn reject_ancestor_resource_scope_changes(
+    root: &Value,
+    schema_pointer: &str,
+) -> Result<(), String> {
+    if schema_pointer.is_empty() {
+        return Ok(());
+    }
+
+    let mut current = root;
+    let mut current_pointer = String::new();
+    loop {
+        let next = schema_children(current, &current_pointer)
+            .into_iter()
+            .find(|(child_pointer, _)| {
+                schema_pointer == child_pointer
+                    || schema_pointer.starts_with(&format!("{child_pointer}/"))
+            })
+            .ok_or_else(|| "opaque branch schema ancestor is unavailable".to_owned())?;
+        current_pointer = next.0;
+        current = next.1;
+        if current.as_object().is_some_and(has_resource_scope_override) {
+            return Err("opaque branch changes JSON Schema resource scope".to_owned());
+        }
+        if current_pointer == schema_pointer {
+            return Ok(());
+        }
+    }
+}
+
+fn has_resource_scope_override(object: &Map<String, Value>) -> bool {
+    [
+        "$schema",
+        "$id",
+        "$anchor",
+        "$dynamicAnchor",
+        "$recursiveAnchor",
+        "$dynamicRef",
+        "$recursiveRef",
+    ]
+    .iter()
+    .any(|keyword| object.contains_key(*keyword))
+}
+
+fn reject_resource_scope_changes(
+    schema: &Value,
+    schema_pointer: &str,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err("contract schema reference depth exceeded".to_owned());
+    }
+    if schema.as_object().is_some_and(has_resource_scope_override) {
+        return Err("copied contract definitions change JSON Schema resource scope".to_owned());
+    }
+    for (child_pointer, child) in schema_children(schema, schema_pointer) {
+        reject_resource_scope_changes(child, &child_pointer, depth + 1)?;
+    }
+    Ok(())
+}
+
+fn schema_contains_opaque(
+    root: &Value,
+    schema: &Value,
+    visited_refs: &mut HashSet<String>,
+    depth: usize,
+) -> bool {
+    if depth > MAX_SCHEMA_DEPTH {
+        return false;
+    }
+    let Some(object) = schema.as_object() else {
+        return false;
+    };
+    if object.get(OPAQUE_JSON_MARKER).and_then(Value::as_bool) == Some(true) {
+        return true;
+    }
+    if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+        if let Ok(target) = resolve_reference(root, reference) {
+            let target_pointer = reference.strip_prefix('#').unwrap_or(reference);
+            if visited_refs.insert(target_pointer.to_owned())
+                && schema_contains_opaque(root, target, visited_refs, depth + 1)
+            {
+                return true;
+            }
+        }
+    }
+    schema_children(schema, "")
+        .into_iter()
+        .any(|(_, child)| schema_contains_opaque(root, child, visited_refs, depth + 1))
+}
+
+fn schema_children<'a>(schema: &'a Value, pointer: &str) -> Vec<(String, &'a Value)> {
+    let Some(object) = schema.as_object() else {
+        return Vec::new();
+    };
+    let mut children = Vec::new();
+    for keyword in [
+        "$defs",
+        "definitions",
+        "properties",
+        "patternProperties",
+        "dependentSchemas",
+    ] {
+        if let Some(entries) = object.get(keyword).and_then(Value::as_object) {
+            for (name, child) in entries {
+                children.push((pointer_child(&pointer_child(pointer, keyword), name), child));
+            }
+        }
+    }
+    for keyword in [
+        "additionalProperties",
+        "unevaluatedProperties",
+        "items",
+        "contains",
+        "not",
+        "if",
+        "then",
+        "else",
+        "propertyNames",
+        "additionalItems",
+        "unevaluatedItems",
+        "contentSchema",
+    ] {
+        if let Some(child) = object
+            .get(keyword)
+            .filter(|value| value.is_object() || value.is_boolean())
+        {
+            children.push((pointer_child(pointer, keyword), child));
+        }
+    }
+    for keyword in ["allOf", "anyOf", "oneOf", "prefixItems"] {
+        if let Some(items) = object.get(keyword).and_then(Value::as_array) {
+            for (index, child) in items.iter().enumerate() {
+                children.push((
+                    pointer_child(&pointer_child(pointer, keyword), &index.to_string()),
+                    child,
+                ));
+            }
+        }
+    }
+    if let Some(items) = object.get("items").and_then(Value::as_array) {
+        for (index, child) in items.iter().enumerate() {
+            children.push((
+                pointer_child(&pointer_child(pointer, "items"), &index.to_string()),
+                child,
+            ));
+        }
+    }
+    if let Some(dependencies) = object.get("dependencies").and_then(Value::as_object) {
+        for (name, child) in dependencies
+            .iter()
+            .filter(|(_, value)| value.is_object() || value.is_boolean())
+        {
+            children.push((
+                pointer_child(&pointer_child(pointer, "dependencies"), name),
+                child,
+            ));
+        }
+    }
+    children
+}
+
+fn pointer_child(parent: &str, segment: &str) -> String {
+    let escaped = segment.replace('~', "~0").replace('/', "~1");
+    format!("{parent}/{escaped}")
+}
+
+pub(crate) fn mask_opaque_json_values(
+    schema: &Value,
+    branch_validators: &OpaqueBranchValidators,
+    value: &Value,
+) -> Result<(Value, OpaqueJsonValues), String> {
+    let mut opaque = OpaqueJsonValues::default();
+    collect_opaque_json_values(
+        schema,
+        schema,
+        "",
+        value,
+        "",
+        branch_validators,
+        &mut opaque,
+        0,
+    )?;
+    opaque.unions.retain(|observation| {
+        !has_strict_opaque_ancestor(&opaque.values, &observation.instance_pointer)
+    });
+    let mut masked = value.clone();
+    for pointer in opaque.values.keys() {
+        if pointer.is_empty() {
+            masked = Value::Bool(false);
+        } else {
+            let slot = masked
+                .pointer_mut(pointer)
+                .ok_or_else(|| "opaque contract value path is missing".to_owned())?;
+            *slot = Value::Bool(false);
+        }
+    }
+    for observation in &opaque.unions {
+        let masked_instance = if observation.instance_pointer.is_empty() {
+            &masked
+        } else {
+            masked
+                .pointer(&observation.instance_pointer)
+                .ok_or_else(|| "contract union instance path is missing".to_owned())?
+        };
+        let selected = selected_union_branches(
+            branch_validators,
+            &observation.schema_pointer,
+            observation.keyword,
+            masked_instance,
+        )?;
+        if selected != observation.branches {
+            return Err("opaque placeholder changes contract union selection".to_owned());
+        }
+    }
+    Ok((masked, opaque))
+}
+
+pub(crate) fn restore_opaque_json_values(
+    value: &mut Value,
+    opaque: OpaqueJsonValues,
+) -> Result<(), String> {
+    for (pointer, original) in opaque.values {
+        if pointer.is_empty() {
+            *value = original;
+            continue;
+        }
+        let slot = value
+            .pointer_mut(&pointer)
+            .ok_or_else(|| "opaque contract value path is missing after DTO decode".to_owned())?;
+        *slot = original;
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_arguments)]
+fn collect_opaque_json_values(
+    root: &Value,
+    schema: &Value,
+    schema_pointer: &str,
+    instance: &Value,
+    instance_pointer: &str,
+    branch_validators: &OpaqueBranchValidators,
+    output: &mut OpaqueJsonValues,
+    depth: usize,
+) -> Result<(), String> {
+    if depth > MAX_SCHEMA_DEPTH {
+        return Err("contract schema reference depth exceeded".to_owned());
+    }
+    let Some(object) = schema.as_object() else {
+        return Ok(());
+    };
+    if object.get(OPAQUE_JSON_MARKER).and_then(Value::as_bool) == Some(true) {
+        insert_opaque_value(output, instance_pointer, instance.clone())?;
+        return Ok(());
+    }
+    if !schema_contains_opaque(root, schema, &mut HashSet::new(), depth) {
+        return Ok(());
+    }
+
+    if let Some(reference) = object.get("$ref").and_then(Value::as_str) {
+        let target_pointer = reference
+            .strip_prefix('#')
+            .ok_or_else(|| "external contract schema references are not allowed".to_owned())?;
+        let target = resolve_reference(root, reference)?;
+        collect_opaque_json_values(
+            root,
+            target,
+            target_pointer,
+            instance,
+            instance_pointer,
+            branch_validators,
+            output,
+            depth + 1,
+        )?;
+    }
+
+    for keyword in ["allOf", "anyOf", "oneOf"] {
+        let Some(branches) = object.get(keyword).and_then(Value::as_array) else {
+            continue;
+        };
+        if keyword == "allOf" {
+            for (index, branch) in branches.iter().enumerate() {
+                let branch_pointer =
+                    pointer_child(&pointer_child(schema_pointer, keyword), &index.to_string());
+                collect_opaque_json_values(
+                    root,
+                    branch,
+                    &branch_pointer,
+                    instance,
+                    instance_pointer,
+                    branch_validators,
+                    output,
+                    depth + 1,
+                )?;
+            }
+            continue;
+        }
+        if !branches
+            .iter()
+            .any(|branch| schema_contains_opaque(root, branch, &mut HashSet::new(), depth + 1))
+        {
+            continue;
+        }
+        let selected =
+            selected_union_branches(branch_validators, schema_pointer, keyword, instance)?;
+        output.unions.push(UnionObservation {
+            schema_pointer: schema_pointer.to_owned(),
+            instance_pointer: instance_pointer.to_owned(),
+            keyword: if keyword == "anyOf" { "anyOf" } else { "oneOf" },
+            branches: selected.clone(),
+        });
+        for index in selected {
+            let branch_pointer =
+                pointer_child(&pointer_child(schema_pointer, keyword), &index.to_string());
+            collect_opaque_json_values(
+                root,
+                &branches[index],
+                &branch_pointer,
+                instance,
+                instance_pointer,
+                branch_validators,
+                output,
+                depth + 1,
+            )?;
+        }
+    }
+
+    if let (Some(properties), Some(instance_object)) = (
+        object.get("properties").and_then(Value::as_object),
+        instance.as_object(),
+    ) {
+        for (name, child_schema) in properties {
+            if let Some(child_instance) = instance_object.get(name) {
+                collect_opaque_json_values(
+                    root,
+                    child_schema,
+                    &pointer_child(&pointer_child(schema_pointer, "properties"), name),
+                    child_instance,
+                    &pointer_child(instance_pointer, name),
+                    branch_validators,
+                    output,
+                    depth + 1,
+                )?;
+            }
+        }
+    }
+    if let (Some(patterns), Some(instance_object)) = (
+        object.get("patternProperties").and_then(Value::as_object),
+        instance.as_object(),
+    ) {
+        for (pattern, child_schema) in patterns {
+            let regex = regress::Regex::new(pattern)
+                .map_err(|_| "invalid contract patternProperties expression".to_owned())?;
+            for (name, child_instance) in instance_object {
+                if regex.find(name).is_some() {
+                    collect_opaque_json_values(
+                        root,
+                        child_schema,
+                        &pointer_child(
+                            &pointer_child(schema_pointer, "patternProperties"),
+                            pattern,
+                        ),
+                        child_instance,
+                        &pointer_child(instance_pointer, name),
+                        branch_validators,
+                        output,
+                        depth + 1,
+                    )?;
+                }
+            }
+        }
+    }
+    if let (Some(additional_schema), Some(instance_object)) =
+        (object.get("additionalProperties"), instance.as_object())
+    {
+        if additional_schema.as_object().is_some_and(|schema| {
+            schema.get(OPAQUE_JSON_MARKER).and_then(Value::as_bool) == Some(true)
+        }) {
+            let properties = object.get("properties").and_then(Value::as_object);
+            for (name, child_instance) in instance_object {
+                if !properties.is_some_and(|properties| properties.contains_key(name))
+                    && !matches_pattern_property(object, name)?
+                {
+                    insert_opaque_value(
+                        output,
+                        &pointer_child(instance_pointer, name),
+                        child_instance.clone(),
+                    )?;
+                }
+            }
+        } else if additional_schema.is_object() || additional_schema.is_boolean() {
+            let properties = object.get("properties").and_then(Value::as_object);
+            for (name, child_instance) in instance_object {
+                if !properties.is_some_and(|properties| properties.contains_key(name))
+                    && !matches_pattern_property(object, name)?
+                {
+                    collect_opaque_json_values(
+                        root,
+                        additional_schema,
+                        &pointer_child(schema_pointer, "additionalProperties"),
+                        child_instance,
+                        &pointer_child(instance_pointer, name),
+                        branch_validators,
+                        output,
+                        depth + 1,
+                    )?;
+                }
+            }
+        }
+    }
+    if let (Some(items_schema), Some(instance_array)) = (object.get("items"), instance.as_array()) {
+        match items_schema {
+            Value::Array(tuple_schemas) => {
+                for (index, (child_schema, child_instance)) in
+                    tuple_schemas.iter().zip(instance_array).enumerate()
+                {
+                    collect_opaque_json_values(
+                        root,
+                        child_schema,
+                        &pointer_child(&pointer_child(schema_pointer, "items"), &index.to_string()),
+                        child_instance,
+                        &pointer_child(instance_pointer, &index.to_string()),
+                        branch_validators,
+                        output,
+                        depth + 1,
+                    )?;
+                }
+            }
+            Value::Object(_) | Value::Bool(_) => {
+                let first_unevaluated = object
+                    .get("prefixItems")
+                    .and_then(Value::as_array)
+                    .map_or(0, Vec::len);
+                for (index, child_instance) in
+                    instance_array.iter().enumerate().skip(first_unevaluated)
+                {
+                    collect_opaque_json_values(
+                        root,
+                        items_schema,
+                        &pointer_child(schema_pointer, "items"),
+                        child_instance,
+                        &pointer_child(instance_pointer, &index.to_string()),
+                        branch_validators,
+                        output,
+                        depth + 1,
+                    )?;
+                }
+            }
+            _ => {}
+        }
+    }
+    if let (Some(prefix_items), Some(instance_array)) = (
+        object.get("prefixItems").and_then(Value::as_array),
+        instance.as_array(),
+    ) {
+        for (index, (child_schema, child_instance)) in
+            prefix_items.iter().zip(instance_array).enumerate()
+        {
+            collect_opaque_json_values(
+                root,
+                child_schema,
+                &pointer_child(
+                    &pointer_child(schema_pointer, "prefixItems"),
+                    &index.to_string(),
+                ),
+                child_instance,
+                &pointer_child(instance_pointer, &index.to_string()),
+                branch_validators,
+                output,
+                depth + 1,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn matches_pattern_property(schema: &Map<String, Value>, name: &str) -> Result<bool, String> {
+    let Some(patterns) = schema.get("patternProperties").and_then(Value::as_object) else {
+        return Ok(false);
+    };
+    for pattern in patterns.keys() {
+        let regex = regress::Regex::new(pattern)
+            .map_err(|_| "invalid contract patternProperties expression".to_owned())?;
+        if regex.find(name).is_some() {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+fn selected_union_branches(
+    branch_validators: &OpaqueBranchValidators,
+    schema_pointer: &str,
+    keyword: &str,
+    instance: &Value,
+) -> Result<Vec<usize>, String> {
+    let validators = branch_validators
+        .by_pointer
+        .get(schema_pointer)
+        .and_then(|set| match keyword {
+            "anyOf" => set.any_of.as_ref(),
+            "oneOf" => set.one_of.as_ref(),
+            _ => None,
+        })
+        .ok_or_else(|| "opaque union branch validators are unavailable".to_owned())?;
+    let selected: Vec<usize> = validators
+        .iter()
+        .enumerate()
+        .filter_map(|(index, validator)| validator.is_valid(instance).then_some(index))
+        .collect();
+    let valid = if keyword == "anyOf" {
+        !selected.is_empty()
+    } else {
+        selected.len() == 1
+    };
+    if !valid {
+        return Err("opaque union branch selection is ambiguous".to_owned());
+    }
+    Ok(selected)
+}
+
+fn insert_opaque_value(
+    output: &mut OpaqueJsonValues,
+    pointer: &str,
+    value: Value,
+) -> Result<(), String> {
+    if value.is_null() {
+        return Ok(());
+    }
+    if let Some(existing) = output.values.get(pointer) {
+        return if existing == &value {
+            Ok(())
+        } else {
+            Err("overlapping opaque contract values disagree".to_owned())
+        };
+    }
+
+    if output.values.contains_key("") {
+        return Ok(());
+    }
+    let mut ancestor_end = pointer.rfind('/');
+    while let Some(end) = ancestor_end {
+        if output.values.contains_key(&pointer[..end]) {
+            return Ok(());
+        }
+        ancestor_end = pointer[..end].rfind('/');
+    }
+
+    let descendants_prefix = if pointer.is_empty() {
+        "/".to_owned()
+    } else {
+        format!("{pointer}/")
+    };
+    let descendants: Vec<String> = output
+        .values
+        .range(descendants_prefix.clone()..)
+        .take_while(|(path, _)| path.starts_with(&descendants_prefix))
+        .map(|(path, _)| path.to_owned())
+        .collect();
+    for descendant in descendants {
+        output.values.remove(&descendant);
+    }
+    output.values.insert(pointer.to_owned(), value);
+    Ok(())
+}
+
+fn has_strict_opaque_ancestor(values: &BTreeMap<String, Value>, pointer: &str) -> bool {
+    if values.contains_key("") {
+        return !pointer.is_empty();
+    }
+    let mut ancestor_end = pointer.rfind('/');
+    while let Some(end) = ancestor_end {
+        if values.contains_key(&pointer[..end]) {
+            return true;
+        }
+        ancestor_end = pointer[..end].rfind('/');
+    }
+    false
+}
 
 pub(crate) fn validate(schema: &Value, value: &Value) -> Result<(), String> {
     validate_node(schema, schema, value, 0)
@@ -1651,5 +2519,333 @@ mod tests {
     #[test]
     fn projection_percent_encoding_is_uppercase_rfc3986() {
         assert_eq!(percent_encode_projection("peer /☃"), "peer%20%2F%E2%98%83");
+    }
+}
+
+#[cfg(test)]
+mod opaque_json_schema_tests {
+    use serde_json::{json, Value};
+
+    use super::{
+        compile_opaque_branch_validators, mask_opaque_json_values, restore_opaque_json_values,
+        selected_union_branches,
+    };
+
+    fn opaque_map_schema() -> Value {
+        json!({
+            "type": "object",
+            "additionalProperties": { "x-aurora-json-value": true }
+        })
+    }
+
+    #[test]
+    fn rejects_root_relative_reference_in_non_marker_sibling_constraint() {
+        let schema = json!({
+            "$defs": {
+                "OpaqueObject": {
+                    "allOf": [
+                        opaque_map_schema(),
+                        { "properties": { "typed": { "$ref": "#/properties/typed" } } }
+                    ]
+                },
+                "NullableOpaque": {
+                    "anyOf": [
+                        { "$ref": "#/$defs/OpaqueObject" },
+                        { "type": "null" }
+                    ]
+                }
+            },
+            "type": "object",
+            "properties": {
+                "opaque": { "$ref": "#/$defs/NullableOpaque" },
+                "typed": { "type": "string" }
+            }
+        });
+
+        let error = match compile_opaque_branch_validators(&schema) {
+            Ok(_) => panic!("root-relative branch reference must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "cannot compile contract anyOf branch");
+    }
+
+    #[test]
+    fn preserves_supported_transitive_defs_reference_scope() {
+        let schema = json!({
+            "$defs": {
+                "NullableOpaque": {
+                    "anyOf": [
+                        { "$ref": "#/$defs/OpaqueWrapper" },
+                        { "type": "null" }
+                    ]
+                },
+                "OpaqueWrapper": { "$ref": "#/$defs/OpaqueObject" },
+                "OpaqueObject": {
+                    "type": "object",
+                    "properties": { "typed": { "$ref": "#/$defs/TypedString" } },
+                    "additionalProperties": { "x-aurora-json-value": true }
+                },
+                "TypedString": { "type": "string" }
+            },
+            "type": "object",
+            "properties": { "payload": { "$ref": "#/$defs/NullableOpaque" } }
+        });
+        let validators = compile_opaque_branch_validators(&schema)
+            .expect("root-local defs refs should retain their original targets");
+        let original = json!({
+            "typed": "valid sibling",
+            "opaque": { "$serde_json::private::RawValue": "{\"n\":1}" }
+        });
+        assert_eq!(
+            selected_union_branches(&validators, "/$defs/NullableOpaque", "anyOf", &original)
+                .expect("branch should be selectable"),
+            vec![0]
+        );
+        assert_eq!(
+            selected_union_branches(&validators, "/$defs/NullableOpaque", "anyOf", &Value::Null)
+                .expect("null should select the nullable branch"),
+            vec![1]
+        );
+        let invalid_typed_sibling = json!({
+            "typed": 42,
+            "opaque": { "$serde_json::private::RawValue": "{\"n\":1}" }
+        });
+        assert_eq!(
+            selected_union_branches(
+                &validators,
+                "/$defs/NullableOpaque",
+                "anyOf",
+                &invalid_typed_sibling
+            ),
+            Err("opaque union branch selection is ambiguous".to_owned())
+        );
+
+        let value = json!({ "payload": original });
+        let (masked, saved) = mask_opaque_json_values(&schema, &validators, &value)
+            .expect("opaque values should be masked without changing branch selection");
+        assert_eq!(masked.pointer("/payload/opaque"), Some(&Value::Bool(false)));
+        let mut restored = masked;
+        restore_opaque_json_values(&mut restored, saved)
+            .expect("opaque values should restore at their original paths");
+        assert_eq!(restored, value);
+    }
+
+    #[test]
+    fn rejects_resource_scope_change_in_transitive_definition() {
+        let schema = json!({
+            "$defs": {
+                "NullableOpaque": {
+                    "anyOf": [
+                        { "$ref": "#/$defs/OpaqueWrapper" },
+                        { "type": "null" }
+                    ]
+                },
+                "OpaqueWrapper": { "$ref": "#/$defs/OpaqueObject" },
+                "OpaqueObject": {
+                    "type": "object",
+                    "properties": { "typed": { "$ref": "#/$defs/ScopedString" } },
+                    "additionalProperties": { "x-aurora-json-value": true }
+                },
+                "ScopedString": { "$id": "urn:changed-scope", "type": "string" }
+            },
+            "type": "object",
+            "properties": { "payload": { "$ref": "#/$defs/NullableOpaque" } }
+        });
+
+        let error = match compile_opaque_branch_validators(&schema) {
+            Ok(_) => panic!("nested resource scope change must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "cannot compile contract anyOf branch");
+    }
+
+    #[test]
+    fn rejects_unreferenced_copied_definition_resource_scope() {
+        let schema = json!({
+            "$defs": {
+                "Unreferenced": { "$id": "urn:unreferenced-scope", "type": "string" }
+            },
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "additionalProperties": { "x-aurora-json-value": true }
+                        },
+                        { "type": "null" }
+                    ]
+                }
+            }
+        });
+
+        let error = match compile_opaque_branch_validators(&schema) {
+            Ok(_) => panic!("every copied definition must retain the original resource scope"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "cannot compile contract anyOf branch");
+    }
+
+    #[test]
+    fn rejects_opaque_union_under_nested_resource_scope() {
+        let schema = json!({
+            "$defs": { "Typed": { "type": "string" } },
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "$id": "urn:nested-payload-resource",
+                    "$defs": { "Typed": { "type": "integer" } },
+                    "anyOf": [
+                        {
+                            "type": "object",
+                            "properties": { "typed": { "$ref": "#/$defs/Typed" } },
+                            "additionalProperties": { "x-aurora-json-value": true }
+                        },
+                        { "type": "null" }
+                    ]
+                }
+            }
+        });
+        let valid_in_original_scope = json!({
+            "payload": { "typed": 7, "opaque": { "nested": [1, 2] } }
+        });
+        let invalid_in_original_scope = json!({
+            "payload": { "typed": "outer resource would accept this", "opaque": {} }
+        });
+        let original_validator = jsonschema::validator_for(&schema)
+            .expect("the nested-resource schema is valid JSON Schema");
+        assert!(original_validator.is_valid(&valid_in_original_scope));
+        assert!(!original_validator.is_valid(&invalid_in_original_scope));
+
+        let mistaken_root_wrapper = json!({
+            "$defs": { "Typed": { "type": "string" } },
+            "allOf": [{
+                "type": "object",
+                "properties": { "typed": { "$ref": "#/$defs/Typed" } },
+                "additionalProperties": { "x-aurora-json-value": true }
+            }]
+        });
+        let relocated_validator = jsonschema::validator_for(&mistaken_root_wrapper)
+            .expect("the wrapper demonstrates the changed root reference scope");
+        assert!(relocated_validator.is_valid(&json!({
+            "typed": "outer resource would accept this",
+            "opaque": false
+        })));
+        assert!(!relocated_validator.is_valid(&json!({ "typed": 7, "opaque": false })));
+
+        let error = match compile_opaque_branch_validators(&schema) {
+            Ok(_) => panic!("nested resource scope must not be rebound to the wrapper root"),
+            Err(error) => error,
+        };
+        assert_eq!(error, "cannot compile contract anyOf branch");
+    }
+
+    #[test]
+    fn scope_keyword_looking_schema_entry_names_are_not_scope_keywords() {
+        let schema = json!({
+            "$defs": {
+                "$id": {
+                    "anyOf": [
+                        opaque_map_schema(),
+                        { "type": "null" }
+                    ]
+                }
+            },
+            "type": "object",
+            "properties": {
+                "$id": {
+                    "anyOf": [
+                        opaque_map_schema(),
+                        { "type": "null" }
+                    ]
+                },
+                "definitionPayload": { "$ref": "#/$defs/$id" }
+            }
+        });
+        let validators = compile_opaque_branch_validators(&schema)
+            .expect("property and definition names are data, not schema keywords");
+        let value = json!({
+            "$id": { "property-value": { "nested": true } },
+            "definitionPayload": { "definition-value": [1, 2] }
+        });
+
+        let (masked, saved) = mask_opaque_json_values(&schema, &validators, &value)
+            .expect("opaque values under scope-looking names should round-trip");
+        assert_eq!(
+            masked.pointer("/$id/property-value"),
+            Some(&Value::Bool(false))
+        );
+        assert_eq!(
+            masked.pointer("/definitionPayload/definition-value"),
+            Some(&Value::Bool(false))
+        );
+        let mut restored = masked;
+        restore_opaque_json_values(&mut restored, saved)
+            .expect("scope-looking property and definition names should restore");
+        assert_eq!(restored, value);
+    }
+
+    #[test]
+    fn rejects_opaque_markers_under_unhandled_schema_keyword() {
+        let schema = json!({
+            "type": "object",
+            "properties": {
+                "payload": {
+                    "if": {
+                        "properties": {
+                            "nested": { "x-aurora-json-value": true }
+                        }
+                    }
+                }
+            }
+        });
+
+        let error = match compile_opaque_branch_validators(&schema) {
+            Ok(_) => panic!("unsupported marker location must be rejected"),
+            Err(error) => error,
+        };
+        assert_eq!(
+            error,
+            "opaque contract marker uses an unsupported schema keyword"
+        );
+    }
+
+    #[test]
+    fn parent_marker_covers_descendant_union_observations() {
+        let schema = json!({
+            "allOf": [
+                {
+                    "properties": {
+                        "payload": {
+                            "properties": {
+                                "choice": {
+                                    "anyOf": [
+                                        {
+                                            "type": "object",
+                                            "additionalProperties": { "x-aurora-json-value": true }
+                                        },
+                                        { "type": "null" }
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                },
+                { "properties": { "payload": { "x-aurora-json-value": true } } }
+            ],
+            "type": "object",
+            "properties": { "payload": { "x-aurora-json-value": true } }
+        });
+        let validators = compile_opaque_branch_validators(&schema)
+            .expect("the synthetic schema should have supported marker positions");
+        let value = json!({ "payload": { "choice": { "opaque": [1, 2, 3] } } });
+
+        let (masked, saved) = mask_opaque_json_values(&schema, &validators, &value)
+            .expect("descendant branch observations under an opaque parent are irrelevant");
+        assert_eq!(masked, json!({ "payload": false }));
+        let mut restored = masked;
+        restore_opaque_json_values(&mut restored, saved)
+            .expect("enclosing opaque subtree should restore");
+        assert_eq!(restored, value);
     }
 }

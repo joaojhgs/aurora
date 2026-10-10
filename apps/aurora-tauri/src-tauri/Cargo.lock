@@ -421,6 +421,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "aurora-local-inference"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "aurora-mesh-authority"
 version = "0.1.0"
 dependencies = [
@@ -454,6 +466,7 @@ dependencies = [
  "aes-gcm",
  "async-trait",
  "aurora-contracts",
+ "aurora-local-inference",
  "aurora-mesh-authority",
  "aurora-mesh-session",
  "aurora-voice-core",

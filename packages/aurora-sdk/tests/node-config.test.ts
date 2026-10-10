@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TTSRequestInputTTSRequestSchema } from '../src/generated/backend-contracts.zod.js'
 import { MemoryClient } from '../src/memory.js'
 import {
   AURORA_NODE_CONFIG_MODULES,
-  AURORA_NODE_CONFIG_STORAGE_KEY,
-  AURORA_NODE_CONFIG_V2_STORAGE_KEY,
   AURORA_NODE_RUNTIME_MODULES_BY_POLICY,
   AuroraNodeConfigValidationError,
   AuroraNodeConfigRevisionConflictError,
@@ -37,6 +35,10 @@ import {
   type AuroraNodeRoutingResolutionRecord,
 } from '../src/index.js'
 import type { AuroraClient } from '../src/client.js'
+
+afterEach(() => {
+  vi.unstubAllGlobals()
+})
 
   const remoteCandidate: AuroraNodeRouteCandidate = {
   peerId: 'home-peer',
@@ -802,175 +804,195 @@ describe('resolveServiceRouting', () => {
   })
 })
 
-describe('createAuroraNodeConfigTauriStore', () => {
+describe('coordinator-backed node-config compatibility stores', () => {
+  const documentToken = 'c'.repeat(64)
+
+  beforeEach(() => {
+    vi.stubGlobal('window', { __AURORA_NODE_CONFIG_DOCUMENT_TOKEN__: documentToken })
+  })
+
   class FakeTauriTransport implements AuroraNodeConfigTauriTransport {
-    readonly values = new Map<string, string>()
-    failLegacyDelete = false
+    document = emptyAuroraNodeConfigDocumentV2(600)
+    readonly calls: Array<{ kind: 'read' } | { kind: 'compare-and-swap'; revision: number }> = []
+    readonly casDraftHandles: string[] = []
+    malformedRead: string | null = null
+    nextHandle = 0
+    activeHandle: string | null = null
 
-    async nodeConfigGet(): Promise<{ key: string; value: string | null }> {
-      return { key: AURORA_NODE_CONFIG_STORAGE_KEY, value: this.values.get(AURORA_NODE_CONFIG_STORAGE_KEY) ?? null }
+    async nodeConfigPolicyRead(token: string): Promise<unknown> {
+      expect(token).toBe(documentToken)
+      this.calls.push({ kind: 'read' })
+      this.activeHandle = (++this.nextHandle).toString(16).padStart(64, '0')
+      return {
+        documentJson: this.malformedRead ?? JSON.stringify(this.document),
+        draftHandle: this.activeHandle
+      }
     }
 
-    async nodeConfigSet(value: string): Promise<{ key: string; ok: boolean }> {
-      this.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, value)
-      return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
-    }
-
-    async nodeConfigDelete(): Promise<{ key: string; ok: boolean }> {
-      if (this.failLegacyDelete) return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: false }
-      this.values.delete(AURORA_NODE_CONFIG_STORAGE_KEY)
-      return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
-    }
-
-    async nodeConfigV2Get(): Promise<{ key: string; value: string | null }> {
-      return { key: AURORA_NODE_CONFIG_V2_STORAGE_KEY, value: this.values.get(AURORA_NODE_CONFIG_V2_STORAGE_KEY) ?? null }
-    }
-
-    async nodeConfigV2Set(value: string): Promise<{ key: string; ok: boolean }> {
-      this.values.set(AURORA_NODE_CONFIG_V2_STORAGE_KEY, value)
-      return { key: AURORA_NODE_CONFIG_V2_STORAGE_KEY, ok: true }
-    }
-
-    async nodeConfigV2Delete(): Promise<{ key: string; ok: boolean }> {
-      this.values.delete(AURORA_NODE_CONFIG_V2_STORAGE_KEY)
-      return { key: AURORA_NODE_CONFIG_V2_STORAGE_KEY, ok: true }
+    async nodeConfigPolicyCompareAndSwap(request: {
+      documentToken: string
+      draftHandle: string
+      expectedRevision: number
+      draftJson: string
+    }): Promise<unknown> {
+      expect(request.documentToken).toBe(documentToken)
+      this.calls.push({ kind: 'compare-and-swap', revision: request.expectedRevision })
+      this.casDraftHandles.push(request.draftHandle)
+      if (request.draftHandle !== this.activeHandle) throw new Error('profile receipt changed')
+      if (request.expectedRevision !== this.document.revision) throw new Error('revision conflict')
+      this.document = JSON.parse(request.draftJson) as AuroraNodeConfigDocumentV2
+      return {
+        documentJson: JSON.stringify(this.document),
+        savedRevision: this.document.revision
+      }
     }
   }
 
-  it('uses a dedicated secure-storage key and drops invalid persisted documents', async () => {
+  it('projects V1 service settings through CAS and clear preserves speech policy', async () => {
     const storage = new FakeTauriTransport()
+    storage.document.speech.stages.stt.target = { peerId: 'speech-peer', modelId: 'stt-model' }
+    const speech = structuredClone(storage.document.speech)
     const store = createAuroraNodeConfigTauriStore(storage)
-    const document = emptyAuroraNodeConfigDocument(600)
+    const loaded = await store.load()
+    expect(loaded?.version).toBe(1)
 
-    await store.save(document)
-    expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(true)
-    expect(await store.load()).toEqual(document)
+    const updated = { ...loaded!, updatedAtMs: 601 }
+    updated.services.tts = { routing: { prefer: 'network', fallback: 'local' } }
+    await store.save(updated)
+    expect(storage.document.services.tts).toEqual(updated.services.tts)
+    expect(storage.document.speech).toEqual(speech)
 
-    storage.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, '{"version":1,"updatedAtMs":-1}')
-    expect(await store.load()).toBeNull()
-    expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(false)
     await store.clear?.()
-    expect(storage.values.size).toBe(0)
+    expect(storage.document.services).toEqual(emptyAuroraNodeConfigDocument(602).services)
+    expect(storage.document.expose).toEqual(emptyAuroraNodeConfigDocument(602).expose)
+    expect(storage.document.speech).toEqual(speech)
+    expect(storage.calls.map(({ kind }) => kind)).toEqual([
+      'read', 'compare-and-swap', 'read', 'compare-and-swap'
+    ])
   })
 
-  it('migrates the legacy key once and then reads the canonical v2 key', async () => {
+  it('keeps a V1 compatibility draft bound to the profile that loaded it', async () => {
     const storage = new FakeTauriTransport()
-    const legacy = emptyAuroraNodeConfigDocument(800)
-    legacy.services.tts = { routing: { prefer: 'network', fallback: 'local' } }
-    storage.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, JSON.stringify(legacy))
+    storage.document.speech.stages.tts.target = { peerId: 'profile-a', modelId: 'tts-a' }
+    const store = createAuroraNodeConfigTauriStore(storage)
+    const profileA = await store.load()
+    const draftA = { ...profileA!, services: { ...profileA!.services } }
+    draftA.services.tts = { routing: { prefer: 'network', fallback: 'local' } }
+
+    storage.document = emptyAuroraNodeConfigDocumentV2(600)
+    storage.document.speech.stages.tts.target = { peerId: 'profile-b', modelId: 'tts-b' }
+    await store.load()
+
+    await expect(store.save(draftA)).rejects.toMatchObject({ code: 'save_unavailable' })
+    expect(storage.calls.map(({ kind }) => kind)).toEqual(['read', 'read', 'compare-and-swap'])
+    expect(storage.casDraftHandles).toEqual(['0'.repeat(63) + '1'])
+    expect(storage.document.services.tts).toEqual(emptyAuroraNodeConfigDocumentV2(600).services.tts)
+    expect(storage.document.speech.stages.tts.target).toEqual({ peerId: 'profile-b', modelId: 'tts-b' })
+  })
+
+  it('uses revision-bound policy receipts for V2 reads, saves, and clear', async () => {
+    const storage = new FakeTauriTransport()
     const store = createAuroraNodeConfigV2TauriStore(storage)
-
-    const migrated = await store.load()
-    expect(migrated?.version).toBe(2)
-    expect(migrated?.speech.stages.tts.routing).toEqual({ prefer: 'network', fallback: 'local' })
-    expect(storage.values.has(AURORA_NODE_CONFIG_V2_STORAGE_KEY)).toBe(true)
-    expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(false)
-
-    const updated = { ...migrated!, revision: 2 }
-    await expect(store.save(updated)).rejects.toThrow(/requires saveCas/u)
-    const { acknowledgement } = await store.saveCas(updated, 1)
-    expect(acknowledgement).toMatchObject({ savedRevision: 2, effectiveRevision: 1, pendingNextGeneration: true })
+    const current = await store.load()
+    const updated = {
+      ...current!,
+      speech: {
+        ...current!.speech,
+        stages: {
+          ...current!.speech.stages,
+          tts: { ...current!.speech.stages.tts, routing: { prefer: 'network_only' as const, fallback: 'error' as const } }
+        }
+      }
+    }
+    const saved = await store.saveCas(updated, current!.revision)
+    expect(saved.document.speech.stages.tts.routing).toEqual({ prefer: 'network_only', fallback: 'error' })
+    expect(saved.acknowledgement).toMatchObject({
+      savedRevision: current!.revision + 1,
+      effectiveRevision: current!.revision,
+      pendingNextGeneration: true,
+      pendingRevision: current!.revision + 1
+    })
+    await expect(store.save(saved.document)).rejects.toThrow(/requires saveCas/u)
+    await store.clear?.()
+    expect(storage.document.speech.stages.tts.routing).toEqual({ prefer: 'local', fallback: 'network' })
+    expect(storage.calls.some(({ kind }) => kind === 'compare-and-swap')).toBe(true)
   })
 
-  it('fails closed and removes both policy generations when canonical v2 storage is corrupt', async () => {
+  it('keeps a V2 compatibility draft bound to the profile that loaded it', async () => {
     const storage = new FakeTauriTransport()
-    storage.values.set(AURORA_NODE_CONFIG_V2_STORAGE_KEY, '{"version":2,"revision":0}')
-    storage.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, JSON.stringify(emptyAuroraNodeConfigDocument(805)))
-
-    await expect(createAuroraNodeConfigV2TauriStore(storage).load()).resolves.toBeNull()
-    expect(storage.values.has(AURORA_NODE_CONFIG_V2_STORAGE_KEY)).toBe(false)
-    expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(false)
-  })
-
-  it('keeps corrupt canonical v2 authoritative when legacy cleanup fails, then retries safely', async () => {
-    const storage = new FakeTauriTransport()
-    storage.values.set(AURORA_NODE_CONFIG_V2_STORAGE_KEY, '{"version":2,"revision":0}')
-    storage.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, JSON.stringify(emptyAuroraNodeConfigDocument(806)))
+    storage.document.speech.stages.tts.target = { peerId: 'profile-a', modelId: 'tts-a' }
     const store = createAuroraNodeConfigV2TauriStore(storage)
-    storage.failLegacyDelete = true
+    const profileA = await store.load()
+    const draftA = {
+      ...profileA!,
+      speech: {
+        ...profileA!.speech,
+        stages: {
+          ...profileA!.speech.stages,
+          tts: { ...profileA!.speech.stages.tts, routing: { prefer: 'network_only' as const, fallback: 'error' as const } }
+        }
+      }
+    }
 
-    await expect(store.load()).rejects.toThrow('Invalid node config legacy cleanup failed')
-    expect(storage.values.has(AURORA_NODE_CONFIG_V2_STORAGE_KEY)).toBe(true)
-    expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(true)
+    storage.document = emptyAuroraNodeConfigDocumentV2(600)
+    storage.document.speech.stages.tts.target = { peerId: 'profile-b', modelId: 'tts-b' }
+    await store.load()
 
-    storage.failLegacyDelete = false
-    await expect(store.load()).resolves.toBeNull()
-    expect(storage.values.size).toBe(0)
+    await expect(store.saveCas(draftA, profileA!.revision)).rejects.toMatchObject({ code: 'save_unavailable' })
+    expect(storage.calls.map(({ kind }) => kind)).toEqual(['read', 'read', 'compare-and-swap'])
+    expect(storage.casDraftHandles).toEqual(['0'.repeat(63) + '1'])
+    expect(storage.document.speech.stages.tts.target).toEqual({ peerId: 'profile-b', modelId: 'tts-b' })
   })
 
-  it('does not resurrect legacy policy when clear cleanup partially fails', async () => {
+  it('rejects an invalid canonical policy response without a legacy read or delete', async () => {
     const storage = new FakeTauriTransport()
-    storage.values.set(AURORA_NODE_CONFIG_V2_STORAGE_KEY, JSON.stringify(emptyAuroraNodeConfigDocumentV2(807)))
-    storage.values.set(AURORA_NODE_CONFIG_STORAGE_KEY, JSON.stringify(emptyAuroraNodeConfigDocument(807)))
-    const store = createAuroraNodeConfigV2TauriStore(storage)
-    storage.failLegacyDelete = true
+    storage.malformedRead = '{"version":2,"revision":0,"secret":"unchanged"}'
 
-    await expect(store.clear?.()).rejects.toThrow('Node config v1 clear failed')
-    expect(storage.values.has(AURORA_NODE_CONFIG_V2_STORAGE_KEY)).toBe(true)
-    expect(storage.values.has(AURORA_NODE_CONFIG_STORAGE_KEY)).toBe(true)
-
-    storage.failLegacyDelete = false
-    await expect(store.clear?.()).resolves.toBeUndefined()
-    expect(storage.values.size).toBe(0)
+    await expect(createAuroraNodeConfigV2TauriStore(storage).load())
+      .rejects.toMatchObject({ code: 'invalid_document' })
+    expect(storage.calls).toEqual([{ kind: 'read' }])
   })
 
-  it('uses the real narrow TauriLocalTransport command boundary', async () => {
-    const values = new Map<string, string>()
+  it('uses only the native policy command boundary through TauriLocalTransport', async () => {
+    vi.stubGlobal('window', { __AURORA_NODE_CONFIG_DOCUMENT_TOKEN__: 'd'.repeat(64) })
+    let document = emptyAuroraNodeConfigDocumentV2(610)
     const calls: Array<{ command: string; args?: Record<string, unknown> }> = []
+    let handle = 0
     const transport = new TauriLocalTransport({
       listen: async () => () => {},
       invoke: async (command, args) => {
         calls.push(args === undefined ? { command } : { command, args })
-        if (command === 'aurora_node_config_get') {
-          return { key: AURORA_NODE_CONFIG_STORAGE_KEY, value: values.get(AURORA_NODE_CONFIG_STORAGE_KEY) ?? null }
+        if (command === 'aurora_node_config_policy_read') {
+          return {
+            documentJson: JSON.stringify(document),
+            draftHandle: (++handle).toString(16).padStart(64, '0')
+          }
         }
-        if (command === 'aurora_node_config_set') {
-          values.set(AURORA_NODE_CONFIG_STORAGE_KEY, String(args?.value))
-          return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
-        }
-        if (command === 'aurora_node_config_delete') {
-          values.delete(AURORA_NODE_CONFIG_STORAGE_KEY)
-          return { key: AURORA_NODE_CONFIG_STORAGE_KEY, ok: true }
-        }
-        if (command === 'aurora_node_config_v2_get') {
-          return { key: AURORA_NODE_CONFIG_V2_STORAGE_KEY, value: values.get(AURORA_NODE_CONFIG_V2_STORAGE_KEY) ?? null }
-        }
-        if (command === 'aurora_node_config_v2_set') {
-          values.set(AURORA_NODE_CONFIG_V2_STORAGE_KEY, String(args?.value))
-          return { key: AURORA_NODE_CONFIG_V2_STORAGE_KEY, ok: true }
-        }
-        if (command === 'aurora_node_config_v2_delete') {
-          values.delete(AURORA_NODE_CONFIG_V2_STORAGE_KEY)
-          return { key: AURORA_NODE_CONFIG_V2_STORAGE_KEY, ok: true }
+        if (command === 'aurora_node_config_policy_compare_and_swap') {
+          document = JSON.parse(String(args?.draftJson)) as AuroraNodeConfigDocumentV2
+          return { documentJson: JSON.stringify(document), savedRevision: document.revision }
         }
         throw new Error(`unexpected command ${command}`)
       },
     })
     const store = createAuroraNodeConfigTauriStore(transport)
-    const document = emptyAuroraNodeConfigDocument(610)
-
-    await store.save(document)
-    expect(await store.load()).toEqual(document)
+    const legacy = await store.load()
+    if (!legacy) throw new Error('Expected loaded device settings')
+    legacy.updatedAtMs = 611
+    legacy.services.tts = { routing: { prefer: 'network_only', fallback: 'error' } }
+    await store.save(legacy)
+    expect((await store.load())?.services.tts).toEqual(legacy.services.tts)
     await store.clear?.()
     expect(calls.map(({ command }) => command)).toEqual([
-      'aurora_node_config_set',
-      'aurora_node_config_get',
-      'aurora_node_config_delete',
+      'aurora_node_config_policy_read',
+      'aurora_node_config_policy_compare_and_swap',
+      'aurora_node_config_policy_read',
+      'aurora_node_config_policy_read',
+      'aurora_node_config_policy_compare_and_swap'
     ])
-
-    const legacy = emptyAuroraNodeConfigDocument(620)
-    await transport.nodeConfigSet(JSON.stringify(legacy))
-    calls.length = 0
-    const v2Store = createAuroraNodeConfigV2TauriStore(transport)
-    expect((await v2Store.load())?.version).toBe(2)
-    expect(calls.map(({ command }) => command)).toEqual([
-      'aurora_node_config_v2_get',
-      'aurora_node_config_get',
-      'aurora_node_config_v2_set',
-      'aurora_node_config_delete',
-    ])
-    await v2Store.clear?.()
-    expect(await v2Store.load()).toBeNull()
-    expect(calls.some(({ command, args }) => command.startsWith('aurora_secure_storage') || args?.key !== undefined)).toBe(false)
+    expect(calls.filter(({ command }) => command === 'aurora_node_config_policy_read')
+      .every(({ args }) => args?.documentToken === 'd'.repeat(64))).toBe(true)
+    expect(calls.filter(({ command }) => command === 'aurora_node_config_policy_compare_and_swap')
+      .every(({ args }) => args?.documentToken === 'd'.repeat(64))).toBe(true)
   })
 })

@@ -1,0 +1,15 @@
+[[permission]]
+identifier = "aurora-local-inference"
+description = "Allow explicit model preparation and profile-scoped offline answers on this device."
+commands.allow = [
+  "aurora_local_inference_engines",
+  "aurora_local_inference_catalog",
+  "aurora_local_inference_model_status",
+  "aurora_local_inference_download_model",
+  "aurora_local_inference_delete_model",
+  "aurora_local_inference_session_create",
+  "aurora_local_inference_complete",
+  "aurora_local_inference_cancel",
+  "aurora_local_inference_session_reset",
+  "aurora_local_inference_session_destroy",
+]

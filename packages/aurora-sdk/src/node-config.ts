@@ -1,7 +1,9 @@
 import type { MeshAddressSelector, MeshRouteCandidate } from './mesh.js'
+import type { AuroraNativeNodeConfigTransport } from './native-node-config.js'
 
 export const AURORA_NODE_CONFIG_VERSION = 1 as const
 export const AURORA_NODE_CONFIG_STORAGE_KEY = 'aurora.nodeConfig.v1'
+export const AURORA_NODE_CONFIG_V2_DRAFT_CONTEXT: unique symbol = Symbol('aurora.node-config.v2-draft-context')
 
 export const AURORA_NODE_CONFIG_MODULES = [
   'tooling',
@@ -85,14 +87,7 @@ export interface AuroraNodeConfigStore {
   clear?(): Promise<void>
 }
 
-export interface AuroraNodeConfigTauriTransport {
-  nodeConfigGet(): Promise<{ key: string; value: string | null }>
-  nodeConfigSet(value: string): Promise<{ key: string; ok: boolean }>
-  nodeConfigDelete(): Promise<{ key: string; ok: boolean }>
-  nodeConfigV2Get(): Promise<{ key: string; value: string | null }>
-  nodeConfigV2Set(value: string): Promise<{ key: string; ok: boolean }>
-  nodeConfigV2Delete(): Promise<{ key: string; ok: boolean }>
-}
+export interface AuroraNodeConfigTauriTransport extends AuroraNativeNodeConfigTransport {}
 
 export interface AuroraNodeConfigSecureStorage {
   get(key: string): Promise<{ value: string | null }>
@@ -373,6 +368,20 @@ export interface AuroraSpeechConfigV1 {
   }
 }
 
+/** Saved preferences only. Microphone consent and capture state are native facts. */
+export interface AuroraBackgroundTranscriptionPolicy {
+  version: 1
+  enabled: boolean
+  ambient: boolean
+  notification: boolean
+  retentionDays: number
+  language?: string | null
+}
+
+export function defaultBackgroundTranscriptionPolicy(): AuroraBackgroundTranscriptionPolicy {
+  return { version: 1, enabled: false, ambient: false, notification: false, retentionDays: 30 }
+}
+
 export interface AuroraNodeConfigDocumentV2 {
   version: typeof AURORA_NODE_CONFIG_V2_VERSION
   revision: number
@@ -380,6 +389,7 @@ export interface AuroraNodeConfigDocumentV2 {
   services: AuroraNodeConfigDocumentV1['services']
   expose: AuroraNodeConfigDocumentV1['expose']
   speech: AuroraSpeechConfigV1
+  backgroundTranscription: AuroraBackgroundTranscriptionPolicy
   /** Read-only provenance used for an explicit rollback/recovery operation. */
   legacyV1Snapshot?: AuroraNodeConfigDocumentV1 | null
 }
@@ -432,13 +442,14 @@ export function emptyAuroraNodeConfigDocumentV2(now = Date.now()): AuroraNodeCon
       sharing: { stt: false, tts: false, kws: false, vad: false },
       limits: { maxAttempts: 2, admissionTimeoutMs: 5_000, finiteDeadlineMs: 60_000 }
     },
+    backgroundTranscription: defaultBackgroundTranscriptionPolicy(),
     legacyV1Snapshot: null
   }
 }
 
 export function sanitizeAuroraNodeConfigDocumentV2(document: unknown): AuroraNodeConfigDocumentV2 {
   const record = asRecord(document, 'document')
-  assertExactKeys(record, ['version', 'revision', 'updatedAtMs', 'services', 'expose', 'speech', 'legacyV1Snapshot'], 'document')
+  assertExactKeys(record, ['version', 'revision', 'updatedAtMs', 'services', 'expose', 'speech', 'backgroundTranscription', 'legacyV1Snapshot'], 'document')
   if (record.version !== AURORA_NODE_CONFIG_V2_VERSION) {
     throw new AuroraNodeConfigValidationError('document.version', 'must be 2')
   }
@@ -489,7 +500,34 @@ export function sanitizeAuroraNodeConfigDocumentV2(document: unknown): AuroraNod
     services: legacy.services,
     expose: legacy.expose,
     speech: { version: 1, stages, sharing, limits: { maxAttempts, admissionTimeoutMs, finiteDeadlineMs } },
+    backgroundTranscription: sanitizeBackgroundTranscriptionPolicy(record.backgroundTranscription),
     legacyV1Snapshot
+  }
+}
+
+function sanitizeBackgroundTranscriptionPolicy(value: unknown): AuroraBackgroundTranscriptionPolicy {
+  if (value === undefined) return defaultBackgroundTranscriptionPolicy()
+  const path = 'document.backgroundTranscription'
+  const record = asRecord(value, path)
+  assertExactKeys(record, ['version', 'enabled', 'ambient', 'notification', 'retentionDays', 'language'], path)
+  if (record.version !== 1) throw new AuroraNodeConfigValidationError(`${path}.version`, 'must be 1')
+  for (const key of ['enabled', 'ambient', 'notification'] as const) {
+    if (typeof record[key] !== 'boolean') throw new AuroraNodeConfigValidationError(`${path}.${key}`, 'must be boolean')
+  }
+  if (!isBoundedSafeInteger(record.retentionDays, 1, 3_650)) {
+    throw new AuroraNodeConfigValidationError(`${path}.retentionDays`, 'must be between 1 and 3650')
+  }
+  if (record.language !== undefined && record.language !== null &&
+    (typeof record.language !== 'string' || record.language.length > 64)) {
+    throw new AuroraNodeConfigValidationError(`${path}.language`, 'must be a string of at most 64 characters or null')
+  }
+  return {
+    version: 1,
+    enabled: record.enabled as boolean,
+    ambient: record.ambient as boolean,
+    notification: record.notification as boolean,
+    retentionDays: record.retentionDays,
+    ...(record.language === undefined ? {} : { language: record.language as string | null })
   }
 }
 
@@ -525,6 +563,7 @@ export function updateAuroraNodeConfigDocumentV2(
   expectedRevision: number,
   now = Date.now()
 ): { document: AuroraNodeConfigDocumentV2; acknowledgement: AuroraNodeConfigSaveAck } {
+  const contextMarker = isRecord(draft) ? Reflect.get(draft, AURORA_NODE_CONFIG_V2_DRAFT_CONTEXT) : undefined
   const currentDocument = sanitizeAuroraNodeConfigDocumentV2(current)
   if (currentDocument.revision !== expectedRevision) throw new AuroraNodeConfigRevisionConflictError(expectedRevision, currentDocument.revision)
   const candidate = sanitizeAuroraNodeConfigDocumentV2(draft)
@@ -532,6 +571,12 @@ export function updateAuroraNodeConfigDocumentV2(
     ...candidate,
     revision: currentDocument.revision + 1,
     updatedAtMs: validateTimestamp(now, 'updatedAtMs')
+  }
+  if (contextMarker !== undefined) {
+    Object.defineProperty(document, AURORA_NODE_CONFIG_V2_DRAFT_CONTEXT, {
+      value: contextMarker,
+      enumerable: true,
+    })
   }
   return {
     document,
@@ -794,33 +839,21 @@ export function createAuroraNodeConfigTauriStore(
   storage: AuroraNodeConfigTauriTransport,
   options: AuroraNodeConfigTauriStoreOptions = {}
 ): AuroraNodeConfigStore {
-  const evidence = options.evidence ?? 'Tauri narrow nonsecret node-config storage'
+  let adapter: Promise<{
+    load(): Promise<AuroraNodeConfigDocumentV1 | null>
+    save(document: AuroraNodeConfigDocumentV1): Promise<void>
+    clear(): Promise<void>
+  }> | null = null
+  const getAdapter = () => {
+    adapter ??= import('./native-node-config.js').then(({ createAuroraNodeConfigV1PolicyStore }) =>
+      createAuroraNodeConfigV1PolicyStore(storage, options))
+    return adapter
+  }
   return {
-    evidence,
-    load: async () => {
-      const result = await storage.nodeConfigGet()
-      assertNodeConfigStorageKey(result.key)
-      if (typeof result.value !== 'string' || result.value.length === 0) return null
-      const parsed = parseAuroraNodeConfigDocument(result.value)
-      if (parsed) return parsed
-      try {
-        const deleted = await storage.nodeConfigDelete()
-        assertNodeConfigStorageKey(deleted.key)
-      } catch {
-        // Invalid policy remains fail-closed even when cleanup is unavailable.
-      }
-      return null
-    },
-    save: async (document) => {
-      const result = await storage.nodeConfigSet(serializeAuroraNodeConfigDocument(document))
-      assertNodeConfigStorageKey(result.key)
-      if (!result.ok) throw new Error('Node config save failed')
-    },
-    clear: async () => {
-      const result = await storage.nodeConfigDelete()
-      assertNodeConfigStorageKey(result.key)
-      if (!result.ok) throw new Error('Node config clear failed')
-    }
+    evidence: options.evidence ?? 'Tauri coordinator-backed non-speech node-config compatibility store',
+    load: async () => (await getAdapter()).load(),
+    save: async (document) => (await getAdapter()).save(document),
+    clear: async () => (await getAdapter()).clear()
   }
 }
 
@@ -844,82 +877,18 @@ export function createAuroraNodeConfigV2TauriStore(
   storage: AuroraNodeConfigTauriTransport,
   options: AuroraNodeConfigTauriStoreOptions = {}
 ): AuroraNodeConfigV2Store {
-  const evidence = options.evidence ?? 'Tauri native-owned v2 speech policy storage'
-  let writeChain: Promise<unknown> = Promise.resolve()
-  const enqueue = <T>(operation: () => Promise<T>): Promise<T> => {
-    const next = writeChain.then(operation, operation)
-    writeChain = next.then(() => undefined, () => undefined)
-    return next
-  }
-  const load = async (): Promise<AuroraNodeConfigDocumentV2 | null> => {
-    const result = await storage.nodeConfigV2Get()
-    assertNodeConfigV2StorageKey(result.key)
-    if (typeof result.value === 'string' && result.value.length > 0) {
-      const parsed = parseAuroraNodeConfigDocumentV2(result.value)
-      if (parsed !== null) return parsed
-      const deletedLegacy = await storage.nodeConfigDelete()
-      assertNodeConfigStorageKey(deletedLegacy.key)
-      if (!deletedLegacy.ok) throw new Error('Invalid node config legacy cleanup failed')
-      const deleted = await storage.nodeConfigV2Delete()
-      assertNodeConfigV2StorageKey(deleted.key)
-      if (!deleted.ok) throw new Error('Invalid node config v2 cleanup failed')
-      return null
-    }
-    // A v1 document is read-only provenance.  Persist its v2 projection under
-    // the new key so subsequent reads use one canonical authority.
-    const legacyResult = await storage.nodeConfigGet()
-    assertNodeConfigStorageKey(legacyResult.key)
-    if (typeof legacyResult.value !== 'string' || legacyResult.value.length === 0) return null
-    const migrated = parseAuroraNodeConfigDocumentV2(legacyResult.value)
-    if (migrated === null) return null
-    const persisted = await storage.nodeConfigV2Set(serializeAuroraNodeConfigDocumentV2(migrated))
-    assertNodeConfigV2StorageKey(persisted.key)
-    if (!persisted.ok) throw new Error('Node config v2 migration save failed')
-    const deletedLegacy = await storage.nodeConfigDelete()
-    assertNodeConfigStorageKey(deletedLegacy.key)
-    if (!deletedLegacy.ok) throw new Error('Node config v1 migration cleanup failed')
-    return migrated
+  let adapter: Promise<AuroraNodeConfigV2Store> | null = null
+  const getAdapter = () => {
+    adapter ??= import('./native-node-config.js').then(({ createAuroraNodeConfigV2PolicyStore }) =>
+      createAuroraNodeConfigV2PolicyStore(storage, options))
+    return adapter
   }
   return {
-    evidence,
-    load,
-    save: async (document) => enqueue(async () => {
-      // Direct overwrite is intentionally limited to first initialization.
-      // User-facing edits must use saveCas so stale UI documents cannot
-      // silently replace a newer durable policy.
-      const current = await load()
-      if (current !== null) throw new Error('Node config v2 save requires saveCas')
-      const normalized = sanitizeAuroraNodeConfigDocumentV2(document)
-      if (normalized.revision !== 1) {
-        throw new Error('Node config v2 initialization must start at revision 1')
-      }
-      const result = await storage.nodeConfigV2Set(serializeAuroraNodeConfigDocumentV2(normalized))
-      assertNodeConfigV2StorageKey(result.key)
-      if (!result.ok) throw new Error('Node config v2 save failed')
-      return {
-        savedRevision: normalized.revision,
-        effectiveRevision: 0,
-        pendingNextGeneration: true,
-        pendingRevision: normalized.revision
-      }
-    }),
-    saveCas: (draft, expectedRevision) => enqueue(async () => {
-      const current = await load()
-      if (current === null) throw new Error('Node config v2 is not initialized')
-      const updated = updateAuroraNodeConfigDocumentV2(current, draft, expectedRevision)
-      const result = await storage.nodeConfigV2Set(serializeAuroraNodeConfigDocumentV2(updated.document))
-      assertNodeConfigV2StorageKey(result.key)
-      if (!result.ok) throw new Error('Node config v2 save failed')
-      return updated
-    }),
-    clear: async () => enqueue(async () => {
-      const deletedLegacy = await storage.nodeConfigDelete()
-      assertNodeConfigStorageKey(deletedLegacy.key)
-      if (!deletedLegacy.ok) throw new Error('Node config v1 clear failed')
-      const result = await storage.nodeConfigV2Delete()
-      assertNodeConfigV2StorageKey(result.key)
-      if (!result.ok) throw new Error('Node config v2 clear failed')
-    })
+    get evidence() { return options.evidence ?? 'Tauri native-owned v2 speech policy storage' },
+    load: async () => (await getAdapter()).load(),
+    save: async (document) => (await getAdapter()).save(document),
+    saveCas: async (draft, expectedRevision) => (await getAdapter()).saveCas(draft, expectedRevision),
+    clear: async () => (await getAdapter()).clear?.()
   }
 }
 
@@ -1157,18 +1126,6 @@ function readSelectorValue(
     throw new AuroraNodeConfigValidationError(`remoteCandidates.selector.${wireKey}`, 'snake_case and camelCase values must match')
   }
   return suppliedValues[0] as string | null | undefined
-}
-
-function assertNodeConfigStorageKey(key: string): void {
-  if (key !== AURORA_NODE_CONFIG_STORAGE_KEY) {
-    throw new Error(`Node config storage returned unexpected key: ${key}`)
-  }
-}
-
-function assertNodeConfigV2StorageKey(key: string): void {
-  if (key !== AURORA_NODE_CONFIG_V2_STORAGE_KEY) {
-    throw new Error(`Node config v2 storage returned unexpected key: ${key}`)
-  }
 }
 
 function isIdentityValue(value: unknown): value is string {

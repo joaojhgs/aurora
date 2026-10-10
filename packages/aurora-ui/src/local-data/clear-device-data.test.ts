@@ -303,6 +303,8 @@ async function seedLocalDataDocument(indexedDB: MemoryIndexedDbFactory): Promise
       localToolStates: [],
       peerGrantMetadata: [],
       localAudit: [],
+      transcriptSessions: [],
+      transcriptSegments: [],
     },
   })
   await store.close()

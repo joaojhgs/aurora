@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -44,12 +45,19 @@ class _FakeInferenceMessage:
 class _FakeInferenceLLM:
     def __init__(self) -> None:
         self.messages = None
+        self.group = None
 
     async def ainvoke(self, messages):
+        from app.services.orchestrator.native_request_completion import current_request_group
+
+        self.group = current_request_group()
         self.messages = messages
         return _FakeInferenceMessage("configured runtime response")
 
     async def astream(self, messages):
+        from app.services.orchestrator.native_request_completion import current_request_group
+
+        self.group = current_request_group()
         self.messages = messages
         yield _FakeInferenceMessage("chunk")
 
@@ -502,6 +510,11 @@ async def test_infer_chat_defaults_to_configured_provider_model_and_ignores_para
     assert response.text == "configured runtime response"
     assert response.metadata["caller_params_ignored"] is True
     assert fake_llm.messages == [{"role": "user", "content": "hello"}]
+    assert fake_llm.group is not None
+    assert fake_llm.group.binding.principal.startswith("local-orchestrator-")
+    assert fake_llm.group.binding.session_id.startswith("session-")
+    assert fake_llm.group.binding.execution_generation == service._native_execution_generation
+    assert not fake_llm.group.is_open
 
 
 @pytest.mark.asyncio
@@ -696,20 +709,77 @@ async def test_stream_infer_chat_uses_validated_configured_labels(tmp_path):
     config_api = AsyncMock()
     config_api.aget_config = AsyncMock(return_value=_services_config(model_file))
     service = OrchestratorService()
-    fake_llm = _FakeInferenceLLM()
+    entered_tail = asyncio.Event()
+    release_tail = asyncio.Event()
+
+    class ControlledInferenceLLM(_FakeInferenceLLM):
+        async def astream(self, messages):
+            from app.services.orchestrator.native_request_completion import current_request_group
+
+            self.group = current_request_group()
+            assert self.group is not None
+            self.member = self.group.admit("local-native")
+            self.messages = messages
+            yield _FakeInferenceMessage("chunk")
+            entered_tail.set()
+            await release_tail.wait()
+            self.group.mark_native_work(self.member, known=True)
+            self.group.settle(
+                self.member,
+                native_status="complete",
+                cache_tail_completed=True,
+            )
+
+    fake_llm = ControlledInferenceLLM()
 
     with (
         patch("app.services.orchestrator.service.ConfigAPI", return_value=config_api),
         patch.object(service, "_inference_llm", new=AsyncMock(return_value=fake_llm)),
     ):
-        stream = await service.stream_infer_chat(
-            OrchestratorInferChatRequest(
-                messages=[OrchestratorChatMessage(role="user", content="hello")],
-                stream=True,
-            )
+        request = OrchestratorInferChatRequest(
+            messages=[OrchestratorChatMessage(role="user", content="hello")],
+            stream=True,
+            session_id="inference-session",
         )
-        chunks = [chunk async for chunk in stream]
+        stream = await service.stream_infer_chat(
+            request,
+            envelope=Envelope(
+                type=OrchestratorMethods.STREAM_INFER_CHAT,
+                payload=request,
+                origin="external",
+                principal_id="inference-principal",
+                caller_peer_id="inference-peer",
+                effective_perms=[OrchestratorMethods.REMOTE_INFERENCE],
+                identity_source="gateway_http",
+            ),
+        )
 
-    assert [chunk.model_id for chunk in chunks] == ["private-model.gguf", "private-model.gguf"]
-    assert [chunk.provider_id for chunk in chunks] == ["llama_cpp", "llama_cpp"]
-    assert chunks[-1].is_final is True
+        iterator = stream.__aiter__()
+        first = await anext(iterator)
+        assert first.is_final is False
+        terminal_task = asyncio.create_task(anext(iterator))
+        try:
+            await asyncio.wait_for(entered_tail.wait(), timeout=1)
+            assert not terminal_task.done()
+            assert fake_llm.group is not None
+            assert fake_llm.group.binding.principal == "inference-principal"
+            assert fake_llm.group.binding.peer == "inference-peer"
+            assert fake_llm.group.binding.session_id == "inference-session"
+            assert fake_llm.group.has_admitted_work
+            assert fake_llm.group.is_open
+
+            release_tail.set()
+            terminal = await asyncio.wait_for(terminal_task, timeout=1)
+            assert terminal.is_final is True
+        finally:
+            release_tail.set()
+            if not terminal_task.done():
+                terminal_task.cancel()
+            _, pending = await asyncio.wait((terminal_task,), timeout=1)
+            assert not pending
+            await iterator.aclose()
+
+    assert first.model_id == terminal.model_id == "private-model.gguf"
+    assert first.provider_id == terminal.provider_id == "llama_cpp"
+    assert fake_llm.group is not None
+    assert not fake_llm.group.is_open

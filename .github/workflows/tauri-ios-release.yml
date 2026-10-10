@@ -137,6 +137,22 @@ jobs:
           echo "AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
           echo "CARGO_AURORA_SHERPA_ONNX_LINK_KIND=static" >> "$GITHUB_ENV"
 
+      - name: Restore pinned device offline assistant runtime
+        if: inputs.app_store_dry_run == 'true'
+        id: llama-cache
+        uses: actions/cache@v4
+        with:
+          path: .artifacts/local-inference/runtime/ios-arm64
+          key: llama-native-${{ runner.os }}-ios-arm64-${{ hashFiles('tools/local-inference/**') }}
+
+      - name: Build pinned device offline assistant runtime
+        if: inputs.app_store_dry_run == 'true' && steps.llama-cache.outputs.cache-hit != 'true'
+        run: python tools/local-inference/build_llama_native.py --target ios-arm64 --jobs 2
+
+      - name: Configure pinned device offline assistant runtime
+        if: inputs.app_store_dry_run == 'true'
+        run: echo "AURORA_LLAMA_CPP_LIB_DIR=$GITHUB_WORKSPACE/.artifacts/local-inference/runtime/ios-arm64" >> "$GITHUB_ENV"
+
       - name: Build Tauri workspace dependencies
         run: |
           pnpm --filter @aurora/client build

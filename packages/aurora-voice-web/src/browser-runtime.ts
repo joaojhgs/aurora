@@ -98,7 +98,7 @@ export function createAuroraBrowserVoiceRuntime(options: AuroraBrowserVoiceRunti
 class AuroraLifecycleAwareBrowserVoiceRuntime extends AuroraVoiceWebRuntime {
   private unsubscribePageLifecycle: (() => void) | null
   private lifecycleRefreshChain: Promise<void> = Promise.resolve()
-  private cancellation: Promise<void> | null = null
+  private cancellation: { readonly operationRevision: number; readonly promise: Promise<void> } | null = null
 
   constructor(
     options: AuroraVoiceWebRuntimeOptions,
@@ -110,31 +110,37 @@ class AuroraLifecycleAwareBrowserVoiceRuntime extends AuroraVoiceWebRuntime {
     this.unsubscribePageLifecycle = pageLifecycle?.subscribe((pageEligibility) => {
       const eligibility = !isEligible(pageEligibility) ? pageEligibility : lifecycle()
       const affectedSession = this.snapshot()
-      if (isEligible(eligibility) || affectedSession.sessionId === null) return
-      this.lifecycleRefreshChain = this.lifecycleRefreshChain
-        .then(async () => {
-          const currentSession = this.snapshot()
-          if (
-            currentSession.sessionId !== affectedSession.sessionId ||
-            currentSession.generation !== affectedSession.generation
-          ) return
-          try {
-            await this.refreshLifecycleEligibility(eligibility)
-          } finally {
-            if (eligibility.reason !== 'visible') onPageLifecycleLost?.(eligibility.reason)
-          }
-        })
+      const affectedSttGeneration = this.activeFiniteSttGeneration()
+      const affectedTtsGeneration = this.activeFiniteTtsGeneration()
+      if (isEligible(eligibility) || (
+        affectedSession.sessionId === null && affectedSttGeneration === null && affectedTtsGeneration === null
+      )) return
+      // Invoke cancellation immediately so the runtime generation is fenced at
+      // lifecycle-event time. Track each promise for dispose without serializing
+      // callbacks whose observation may already be stale when it runs.
+      const refresh = this.refreshLifecycleForObservedOperation(eligibility, {
+        sessionId: affectedSession.sessionId,
+        generation: affectedSession.generation,
+        sttGeneration: affectedSttGeneration,
+        ttsGeneration: affectedTtsGeneration,
+        operationRevision: this.currentOperationRevision()
+      }).finally(() => {
+        if (eligibility.reason !== 'visible') onPageLifecycleLost?.(eligibility.reason)
+      })
+      this.lifecycleRefreshChain = Promise.all([this.lifecycleRefreshChain, refresh])
+        .then(() => undefined)
         .catch(() => undefined)
     }) ?? null
   }
 
   override cancel(reason = 'cancelled'): Promise<void> {
-    if (this.cancellation !== null) return this.cancellation
+    const operationRevision = this.currentOperationRevision()
+    if (this.cancellation?.operationRevision === operationRevision) return this.cancellation.promise
     const cancellation = super.cancel(reason)
     const tracked = cancellation.finally(() => {
-      if (this.cancellation === tracked) this.cancellation = null
+      if (this.cancellation?.promise === tracked) this.cancellation = null
     })
-    this.cancellation = tracked
+    this.cancellation = { operationRevision, promise: tracked }
     return tracked
   }
 

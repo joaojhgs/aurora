@@ -1789,7 +1789,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSSynthesizeRequest",
-      "input_schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
+      "input_schema_hash": "4e5ea8200171c60a7dddcf6e3303cc1620120b1d8a234e568cafc63d3564445d",
       "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest",
       "method_id": "TTS.Synthesize",
       "method_type": "use",
@@ -13453,6 +13453,21 @@
             ],
             "default": null
           },
+          "model_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
           "sample_rate": {
             "anyOf": [
               {
@@ -13497,7 +13512,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "strip"
       },
-      "schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
+      "schema_hash": "4e5ea8200171c60a7dddcf6e3303cc1620120b1d8a234e568cafc63d3564445d",
       "schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest",
       "vectors": {}
     },

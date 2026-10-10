@@ -360,11 +360,11 @@ async function connectToRunningWebview({ adb, serial, appId, deadline, onEvent }
 }
 
 function launchApp(adb, serial, appId) {
-  adbOutput(adb, serial, ['shell', 'am', 'force-stop', appId], { allowFailure: true })
+  adbOutput(adb, serial, ['shell', 'am', 'force-stop', '--user', 'current', appId], { allowFailure: true })
   const startedAt = performance.now()
   let raw = ''
   try {
-    raw = adbOutput(adb, serial, ['shell', 'am', 'start', '-W', '-n', `${appId}/.MainActivity`])
+    raw = adbOutput(adb, serial, ['shell', 'am', 'start', '--user', 'current', '-W', '-n', `${appId}/.MainActivity`])
   } catch {
     raw = adbOutput(adb, serial, ['shell', 'monkey', '-p', appId, '-c', 'android.intent.category.LAUNCHER', '1'])
   }

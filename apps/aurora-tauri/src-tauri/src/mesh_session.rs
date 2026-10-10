@@ -176,6 +176,7 @@ struct MeshSessionPeerBinding {
     latest_rtt_ms: Option<f64>,
     advertised_method_ids: BTreeSet<String>,
     manifest_methods_ready: bool,
+    speech_stage_capabilities: Vec<Value>,
     primary: bool,
     data_channel_codec: Option<Arc<NativeDataChannelCodec>>,
 }
@@ -280,6 +281,9 @@ pub struct MeshSessionBindRequest {
     /// Whether `advertised_method_ids` is authoritative for this binding.
     #[serde(default = "default_manifest_methods_ready")]
     manifest_methods_ready: bool,
+    /// Provider capabilities copied from the validated manifest for this exact data-channel bind.
+    #[serde(default)]
+    speech_stage_capabilities: Vec<Value>,
     /// Whether this peer is the primary eligible route for this local surface.
     #[serde(default)]
     primary: bool,
@@ -473,6 +477,7 @@ pub async fn aurora_mesh_session_bind(
             latest_rtt_ms,
             advertised_method_ids: request.advertised_method_ids.into_iter().collect(),
             manifest_methods_ready: request.manifest_methods_ready,
+            speech_stage_capabilities: request.speech_stage_capabilities,
             primary: request.primary,
             data_channel_codec,
         },
@@ -1030,6 +1035,15 @@ fn drained_payload(
 
 fn default_manifest_methods_ready() -> bool {
     true
+}
+
+fn valid_speech_model_id(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value.bytes().enumerate().all(|(index, byte)| match index {
+            0 => byte.is_ascii_alphanumeric(),
+            _ => byte.is_ascii_alphanumeric() || b"_.:-".contains(&byte),
+        })
 }
 
 impl MeshSessionInner {
@@ -2348,6 +2362,80 @@ pub async fn route_native_data_channel_closed(app: &AppHandle, data_channel_id: 
 }
 
 impl MeshSessionState {
+    /// Resolve the unique ready finite STT model advertised by the currently
+    /// bound peer for the exact configured resource. Capability data is bound
+    /// atomically with its peer/data-channel epoch and is never used as grant
+    /// authority; the native call still goes through the existing authority.
+    pub async fn resolve_ready_stt_model(
+        &self,
+        peer_id: &str,
+        resource_id: &str,
+    ) -> Result<String, TransportError> {
+        let inner = self.inner.lock().await;
+        let binding = inner
+            .peer_bindings
+            .get(peer_id)
+            .filter(|binding| !binding.native_event_lease.is_revoked())
+            .filter(|binding| {
+                inner.peer_channels.get(peer_id) == Some(&binding.data_channel_id)
+                    && inner
+                        .channel_peers
+                        .get(&binding.data_channel_id)
+                        .is_some_and(|bound_peer| bound_peer == peer_id)
+            })
+            .filter(|binding| {
+                binding.manifest_methods_ready
+                    && binding
+                        .advertised_method_ids
+                        .contains("Transcription.Transcribe")
+            })
+            .ok_or(TransportError::UnknownMethod)?;
+
+        let mut resolved = None;
+        for wrapper in &binding.speech_stage_capabilities {
+            let Some(capability) = wrapper.get("capability").and_then(Value::as_object) else {
+                continue;
+            };
+            let matches = capability.get("schema").and_then(Value::as_str)
+                == Some("speech-stage-capability.v1")
+                && capability.get("stage").and_then(Value::as_str) == Some("stt")
+                && capability.get("peer_id").and_then(Value::as_str) == Some(peer_id)
+                && capability.get("resource_id").and_then(Value::as_str) == Some(resource_id)
+                && capability.get("readiness").and_then(Value::as_str) == Some("ready")
+                && capability
+                    .get("method_ids")
+                    .and_then(Value::as_array)
+                    .is_some_and(|methods| {
+                        methods
+                            .iter()
+                            .any(|method| method.as_str() == Some("Transcription.Transcribe"))
+                    })
+                && capability
+                    .get("modes")
+                    .and_then(Value::as_array)
+                    .is_some_and(|modes| modes.iter().any(|mode| mode.as_str() == Some("finite")));
+            if !matches {
+                continue;
+            }
+            let Some(models) = capability.get("model_ids").and_then(Value::as_array) else {
+                continue;
+            };
+            if models.len() != 1 {
+                continue;
+            }
+            let Some(model_id) = models[0].as_str() else {
+                continue;
+            };
+            if !valid_speech_model_id(model_id) {
+                continue;
+            }
+            if resolved.replace(model_id.to_owned()).is_some() {
+                return Err(TransportError::InvalidConfiguration);
+            }
+        }
+        resolved.ok_or(TransportError::InvalidConfiguration)
+    }
+
     /// Conservatively downgrade the native dispatcher when the mobile window
     /// is suspended. The native Tauri window event is emitted by Android's
     /// activity lifecycle even when the WebView is already frozen.
@@ -2719,6 +2807,7 @@ impl MeshSessionState {
                     .map(|method| (*method).to_owned())
                     .collect(),
                 manifest_methods_ready,
+                speech_stage_capabilities: Vec::new(),
                 primary,
                 data_channel_codec: None,
             },
@@ -3123,6 +3212,45 @@ mod tests {
             .block_on(future)
     }
 
+    #[test]
+    fn omitted_mesh_stt_model_requires_one_ready_bound_manifest_model() {
+        let state = MeshSessionState::default();
+        block_on(state.test_bind_native_assistant_peer_at(
+            "peer-1",
+            10,
+            &["Transcription.Transcribe"],
+            true,
+            Some("local-1"),
+            100,
+            true,
+        ));
+        block_on(async {
+            let mut inner = state.inner.lock().await;
+            inner
+                .peer_bindings
+                .get_mut("peer-1")
+                .unwrap()
+                .speech_stage_capabilities = vec![json!({
+                "capability": {
+                    "schema": "speech-stage-capability.v1",
+                    "stage": "stt",
+                    "peer_id": "peer-1",
+                    "resource_id": "remote:peer-1:Transcription",
+                    "readiness": "ready",
+                    "method_ids": ["Transcription.Transcribe"],
+                    "modes": ["finite"],
+                    "model_ids": ["whisper-small"]
+                }
+            })];
+        });
+        assert_eq!(
+            block_on(state.resolve_ready_stt_model("peer-1", "remote:peer-1:Transcription"))
+                .unwrap(),
+            "whisper-small"
+        );
+        assert!(block_on(state.resolve_ready_stt_model("peer-1", "remote:peer-1:TTS")).is_err());
+    }
+
     fn install_ready_assistant_binding(
         inner: &mut MeshSessionInner,
         peer_id: &str,
@@ -3150,6 +3278,7 @@ mod tests {
                     ids::ORCHESTRATOR_EXTERNAL_USER_INPUT.to_owned()
                 ]),
                 manifest_methods_ready: true,
+                speech_stage_capabilities: Vec::new(),
                 primary: true,
                 data_channel_codec: None,
             },
@@ -3381,6 +3510,7 @@ mod tests {
                 latest_rtt_ms: None,
                 advertised_method_ids: BTreeSet::new(),
                 manifest_methods_ready: true,
+                speech_stage_capabilities: Vec::new(),
                 primary: false,
                 data_channel_codec: None,
             },
@@ -3396,6 +3526,7 @@ mod tests {
                 latest_rtt_ms: None,
                 advertised_method_ids: BTreeSet::new(),
                 manifest_methods_ready: true,
+                speech_stage_capabilities: Vec::new(),
                 primary: true,
                 data_channel_codec: None,
             },
@@ -4337,6 +4468,7 @@ mod tests {
                 latest_rtt_ms: None,
                 advertised_method_ids: BTreeSet::new(),
                 manifest_methods_ready: true,
+                speech_stage_capabilities: Vec::new(),
                 primary: true,
                 data_channel_codec: Some(installed.clone()),
             },
@@ -4388,6 +4520,7 @@ mod tests {
                     ids::ORCHESTRATOR_EXTERNAL_USER_INPUT.to_owned()
                 ]),
                 manifest_methods_ready: true,
+                speech_stage_capabilities: Vec::new(),
                 primary: true,
                 data_channel_codec: None,
             },
@@ -4422,6 +4555,7 @@ mod tests {
                     ids::ORCHESTRATOR_EXTERNAL_USER_INPUT.to_owned()
                 ]),
                 manifest_methods_ready: true,
+                speech_stage_capabilities: Vec::new(),
                 primary: true,
                 data_channel_codec: None,
             },

@@ -1,4 +1,5 @@
 import { createServer } from 'node:http'
+import { createHash } from 'node:crypto'
 
 const port = Number(process.env.AURORA_MODEL_FIXTURE_PORT ?? 0)
 const partial = process.env.AURORA_MODEL_FIXTURE_PARTIAL ?? 'Fixture partial response'
@@ -11,6 +12,28 @@ let armedTurnId = null
 function json(response, status, body) {
   response.writeHead(status, { 'content-type': 'application/json' })
   response.end(JSON.stringify(body))
+}
+
+async function readJson(request) {
+  let body = ''
+  for await (const chunk of request) body += chunk
+  return JSON.parse(body)
+}
+
+function fixtureEmbedding(input) {
+  const tokens = typeof input === 'string'
+    ? input.trim().split(/\s+/u).filter(Boolean)
+    : input.map(String)
+  const vector = Array(8).fill(0)
+  for (const token of tokens) {
+    const digest = createHash('sha256').update(token).digest()
+    const bucket = digest.readUInt32BE(0) % vector.length
+    vector[bucket] += digest[4] & 1 ? 1 : -1
+  }
+  const magnitude = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0))
+  if (magnitude === 0) vector[0] = 1
+  else for (let index = 0; index < vector.length; index += 1) vector[index] /= magnitude
+  return { vector, tokenCount: tokens.length }
 }
 
 function clearTurn(turn) {
@@ -37,7 +60,7 @@ function resumeTurn(turn) {
   return true
 }
 
-const server = createServer((request, response) => {
+const server = createServer(async (request, response) => {
   const armMatch = request.url?.match(/^\/__fixture\/arm\/([^/]+)$/u)
   if (request.method === 'POST' && armMatch) {
     const turnId = decodeURIComponent(armMatch[1])
@@ -65,6 +88,35 @@ const server = createServer((request, response) => {
 
   if (request.method !== 'GET' && request.method !== 'POST') return json(response, 405, { error: 'method_not_allowed' })
   if (request.url === '/v1/models') return json(response, 200, { data: [{ id: 'aurora-ui-acceptance-fixture', object: 'model' }] })
+  if (request.method === 'POST' && request.url === '/v1/embeddings') {
+    let body
+    try {
+      body = await readJson(request)
+    } catch {
+      return json(response, 400, { error: 'invalid_json' })
+    }
+    const inputs = typeof body.input === 'string'
+      ? [body.input]
+      : Array.isArray(body.input) && body.input.every(Number.isInteger)
+        ? [body.input]
+        : body.input
+    if (!Array.isArray(inputs) || !inputs.every((item) => typeof item === 'string' || (Array.isArray(item) && item.every(Number.isInteger)))) {
+      return json(response, 400, { error: 'input_must_be_text_or_token_arrays' })
+    }
+    let tokenCount = 0
+    const data = inputs.map((input, index) => {
+      const embedding = fixtureEmbedding(input)
+      tokenCount += embedding.tokenCount
+      return { object: 'embedding', index, embedding: embedding.vector }
+    })
+    response.setHeader('x-aurora-fixture-semantics', 'deterministic hash vectors; not semantic embeddings')
+    return json(response, 200, {
+      object: 'list',
+      data,
+      model: body.model ?? 'aurora-ui-acceptance-fixture',
+      usage: { prompt_tokens: tokenCount, total_tokens: tokenCount },
+    })
+  }
   if (request.method !== 'POST' || request.url !== '/v1/chat/completions') return json(response, 404, { error: 'not_found' })
 
   const requestedTurnId = request.headers['x-aurora-acceptance-turn-id']?.toString().trim()

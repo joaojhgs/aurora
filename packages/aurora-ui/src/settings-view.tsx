@@ -36,6 +36,8 @@ export interface SettingsViewProps {
   onNavigate?: ((href: string) => void) | undefined
   /** Optional host-supplied content rendered in This device → Connection & role (e.g. Tauri "Change device setup"). */
   connectionRoleContent?: ReactNode | undefined
+  /** Native phone host supplies its on-device assistant controls. */
+  localAssistantContent?: ReactNode | undefined
 }
 
 export function SettingsView({
@@ -48,7 +50,8 @@ export function SettingsView({
   onDesktopOverlayConfirmed,
   onRequestNativeAccess,
   onNavigate,
-  connectionRoleContent
+  connectionRoleContent,
+  localAssistantContent,
 }: SettingsViewProps) {
   const profile = useMemo(() => surfaceProfile ?? getAuroraSurfaceProfile({
     transportKind: snapshot.transportKind,
@@ -75,6 +78,7 @@ export function SettingsView({
         connectionRoleContent={connectionRoleContent}
         onDesktopOverlayConfirmed={onDesktopOverlayConfirmed}
       />
+      {shouldShowForSurface(profile, 'localInference') ? localAssistantContent : null}
       {showLocalVoiceEditor ? (
         <VoiceSettingsView
           client={client}

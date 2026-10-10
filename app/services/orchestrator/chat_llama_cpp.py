@@ -1,3 +1,4 @@
+import inspect
 import json
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from operator import itemgetter
@@ -48,10 +49,54 @@ from langchain_core.utils.pydantic import is_basemodel_subclass
 from pydantic import (
     BaseModel,
     Field,
+    PrivateAttr,
     model_validator,
 )
 
-from app.services.orchestrator.native_worker import run_native, stream_native
+from app.services.orchestrator.llama_context_owner import (
+    bind_native_wrapper,
+    make_owned_llama_class,
+    native_context,
+)
+from app.services.orchestrator.native_worker import (
+    direct_native_call,
+    native_cleanup_callback,
+    record_iterator_cleanup_failure,
+    run_native,
+    stream_native,
+)
+
+
+def _close_native_iterator(iterator: Any, *, provider: Any) -> BaseException | None:
+    """Close one exact iterator and retain only a fixed lifecycle outcome."""
+
+    with native_cleanup_callback():
+        try:
+            close = getattr(iterator, "close", None)
+        except BaseException:
+            record_iterator_cleanup_failure(
+                None, unknown=True, provider=provider, retained=iterator
+            )
+            return None
+        if not callable(close):
+            record_iterator_cleanup_failure(
+                None, unknown=True, provider=provider, retained=iterator
+            )
+            return None
+        try:
+            close_result = close()
+        except BaseException:
+            record_iterator_cleanup_failure(None, provider=provider, retained=iterator)
+            return RuntimeError("Aurora cannot complete this request right now.")
+        if inspect.isawaitable(close_result):
+            if inspect.iscoroutine(close_result):
+                close_result.close()
+            error = RuntimeError("Aurora cannot complete this request right now.")
+            record_iterator_cleanup_failure(
+                None, unknown=True, provider=provider, retained=iterator
+            )
+            return error
+        return None
 
 
 class ChatLlamaCpp(BaseChatModel):
@@ -119,6 +164,12 @@ class ChatLlamaCpp(BaseChatModel):
     top_p: float = 0.95
     """The top-p value to use for sampling."""
 
+    min_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    """The minimum probability for nucleus sampling, when configured."""
+
+    chat_format: str | None = None
+    """The llama.cpp chat format to select, when configured."""
+
     echo: bool = False
     """Whether to echo the prompt."""
 
@@ -166,13 +217,17 @@ class ChatLlamaCpp(BaseChatModel):
     verbose: bool = False
     """Print verbose output to stderr."""
 
+    _constructed_client: Any = PrivateAttr(default=None)
+    _effective_chat_format: str | None = PrivateAttr(default=None)
+    _constructed_chat_format: str | None = PrivateAttr(default=None)
+
     @model_validator(mode="after")
     def validate_environment(self) -> Self:
         """Validate that llama-cpp-python library is installed."""
         from app.services.orchestrator.llama_cpp_compat import load_llama_cpp_backend
 
         backend = load_llama_cpp_backend()
-        llama_class = backend.Llama
+        llama_class = make_owned_llama_class(backend)
         llama_grammar_class = backend.LlamaGrammar
 
         model_path = self.model_path
@@ -199,10 +254,31 @@ class ChatLlamaCpp(BaseChatModel):
         if self.n_gpu_layers is not None:
             model_params["n_gpu_layers"] = self.n_gpu_layers
 
+        if self.chat_format is not None:
+            model_params["chat_format"] = self.chat_format
+
         model_params.update(self.model_kwargs)
+
+        effective_chat_format = model_params.get("chat_format")
+        if self.chat_format is not None and "chat_format" not in self.model_kwargs:
+            try:
+                constructor_parameters = inspect.signature(backend.Llama.__init__).parameters
+            except (TypeError, ValueError) as error:
+                raise ValueError("Configured chat format is unavailable.") from error
+            if "chat_format" not in constructor_parameters:
+                raise ValueError("Configured chat format is unavailable.")
 
         try:
             self.client = llama_class(model_path, **model_params)
+            bind_native_wrapper(self, self.client)
+            self._constructed_client = self.client
+            self._effective_chat_format = (
+                effective_chat_format if type(effective_chat_format) is str else None
+            )
+            actual_chat_format = getattr(self.client, "chat_format", None)
+            self._constructed_chat_format = (
+                actual_chat_format if type(actual_chat_format) is str else None
+            )
         except Exception as e:
             raise ValueError(
                 f"Could not load Llama model from path: {model_path}. Received error {e}"
@@ -260,6 +336,7 @@ class ChatLlamaCpp(BaseChatModel):
         }
         return ChatResult(generations=generations, llm_output=llm_output)
 
+    @direct_native_call(cleanup_slots=2)
     def _generate(
         self,
         messages: list[BaseMessage],
@@ -268,12 +345,24 @@ class ChatLlamaCpp(BaseChatModel):
         **kwargs: Any,
     ) -> ChatResult:
         params = {**self._get_parameters(stop), **kwargs}
+        if params.get("tools") and params.get("tool_choice") is None:
+            params["tool_choice"] = "auto"
+        self._validate_completion_options(params)
 
         # Check tool_choice is whether available, if yes then run no stream with tool
         # calling
         if self.streaming and not params.get("tool_choice"):
             stream_iter = self._stream(messages, run_manager=run_manager, **kwargs)
-            return generate_from_stream(stream_iter)
+            primary_error: BaseException | None = None
+            try:
+                return generate_from_stream(stream_iter)
+            except BaseException as error:
+                primary_error = error
+                raise
+            finally:
+                cleanup_error = _close_native_iterator(stream_iter, provider=self)
+                if cleanup_error is not None and primary_error is None:
+                    raise cleanup_error
 
         message_dicts = self._create_message_dicts(messages)
 
@@ -281,6 +370,7 @@ class ChatLlamaCpp(BaseChatModel):
 
         return self._create_chat_result(response)
 
+    @direct_native_call
     def _stream(
         self,
         messages: list[BaseMessage],
@@ -289,30 +379,66 @@ class ChatLlamaCpp(BaseChatModel):
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
         params = {**self._get_parameters(stop), **kwargs}
+        if params.get("tools") and params.get("tool_choice") is None:
+            params["tool_choice"] = "auto"
+        self._validate_completion_options(params)
+
+        if (
+            params.get("tool_choice") == "auto"
+            and isinstance(params.get("tools"), (list, tuple))
+            and params["tools"]
+        ):
+            message_dicts = self._create_message_dicts(messages)
+            response = self.client.create_chat_completion(
+                messages=message_dicts,
+                stream=False,
+                **params,
+            )
+            result = self._create_chat_result(response)
+            for generation in result.generations:
+                chunk = ChatGenerationChunk(
+                    message=AIMessageChunk.model_validate(
+                        generation.message.model_dump(exclude={"type"})
+                    ),
+                    generation_info=generation.generation_info,
+                )
+                if run_manager is not None:
+                    run_manager.on_llm_new_token(chunk.text, chunk=chunk)
+                yield chunk
+            return
+
         message_dicts = self._create_message_dicts(messages)
 
         result = self.client.create_chat_completion(messages=message_dicts, stream=True, **params)
-
-        default_chunk_class = AIMessageChunk
-        count = 0
-        for chunk in result:
-            count += 1
-            if not isinstance(chunk, dict):
-                chunk = chunk.model_dump()
-            if len(chunk["choices"]) == 0:
-                continue
-            choice = chunk["choices"][0]
-            if choice["delta"] is None:
-                continue
-            chunk = _convert_delta_to_message_chunk(choice["delta"], default_chunk_class)
-            generation_info = {}
-            if finish_reason := choice.get("finish_reason"):
-                generation_info["finish_reason"] = finish_reason
-            default_chunk_class = chunk.__class__
-            chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info or None)
-            if run_manager:
-                run_manager.on_llm_new_token(chunk.text, chunk=chunk)
-            yield chunk
+        primary_error: BaseException | None = None
+        try:
+            default_chunk_class = AIMessageChunk
+            count = 0
+            for chunk in result:
+                count += 1
+                if not isinstance(chunk, dict):
+                    chunk = chunk.model_dump()
+                if len(chunk["choices"]) == 0:
+                    continue
+                choice = chunk["choices"][0]
+                if choice["delta"] is None:
+                    continue
+                chunk = _convert_delta_to_message_chunk(choice["delta"], default_chunk_class)
+                generation_info = {}
+                if finish_reason := choice.get("finish_reason"):
+                    generation_info["finish_reason"] = finish_reason
+                default_chunk_class = chunk.__class__
+                chunk = ChatGenerationChunk(message=chunk, generation_info=generation_info or None)
+                if run_manager:
+                    run_manager.on_llm_new_token(chunk.text, chunk=chunk)
+                yield chunk
+        except BaseException as error:
+            primary_error = error
+            raise
+        finally:
+            cleanup_error = _close_native_iterator(result, provider=self)
+            if cleanup_error is not None and primary_error is None:
+                raise cleanup_error
 
     async def _astream(
         self,
@@ -323,16 +449,51 @@ class ChatLlamaCpp(BaseChatModel):
     ):
         """Stream through provider-owned workers that can be drained on cancellation."""
 
+        kwargs = dict(kwargs)
+        tools = kwargs.get("tools")
+        if tools and kwargs.get("tool_choice") is None:
+            kwargs["tool_choice"] = "auto"
+        if kwargs.get("tool_choice") == "auto" and isinstance(tools, (list, tuple)) and tools:
+            result = await self._agenerate(
+                messages,
+                stop=stop,
+                run_manager=run_manager,
+                **kwargs,
+            )
+            for generation in result.generations:
+                chunk = ChatGenerationChunk(
+                    message=AIMessageChunk.model_validate(
+                        generation.message.model_dump(exclude={"type"})
+                    ),
+                    generation_info=generation.generation_info,
+                )
+                if run_manager is not None:
+                    await run_manager.on_llm_new_token(chunk.text, chunk=chunk)
+                yield chunk
+            return
+
         sync_run_manager = run_manager.get_sync() if run_manager is not None else None
-        async for chunk in stream_native(
+        inner_stream = stream_native(
             self,
             self._stream,
             messages,
             stop=stop,
             run_manager=sync_run_manager,
             **kwargs,
-        ):
-            yield chunk
+        )
+        primary_error: BaseException | None = None
+        try:
+            async for chunk in inner_stream:
+                yield chunk
+        except BaseException as error:
+            primary_error = error
+            raise
+        finally:
+            try:
+                await inner_stream.aclose()
+            except BaseException:
+                if primary_error is None:
+                    raise
 
     async def _agenerate(
         self,
@@ -344,14 +505,15 @@ class ChatLlamaCpp(BaseChatModel):
         """Run non-streaming generation through the same drainable worker lease."""
 
         sync_run_manager = run_manager.get_sync() if run_manager is not None else None
-        return await run_native(
-            self,
-            self._generate,
-            messages,
-            stop=stop,
-            run_manager=sync_run_manager,
-            **kwargs,
-        )
+        async with native_context(self):
+            return await run_native(
+                self,
+                self._generate,
+                messages,
+                stop=stop,
+                run_manager=sync_run_manager,
+                **kwargs,
+            )
 
     def bind_tools(
         self,
@@ -580,7 +742,20 @@ class ChatLlamaCpp(BaseChatModel):
         This information is used by the LangChain callback system, which
         is used for tracing purposes make it possible to monitor LLMs.
         """
-        return {
+        constructed_client = self._constructed_client
+        effective_chat_format = self._effective_chat_format
+        if constructed_client is not None:
+            if self.client is not constructed_client:
+                raise ValueError("The configured model is unavailable.")
+            if effective_chat_format is not None:
+                actual_chat_format = getattr(self.client, "chat_format", None)
+                if (
+                    type(actual_chat_format) is not str
+                    or actual_chat_format != self._constructed_chat_format
+                ):
+                    raise ValueError("The configured model is unavailable.")
+
+        params = {
             # The model name allows users to specify custom token counting
             # rules in LLM monitoring applications (e.g., in LangSmith users
             # can provide per token pricing for their model and monitor
@@ -588,6 +763,23 @@ class ChatLlamaCpp(BaseChatModel):
             **{"model_path": self.model_path},
             **self._default_params,
         }
+        if effective_chat_format is not None:
+            params["chat_format"] = self._constructed_chat_format
+        return params
+
+    def _validate_completion_options(self, params: Mapping[str, Any]) -> None:
+        """Fail closed if an explicitly supplied option is absent from the base API."""
+
+        if "min_p" not in params:
+            return
+        owned_base = getattr(type(self.client), "_aurora_owned_base", None)
+        completion_method = getattr(owned_base, "create_chat_completion", None)
+        try:
+            completion_parameters = inspect.signature(completion_method).parameters
+        except (TypeError, ValueError) as error:
+            raise ValueError("Configured sampling option is unavailable.") from error
+        if "min_p" not in completion_parameters:
+            raise ValueError("Configured sampling option is unavailable.")
 
     @property
     def _llm_type(self) -> str:
@@ -607,6 +799,8 @@ class ChatLlamaCpp(BaseChatModel):
         }
         if self.grammar:
             params["grammar"] = self.grammar
+        if self.min_p is not None:
+            params["min_p"] = self.min_p
         return params
 
 

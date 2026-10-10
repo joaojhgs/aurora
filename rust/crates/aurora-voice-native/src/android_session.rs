@@ -4,6 +4,9 @@
 //! owns the platform capture/playback threads, but it never owns voice state,
 //! generations, transport calls, or cancellation semantics.
 
+use crate::mobile_session_close::{
+    rollback_failed_join_driver, start_join_driver, MobileSessionCloseError, MobileSessionLifecycle,
+};
 use crate::native_event_observer::{
     begin_native_voice_observation_producer, observe_native_voice, NativeVoiceObservation,
     NativeVoiceObservationToken, NativeVoiceTurnIds, NativeVoiceTurnSnapshot,
@@ -16,6 +19,7 @@ use crate::{
 };
 #[cfg(feature = "native-sherpa-tts")]
 use crate::{build_installed_tts_provider, build_installed_tts_provider_with_reference};
+use crate::{emit_native_speech_lifecycle, native_speech_lifecycle_observer_enabled};
 use crate::{
     AndroidAudioInput, AndroidAudioOutput, AndroidCaptureControl, AndroidPcmIngress, GatewayAuth,
     MicrophoneAudioPolicy, NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig,
@@ -23,24 +27,26 @@ use crate::{
     NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, TransportLimits,
 };
 use async_trait::async_trait;
+use aurora_voice_core::node_policy::SpeechStages;
 #[cfg(any(test, all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
 use aurora_voice_core::EngineError;
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_core::WakeOrchestrationConfig;
 use aurora_voice_core::{
-    CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation, RedactedSnapshot,
-    RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechTransport, TimestampMicros,
-    VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState,
+    AudioInput, AudioOutput, CancellationToken, CaptureOwnerKind, CaptureStartReason, Generation,
+    RedactedSnapshot, RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechLifecycleEventV1,
+    SpeechTransport, TimestampMicros, TransitionReason, VoiceCaptureLease, VoiceCoreError,
+    VoiceRuntime, VoiceState,
 };
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttPort,
-    FiniteSttProviderBinding, FiniteSttResult, KwsConfig, TaskPackBinding, TtsSynthesisPort,
-    TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig, VoiceTask,
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttResult, KwsConfig,
+    TaskPackBinding, TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
 };
 use aurora_voice_engine::{
-    FiniteSttRouteScope, RouteFiniteSttBinding, RouteTtsBinding, MAX_FINITE_STT_SAMPLES,
-    VAD_SAMPLE_RATE_HZ,
+    BoundTaskRequest, FiniteSttAudioBuilder, FiniteSttPort, FiniteSttProviderBinding,
+    FiniteSttRouteScope, RouteFiniteSttBinding, RouteFiniteSttRequest, RouteTtsBinding,
+    TaskRequest, TtsSynthesisPort, VoiceTask, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
 };
 #[cfg(feature = "native-sherpa")]
 use aurora_voice_sherpa::{
@@ -78,6 +84,64 @@ type RuntimeCore = VoiceRuntime<
     AndroidAudioOutput,
     AndroidSessionSink,
 >;
+
+trait AndroidSessionRuntime {
+    fn has_active_capture(&self) -> bool;
+    fn next_capture_generation(&self) -> Result<Generation, VoiceCoreError>;
+    fn invoke_turn<'a>(
+        &'a mut self,
+        mode: AndroidVoiceStartMode,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>>;
+    fn cleanup_report_for_generation(
+        &self,
+        generation: Generation,
+    ) -> Option<aurora_voice_core::VoiceCleanupReport>;
+}
+
+impl<A, E, P, T, O, S> AndroidSessionRuntime for VoiceRuntime<A, E, P, T, O, S>
+where
+    A: AudioInput,
+    E: FiniteSttPort,
+    P: TtsSynthesisPort,
+    T: SpeechTransport,
+    O: AudioOutput,
+    S: RuntimeEventSink,
+{
+    fn has_active_capture(&self) -> bool {
+        VoiceRuntime::has_active_capture(self)
+    }
+
+    fn next_capture_generation(&self) -> Result<Generation, VoiceCoreError> {
+        VoiceRuntime::next_capture_generation(self)
+    }
+
+    fn invoke_turn<'a>(
+        &'a mut self,
+        mode: AndroidVoiceStartMode,
+        lease: VoiceCaptureLease,
+        at: TimestampMicros,
+        cancellation: CancellationToken,
+    ) -> Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> {
+        match mode {
+            AndroidVoiceStartMode::PushToTalk => {
+                Box::pin(self.run_push_to_talk_transcription(lease, at, cancellation))
+            }
+            AndroidVoiceStartMode::BackgroundSession => {
+                Box::pin(self.run_background_turn(lease, at, cancellation))
+            }
+        }
+    }
+
+    fn cleanup_report_for_generation(
+        &self,
+        generation: Generation,
+    ) -> Option<aurora_voice_core::VoiceCleanupReport> {
+        VoiceRuntime::cleanup_report_for_generation(self, generation)
+    }
+}
 
 #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
 type RuntimeCore = VoiceRuntime<
@@ -451,6 +515,7 @@ pub struct AndroidVoiceSessionConfig {
     wake_phrase_id: Option<String>,
     wake_phrase_text: Option<String>,
     wake_phrase_revision: Option<String>,
+    speech_stages: Option<SpeechStages>,
     #[cfg(feature = "native-sherpa-tts")]
     tts_reference_profile: Option<AndroidTtsReferenceProfile>,
 }
@@ -524,6 +589,7 @@ impl AndroidVoiceSessionConfig {
             wake_phrase_id: None,
             wake_phrase_text: None,
             wake_phrase_revision: None,
+            speech_stages: None,
             #[cfg(feature = "native-sherpa-tts")]
             tts_reference_profile: None,
         }
@@ -586,6 +652,11 @@ impl AndroidVoiceSessionConfig {
         )
     }
 
+    pub fn with_speech_stages(mut self, stages: SpeechStages) -> Self {
+        self.speech_stages = Some(stages);
+        self
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn with_local_pack_selection_for_route(
         gateway: Option<Url>,
@@ -600,20 +671,50 @@ impl AndroidVoiceSessionConfig {
         wake_phrase_text: Option<String>,
         wake_phrase_revision: Option<String>,
     ) -> Self {
+        Self::with_pack_selection_for_route(
+            gateway,
+            auth,
+            remote_audio_consent,
+            Some(pack_store_root.into()),
+            Some(stt_model_id.into()),
+            Some(tts_voice_id.into()),
+            vad_model_id,
+            kws_model_id,
+            wake_phrase_id,
+            wake_phrase_text,
+            wake_phrase_revision,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_pack_selection_for_route(
+        gateway: Option<Url>,
+        auth: GatewayAuth,
+        remote_audio_consent: bool,
+        pack_store_root: Option<PathBuf>,
+        stt_model_id: Option<String>,
+        tts_voice_id: Option<String>,
+        vad_model_id: Option<String>,
+        kws_model_id: Option<String>,
+        wake_phrase_id: Option<String>,
+        wake_phrase_text: Option<String>,
+        wake_phrase_revision: Option<String>,
+    ) -> Self {
         Self {
             gateway,
             auth,
             remote_audio_consent,
             assistant_route_mode: AndroidAssistantRouteMode::HttpOnly,
             preferred_stable_peer_id: None,
-            pack_store_root: Some(pack_store_root.into()),
-            stt_model_id: Some(stt_model_id.into()),
+            pack_store_root,
+            stt_model_id,
             vad_model_id,
             kws_model_id,
-            tts_voice_id: Some(tts_voice_id.into()),
+            tts_voice_id,
             wake_phrase_id,
             wake_phrase_text,
             wake_phrase_revision,
+            speech_stages: None,
             #[cfg(feature = "native-sherpa-tts")]
             tts_reference_profile: None,
         }
@@ -741,11 +842,12 @@ pub struct AndroidBackgroundVoiceTurnResult {
 pub struct AndroidVoiceSession {
     ingress: AndroidPcmIngress,
     output: AndroidAudioOutput,
+    control: AndroidCaptureControl,
     commands: tokio_mpsc::UnboundedSender<Command>,
     status: Arc<Mutex<AndroidVoiceSessionStatus>>,
     focused_transcript: Arc<Mutex<Option<String>>>,
     background_results: Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
-    join: Mutex<Option<thread::JoinHandle<()>>>,
+    lifecycle: MobileSessionLifecycle,
 }
 
 impl AndroidVoiceSession {
@@ -754,6 +856,27 @@ impl AndroidVoiceSession {
         ingress_capacity_chunks: usize,
         max_chunk_samples: usize,
         output_capacity_chunks: usize,
+    ) -> Result<Self, AndroidVoiceSessionCommandError> {
+        Self::new_with_join_driver(
+            config,
+            ingress_capacity_chunks,
+            max_chunk_samples,
+            output_capacity_chunks,
+            start_join_driver,
+            || {},
+        )
+    }
+
+    fn new_with_join_driver(
+        config: AndroidVoiceSessionConfig,
+        ingress_capacity_chunks: usize,
+        max_chunk_samples: usize,
+        output_capacity_chunks: usize,
+        start_driver: impl FnOnce(
+            &MobileSessionLifecycle,
+            thread::JoinHandle<()>,
+        ) -> Result<(), thread::JoinHandle<()>>,
+        worker_exit: impl FnOnce() + Send + 'static,
     ) -> Result<Self, AndroidVoiceSessionCommandError> {
         let ingress = AndroidPcmIngress::new(ingress_capacity_chunks, max_chunk_samples);
         let output = AndroidAudioOutput::new(output_capacity_chunks);
@@ -770,6 +893,7 @@ impl AndroidVoiceSession {
             observation_tokens: Arc::clone(&observation_tokens),
         };
         let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let lifecycle = MobileSessionLifecycle::new();
         let thread_state = AndroidSessionThreadState {
             status: Arc::clone(&status),
             focused_transcript: Arc::clone(&focused_transcript),
@@ -777,22 +901,38 @@ impl AndroidVoiceSession {
             background_results: Arc::clone(&background_results),
             observation_tokens: Arc::clone(&observation_tokens),
             control: control.clone(),
+            lifecycle: lifecycle.clone(),
         };
         let thread_output = output.clone();
-        let join = thread::Builder::new()
+        let worker = thread::Builder::new()
             .name("aurora-android-voice".to_owned())
             .spawn(move || {
-                run_session_thread(config, input, thread_output, sink, command_rx, thread_state)
+                run_session_thread(config, input, thread_output, sink, command_rx, thread_state);
+                worker_exit();
             })
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        if let Err(worker) = start_driver(&lifecycle, worker) {
+            rollback_failed_join_driver(
+                &lifecycle,
+                worker,
+                || commands.send(Command::Shutdown).is_ok(),
+                |generation| control.interrupt(generation),
+                || {
+                    ingress.close();
+                    output.close();
+                },
+            );
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
         Ok(Self {
             ingress,
             output,
+            control,
             commands,
             status,
             focused_transcript,
             background_results,
-            join: Mutex::new(Some(join)),
+            lifecycle,
         })
     }
 
@@ -848,9 +988,9 @@ impl AndroidVoiceSession {
         mode: AndroidVoiceStartMode,
     ) -> Result<Generation, AndroidVoiceSessionCommandError> {
         let (reply, response) = mpsc::channel();
-        self.commands
-            .send(Command::Start { mode, reply })
-            .map_err(|_| AndroidVoiceSessionCommandError::Closed)?;
+        self.lifecycle
+            .admit(|| self.commands.send(Command::Start { mode, reply }).is_ok())
+            .map_err(map_close_command_error)?;
         response
             .recv()
             .unwrap_or(Err(AndroidVoiceSessionCommandError::Closed))
@@ -858,12 +998,16 @@ impl AndroidVoiceSession {
 
     pub fn finish(&self, generation: u64) -> Result<(), AndroidVoiceSessionCommandError> {
         let (reply, response) = mpsc::channel();
-        self.commands
-            .send(Command::Finish {
-                generation: Generation(generation),
-                reply,
+        self.lifecycle
+            .admit(|| {
+                self.commands
+                    .send(Command::Finish {
+                        generation: Generation(generation),
+                        reply,
+                    })
+                    .is_ok()
             })
-            .map_err(|_| AndroidVoiceSessionCommandError::Closed)?;
+            .map_err(map_close_command_error)?;
         response
             .recv()
             .unwrap_or(Err(AndroidVoiceSessionCommandError::Closed))
@@ -871,32 +1015,72 @@ impl AndroidVoiceSession {
 
     pub fn cancel(&self, generation: u64) -> Result<(), AndroidVoiceSessionCommandError> {
         let (reply, response) = mpsc::channel();
-        self.commands
-            .send(Command::Cancel {
-                generation: Generation(generation),
-                reply,
+        self.lifecycle
+            .admit(|| {
+                self.commands
+                    .send(Command::Cancel {
+                        generation: Generation(generation),
+                        reply,
+                    })
+                    .is_ok()
             })
-            .map_err(|_| AndroidVoiceSessionCommandError::Closed)?;
+            .map_err(map_close_command_error)?;
         response
             .recv()
             .unwrap_or(Err(AndroidVoiceSessionCommandError::Closed))
     }
 
     pub fn close(&self) {
-        let _ = self.commands.send(Command::Shutdown);
+        self.request_close();
+        let _ = self.lifecycle.close_checked();
+    }
+
+    /// Requests terminal retirement without waiting for the native worker.
+    pub fn request_close(&self) {
+        let generation = self
+            .lifecycle
+            .request_retirement(|| self.commands.send(Command::Shutdown).is_ok());
+        if let Some(generation) = generation {
+            self.control.interrupt(generation);
+        }
         self.ingress.close();
         self.output.close();
-        if let Ok(mut join) = self.join.lock() {
-            if let Some(handle) = join.take() {
-                let _ = handle.join();
-            }
-        }
+    }
+
+    /// Waits for the shared terminal result without requiring a Tokio runtime.
+    pub fn wait_closed(
+        &self,
+    ) -> impl Future<Output = Result<(), MobileSessionCloseError>> + 'static {
+        self.lifecycle.wait_closed()
+    }
+
+    /// Requests closure and blocks until the worker thread has actually joined.
+    ///
+    /// Call this only from a thread that may block, never from UI or audio callbacks.
+    pub fn close_checked(&self) -> Result<(), MobileSessionCloseError> {
+        self.request_close();
+        self.lifecycle.close_checked()
+    }
+
+    /// Requests closure and records a sticky failure if the join deadline expires.
+    ///
+    /// The worker and join driver continue after this observer returns on timeout.
+    pub fn close_checked_timeout(&self, timeout: Duration) -> Result<(), MobileSessionCloseError> {
+        self.request_close();
+        self.lifecycle.close_checked_timeout(timeout)
     }
 }
 
 impl Drop for AndroidVoiceSession {
     fn drop(&mut self) {
-        self.close();
+        self.request_close();
+    }
+}
+
+fn map_close_command_error(error: MobileSessionCloseError) -> AndroidVoiceSessionCommandError {
+    match error {
+        MobileSessionCloseError::ShutdownFailed => AndroidVoiceSessionCommandError::Closed,
+        _ => AndroidVoiceSessionCommandError::Unavailable,
     }
 }
 
@@ -908,6 +1092,9 @@ fn build_runtime(
 ) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
     #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     {
+        if let Some(stages) = config.speech_stages.as_ref() {
+            return build_runtime_for_stages(config, stages, input, output, sink);
+        }
         if has_complete_local_pack_selection(config) {
             build_local_runtime(config, input, output, sink)
         } else {
@@ -916,7 +1103,420 @@ fn build_runtime(
     }
     #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
     {
+        if let Some(stages) = config.speech_stages.as_ref() {
+            validate_android_stage_provider(config, &stages.stt, false, false)?;
+            validate_android_stage_provider(config, &stages.tts, false, false)?;
+            validate_android_wake_stages(config, stages)?;
+        }
         build_gateway_runtime(config, input, output, sink)
+    }
+}
+
+fn stage_uses_android_local(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+    local_available: bool,
+    gateway_available: bool,
+    optional_local_absence: bool,
+) -> Result<bool, AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::{RoutingFallback, RoutingPreference};
+
+    match stage.routing.prefer {
+        RoutingPreference::LocalOnly => {
+            if local_available {
+                Ok(true)
+            } else if optional_local_absence {
+                Ok(false)
+            } else {
+                Err(AndroidVoiceSessionCommandError::Unavailable)
+            }
+        }
+        RoutingPreference::Local => {
+            if local_available {
+                Ok(true)
+            } else if stage.routing.fallback == RoutingFallback::Network && gateway_available {
+                Ok(false)
+            } else {
+                Err(AndroidVoiceSessionCommandError::Unavailable)
+            }
+        }
+        RoutingPreference::NetworkOnly => {
+            if gateway_available {
+                Ok(false)
+            } else {
+                Err(AndroidVoiceSessionCommandError::Unavailable)
+            }
+        }
+        RoutingPreference::Network => {
+            if gateway_available {
+                Ok(false)
+            } else if stage.routing.fallback == RoutingFallback::Local && local_available {
+                Ok(true)
+            } else {
+                Err(AndroidVoiceSessionCommandError::Unavailable)
+            }
+        }
+    }
+}
+
+fn validate_android_gateway_stage(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+) -> Result<(), AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::{NullableField, Omitted, SpeechNetworkKind};
+
+    if matches!(&stage.network_kind, Omitted::Value(SpeechNetworkKind::Mesh))
+        || matches!(&stage.target, NullableField::Value(_))
+    {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+    Ok(())
+}
+
+fn validate_android_local_stage(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+) -> Result<(), AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::{NullableField, Omitted};
+
+    if !matches!(&stage.network_kind, Omitted::Missing)
+        || matches!(&stage.target, NullableField::Value(_))
+    {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn validate_android_local_model_selector(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+    selected_model_id: &str,
+) -> Result<(), AndroidVoiceSessionCommandError> {
+    if let aurora_voice_core::node_policy::NullableField::Value(model_id) = &stage.model_id {
+        if model_id != selected_model_id {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
+    }
+    Ok(())
+}
+
+fn android_stage_language(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+) -> Option<&str> {
+    match &stage.language {
+        aurora_voice_core::node_policy::NullableField::Value(language) => Some(language),
+        aurora_voice_core::node_policy::NullableField::Missing
+        | aurora_voice_core::node_policy::NullableField::Null => None,
+    }
+}
+
+fn android_gateway_fallback_allowed(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+) -> bool {
+    use aurora_voice_core::node_policy::{RoutingFallback, RoutingPreference};
+
+    stage.routing.prefer == RoutingPreference::Local
+        && stage.routing.fallback == RoutingFallback::Network
+}
+
+fn validate_android_stage_provider(
+    config: &AndroidVoiceSessionConfig,
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+    local_available: bool,
+    optional_local_absence: bool,
+) -> Result<bool, AndroidVoiceSessionCommandError> {
+    let local = stage_uses_android_local(
+        stage,
+        local_available,
+        config.gateway.is_some(),
+        optional_local_absence,
+    )?;
+    if local {
+        validate_android_local_stage(stage)?;
+    } else {
+        validate_android_gateway_stage(stage)?;
+    }
+    Ok(local)
+}
+
+fn validate_android_wake_stages(
+    config: &AndroidVoiceSessionConfig,
+    stages: &SpeechStages,
+) -> Result<(), AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::{Omitted, RoutingFallback, RoutingPreference};
+
+    for (stage, configured) in [
+        (&stages.kws, config.kws_model_id.is_some()),
+        (&stages.vad, config.vad_model_id.is_some()),
+    ] {
+        let local = validate_android_stage_provider(config, stage, configured, true)?;
+        let routes_to_gateway = matches!(
+            stage.routing.prefer,
+            RoutingPreference::Network | RoutingPreference::NetworkOnly
+        ) || (stage.routing.prefer == RoutingPreference::Local
+            && stage.routing.fallback == RoutingFallback::Network);
+        if !local
+            && (configured || routes_to_gateway || !matches!(&stage.network_kind, Omitted::Missing))
+        {
+            // Android currently has no Gateway KWS or VAD provider.
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
+    }
+    Ok(())
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn build_runtime_for_stages(
+    config: &AndroidVoiceSessionConfig,
+    stages: &SpeechStages,
+    input: AndroidAudioInput,
+    output: AndroidAudioOutput,
+    sink: AndroidSessionSink,
+) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
+    let local_stt_available = config.pack_store_root.is_some()
+        && config
+            .stt_model_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty());
+    let local_tts_available = config.pack_store_root.is_some()
+        && config
+            .tts_voice_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty());
+    let mut local_stt =
+        validate_android_stage_provider(config, &stages.stt, local_stt_available, false)?;
+    let mut local_tts =
+        validate_android_stage_provider(config, &stages.tts, local_tts_available, false)?;
+    validate_android_wake_stages(config, stages)?;
+
+    if local_stt {
+        validate_android_local_model_selector(
+            &stages.stt,
+            config
+                .stt_model_id
+                .as_deref()
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+        )?;
+    }
+    if local_tts {
+        validate_android_local_model_selector(
+            &stages.tts,
+            config
+                .tts_voice_id
+                .as_deref()
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+        )?;
+    }
+    let wake_selected = config.vad_model_id.is_some() || config.kws_model_id.is_some();
+    let manager = if local_stt || local_tts || wake_selected {
+        let opened = config
+            .pack_store_root
+            .clone()
+            .and_then(|store_root| SpeechPackManagerConfig::new(store_root, None).ok())
+            .and_then(|manager_config| SpeechPackManager::open(manager_config).ok())
+            .map(Arc::new);
+        match opened {
+            Some(manager) => Some(manager),
+            None => {
+                if wake_selected
+                    || (local_stt && !android_gateway_fallback_allowed(&stages.stt))
+                    || (local_tts && !android_gateway_fallback_allowed(&stages.tts))
+                {
+                    return Err(AndroidVoiceSessionCommandError::Unavailable);
+                }
+                local_stt = false;
+                local_tts = false;
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let mut local_stt_provider = None;
+    if local_stt {
+        let manager = manager
+            .as_ref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let model_id = config
+            .stt_model_id
+            .as_deref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        match LazyInstalledSttProvider::new(Arc::clone(manager), model_id) {
+            Ok(mut provider) => {
+                provider
+                    .binding
+                    .validate_language(android_stage_language(&stages.stt))
+                    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+                if provider.preload().is_ok() {
+                    local_stt_provider = Some(AndroidFiniteSttProvider::Local(Box::new(provider)));
+                } else if android_gateway_fallback_allowed(&stages.stt) {
+                    local_stt = false;
+                } else {
+                    return Err(AndroidVoiceSessionCommandError::Unavailable);
+                }
+            }
+            Err(_) if android_gateway_fallback_allowed(&stages.stt) => local_stt = false,
+            Err(_) => return Err(AndroidVoiceSessionCommandError::Unavailable),
+        }
+    }
+
+    let mut local_tts_provider = None;
+    if local_tts {
+        let manager = manager
+            .as_ref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let voice_id = config
+            .tts_voice_id
+            .as_deref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        match LazyInstalledTtsProvider::new(
+            Arc::clone(manager),
+            voice_id,
+            config.tts_reference_profile.clone(),
+        ) {
+            Ok(mut provider) => {
+                provider
+                    .binding
+                    .validate_language(android_stage_language(&stages.tts))
+                    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+                if provider.preload().is_ok() {
+                    local_tts_provider = Some(AndroidTtsProvider::Local(Box::new(provider)));
+                } else if android_gateway_fallback_allowed(&stages.tts) {
+                    local_tts = false;
+                } else {
+                    return Err(AndroidVoiceSessionCommandError::Unavailable);
+                }
+            }
+            Err(_) if android_gateway_fallback_allowed(&stages.tts) => local_tts = false,
+            Err(_) => return Err(AndroidVoiceSessionCommandError::Unavailable),
+        }
+    }
+
+    if !local_tts
+        && matches!(
+            &stages.tts.model_id,
+            aurora_voice_core::node_policy::NullableField::Value(_)
+        )
+    {
+        // The existing Gateway TTS port accepts a route and voice identifier, not a model id.
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+
+    let gateway_stt_model = if local_stt {
+        None
+    } else {
+        match &stages.stt.model_id {
+            aurora_voice_core::node_policy::NullableField::Value(model) => Some(model.clone()),
+            aurora_voice_core::node_policy::NullableField::Missing
+            | aurora_voice_core::node_policy::NullableField::Null => None,
+        }
+    };
+    let gateway_policy = if !local_stt || !local_tts {
+        Some(android_gateway_audio_policy(config)?)
+    } else {
+        None
+    };
+    let gateway_limits = gateway_policy.map(transport_limits);
+
+    let stt = if local_stt {
+        local_stt_provider.ok_or(AndroidVoiceSessionCommandError::Unavailable)?
+    } else {
+        let gateway = config
+            .gateway
+            .as_ref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let limits = gateway_limits.ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let route = RouteFiniteSttBinding::new(
+            "gateway.default",
+            if matches!(gateway_policy, Some(MicrophoneAudioPolicy::LoopbackOnly)) {
+                FiniteSttRouteScope::LoopbackSidecar
+            } else {
+                FiniteSttRouteScope::RemoteGateway
+            },
+            VAD_SAMPLE_RATE_HZ,
+            MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+            ROUTE_REVISION,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let transport = NativeGatewayTransport::new(gateway.clone(), config.auth.clone(), limits)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let provider = NativeGatewayFiniteStt::new(
+            transport,
+            NativeGatewayFiniteSttConfig::new(
+                route,
+                gateway_stt_model.unwrap_or_else(|| "realtime".to_owned()),
+                gateway_policy.ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+            )
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        AndroidFiniteSttProvider::Gateway(Box::new(provider))
+    };
+
+    let tts = if local_tts {
+        local_tts_provider.ok_or(AndroidVoiceSessionCommandError::Unavailable)?
+    } else {
+        let gateway = config
+            .gateway
+            .as_ref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let limits = gateway_limits.ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let route = RouteTtsBinding::new(
+            "gateway.default",
+            "voice.default",
+            VAD_SAMPLE_RATE_HZ,
+            ROUTE_REVISION,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let transport = NativeGatewayTransport::new(gateway.clone(), config.auth.clone(), limits)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let provider = NativeGatewayTtsSynthesizer::new(
+            transport,
+            NativeGatewayTtsConfig::new(route, None, 1.0, 16_000 * 30)
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+        );
+        AndroidTtsProvider::Gateway(Box::new(provider))
+    };
+
+    let assistant_policy = microphone_policy(config)?;
+    let assistant_limits = gateway_limits.unwrap_or_else(|| transport_limits(assistant_policy));
+    let assistant_transport = build_assistant_transport(config, assistant_limits)?;
+    let mut runtime = VoiceRuntime::new(
+        input,
+        stt,
+        tts,
+        assistant_transport,
+        output,
+        sink,
+        ANDROID_SURFACE,
+        ANDROID_RUNTIME_ID,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?
+    .with_speech_languages(
+        android_stage_language(&stages.stt).map(str::to_owned),
+        android_stage_language(&stages.tts).map(str::to_owned),
+    );
+    if let Some(manager) = manager.as_ref() {
+        if let Some((vad, kws, wake_config)) = build_wake_runtime_parts(manager.as_ref(), config)? {
+            runtime = runtime
+                .with_wake_providers(Box::new(vad), Box::new(kws), wake_config)
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        }
+    }
+    Ok(runtime)
+}
+
+fn android_gateway_audio_policy(
+    config: &AndroidVoiceSessionConfig,
+) -> Result<MicrophoneAudioPolicy, AndroidVoiceSessionCommandError> {
+    let gateway = config
+        .gateway
+        .as_ref()
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    if gateway.scheme() == "http" && is_loopback(gateway) {
+        Ok(MicrophoneAudioPolicy::LoopbackOnly)
+    } else if config.remote_audio_consent {
+        Ok(MicrophoneAudioPolicy::ExplicitRemoteConsent)
+    } else {
+        Err(AndroidVoiceSessionCommandError::Unavailable)
     }
 }
 
@@ -1064,13 +1664,22 @@ fn build_gateway_runtime(
     sink: AndroidSessionSink,
 ) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
     #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
-    if config.pack_store_root.is_some()
-        || config.stt_model_id.is_some()
-        || config.tts_voice_id.is_some()
-        || config.vad_model_id.is_some()
-        || config.kws_model_id.is_some()
+    if config.speech_stages.is_none()
+        && (config.pack_store_root.is_some()
+            || config.stt_model_id.is_some()
+            || config.tts_voice_id.is_some()
+            || config.vad_model_id.is_some()
+            || config.kws_model_id.is_some())
     {
         return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+    if let Some(stages) = config.speech_stages.as_ref() {
+        if matches!(
+            &stages.tts.model_id,
+            aurora_voice_core::node_policy::NullableField::Value(_)
+        ) {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
     }
     let gateway = config
         .gateway
@@ -1112,9 +1721,18 @@ fn build_gateway_runtime(
         NativeGatewayTransport::new(gateway.clone(), config.auth.clone(), limits)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
     let transport_for_assistant = build_assistant_transport(config, limits)?;
+    let stt_model_id = config
+        .speech_stages
+        .as_ref()
+        .and_then(|stages| match &stages.stt.model_id {
+            aurora_voice_core::node_policy::NullableField::Value(model) => Some(model.clone()),
+            aurora_voice_core::node_policy::NullableField::Missing
+            | aurora_voice_core::node_policy::NullableField::Null => None,
+        })
+        .unwrap_or_else(|| "realtime".to_owned());
     let stt = NativeGatewayFiniteStt::new(
         transport_for_stt,
-        NativeGatewayFiniteSttConfig::realtime(stt_route, policy)
+        NativeGatewayFiniteSttConfig::new(stt_route, stt_model_id, policy)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
@@ -1138,6 +1756,18 @@ fn build_gateway_runtime(
         ANDROID_RUNTIME_ID,
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+    .map(|runtime| {
+        runtime.with_speech_languages(
+            config
+                .speech_stages
+                .as_ref()
+                .and_then(|stages| android_stage_language(&stages.stt).map(str::to_owned)),
+            config
+                .speech_stages
+                .as_ref()
+                .and_then(|stages| android_stage_language(&stages.tts).map(str::to_owned)),
+        )
+    })
 }
 
 fn build_assistant_transport(
@@ -1224,6 +1854,7 @@ struct AndroidSessionThreadState {
     background_results: Arc<Mutex<VecDeque<AndroidBackgroundVoiceTurnResult>>>,
     observation_tokens: Arc<Mutex<HashMap<Generation, NativeVoiceObservationToken>>>,
     control: AndroidCaptureControl,
+    lifecycle: MobileSessionLifecycle,
 }
 
 fn run_session_thread(
@@ -1231,13 +1862,32 @@ fn run_session_thread(
     input: AndroidAudioInput,
     output: AndroidAudioOutput,
     sink: AndroidSessionSink,
-    mut commands: tokio_mpsc::UnboundedReceiver<Command>,
+    commands: tokio_mpsc::UnboundedReceiver<Command>,
     state: AndroidSessionThreadState,
 ) {
+    run_session_thread_with_builder(config, input, output, sink, commands, state, build_runtime);
+}
+
+fn run_session_thread_with_builder(
+    config: AndroidVoiceSessionConfig,
+    input: AndroidAudioInput,
+    output: AndroidAudioOutput,
+    sink: AndroidSessionSink,
+    commands: tokio_mpsc::UnboundedReceiver<Command>,
+    state: AndroidSessionThreadState,
+    build: impl FnOnce(
+        &AndroidVoiceSessionConfig,
+        AndroidAudioInput,
+        AndroidAudioOutput,
+        AndroidSessionSink,
+    ) -> Result<RuntimeCore, AndroidVoiceSessionCommandError>,
+) {
+    let lifecycle = state.lifecycle.clone();
     let remote_audio_consent = config.remote_audio_consent;
-    let mut voice_runtime = match build_runtime(&config, input, output, sink) {
+    let voice_runtime = match build(&config, input, output, sink) {
         Ok(runtime) => runtime,
         Err(_) => {
+            lifecycle.record_failure(MobileSessionCloseError::Unavailable);
             set_fault(&state.status, "runtime_unavailable");
             return;
         }
@@ -1248,113 +1898,162 @@ fn run_session_thread(
     {
         Ok(runtime) => runtime,
         Err(_) => {
+            lifecycle.record_failure(MobileSessionCloseError::Unavailable);
             set_fault(&state.status, "runtime_unavailable");
             return;
         }
     };
-    tokio_runtime.block_on(async move {
-        loop {
-            let Some(command) = commands.recv().await else {
-                break;
-            };
-            match command {
-                Command::Start { mode, reply } => {
-                    if voice_runtime.has_active_capture() {
-                        let _ = reply.send(Err(AndroidVoiceSessionCommandError::AlreadyActive));
-                        continue;
-                    }
-                    let generation = match voice_runtime.next_capture_generation() {
-                        Ok(generation) => generation,
-                        Err(_) => {
-                            let _ = reply.send(Err(AndroidVoiceSessionCommandError::Unavailable));
-                            continue;
-                        }
-                    };
-                    let now = now_micros();
-                    let lease = VoiceCaptureLease {
-                        owner: CaptureOwnerKind::Native,
-                        surface: ANDROID_SURFACE.to_owned(),
-                        device_route: "default".to_owned(),
-                        start_reason: capture_start_reason(mode),
-                        generation,
-                        created_at: now,
-                        route_revision: RouteRevision(ROUTE_REVISION),
-                        background_eligible: background_eligible(mode),
-                        consent_revision: if remote_audio_consent { 1 } else { 0 },
-                        heartbeat_at: now,
-                        stop_deadline: None,
-                    };
-                    let cancellation = CancellationToken::new();
-                    let observation_token = begin_native_voice_observation_producer();
-                    if let Some(token) = observation_token {
-                        if let Ok(mut tokens) = state.observation_tokens.lock() {
-                            tokens.clear();
-                            tokens.insert(generation, token);
-                        }
-                    }
-                    if matches!(mode, AndroidVoiceStartMode::PushToTalk) {
-                        if let Ok(mut transcript) = state.focused_transcript.lock() {
-                            *transcript = None;
-                        }
-                    }
-                    if let Ok(mut transcript) = state.turn_transcript.lock() {
-                        *transcript = None;
-                    }
-                    set_active(&state.status, generation);
-                    if let Some(token) = observation_token {
-                        observe_android_turn_snapshot(
-                            token, generation, "started", None, None, false,
-                        );
-                    }
-                    let _ = reply.send(Ok(generation));
-                    let result = run_turn(
-                        &mut voice_runtime,
-                        &mut commands,
-                        mode,
-                        lease,
-                        now,
-                        cancellation,
-                        state.control.clone(),
-                    )
-                    .await;
-                    finish_status(&state, generation, mode, result);
-                }
-                Command::Shutdown => {
-                    if let Some(generation) = active_generation(&state.status) {
-                        state.control.interrupt(generation);
-                    }
-                    break;
-                }
-                Command::Finish { reply, .. } | Command::Cancel { reply, .. } => {
-                    let _ = reply.send(Err(AndroidVoiceSessionCommandError::NotActive));
-                }
-            }
-        }
-    });
+    tokio_runtime.block_on(run_session_loop(
+        voice_runtime,
+        commands,
+        state,
+        remote_audio_consent,
+    ));
 }
 
-async fn run_turn<'a>(
-    runtime: &'a mut RuntimeCore,
-    commands: &'a mut tokio_mpsc::UnboundedReceiver<Command>,
+async fn run_session_loop<R: AndroidSessionRuntime>(
+    mut voice_runtime: R,
+    mut commands: tokio_mpsc::UnboundedReceiver<Command>,
+    state: AndroidSessionThreadState,
+    remote_audio_consent: bool,
+) {
+    let lifecycle = state.lifecycle.clone();
+    loop {
+        if lifecycle.is_retired() {
+            reject_queued_commands(&mut commands);
+            break;
+        }
+        let Some(command) = commands.recv().await else {
+            if let Some(generation) = lifecycle.unexpected_channel_close() {
+                state.control.interrupt(generation);
+            }
+            break;
+        };
+        match command {
+            Command::Start { mode, reply } => {
+                if lifecycle.is_retired() {
+                    let _ = reply.send(Err(AndroidVoiceSessionCommandError::Unavailable));
+                    continue;
+                }
+                if voice_runtime.has_active_capture() {
+                    let _ = reply.send(Err(AndroidVoiceSessionCommandError::AlreadyActive));
+                    continue;
+                }
+                let generation = match voice_runtime.next_capture_generation() {
+                    Ok(generation) => generation,
+                    Err(_) => {
+                        let _ = reply.send(Err(AndroidVoiceSessionCommandError::Unavailable));
+                        continue;
+                    }
+                };
+                let now = now_micros();
+                let lease = VoiceCaptureLease {
+                    owner: CaptureOwnerKind::Native,
+                    surface: ANDROID_SURFACE.to_owned(),
+                    device_route: "default".to_owned(),
+                    start_reason: capture_start_reason(mode),
+                    generation,
+                    created_at: now,
+                    route_revision: RouteRevision(ROUTE_REVISION),
+                    background_eligible: background_eligible(mode),
+                    consent_revision: if remote_audio_consent { 1 } else { 0 },
+                    heartbeat_at: now,
+                    stop_deadline: None,
+                };
+                let cancellation = CancellationToken::new();
+                if lifecycle
+                    .begin_generation(generation, cancellation.clone())
+                    .is_err()
+                {
+                    let _ = reply.send(Err(AndroidVoiceSessionCommandError::Unavailable));
+                    continue;
+                }
+                let observation_token = begin_native_voice_observation_producer();
+                if let Some(token) = observation_token {
+                    if let Ok(mut tokens) = state.observation_tokens.lock() {
+                        tokens.clear();
+                        tokens.insert(generation, token);
+                    }
+                }
+                if matches!(mode, AndroidVoiceStartMode::PushToTalk) {
+                    if let Ok(mut transcript) = state.focused_transcript.lock() {
+                        *transcript = None;
+                    }
+                }
+                if let Ok(mut transcript) = state.turn_transcript.lock() {
+                    *transcript = None;
+                }
+                set_active(&state.status, generation);
+                if let Some(token) = observation_token {
+                    observe_android_turn_snapshot(token, generation, "started", None, None, false);
+                }
+                let _ = reply.send(Ok(generation));
+                let result = run_turn(
+                    &mut voice_runtime,
+                    &mut commands,
+                    AndroidTurnContext {
+                        mode,
+                        lease,
+                        at: now,
+                        cancellation,
+                        control: state.control.clone(),
+                        lifecycle: lifecycle.clone(),
+                    },
+                )
+                .await;
+                lifecycle.record_cleanup(
+                    generation,
+                    voice_runtime.cleanup_report_for_generation(generation),
+                );
+                finish_status(&state, generation, mode, result);
+                if lifecycle.is_retired() {
+                    reject_queued_commands(&mut commands);
+                    break;
+                }
+            }
+            Command::Shutdown => {
+                if let Some(generation) = lifecycle.worker_retire() {
+                    state.control.interrupt(generation);
+                }
+                reject_queued_commands(&mut commands);
+                break;
+            }
+            Command::Finish { reply, .. } | Command::Cancel { reply, .. } => {
+                let _ = reply.send(Err(AndroidVoiceSessionCommandError::NotActive));
+            }
+        }
+    }
+}
+
+struct AndroidTurnContext {
     mode: AndroidVoiceStartMode,
     lease: VoiceCaptureLease,
     at: TimestampMicros,
     cancellation: CancellationToken,
     control: AndroidCaptureControl,
+    lifecycle: MobileSessionLifecycle,
+}
+
+async fn run_turn<'a, R: AndroidSessionRuntime>(
+    runtime: &'a mut R,
+    commands: &'a mut tokio_mpsc::UnboundedReceiver<Command>,
+    context: AndroidTurnContext,
 ) -> Result<String, VoiceCoreError> {
+    let AndroidTurnContext {
+        mode,
+        lease,
+        at,
+        cancellation,
+        control,
+        lifecycle,
+    } = context;
     let generation = lease.generation;
-    let mut turn: Pin<Box<dyn Future<Output = Result<String, VoiceCoreError>> + 'a>> = match mode {
-        AndroidVoiceStartMode::PushToTalk => {
-            Box::pin(runtime.run_push_to_talk_transcription(lease, at, cancellation.clone()))
-        }
-        AndroidVoiceStartMode::BackgroundSession => {
-            Box::pin(runtime.run_background_turn(lease, at, cancellation.clone()))
-        }
-    };
+    let mut turn = runtime.invoke_turn(mode, lease, at, cancellation.clone());
+    let mut retiring = false;
     loop {
         tokio::select! {
             result = &mut turn => return result,
-            command = commands.recv() => {
+            command = commands.recv(), if !retiring => {
                 match command {
                     Some(Command::Finish { generation: requested, reply }) if requested == generation => {
                         control.finish(generation);
@@ -1371,13 +2070,34 @@ async fn run_turn<'a>(
                     Some(Command::Start { reply, .. }) => {
                         let _ = reply.send(Err(AndroidVoiceSessionCommandError::AlreadyActive));
                     }
-                    Some(Command::Shutdown) | None => {
+                    Some(Command::Shutdown) => {
+                        lifecycle.worker_retire();
                         cancellation.cancel();
                         control.interrupt(generation);
-                        return Err(VoiceCoreError::Cancelled);
+                        retiring = true;
+                    }
+                    None => {
+                        lifecycle.unexpected_channel_close();
+                        cancellation.cancel();
+                        control.interrupt(generation);
+                        retiring = true;
                     }
                 }
             }
+        }
+    }
+}
+
+fn reject_queued_commands(commands: &mut tokio_mpsc::UnboundedReceiver<Command>) {
+    while let Ok(command) = commands.try_recv() {
+        match command {
+            Command::Start { reply, .. } => {
+                let _ = reply.send(Err(AndroidVoiceSessionCommandError::Unavailable));
+            }
+            Command::Finish { reply, .. } | Command::Cancel { reply, .. } => {
+                let _ = reply.send(Err(AndroidVoiceSessionCommandError::Closed));
+            }
+            Command::Shutdown => {}
         }
     }
 }
@@ -1391,6 +2111,25 @@ struct AndroidSessionSink {
 
 #[async_trait(?Send)]
 impl RuntimeEventSink for AndroidSessionSink {
+    fn wants_speech_lifecycle(&self) -> bool {
+        native_speech_lifecycle_observer_enabled()
+    }
+
+    fn speech_lifecycle_callback(
+        &self,
+    ) -> Option<Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync>> {
+        if !native_speech_lifecycle_observer_enabled() {
+            return None;
+        }
+        let callback: Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync> =
+            Arc::new(emit_native_speech_lifecycle);
+        Some(callback)
+    }
+
+    fn speech_lifecycle(&mut self, event: SpeechLifecycleEventV1) {
+        emit_native_speech_lifecycle(event);
+    }
+
     async fn snapshot(&mut self, snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
         let phase = phase_for_state(snapshot.state);
         if let Ok(mut status) = self.status.lock() {
@@ -1559,10 +2298,6 @@ fn set_active(status: &Arc<Mutex<AndroidVoiceSessionStatus>>, generation: Genera
     }
 }
 
-fn active_generation(status: &Arc<Mutex<AndroidVoiceSessionStatus>>) -> Option<Generation> {
-    status.lock().ok().and_then(|status| status.generation)
-}
-
 fn finish_status(
     state: &AndroidSessionThreadState,
     active_generation: Generation,
@@ -1718,9 +2453,836 @@ fn now_micros() -> TimestampMicros {
     TimestampMicros(micros as u64)
 }
 
+/// A capture-only Android session used by background transcript recording.
+/// It constructs only the selected finite STT provider and Android PCM input;
+/// assistant transport, TTS, playback, KWS, and VAD are deliberately absent.
+pub struct AndroidTranscriptionSession {
+    ingress: AndroidPcmIngress,
+    control: AndroidCaptureControl,
+    commands: mpsc::Sender<TranscriptionCommand>,
+    status: Arc<Mutex<AndroidTranscriptionStatus>>,
+    active_cancellation: Arc<Mutex<Option<(Generation, CancellationToken)>>>,
+    transcript: Arc<Mutex<Option<String>>>,
+    worker: Mutex<Option<thread::JoinHandle<()>>>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AndroidTranscriptionPhase {
+    Idle = 0,
+    Starting = 1,
+    Listening = 2,
+    Transcribing = 3,
+    Completed = 4,
+    Failed = 5,
+}
+
+#[derive(Debug, Clone)]
+pub struct AndroidTranscriptionStatus {
+    pub phase: AndroidTranscriptionPhase,
+    pub generation: u64,
+    pub accepted_chunks: u64,
+    pub accepted_samples: u64,
+    pub dropped_chunks: u64,
+    pub queued_chunks: u32,
+    pub capture_started_at_ms: i64,
+    pub capture_ended_at_ms: i64,
+    pub error: Option<&'static str>,
+}
+
+impl Default for AndroidTranscriptionStatus {
+    fn default() -> Self {
+        Self {
+            phase: AndroidTranscriptionPhase::Idle,
+            generation: 0,
+            accepted_chunks: 0,
+            accepted_samples: 0,
+            dropped_chunks: 0,
+            queued_chunks: 0,
+            capture_started_at_ms: 0,
+            capture_ended_at_ms: 0,
+            error: None,
+        }
+    }
+}
+
+enum TranscriptionCommand {
+    Start {
+        generation: Generation,
+        background_eligible: bool,
+        reply: mpsc::Sender<Result<(), AndroidVoiceSessionCommandError>>,
+    },
+    Shutdown,
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+type AndroidTranscriptionStt = AndroidFiniteSttProvider;
+#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
+type AndroidTranscriptionStt = NativeGatewayFiniteStt;
+
+impl AndroidTranscriptionSession {
+    pub fn new(
+        config: AndroidVoiceSessionConfig,
+        ingress_capacity_chunks: usize,
+        max_chunk_samples: usize,
+    ) -> Result<Self, AndroidVoiceSessionCommandError> {
+        let language =
+            config
+                .speech_stages
+                .as_ref()
+                .and_then(|stages| match &stages.stt.language {
+                    aurora_voice_core::node_policy::NullableField::Value(value) => {
+                        Some(value.clone())
+                    }
+                    aurora_voice_core::node_policy::NullableField::Missing
+                    | aurora_voice_core::node_policy::NullableField::Null => None,
+                });
+        let ingress = AndroidPcmIngress::new(ingress_capacity_chunks, max_chunk_samples);
+        let input = AndroidAudioInput::new(ingress.clone());
+        let control = input.control();
+        let status = Arc::new(Mutex::new(AndroidTranscriptionStatus::default()));
+        let active_cancellation = Arc::new(Mutex::new(None));
+        let transcript = Arc::new(Mutex::new(None));
+        let (commands, command_rx) = mpsc::channel();
+        let worker_status = Arc::clone(&status);
+        let worker_cancellation = Arc::clone(&active_cancellation);
+        let worker_ingress = ingress.clone();
+        let worker_transcript = Arc::clone(&transcript);
+        let worker_control = control.clone();
+        let worker = thread::Builder::new()
+            .name("aurora-android-transcription".to_owned())
+            .spawn(move || {
+                let Ok(runtime) = TokioRuntimeBuilder::new_current_thread()
+                    .enable_all()
+                    .build()
+                else {
+                    set_transcription_status(
+                        &worker_status,
+                        AndroidTranscriptionPhase::Failed,
+                        0,
+                        Some("runtime_unavailable"),
+                    );
+                    return;
+                };
+                let mut input = input;
+                // Native recognizers are confined to their owning worker.
+                let mut stt = match build_transcription_stt(&config) {
+                    Ok(provider) => provider,
+                    Err(_) => {
+                        set_transcription_status(
+                            &worker_status,
+                            AndroidTranscriptionPhase::Failed,
+                            0,
+                            Some("stt_unavailable"),
+                        );
+                        return;
+                    }
+                };
+                while let Ok(command) = command_rx.recv() {
+                    match command {
+                        TranscriptionCommand::Start {
+                            generation,
+                            background_eligible,
+                            reply,
+                        } => {
+                            if matches!(
+                                worker_status.lock().map(|state| state.phase),
+                                Ok(AndroidTranscriptionPhase::Starting
+                                    | AndroidTranscriptionPhase::Listening
+                                    | AndroidTranscriptionPhase::Transcribing)
+                            ) {
+                                let _ =
+                                    reply.send(Err(AndroidVoiceSessionCommandError::AlreadyActive));
+                                continue;
+                            }
+                            let now = now_micros();
+                            let lease = VoiceCaptureLease {
+                                owner: CaptureOwnerKind::Native,
+                                surface: ANDROID_SURFACE.to_owned(),
+                                device_route: "default".to_owned(),
+                                start_reason: CaptureStartReason::BackgroundSession,
+                                generation,
+                                created_at: now,
+                                route_revision: RouteRevision(ROUTE_REVISION),
+                                background_eligible,
+                                consent_revision: if config.remote_audio_consent { 1 } else { 0 },
+                                heartbeat_at: now,
+                                stop_deadline: None,
+                            };
+                            let cancellation = CancellationToken::new();
+                            if let Ok(mut active) = worker_cancellation.lock() {
+                                *active = Some((generation, cancellation.clone()));
+                            }
+                            set_transcription_status(
+                                &worker_status,
+                                AndroidTranscriptionPhase::Starting,
+                                generation.0,
+                                None,
+                            );
+                            if let Err(error) = runtime.block_on(input.start(lease.clone())) {
+                                set_transcription_status(
+                                    &worker_status,
+                                    AndroidTranscriptionPhase::Failed,
+                                    generation.0,
+                                    Some("capture_unavailable"),
+                                );
+                                let _ =
+                                    reply.send(Err(AndroidVoiceSessionCommandError::Unavailable));
+                                continue;
+                            }
+                            if let Ok(mut state) = worker_status.lock() {
+                                state.capture_started_at_ms = wall_clock_ms();
+                                state.capture_ended_at_ms = 0;
+                            }
+                            set_transcription_status(
+                                &worker_status,
+                                AndroidTranscriptionPhase::Listening,
+                                generation.0,
+                                None,
+                            );
+                            let _ = reply.send(Ok(()));
+                            let result = runtime.block_on(run_transcription_capture(
+                                &mut input,
+                                &mut stt,
+                                &lease,
+                                cancellation,
+                                &worker_status,
+                                language.as_deref(),
+                            ));
+                            let _ = runtime.block_on(input.stop(TransitionReason::Stop));
+                            let (phase, error) = match result {
+                                Ok(text) => {
+                                    if let Ok(mut state) = worker_status.lock() {
+                                        state.error = None;
+                                    }
+                                    if let Ok(mut transcript) = worker_transcript.lock() {
+                                        *transcript = Some(text);
+                                    }
+                                    (AndroidTranscriptionPhase::Completed, None)
+                                }
+                                Err(error) if matches!(error, VoiceCoreError::Cancelled) => {
+                                    (AndroidTranscriptionPhase::Failed, Some("cancelled"))
+                                }
+                                Err(_) => (
+                                    AndroidTranscriptionPhase::Failed,
+                                    Some("transcription_failed"),
+                                ),
+                            };
+                            worker_ingress.clear_pending();
+                            set_transcription_status(&worker_status, phase, generation.0, error);
+                            if let Ok(mut active) = worker_cancellation.lock() {
+                                *active = None;
+                            }
+                        }
+                        TranscriptionCommand::Shutdown => break,
+                    }
+                }
+                let _ = runtime.block_on(input.stop(TransitionReason::Stop));
+            })
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        Ok(Self {
+            ingress,
+            control,
+            commands,
+            status,
+            active_cancellation,
+            transcript,
+            worker: Mutex::new(Some(worker)),
+        })
+    }
+
+    pub fn ingress(&self) -> AndroidPcmIngress {
+        self.ingress.clone()
+    }
+
+    pub fn start(
+        &self,
+        generation: u64,
+        background_eligible: bool,
+    ) -> Result<(), AndroidVoiceSessionCommandError> {
+        let (reply, result) = mpsc::channel();
+        self.commands
+            .send(TranscriptionCommand::Start {
+                generation: Generation(generation),
+                background_eligible,
+                reply,
+            })
+            .map_err(|_| AndroidVoiceSessionCommandError::Closed)?;
+        result
+            .recv()
+            .unwrap_or(Err(AndroidVoiceSessionCommandError::Closed))
+    }
+
+    pub fn finish(&self, generation: u64) -> Result<(), AndroidVoiceSessionCommandError> {
+        let active = self.status.lock().ok().map(|state| state.generation);
+        if active != Some(generation) {
+            return Err(AndroidVoiceSessionCommandError::NotActive);
+        }
+        self.control.finish(Generation(generation));
+        Ok(())
+    }
+
+    pub fn cancel(&self, generation: u64) -> Result<(), AndroidVoiceSessionCommandError> {
+        let active = self.status.lock().ok().map(|state| state.generation);
+        if active != Some(generation) {
+            return Err(AndroidVoiceSessionCommandError::NotActive);
+        }
+        if let Ok(active) = self.active_cancellation.lock() {
+            if let Some((active_generation, cancellation)) = active.as_ref() {
+                if *active_generation == Generation(generation) {
+                    cancellation.cancel();
+                    self.control.interrupt(*active_generation);
+                }
+            }
+        }
+        Ok(())
+    }
+
+    pub fn take_transcript(&self) -> Option<String> {
+        self.transcript.lock().ok()?.take()
+    }
+
+    pub fn status(&self) -> AndroidTranscriptionStatus {
+        let mut status = self
+            .status
+            .lock()
+            .map(|value| value.clone())
+            .unwrap_or_default();
+        let ingress = self.ingress.stats();
+        status.accepted_chunks = ingress.accepted_chunks;
+        status.accepted_samples = ingress.accepted_samples;
+        status.dropped_chunks = ingress.dropped_chunks;
+        status.queued_chunks = ingress.queued_chunks;
+        status
+    }
+
+    pub fn close(&self) {
+        if let Ok(active) = self.active_cancellation.lock() {
+            if let Some((generation, cancellation)) = active.as_ref() {
+                cancellation.cancel();
+                self.control.interrupt(*generation);
+            }
+        }
+        let _ = self.commands.send(TranscriptionCommand::Shutdown);
+        if let Ok(mut worker) = self.worker.lock() {
+            if let Some(worker) = worker.take() {
+                if worker.thread().id() != thread::current().id() {
+                    let _ = worker.join();
+                }
+            }
+        }
+    }
+}
+
+impl Drop for AndroidTranscriptionSession {
+    fn drop(&mut self) {
+        self.close();
+    }
+}
+
+fn set_transcription_status(
+    status: &Arc<Mutex<AndroidTranscriptionStatus>>,
+    phase: AndroidTranscriptionPhase,
+    generation: u64,
+    error: Option<&'static str>,
+) {
+    if let Ok(mut status) = status.lock() {
+        status.phase = phase;
+        status.generation = generation;
+        status.error = error;
+    }
+}
+
+fn wall_clock_ms() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis().min(i64::MAX as u128) as i64)
+        .unwrap_or(0)
+}
+
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+fn build_transcription_stt(
+    config: &AndroidVoiceSessionConfig,
+) -> Result<AndroidTranscriptionStt, AndroidVoiceSessionCommandError> {
+    let stages = config
+        .speech_stages
+        .as_ref()
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let local_available = config.pack_store_root.is_some()
+        && config
+            .stt_model_id
+            .as_deref()
+            .is_some_and(|value| !value.trim().is_empty());
+    let local = validate_android_stage_provider(config, &stages.stt, local_available, false)?;
+    if local {
+        let model_id = config
+            .stt_model_id
+            .as_deref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        validate_android_local_model_selector(&stages.stt, model_id)?;
+        let manager = config
+            .pack_store_root
+            .clone()
+            .and_then(|root| SpeechPackManagerConfig::new(root, None).ok())
+            .and_then(|manager_config| SpeechPackManager::open(manager_config).ok())
+            .map(Arc::new);
+        if let Some(manager) = manager {
+            match LazyInstalledSttProvider::new(manager, model_id) {
+                Ok(mut provider) => {
+                    provider
+                        .binding
+                        .validate_language(android_stage_language(&stages.stt))
+                        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+                    if provider.preload().is_ok() {
+                        return Ok(AndroidFiniteSttProvider::Local(Box::new(provider)));
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        if !android_gateway_fallback_allowed(&stages.stt) {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
+    }
+    {
+        use aurora_voice_core::node_policy::NullableField;
+        let gateway = config
+            .gateway
+            .as_ref()
+            .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+        let policy = android_gateway_audio_policy(config)?;
+        let route = RouteFiniteSttBinding::new(
+            "gateway.default",
+            if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
+                FiniteSttRouteScope::LoopbackSidecar
+            } else {
+                FiniteSttRouteScope::RemoteGateway
+            },
+            VAD_SAMPLE_RATE_HZ,
+            MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+            ROUTE_REVISION,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let model = match &stages.stt.model_id {
+            NullableField::Value(value) => value.clone(),
+            NullableField::Missing | NullableField::Null => "realtime".to_owned(),
+        };
+        let transport = NativeGatewayTransport::new(
+            gateway.clone(),
+            config.auth.clone(),
+            transport_limits(policy),
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let provider = NativeGatewayFiniteStt::new(
+            transport,
+            NativeGatewayFiniteSttConfig::new(route, model, policy)
+                .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        Ok(AndroidFiniteSttProvider::Gateway(Box::new(provider)))
+    }
+}
+
+#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
+fn build_transcription_stt(
+    config: &AndroidVoiceSessionConfig,
+) -> Result<AndroidTranscriptionStt, AndroidVoiceSessionCommandError> {
+    let gateway = config
+        .gateway
+        .as_ref()
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    let policy = android_gateway_audio_policy(config)?;
+    let route = RouteFiniteSttBinding::new(
+        "gateway.default",
+        if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
+            FiniteSttRouteScope::LoopbackSidecar
+        } else {
+            FiniteSttRouteScope::RemoteGateway
+        },
+        VAD_SAMPLE_RATE_HZ,
+        MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+        ROUTE_REVISION,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let transport = NativeGatewayTransport::new(
+        gateway.clone(),
+        config.auth.clone(),
+        transport_limits(policy),
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    NativeGatewayFiniteStt::new(
+        transport,
+        NativeGatewayFiniteSttConfig::new(route, "realtime", policy)
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+}
+
+async fn run_transcription_capture<S: FiniteSttPort>(
+    input: &mut AndroidAudioInput,
+    stt: &mut S,
+    lease: &VoiceCaptureLease,
+    cancellation: CancellationToken,
+    status: &Arc<Mutex<AndroidTranscriptionStatus>>,
+    language: Option<&str>,
+) -> Result<String, VoiceCoreError> {
+    let binding = stt.finite_stt_binding()?;
+    if binding.sample_rate_hz() != VAD_SAMPLE_RATE_HZ
+        || binding.channels() != aurora_voice_engine::MONO_CHANNELS
+    {
+        return Err(VoiceCoreError::InvalidTransition);
+    }
+    let language = language.map(str::to_owned);
+    let mut audio = match binding {
+        FiniteSttProviderBinding::LocalTask(binding) => {
+            FiniteSttAudioBuilder::new(BoundTaskRequest::new(
+                TaskRequest {
+                    task: VoiceTask::SpeechToText,
+                    language,
+                    generation: lease.generation.0,
+                },
+                *binding,
+            )?)?
+        }
+        FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
+            RouteFiniteSttRequest::new(route, language, lease.generation.0)?,
+        )?,
+    };
+    let mut captured = false;
+    while let Some(frame) = input.next_frame().await? {
+        cancellation.check()?;
+        if frame.generation() != lease.generation
+            || frame.route_revision() != lease.route_revision
+            || frame.discontinuity()
+        {
+            audio.clear();
+            return Err(VoiceCoreError::InvalidTransition);
+        }
+        audio.push_frame(frame.samples())?;
+        captured = true;
+    }
+    cancellation.check()?;
+    if let Ok(mut state) = status.lock() {
+        state.phase = AndroidTranscriptionPhase::Transcribing;
+        state.capture_ended_at_ms = wall_clock_ms();
+    }
+    if !captured {
+        return Ok(String::new());
+    }
+    let stt_binding = stt.finite_stt_binding()?;
+    stt.warm_finite_stt(stt_binding).await?;
+    let (request, audio) = audio.finish()?;
+    let transcript = stt
+        .transcribe_finite(request, audio, &|| cancellation.is_cancelled())
+        .await?;
+    cancellation.check()?;
+    Ok(transcript.transcript().to_owned())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::AndroidPcmPushResult;
+    use aurora_voice_core::{AssistantTurnRequest, AudioPlaybackContext, AudioPlaybackReceipt};
+    use aurora_voice_engine::{
+        BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttProviderBinding,
+        FiniteSttResult, TtsSynthesisResult,
+    };
+    use std::task::{Context, Poll, Wake, Waker};
+
+    struct TranscriptionFlowTestStt {
+        calls: Arc<std::sync::atomic::AtomicUsize>,
+    }
+
+    #[async_trait(?Send)]
+    impl FiniteSttPort for TranscriptionFlowTestStt {
+        fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+            Ok(FiniteSttProviderBinding::Route(RouteFiniteSttBinding::new(
+                "route.stt.transcription-flow",
+                FiniteSttRouteScope::LoopbackSidecar,
+                VAD_SAMPLE_RATE_HZ,
+                MAX_FINITE_STT_SAMPLES,
+                ROUTE_REVISION,
+            )?))
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            request: BoundFiniteSttRequest,
+            audio: FiniteSttAudio,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            let call = self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            FiniteSttResult::new(&request, &audio, format!("transcript-{call}"))
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn finite_transcription_rearms_across_two_finished_native_capture_generations() {
+        let ingress = AndroidPcmIngress::new(2, 128);
+        let mut input = AndroidAudioInput::new(ingress.clone());
+        let control = input.control();
+        let mut stt = TranscriptionFlowTestStt {
+            calls: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+        };
+        let status = Arc::new(Mutex::new(AndroidTranscriptionStatus::default()));
+        let runtime = TokioRuntimeBuilder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("test runtime");
+
+        for generation in [1_u64, 2_u64] {
+            runtime.block_on(async {
+                let at = TimestampMicros(generation.saturating_mul(1_000_000));
+                let lease = VoiceCaptureLease {
+                    owner: CaptureOwnerKind::Native,
+                    surface: ANDROID_SURFACE.to_owned(),
+                    device_route: "default".to_owned(),
+                    start_reason: CaptureStartReason::BackgroundSession,
+                    generation: Generation(generation),
+                    created_at: at,
+                    route_revision: RouteRevision(ROUTE_REVISION),
+                    background_eligible: true,
+                    consent_revision: 1,
+                    heartbeat_at: at,
+                    stop_deadline: None,
+                };
+                input.start(lease.clone()).await.expect("capture start");
+                assert_eq!(ingress.push(&[100; 64], 0), AndroidPcmPushResult::Accepted);
+                control.finish(lease.generation);
+                let transcript = run_transcription_capture(
+                    &mut input,
+                    &mut stt,
+                    &lease,
+                    CancellationToken::new(),
+                    &status,
+                    None,
+                )
+                .await
+                .expect("finite transcription");
+                assert_eq!(transcript, format!("transcript-{generation}"));
+                input
+                    .stop(TransitionReason::Stop)
+                    .await
+                    .expect("capture stop");
+            });
+        }
+        runtime.block_on(async {
+            let at = TimestampMicros(3_000_000);
+            let lease = VoiceCaptureLease {
+                owner: CaptureOwnerKind::Native,
+                surface: ANDROID_SURFACE.to_owned(),
+                device_route: "default".to_owned(),
+                start_reason: CaptureStartReason::BackgroundSession,
+                generation: Generation(3),
+                created_at: at,
+                route_revision: RouteRevision(ROUTE_REVISION),
+                background_eligible: true,
+                consent_revision: 1,
+                heartbeat_at: at,
+                stop_deadline: None,
+            };
+            input
+                .start(lease.clone())
+                .await
+                .expect("empty capture start");
+            control.finish(lease.generation);
+            assert_eq!(
+                run_transcription_capture(
+                    &mut input,
+                    &mut stt,
+                    &lease,
+                    CancellationToken::new(),
+                    &status,
+                    None,
+                )
+                .await
+                .expect("empty capture settles"),
+                "",
+            );
+            input
+                .stop(TransitionReason::Stop)
+                .await
+                .expect("empty capture stop");
+        });
+        assert_eq!(stt.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn confirmed_speech_stages_select_each_android_port_and_reject_remote_wake() {
+        let stages: SpeechStages = serde_json::from_value(serde_json::json!({
+            "stt": { "routing": { "prefer": "local", "fallback": "network" }, "experimentalRemote": false },
+            "tts": { "routing": { "prefer": "network_only", "fallback": "error" }, "experimentalRemote": false },
+            "kws": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+            "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+        }))
+        .expect("valid speech-stage policy");
+        let config = AndroidVoiceSessionConfig::new(
+            Url::parse("https://gateway.example").expect("gateway URL"),
+            GatewayAuth::None,
+            true,
+        )
+        .with_speech_stages(stages.clone());
+
+        assert!(
+            validate_android_stage_provider(&config, &stages.stt, true, false)
+                .expect("available local STT")
+        );
+        assert!(
+            !validate_android_stage_provider(&config, &stages.stt, false, false)
+                .expect("network fallback STT")
+        );
+        assert!(
+            !validate_android_stage_provider(&config, &stages.tts, true, false)
+                .expect("network-only TTS")
+        );
+
+        let selected_local: aurora_voice_core::node_policy::SpeechStageConfig =
+            serde_json::from_value(serde_json::json!({
+                "routing": { "prefer": "local_only", "fallback": "error" },
+                "modelId": "stt:whisper:base",
+                "language": "en",
+                "experimentalRemote": false
+            }))
+            .expect("valid local stage selectors");
+        assert!(validate_android_local_stage(&selected_local).is_ok());
+        #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+        {
+            assert!(
+                validate_android_local_model_selector(&selected_local, "stt:whisper:base").is_ok()
+            );
+            assert!(validate_android_local_model_selector(&selected_local, "other-model").is_err());
+        }
+
+        let selected_gateway: aurora_voice_core::node_policy::SpeechStageConfig =
+            serde_json::from_value(serde_json::json!({
+                "routing": { "prefer": "network_only", "fallback": "error" },
+                "modelId": "realtime",
+                "language": "en",
+                "experimentalRemote": false
+            }))
+            .expect("valid Gateway stage selectors");
+        assert!(validate_android_gateway_stage(&selected_gateway).is_ok());
+
+        let remote_wake_stages: SpeechStages = serde_json::from_value(serde_json::json!({
+            "stt": { "routing": { "prefer": "local", "fallback": "network" }, "experimentalRemote": false },
+            "tts": { "routing": { "prefer": "local", "fallback": "network" }, "experimentalRemote": false },
+            "kws": { "routing": { "prefer": "network_only", "fallback": "error" }, "experimentalRemote": false },
+            "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+        }))
+        .expect("valid unsupported wake policy");
+        assert!(validate_android_wake_stages(&config, &remote_wake_stages).is_err());
+    }
+
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    #[test]
+    fn transcription_uses_only_configured_gateway_fallback_when_local_pack_is_unavailable() {
+        use aurora_voice_core::node_policy::SpeechStages;
+
+        let root = tempfile::tempdir().expect("temp dir");
+        let stages = |prefer: &str, fallback: &str, model_id: &str| {
+            serde_json::from_value::<SpeechStages>(serde_json::json!({
+                "stt": {
+                    "routing": { "prefer": prefer, "fallback": fallback },
+                    "modelId": model_id,
+                    "experimentalRemote": false
+                },
+                "tts": { "routing": { "prefer": "local", "fallback": "network" }, "experimentalRemote": false },
+                "kws": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+                "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+            }))
+            .expect("valid stage policy")
+        };
+        let config_for = |remote_audio_consent, stages| {
+            let mut config = AndroidVoiceSessionConfig::new(
+                Url::parse("https://gateway.example.test").expect("gateway URL"),
+                GatewayAuth::None,
+                remote_audio_consent,
+            );
+            config.pack_store_root = Some(root.path().to_owned());
+            config.stt_model_id = Some("stt:whisper:base".to_owned());
+            config.speech_stages = Some(stages);
+            config
+        };
+
+        let configured_fallback = config_for(true, stages("local", "network", "stt:whisper:base"));
+        assert!(matches!(
+            build_transcription_stt(&configured_fallback),
+            Ok(AndroidFiniteSttProvider::Gateway(_))
+        ));
+
+        let local_only = config_for(true, stages("local_only", "error", "stt:whisper:base"));
+        assert!(build_transcription_stt(&local_only).is_err());
+
+        let missing_consent = config_for(false, stages("local", "network", "stt:whisper:base"));
+        assert!(build_transcription_stt(&missing_consent).is_err());
+
+        let mismatched_model = config_for(true, stages("local", "network", "other-model"));
+        assert!(build_transcription_stt(&mismatched_model).is_err());
+    }
+
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+    #[test]
+    fn failed_local_tts_load_does_not_ignore_pinned_gateway_voice() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let pinned_voice = "standard:piper:en_us-lessac-high";
+        let stages: SpeechStages = serde_json::from_value(serde_json::json!({
+            "stt": {
+                "routing": { "prefer": "network_only", "fallback": "error" },
+                "experimentalRemote": false
+            },
+            "tts": {
+                "routing": { "prefer": "local", "fallback": "network" },
+                "modelId": pinned_voice,
+                "experimentalRemote": false
+            },
+            "kws": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+            "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+        }))
+        .expect("valid pinned speech-stage policy");
+        let config = AndroidVoiceSessionConfig::with_local_pack_selection_for_route(
+            Some(Url::parse("https://gateway.example.test").expect("gateway URL")),
+            GatewayAuth::None,
+            true,
+            root.path(),
+            "stt:whisper:base",
+            pinned_voice,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .with_speech_stages(stages.clone());
+        let input = AndroidAudioInput::new(AndroidPcmIngress::new(1, 128));
+        let output = AndroidAudioOutput::new(1);
+        let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus::default()));
+        let sink = AndroidSessionSink {
+            status,
+            turn_transcript: Arc::new(Mutex::new(None)),
+            observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+        };
+
+        // The pack store exists but has no installed voice, so local preload fails. Gateway TTS
+        // cannot honor the pinned model id and runtime construction must stay unavailable.
+        assert!(matches!(
+            build_runtime_for_stages(&config, &stages, input, output, sink),
+            Err(AndroidVoiceSessionCommandError::Unavailable)
+        ));
+    }
 
     #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     #[test]
@@ -1967,6 +3529,7 @@ mod tests {
             background_results: Arc::clone(&background_results),
             observation_tokens,
             control: AndroidAudioInput::new(AndroidPcmIngress::new(1, 1)).control(),
+            lifecycle: MobileSessionLifecycle::new(),
         };
 
         finish_status(
@@ -2013,6 +3576,7 @@ mod tests {
             background_results: Arc::clone(&background_results),
             observation_tokens,
             control: AndroidAudioInput::new(AndroidPcmIngress::new(1, 1)).control(),
+            lifecycle: MobileSessionLifecycle::new(),
         };
 
         finish_status(
@@ -2140,6 +3704,1083 @@ mod tests {
         assert!(!status.active);
         assert_eq!(status.failed_turns, 1);
         assert_eq!(status.last_error.as_deref(), Some("cancelled"));
+        // The loopback Gateway has no active assistant request to interrupt. Keep
+        // this strict cleanup failure visible rather than treating local turn
+        // cancellation as proof that transport cleanup succeeded.
+        assert_eq!(
+            session.close_checked(),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+    }
+
+    struct CloseTestAudioInput {
+        started: Option<mpsc::Sender<()>>,
+        start_entered: Option<mpsc::Sender<()>>,
+        release_start: Option<tokio::sync::oneshot::Receiver<()>>,
+        stop_entered: Option<mpsc::Sender<()>>,
+        release_stop: Option<tokio::sync::oneshot::Receiver<()>>,
+        fail_stop: bool,
+        fail_stop_once: Option<Arc<std::sync::atomic::AtomicBool>>,
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for CloseTestAudioInput {
+        async fn start(&mut self, _lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            if let Some(started) = self.started.as_ref() {
+                let _ = started.send(());
+            }
+            if let Some(entered) = self.start_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_start.take() {
+                let _ = release.await;
+            }
+            Ok(())
+        }
+
+        async fn stop(
+            &mut self,
+            _reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.stop_entered.as_ref() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_stop.take() {
+                let _ = release.await;
+            }
+            let fail_stop_once = self.fail_stop_once.as_ref().is_some_and(|remaining| {
+                remaining.swap(false, std::sync::atomic::Ordering::SeqCst)
+            });
+            if self.fail_stop || fail_stop_once {
+                Err(VoiceCoreError::TransportFault {
+                    code: "private_cleanup_failure".to_owned(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn next_frame(
+            &mut self,
+        ) -> Result<Option<aurora_voice_core::PcmFrame>, VoiceCoreError> {
+            Ok(None)
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            RouteRevision(ROUTE_REVISION)
+        }
+    }
+
+    struct GatedAndroidAudioInput {
+        inner: AndroidAudioInput,
+        start_entered: Option<mpsc::Sender<()>>,
+        release_start: Option<tokio::sync::oneshot::Receiver<()>>,
+        stop_entered: Option<mpsc::Sender<()>>,
+        release_stop: Option<tokio::sync::oneshot::Receiver<()>>,
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for GatedAndroidAudioInput {
+        async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.start_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_start.take() {
+                let _ = release.await;
+            }
+            self.inner.start(lease).await
+        }
+
+        async fn stop(
+            &mut self,
+            reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.stop_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_stop.take() {
+                let _ = release.await;
+            }
+            self.inner.stop(reason).await
+        }
+
+        async fn next_frame(
+            &mut self,
+        ) -> Result<Option<aurora_voice_core::PcmFrame>, VoiceCoreError> {
+            self.inner.next_frame().await
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            self.inner.current_route_revision()
+        }
+    }
+
+    struct CloseTestEngine;
+
+    #[async_trait(?Send)]
+    impl FiniteSttPort for CloseTestEngine {
+        fn finite_stt_binding(
+            &self,
+        ) -> Result<aurora_voice_engine::FiniteSttProviderBinding, EngineError> {
+            Ok(aurora_voice_engine::FiniteSttProviderBinding::Route(
+                RouteFiniteSttBinding::new(
+                    "route.stt.close-test",
+                    FiniteSttRouteScope::LoopbackSidecar,
+                    VAD_SAMPLE_RATE_HZ,
+                    MAX_FINITE_STT_SAMPLES,
+                    ROUTE_REVISION,
+                )?,
+            ))
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: aurora_voice_engine::FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            _request: BoundFiniteSttRequest,
+            _audio: FiniteSttAudio,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[async_trait(?Send)]
+    impl TtsSynthesisPort for CloseTestEngine {
+        fn synthesis_binding(
+            &self,
+        ) -> Result<aurora_voice_engine::TtsSynthesisProviderBinding, EngineError> {
+            Ok(aurora_voice_engine::TtsSynthesisProviderBinding::Route(
+                RouteTtsBinding::new(
+                    "route.tts.close-test",
+                    "voice.close-test",
+                    VAD_SAMPLE_RATE_HZ,
+                    ROUTE_REVISION,
+                )?,
+            ))
+        }
+
+        async fn warm_synthesis(
+            &mut self,
+            _binding: aurora_voice_engine::TtsSynthesisProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn synthesize_text(
+            &mut self,
+            _request: BoundTtsSynthesisRequest,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<TtsSynthesisResult, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn cancel_synthesis_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    struct CloseTestTransport;
+
+    #[async_trait(?Send)]
+    impl SpeechTransport for CloseTestTransport {
+        async fn assistant_turn(
+            &mut self,
+            _request: AssistantTurnRequest,
+            _cancellation: CancellationToken,
+        ) -> Result<aurora_voice_core::AssistantTurnResponse, VoiceCoreError> {
+            Err(VoiceCoreError::Cancelled)
+        }
+
+        async fn cancel_session(&mut self, _generation: Generation) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    struct CloseTestOutput;
+
+    #[async_trait(?Send)]
+    impl AudioOutput for CloseTestOutput {
+        async fn play(
+            &mut self,
+            context: AudioPlaybackContext,
+            _audio: TtsSynthesisResult,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<AudioPlaybackReceipt, VoiceCoreError> {
+            Ok(AudioPlaybackReceipt::new(context, 0, 0, context.started_at))
+        }
+
+        async fn stop(
+            &mut self,
+            _generation: Generation,
+            _reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    struct ReportTestAudioInput {
+        frame: Option<aurora_voice_core::PcmFrame>,
+        started: Option<mpsc::Sender<Generation>>,
+        stop_entered: Option<mpsc::Sender<()>>,
+        release_stop: Option<tokio::sync::oneshot::Receiver<()>>,
+        fail_stop: bool,
+    }
+
+    #[async_trait(?Send)]
+    impl AudioInput for ReportTestAudioInput {
+        async fn start(&mut self, lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            if let Some(started) = self.started.as_ref() {
+                let _ = started.send(lease.generation);
+            }
+            Ok(())
+        }
+
+        async fn stop(
+            &mut self,
+            _reason: aurora_voice_core::TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            if let Some(entered) = self.stop_entered.take() {
+                let _ = entered.send(());
+            }
+            if let Some(release) = self.release_stop.take() {
+                let _ = release.await;
+            }
+            if self.fail_stop {
+                Err(VoiceCoreError::TransportFault {
+                    code: "report_test_capture_stop_failed".to_owned(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn next_frame(
+            &mut self,
+        ) -> Result<Option<aurora_voice_core::PcmFrame>, VoiceCoreError> {
+            Ok(self.frame.take())
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            RouteRevision(ROUTE_REVISION)
+        }
+    }
+
+    struct SuccessfulReportTestStt;
+
+    #[async_trait(?Send)]
+    impl FiniteSttPort for SuccessfulReportTestStt {
+        fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+            Ok(FiniteSttProviderBinding::Route(RouteFiniteSttBinding::new(
+                "route.stt.cleanup-report-success",
+                FiniteSttRouteScope::LoopbackSidecar,
+                VAD_SAMPLE_RATE_HZ,
+                MAX_FINITE_STT_SAMPLES,
+                ROUTE_REVISION,
+            )?))
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            request: BoundFiniteSttRequest,
+            audio: FiniteSttAudio,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            FiniteSttResult::new(&request, &audio, "recognized")
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    struct CloseTestSink;
+
+    #[async_trait(?Send)]
+    impl RuntimeEventSink for CloseTestSink {
+        async fn snapshot(&mut self, _snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+
+        async fn event(&mut self, _event: RuntimeEvent) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    fn close_test_runtime(
+        started: mpsc::Sender<()>,
+        stop_entered: mpsc::Sender<()>,
+        release_stop: tokio::sync::oneshot::Receiver<()>,
+        fail_stop: bool,
+    ) -> VoiceRuntime<
+        CloseTestAudioInput,
+        CloseTestEngine,
+        CloseTestEngine,
+        CloseTestTransport,
+        CloseTestOutput,
+        CloseTestSink,
+    > {
+        close_test_runtime_inner(started, stop_entered, release_stop, fail_stop, None)
+    }
+
+    fn close_test_runtime_inner(
+        started: mpsc::Sender<()>,
+        stop_entered: mpsc::Sender<()>,
+        release_stop: tokio::sync::oneshot::Receiver<()>,
+        fail_stop: bool,
+        fail_stop_once: Option<Arc<std::sync::atomic::AtomicBool>>,
+    ) -> VoiceRuntime<
+        CloseTestAudioInput,
+        CloseTestEngine,
+        CloseTestEngine,
+        CloseTestTransport,
+        CloseTestOutput,
+        CloseTestSink,
+    > {
+        VoiceRuntime::new(
+            CloseTestAudioInput {
+                started: Some(started),
+                start_entered: None,
+                release_start: None,
+                stop_entered: Some(stop_entered),
+                release_stop: Some(release_stop),
+                fail_stop,
+                fail_stop_once,
+            },
+            CloseTestEngine,
+            CloseTestEngine,
+            CloseTestTransport,
+            CloseTestOutput,
+            CloseTestSink,
+            ANDROID_SURFACE,
+            ANDROID_RUNTIME_ID,
+        )
+        .expect("real core runtime")
+    }
+
+    fn close_test_runtime_with_one_failed_stop(
+        started: mpsc::Sender<()>,
+        stop_entered: mpsc::Sender<()>,
+        release_stop: tokio::sync::oneshot::Receiver<()>,
+        fail_stop_once: Arc<std::sync::atomic::AtomicBool>,
+    ) -> VoiceRuntime<
+        CloseTestAudioInput,
+        CloseTestEngine,
+        CloseTestEngine,
+        CloseTestTransport,
+        CloseTestOutput,
+        CloseTestSink,
+    > {
+        close_test_runtime_inner(
+            started,
+            stop_entered,
+            release_stop,
+            false,
+            Some(fail_stop_once),
+        )
+    }
+
+    struct CloseTestWake;
+
+    impl Wake for CloseTestWake {
+        fn wake(self: Arc<Self>) {}
+    }
+
+    #[test]
+    fn production_command_loop_waits_for_actual_core_cleanup_before_worker_join() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let (loop_exited_tx, loop_exited_rx) = mpsc::channel();
+        let (allow_worker_exit_tx, allow_worker_exit_rx) = mpsc::channel();
+        let lifecycle = MobileSessionLifecycle::new();
+        let ingress = AndroidPcmIngress::new(1, 128);
+        let control = AndroidAudioInput::new(ingress).control();
+        let state = AndroidSessionThreadState {
+            status: Arc::new(Mutex::new(AndroidVoiceSessionStatus::default())),
+            focused_transcript: Arc::new(Mutex::new(None)),
+            turn_transcript: Arc::new(Mutex::new(None)),
+            background_results: Arc::new(Mutex::new(VecDeque::new())),
+            observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+            control: control.clone(),
+            lifecycle: lifecycle.clone(),
+        };
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime(started_tx, stop_tx, release_rx, true);
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(core, command_rx, state, false));
+            loop_exited_tx.send(()).expect("loop exited after report");
+            allow_worker_exit_rx
+                .recv()
+                .expect("release worker after retained report");
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        let (reply, response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: AndroidVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("start admitted");
+        assert_eq!(
+            response.recv().expect("start reply").expect("generation"),
+            Generation(1)
+        );
+        started_rx.recv().expect("core capture started");
+        stop_rx.recv().expect("core cleanup entered audio stop");
+
+        assert_eq!(
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok()),
+            Some(Generation(1))
+        );
+        control.interrupt(Generation(1));
+        let waker = Waker::from(Arc::new(CloseTestWake));
+        let mut context = Context::from_waker(&waker);
+        let mut wait = Box::pin(lifecycle.wait_closed());
+        assert!(matches!(wait.as_mut().poll(&mut context), Poll::Pending));
+        assert_eq!(
+            lifecycle.admit(|| commands.send(Command::Shutdown).is_ok()),
+            Err(MobileSessionCloseError::ShutdownFailed)
+        );
+        release_tx.send(()).expect("release actual core cleanup");
+        loop_exited_rx
+            .recv()
+            .expect("production loop recorded cleanup and returned");
+        assert!(matches!(wait.as_mut().poll(&mut context), Poll::Pending));
+        allow_worker_exit_tx
+            .send(())
+            .expect("allow actual worker exit");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+        assert!(matches!(
+            wait.as_mut().poll(&mut context),
+            Poll::Ready(Err(MobileSessionCloseError::CleanupFailed))
+        ));
+    }
+
+    #[test]
+    fn production_command_loop_drains_on_channel_close_and_fails_closed() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+        let lifecycle = MobileSessionLifecycle::new();
+        let (channel_closed_tx, channel_closed_rx) = mpsc::channel();
+        lifecycle.set_unexpected_channel_close_hook(channel_closed_tx);
+        let ingress = AndroidPcmIngress::new(1, 128);
+        let control = AndroidAudioInput::new(ingress).control();
+        let state = AndroidSessionThreadState {
+            status: Arc::new(Mutex::new(AndroidVoiceSessionStatus::default())),
+            focused_transcript: Arc::new(Mutex::new(None)),
+            turn_transcript: Arc::new(Mutex::new(None)),
+            background_results: Arc::new(Mutex::new(VecDeque::new())),
+            observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+            control,
+            lifecycle: lifecycle.clone(),
+        };
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime(started_tx, stop_tx, release_rx, false);
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(core, command_rx, state, false));
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        let (reply, response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: AndroidVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("start admitted");
+        assert_eq!(
+            response.recv().expect("start reply").expect("generation"),
+            Generation(1)
+        );
+        started_rx.recv().expect("core capture started");
+        drop(commands);
+        stop_rx.recv().expect("core cleanup entered audio stop");
+        channel_closed_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("production loop retained ShutdownFailed after channel close");
+
+        let waker = Waker::from(Arc::new(CloseTestWake));
+        let mut context = Context::from_waker(&waker);
+        let mut wait = Box::pin(lifecycle.wait_closed());
+        assert!(matches!(wait.as_mut().poll(&mut context), Poll::Pending));
+        release_tx.send(()).expect("release actual core cleanup");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::ShutdownFailed)
+        );
+        assert!(matches!(
+            wait.as_mut().poll(&mut context),
+            Poll::Ready(Err(MobileSessionCloseError::ShutdownFailed))
+        ));
+    }
+
+    #[test]
+    fn cleanup_failure_stays_sticky_after_a_later_clean_generation() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_tx, stop_rx) = mpsc::channel();
+        let (release_stop_tx, release_stop_rx) = tokio::sync::oneshot::channel();
+        drop(release_stop_tx);
+        let fail_first_stop = Arc::new(std::sync::atomic::AtomicBool::new(true));
+        let lifecycle = MobileSessionLifecycle::new();
+        let ingress = AndroidPcmIngress::new(1, 128);
+        let control = AndroidAudioInput::new(ingress).control();
+        let state = AndroidSessionThreadState {
+            status: Arc::new(Mutex::new(AndroidVoiceSessionStatus::default())),
+            focused_transcript: Arc::new(Mutex::new(None)),
+            turn_transcript: Arc::new(Mutex::new(None)),
+            background_results: Arc::new(Mutex::new(VecDeque::new())),
+            observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+            control,
+            lifecycle: lifecycle.clone(),
+        };
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime_with_one_failed_stop(
+                started_tx,
+                stop_tx,
+                release_stop_rx,
+                fail_first_stop,
+            );
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(core, command_rx, state, false));
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        for expected_generation in [Generation(1), Generation(2)] {
+            let (reply, response) = mpsc::channel();
+            lifecycle
+                .admit(|| {
+                    commands
+                        .send(Command::Start {
+                            mode: AndroidVoiceStartMode::PushToTalk,
+                            reply,
+                        })
+                        .is_ok()
+                })
+                .expect("generation admitted before retirement");
+            assert_eq!(
+                response
+                    .recv()
+                    .expect("start response")
+                    .expect("generation"),
+                expected_generation
+            );
+            if expected_generation == Generation(1) {
+                started_rx.recv().expect("first actual capture started");
+            }
+            stop_rx
+                .recv()
+                .expect("actual core cleanup reached audio stop");
+            assert!(lifecycle.wait_for_cleanup_count(expected_generation.0));
+        }
+
+        lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok());
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+    }
+
+    #[test]
+    fn successful_core_report_with_unattempted_state_reset_is_accepted() {
+        for fail_capture_stop in [false, true] {
+            let lifecycle = MobileSessionLifecycle::new();
+            let (started_tx, started_rx) = mpsc::channel();
+            let (stop_entered_tx, stop_entered_rx) = mpsc::channel();
+            let (release_stop_tx, release_stop_rx) = tokio::sync::oneshot::channel();
+            let (report_tx, report_rx) = mpsc::channel();
+            lifecycle.set_after_cleanup_hook(move |generation, report| {
+                report_tx
+                    .send((generation, report))
+                    .expect("production loop recorded cleanup report");
+            });
+            let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus::default()));
+            let state = AndroidSessionThreadState {
+                status: Arc::clone(&status),
+                focused_transcript: Arc::new(Mutex::new(None)),
+                turn_transcript: Arc::new(Mutex::new(None)),
+                background_results: Arc::new(Mutex::new(VecDeque::new())),
+                observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+                control: AndroidAudioInput::new(AndroidPcmIngress::new(1, 128)).control(),
+                lifecycle: lifecycle.clone(),
+            };
+            let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+            let worker = thread::spawn(move || {
+                let generation = Generation(1);
+                let audio = ReportTestAudioInput {
+                    frame: Some(
+                        aurora_voice_core::PcmFrame::new(
+                            vec![0.1, -0.1],
+                            TimestampMicros(1),
+                            1,
+                            false,
+                            RouteRevision(ROUTE_REVISION),
+                            generation,
+                        )
+                        .expect("valid audio frame"),
+                    ),
+                    started: Some(started_tx),
+                    stop_entered: Some(stop_entered_tx),
+                    release_stop: Some(release_stop_rx),
+                    fail_stop: fail_capture_stop,
+                };
+                let runtime = VoiceRuntime::new(
+                    audio,
+                    SuccessfulReportTestStt,
+                    CloseTestEngine,
+                    CloseTestTransport,
+                    CloseTestOutput,
+                    CloseTestSink,
+                    ANDROID_SURFACE,
+                    "cleanup-report-production-loop-test",
+                )
+                .expect("actual core runtime");
+                TokioRuntimeBuilder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .expect("test runtime")
+                    .block_on(run_session_loop(runtime, command_rx, state, false));
+            });
+            start_join_driver(&lifecycle, worker).expect("actual worker join driver");
+
+            let (reply, response) = mpsc::channel();
+            lifecycle
+                .admit(|| {
+                    commands
+                        .send(Command::Start {
+                            mode: AndroidVoiceStartMode::PushToTalk,
+                            reply,
+                        })
+                        .is_ok()
+                })
+                .expect("primary start admitted");
+            assert_eq!(
+                response.recv().expect("start reply").expect("generation"),
+                Generation(1)
+            );
+            assert_eq!(
+                started_rx.recv_timeout(Duration::from_secs(5)),
+                Ok(Generation(1))
+            );
+            stop_entered_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("actual core cleanup entered capture stop");
+            release_stop_tx.send(()).expect("release capture stop");
+
+            let (reported_generation, report) = report_rx
+                .recv_timeout(Duration::from_secs(5))
+                .expect("production loop cleanup report");
+            let report = report.expect("actual core report");
+            assert_eq!(reported_generation, Generation(1));
+            assert_eq!(report.generation(), Generation(1));
+            assert_eq!(
+                report.state_reset(),
+                aurora_voice_core::CleanupCallbackOutcome::NotAttempted
+            );
+            assert_eq!(
+                report.capture_stop(),
+                if fail_capture_stop {
+                    aurora_voice_core::CleanupCallbackOutcome::ReturnedError
+                } else {
+                    aurora_voice_core::CleanupCallbackOutcome::ReturnedOk
+                }
+            );
+
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok());
+            assert_eq!(
+                lifecycle.close_checked_timeout(Duration::from_secs(5)),
+                if fail_capture_stop {
+                    Err(MobileSessionCloseError::CleanupFailed)
+                } else {
+                    Ok(())
+                }
+            );
+            assert!(!status.lock().expect("final status").active);
+        }
+    }
+
+    #[test]
+    fn terminal_close_preserves_missing_transport_cleanup_as_failure() {
+        let config = AndroidVoiceSessionConfig::new(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+        );
+        let session = AndroidVoiceSession::new(config, 2, 128, 2).expect("session");
+        let generation = session.start().expect("start");
+        session.request_close();
+        assert_eq!(
+            session.start(),
+            Err(AndroidVoiceSessionCommandError::Closed)
+        );
+        assert_eq!(
+            session.close_checked_timeout(Duration::from_secs(5)),
+            Err(MobileSessionCloseError::CleanupFailed)
+        );
+        assert!(!session.status().active);
+        assert_eq!(generation.0, 1);
+    }
+
+    #[test]
+    fn production_worker_startup_failure_is_retained_until_join() {
+        let config = AndroidVoiceSessionConfig::new(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+        );
+        let ingress = AndroidPcmIngress::new(1, 128);
+        let input = AndroidAudioInput::new(ingress);
+        let control = input.control();
+        let output = AndroidAudioOutput::new(1);
+        let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus::default()));
+        let turn_transcript = Arc::new(Mutex::new(None));
+        let observation_tokens = Arc::new(Mutex::new(HashMap::new()));
+        let lifecycle = MobileSessionLifecycle::new();
+        let state = AndroidSessionThreadState {
+            status: Arc::clone(&status),
+            focused_transcript: Arc::new(Mutex::new(None)),
+            turn_transcript: Arc::clone(&turn_transcript),
+            background_results: Arc::new(Mutex::new(VecDeque::new())),
+            observation_tokens: Arc::clone(&observation_tokens),
+            control,
+            lifecycle: lifecycle.clone(),
+        };
+        let sink = AndroidSessionSink {
+            status: Arc::clone(&status),
+            turn_transcript,
+            observation_tokens,
+        };
+        let (_commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            run_session_thread_with_builder(
+                config,
+                input,
+                output,
+                sink,
+                command_rx,
+                state,
+                |_config, _input, _output, _sink| Err(AndroidVoiceSessionCommandError::Unavailable),
+            );
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(2)),
+            Err(MobileSessionCloseError::Unavailable)
+        );
+        assert_eq!(
+            status.lock().expect("startup status").phase,
+            AndroidVoiceSessionPhase::Faulted
+        );
+    }
+
+    #[test]
+    fn constructor_driver_spawn_failure_joins_the_actual_android_worker() {
+        let config = AndroidVoiceSessionConfig::new(
+            Url::parse("http://127.0.0.1:8000").expect("url"),
+            GatewayAuth::None,
+            false,
+        );
+        let worker_exited = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let observed_exit = Arc::clone(&worker_exited);
+        assert_eq!(
+            AndroidVoiceSession::new_with_join_driver(
+                config,
+                1,
+                128,
+                1,
+                |_lifecycle, worker| Err(worker),
+                move || observed_exit.store(true, std::sync::atomic::Ordering::SeqCst),
+            )
+            .map(|_| ()),
+            Err(AndroidVoiceSessionCommandError::Unavailable)
+        );
+        assert!(worker_exited.load(std::sync::atomic::Ordering::SeqCst));
+    }
+
+    #[test]
+    fn retirement_before_real_input_control_reset_cannot_admit_another_capture() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let (release_start_tx, release_start_rx) = tokio::sync::oneshot::channel();
+        let (stop_tx, stop_rx) = mpsc::channel::<()>();
+        let (release_stop_tx, release_stop_rx) = tokio::sync::oneshot::channel();
+        let lifecycle = MobileSessionLifecycle::new();
+        let inner = AndroidAudioInput::new(AndroidPcmIngress::new(1, 128));
+        let control = inner.control();
+        let state = AndroidSessionThreadState {
+            status: Arc::new(Mutex::new(AndroidVoiceSessionStatus::default())),
+            focused_transcript: Arc::new(Mutex::new(None)),
+            turn_transcript: Arc::new(Mutex::new(None)),
+            background_results: Arc::new(Mutex::new(VecDeque::new())),
+            observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+            control: control.clone(),
+            lifecycle: lifecycle.clone(),
+        };
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            let core = VoiceRuntime::new(
+                GatedAndroidAudioInput {
+                    inner,
+                    start_entered: Some(started_tx),
+                    release_start: Some(release_start_rx),
+                    stop_entered: Some(stop_tx),
+                    release_stop: Some(release_stop_rx),
+                },
+                CloseTestEngine,
+                CloseTestEngine,
+                CloseTestTransport,
+                CloseTestOutput,
+                CloseTestSink,
+                ANDROID_SURFACE,
+                ANDROID_RUNTIME_ID,
+            )
+            .expect("real core runtime");
+            let runtime = TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime");
+            runtime.block_on(run_session_loop(core, command_rx, state, false));
+        });
+        start_join_driver(&lifecycle, worker).expect("join driver");
+
+        let (reply, response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: AndroidVoiceStartMode::PushToTalk,
+                        reply,
+                    })
+                    .is_ok()
+            })
+            .expect("first start admitted");
+        assert_eq!(
+            response.recv().expect("start reply").expect("generation"),
+            Generation(1)
+        );
+        started_rx.recv().expect("before inner input reset");
+
+        let (queued_reply, queued_response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: AndroidVoiceStartMode::PushToTalk,
+                        reply: queued_reply,
+                    })
+                    .is_ok()
+            })
+            .expect("active-loop start enqueued for rejection");
+        assert_eq!(
+            queued_response.recv().expect("queued start reply"),
+            Err(AndroidVoiceSessionCommandError::AlreadyActive)
+        );
+
+        assert_eq!(
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok()),
+            Some(Generation(1))
+        );
+        control.interrupt(Generation(1));
+        let mut enqueue_ran = false;
+        assert_eq!(
+            lifecycle.admit(|| {
+                enqueue_ran = true;
+                true
+            }),
+            Err(MobileSessionCloseError::ShutdownFailed)
+        );
+        assert!(!enqueue_ran);
+
+        release_start_tx
+            .send(())
+            .expect("release actual input start");
+        stop_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("cancelled capture entered cleanup");
+        release_stop_tx.send(()).expect("finish actual cleanup");
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn queued_start_loses_to_retirement_after_cleanup_and_finish_cancel_match_generation() {
+        let lifecycle = MobileSessionLifecycle::new();
+        let (started_tx, started_rx) = mpsc::channel();
+        let (stop_entered_tx, stop_entered_rx) = mpsc::channel();
+        let (release_stop_tx, release_stop_rx) = tokio::sync::oneshot::channel();
+        let (cleanup_boundary_tx, cleanup_boundary_rx) = mpsc::channel();
+        let (release_boundary_tx, release_boundary_rx) = mpsc::channel();
+        lifecycle.set_after_cleanup_hook(move |generation, _report| {
+            if generation == Generation(1) {
+                cleanup_boundary_tx
+                    .send(())
+                    .expect("actual cleanup reached loop boundary");
+                let _ = release_boundary_rx.recv_timeout(Duration::from_secs(5));
+            }
+        });
+        let status = Arc::new(Mutex::new(AndroidVoiceSessionStatus::default()));
+        let state = AndroidSessionThreadState {
+            status: Arc::clone(&status),
+            focused_transcript: Arc::new(Mutex::new(None)),
+            turn_transcript: Arc::new(Mutex::new(None)),
+            background_results: Arc::new(Mutex::new(VecDeque::new())),
+            observation_tokens: Arc::new(Mutex::new(HashMap::new())),
+            control: AndroidAudioInput::new(AndroidPcmIngress::new(1, 128)).control(),
+            lifecycle: lifecycle.clone(),
+        };
+        let (commands, command_rx) = tokio_mpsc::unbounded_channel();
+        let worker = thread::spawn(move || {
+            let core = close_test_runtime(started_tx, stop_entered_tx, release_stop_rx, false);
+            TokioRuntimeBuilder::new_current_thread()
+                .enable_all()
+                .build()
+                .expect("test runtime")
+                .block_on(run_session_loop(core, command_rx, state, false));
+        });
+        start_join_driver(&lifecycle, worker).expect("actual worker join driver");
+
+        let (start_reply, start_response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: AndroidVoiceStartMode::PushToTalk,
+                        reply: start_reply,
+                    })
+                    .is_ok()
+            })
+            .expect("first start admitted");
+        assert_eq!(
+            start_response
+                .recv()
+                .expect("start response")
+                .expect("generation"),
+            Generation(1)
+        );
+        started_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("first actual capture started");
+        stop_entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("core is blocked in cleanup");
+
+        for (generation, matching) in [(Generation(9), false), (Generation(1), true)] {
+            let (reply, response) = mpsc::channel();
+            lifecycle
+                .admit(|| commands.send(Command::Finish { generation, reply }).is_ok())
+                .expect("finish command admitted");
+            assert_eq!(
+                response.recv_timeout(Duration::from_secs(2)),
+                if matching {
+                    Ok(Ok(()))
+                } else {
+                    Ok(Err(AndroidVoiceSessionCommandError::NotActive))
+                }
+            );
+        }
+        for (generation, matching) in [(Generation(9), false), (Generation(1), true)] {
+            let (reply, response) = mpsc::channel();
+            lifecycle
+                .admit(|| commands.send(Command::Cancel { generation, reply }).is_ok())
+                .expect("cancel command admitted");
+            assert_eq!(
+                response.recv_timeout(Duration::from_secs(2)),
+                if matching {
+                    Ok(Ok(()))
+                } else {
+                    Ok(Err(AndroidVoiceSessionCommandError::NotActive))
+                }
+            );
+        }
+
+        release_stop_tx.send(()).expect("release core cleanup");
+        cleanup_boundary_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("generation cleanup finished before next command");
+        let (queued_reply, queued_response) = mpsc::channel();
+        lifecycle
+            .admit(|| {
+                commands
+                    .send(Command::Start {
+                        mode: AndroidVoiceStartMode::PushToTalk,
+                        reply: queued_reply,
+                    })
+                    .is_ok()
+            })
+            .expect("start queued before retirement wins");
+        assert_eq!(
+            lifecycle.request_retirement(|| commands.send(Command::Shutdown).is_ok()),
+            None,
+            "generation cleanup already released the active binding"
+        );
+        release_boundary_tx
+            .send(())
+            .expect("resume production command loop");
+        assert_eq!(
+            queued_response.recv_timeout(Duration::from_secs(2)),
+            Ok(Err(AndroidVoiceSessionCommandError::Unavailable))
+        );
+        assert_eq!(
+            lifecycle.close_checked_timeout(Duration::from_secs(5)),
+            Ok(())
+        );
+        assert_eq!(
+            started_rx.try_recv(),
+            Err(mpsc::TryRecvError::Disconnected),
+            "no second capture was admitted"
+        );
+        assert!(!status.lock().expect("final status").active);
     }
 
     #[cfg(feature = "native-sherpa-tts")]

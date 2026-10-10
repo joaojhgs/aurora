@@ -298,7 +298,21 @@ export function createBrowserCaptureController(ctx: BrowserCaptureControllerCont
       ctx.ownedVoiceSessionIdsRef.current.clear()
       return
     }
-    let transcript = ctx.readyBrowserSpeechPacks?.capabilities.stt ? ctx.browserVoiceLocalTranscriptRef.current.trim() : ''
+    let sttRoutePolicy: AssistantRoutePolicy
+    try {
+      sttRoutePolicy = ctx.routePolicyFromRoute(ctx.voiceModel.transcriptionRoute)
+    } catch (error) {
+      const settled = await settleBrowserVoiceTurn(token, 'abandon', 'transcription_route_unavailable')
+      if (!settled.current) return
+      ctx.setLastError(ctx.productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
+      ctx.setVoiceCaptureStatus('error')
+      ctx.activeVoiceSessionRef.current = null
+      ctx.ownedVoiceSessionIdsRef.current.clear()
+      return
+    }
+    let transcript = !sttRoutePolicy.peerId && ctx.readyBrowserSpeechPacks?.capabilities.stt
+      ? ctx.browserVoiceLocalTranscriptRef.current.trim()
+      : ''
     if (!transcript) {
       let result: Awaited<ReturnType<typeof ctx.client.assistant.transcribeVoiceAudio>>
       try {
@@ -308,7 +322,7 @@ export function createBrowserCaptureController(ctx: BrowserCaptureControllerCont
           sample_rate: 16000,
           channels: 1,
           model: 'accurate',
-          routePolicy: ctx.routePolicyFromRoute(ctx.voiceModel.transcriptionRoute)
+          routePolicy: sttRoutePolicy
         })
       } catch (error) {
         const settled = await settleBrowserVoiceTurn(token, 'abandon', 'transcription_failed')

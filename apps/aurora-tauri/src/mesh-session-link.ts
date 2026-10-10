@@ -91,6 +91,7 @@ export async function bindMeshSessionPeer(
     readonly localPeerId?: string;
     readonly providerServiceInstanceId?: string;
     readonly advertisedMethodIds?: readonly string[];
+    readonly speechStageCapabilities?: readonly unknown[];
     readonly manifestMethodsReady?: boolean;
     readonly primary?: boolean;
     readonly nativeDataChannelCodec?: MeshSessionNativeDataChannelCodec;
@@ -108,6 +109,7 @@ export async function bindMeshSessionPeer(
       providerServiceInstanceId: options.providerServiceInstanceId ?? null,
       nativeDataChannelCodec: options.nativeDataChannelCodec ?? null,
       advertisedMethodIds: [...(options.advertisedMethodIds ?? [])],
+      speechStageCapabilities: [...(options.speechStageCapabilities ?? [])],
       manifestMethodsReady: options.manifestMethodsReady ?? true,
       primary: options.primary ?? false,
     },
@@ -351,6 +353,7 @@ export interface MeshSessionRuntimePeer {
   getManifest(peerId: string): Promise<{
     readonly services?: readonly {
       readonly methods?: readonly string[];
+      readonly speechStageCapabilities?: readonly unknown[];
     }[];
   } | null>;
   /**
@@ -648,6 +651,7 @@ export function installMeshSessionRuntimeLink(
     handles: { peerConnectionId: number; dataChannelId: number },
     advertisedMethodIds: readonly string[],
     manifestMethodsReady: boolean,
+    speechStageCapabilities: readonly unknown[] = [],
   ): Promise<void> => {
     const nativeCodec = options.peer.nativeDataChannelCodec?.(rosterPeer.peerId) ?? null;
     const keyBytes = nativeCodec ? Array.from(nativeCodec.key) : null;
@@ -662,6 +666,7 @@ export function installMeshSessionRuntimeLink(
         nativeDataChannelCodecVersion: nativeCodec?.version ?? null,
         nativeDataChannelCodecEpoch: nativeCodec ? handles.dataChannelId : null,
         advertisedMethodIds,
+        speechStageCapabilities,
         manifestMethodsReady,
         primary: rosterPeer.primary,
       });
@@ -693,6 +698,7 @@ export function installMeshSessionRuntimeLink(
             }
           : {}),
         advertisedMethodIds,
+        speechStageCapabilities,
         manifestMethodsReady,
         primary: rosterPeer.primary,
       });
@@ -814,19 +820,20 @@ export function installMeshSessionRuntimeLink(
                 scheduleManifestRetry(peerId, hydration);
                 return;
               }
+              const services = manifest.services ?? [];
               const methodIds = [
-                ...new Set(
-                  (manifest.services ?? []).flatMap((service) => [
-                    ...(service.methods ?? []),
-                  ]),
-                ),
+                ...new Set(services.flatMap((service) => [...(service.methods ?? [])])),
               ].sort();
+              const speechStageCapabilities = services.flatMap((service) => [
+                ...(service.speechStageCapabilities ?? []),
+              ]);
               try {
                 await bindRosterPeer(
                   target.rosterPeer,
                   target.handles,
                   methodIds,
                   true,
+                  speechStageCapabilities,
                 );
               } catch {
                 scheduleManifestRetry(peerId, hydration);

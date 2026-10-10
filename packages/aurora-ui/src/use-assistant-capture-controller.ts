@@ -137,10 +137,16 @@ export function createAssistantCaptureController(ctx: AssistantCaptureController
       }
       const coordinatorOwnsCapture = Boolean(sessionId && ctx.coordinatorVoiceSessionIdsRef.current.has(sessionId))
       if (sessionId && coordinatorOwnsCapture) {
+        let routePolicy: AssistantRoutePolicy | undefined
+        try {
+          routePolicy = ctx.routePolicyFromRoute(ctx.voiceModel.transcriptionRoute)
+        } catch {
+          // The session ID is sufficient for teardown when the saved route is unavailable.
+        }
         const stopped = await ctx.client.assistant.stopVoiceListen({
           sessionId,
           reason: 'user_request',
-          routePolicy: ctx.routePolicyFromRoute(ctx.voiceModel.transcriptionRoute)
+          ...(routePolicy ? { routePolicy } : {})
         })
         if (!stopped.ok) ctx.setLastError(ctx.productAssistantErrorCopy(stopped.error))
       }

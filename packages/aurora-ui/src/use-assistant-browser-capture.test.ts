@@ -95,6 +95,31 @@ describe('browser assistant capture controller', () => {
     expect(harness.context.startAssistantTurn).not.toHaveBeenCalled()
     expect(harness.client.assistant.transcribeVoiceAudio).not.toHaveBeenCalled()
   })
+
+  it('uses the selected connected-device speech route instead of a local transcript', async () => {
+    const harness = browserHarness({
+      readyBrowserSpeechPacks: {
+        state: 'ready',
+        packs: [],
+        modelBindings: { files: [], models: [] },
+        capabilities: { stt: true, tts: false, kws: false, vad: false },
+        revision: 'test',
+      } as ReadyBrowserSpeechPacksRuntimeStatus,
+    })
+    harness.context.browserVoiceLocalTranscriptRef.current = 'local transcript'
+    harness.context.routePolicyFromRoute = vi.fn(() => ({ peerId: 'peer-a' }))
+    harness.context.browserVoiceOperationTokenRef.current = 3
+    harness.context.browserVoiceTurnSettlementRef.current = { token: 3, state: 'open', outcome: null, promise: null }
+    const controller = createBrowserCaptureController(harness.context)
+
+    await controller.stopBrowserVoiceCapture()
+
+    expect(harness.client.assistant.transcribeVoiceAudio).toHaveBeenCalledWith(expect.objectContaining({
+      routePolicy: { peerId: 'peer-a' },
+    }))
+    expect(harness.context.startAssistantTurn).toHaveBeenCalledWith('transcribed speech')
+    expect(harness.runtime.completeTurn).toHaveBeenCalledTimes(1)
+  })
 })
 
 function browserHarness(overrides: { runtime?: AuroraBrowserVoiceRuntimeInstance; unsubscribe?: () => void; readyBrowserSpeechPacks?: ReadyBrowserSpeechPacksRuntimeStatus | null } = {}) {

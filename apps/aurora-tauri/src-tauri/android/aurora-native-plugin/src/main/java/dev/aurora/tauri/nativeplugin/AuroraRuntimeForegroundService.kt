@@ -65,6 +65,7 @@ private const val VOICE_CAPTURE_FRAME_SAMPLES = SAMPLE_RATE_HZ / 10
 // failure instead of leaving the assistant turn in "speaking" indefinitely.
 private const val VOICE_PLAYBACK_WRITE_TIMEOUT_MILLIS = 2_000L
 private const val VOICE_RECOVERABLE_ERROR_REARM_DELAY_MILLIS = 2_500L
+private const val TRANSCRIPTION_INTERVAL_MAX_MILLIS = 25_000L
 // Debug-only deterministic ingress expires 120 seconds after its last explicit
 // harness heartbeat, restoring live capture if the harness exits unexpectedly.
 private const val VOICE_LIVE_TEST_INGRESS_MAX_HOLD_MILLIS = 120_000L
@@ -141,6 +142,17 @@ private data class AuroraVoiceRouteProfile(
 )
 
 object AuroraVoiceNativeConfigStore {
+    /** Returns the selected confirmed profile's local STT pack binding, if present. */
+    fun localSttPackId(confirmedProfileDocumentJson: String): String? {
+        val root = runCatching { JSONObject(confirmedProfileDocumentJson) }.getOrNull() ?: return null
+        val profile = activeProfile(root) ?: return null
+        return profile.optJSONObject("localNode")
+            ?.optJSONObject("localSpeechSelection")
+            ?.optJSONObject("stt")
+            ?.optString("packId")
+            ?.takeIf { it.isNotBlank() && it != "null" }
+    }
+
     fun isConfigured(context: Context): Boolean = load(context) != null
 
     fun hasAssistantRoute(context: Context): Boolean =
@@ -177,8 +189,12 @@ object AuroraVoiceNativeConfigStore {
             .apply()
     }
 
-    fun load(context: Context): AuroraVoiceNativeConfig? {
-        val routeProfile = activeVoiceRouteProfile(context) ?: return localOnlyConfig()
+    fun load(
+        context: Context,
+        confirmedProfileDocumentJson: String? = null,
+    ): AuroraVoiceNativeConfig? {
+        val routeProfile = activeVoiceRouteProfile(context, confirmedProfileDocumentJson)
+            ?: return if (confirmedProfileDocumentJson == null) localOnlyConfig() else null
         if (routeProfile.mode == "webrtc-only") {
             return AuroraVoiceNativeConfig(
                 gateway = "",
@@ -250,11 +266,18 @@ object AuroraVoiceNativeConfigStore {
         return gateway
     }
 
-    private fun activeVoiceRouteProfile(context: Context): AuroraVoiceRouteProfile? {
-        val raw = context.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
-            .getString(THIN_PROFILE_KEY, null)
-            ?: return null
-        val root = runCatching { JSONObject(raw) }.getOrNull() ?: return null
+    private fun activeVoiceRouteProfile(
+        context: Context,
+        confirmedProfileDocumentJson: String? = null,
+    ): AuroraVoiceRouteProfile? {
+        val root = if (confirmedProfileDocumentJson != null) {
+            runCatching { JSONObject(confirmedProfileDocumentJson) }.getOrNull() ?: return null
+        } else {
+            val raw = context.getSharedPreferences(THIN_PROFILE_PREFS, Context.MODE_PRIVATE)
+                .getString(THIN_PROFILE_KEY, null)
+                ?: return null
+            runCatching { JSONObject(raw) }.getOrNull() ?: return null
+        }
         val profile = activeProfile(root) ?: return null
         val home = profile.optJSONObject("homeConnection")
         val mode = home?.optString("mode")?.takeIf { it.isNotBlank() }
@@ -534,8 +557,9 @@ private class AuroraNativeVoiceSessionBridge(
     wakePhraseText: String? = null,
     wakePhraseRevision: String? = null,
     ttsReference: AuroraTtsReferenceSelection? = null,
+    speechStagesJson: String? = null,
 ) : AuroraPcmIngressBridge, AuroraPcmOutputBridge {
-    private var handle: Long = if (packStoreRoot != null && sttModelId != null && ttsVoiceId != null) {
+    private var handle: Long = if (packStoreRoot != null) {
         nativeCreateWithPackSelection(
             gateway,
             bearer,
@@ -543,8 +567,8 @@ private class AuroraNativeVoiceSessionBridge(
             assistantRouteMode,
             preferredStablePeerId.orEmpty(),
             packStoreRoot,
-            sttModelId,
-            ttsVoiceId,
+            sttModelId.orEmpty(),
+            ttsVoiceId.orEmpty(),
             vadModelId.orEmpty(),
             kwsModelId.orEmpty(),
             wakePhraseId.orEmpty(),
@@ -554,6 +578,7 @@ private class AuroraNativeVoiceSessionBridge(
             ttsReference?.samples ?: FloatArray(0),
             ttsReference?.text.orEmpty(),
             ttsReference?.revision.orEmpty(),
+            speechStagesJson.orEmpty(),
         )
     } else {
         nativeCreate(
@@ -562,6 +587,7 @@ private class AuroraNativeVoiceSessionBridge(
             remoteAudioConsent,
             assistantRouteMode,
             preferredStablePeerId.orEmpty(),
+            speechStagesJson.orEmpty(),
         )
     }
 
@@ -673,6 +699,7 @@ private class AuroraNativeVoiceSessionBridge(
         remoteAudioConsent: Boolean,
         assistantRouteMode: String,
         preferredStablePeerId: String,
+        speechStagesJson: String,
     ): Long
     private external fun nativeCreateWithPackSelection(
         gateway: String,
@@ -692,6 +719,7 @@ private class AuroraNativeVoiceSessionBridge(
         ttsReferenceSamples: FloatArray,
         ttsReferenceText: String,
         ttsReferenceRevision: String,
+        speechStagesJson: String,
     ): Long
     private external fun nativeStart(handle: Long): Long
     private external fun nativeStartBackground(handle: Long): Long
@@ -843,6 +871,120 @@ private class AuroraAudioPlayback(
     }
 }
 
+/** JNI bridge for the STT-only archive capture path. */
+private class AuroraNativeTranscriptionSessionBridge(
+    gateway: String,
+    bearer: String,
+    remoteAudioConsent: Boolean,
+    packStoreRoot: String?,
+    sttModelId: String?,
+    speechStagesJson: String,
+) : AuroraPcmIngressBridge {
+    private var handle: Long = nativeCreate(
+        gateway,
+        bearer,
+        remoteAudioConsent,
+        packStoreRoot.orEmpty(),
+        sttModelId.orEmpty(),
+        speechStagesJson,
+        QUEUE_CAPACITY_CHUNKS,
+        MAX_CHUNK_SAMPLES,
+    )
+
+    override fun pushPcm(samples: ShortArray, sampleCount: Int, sequence: Long): Int {
+        val current = handle
+        return if (current == 0L || sampleCount !in 1..samples.size) -1
+        else nativePushPcm(current, samples, sampleCount, sequence)
+    }
+
+    override fun stats(): LongArray = if (handle == 0L) LongArray(0) else nativeStats(handle)
+
+    fun start(admissionToken: String, backgroundEligible: Boolean): Long =
+        if (handle == 0L) 0L else nativeStart(handle, admissionToken, backgroundEligible)
+
+    fun finish(generation: Long): Int = if (handle == 0L) -1 else nativeFinish(handle, generation)
+
+    fun cancel(generation: Long): Int = if (handle == 0L) -1 else nativeCancel(handle, generation)
+
+    fun takeTranscript(): String? = if (handle == 0L) null else nativeTakeTranscript(handle)
+
+    fun appendEncrypted(
+        token: String,
+        generation: Long,
+        segmentId: String,
+        sequence: Long,
+        startMs: Long,
+        endMs: Long,
+        envelopeJson: String,
+        microphonePermissionGranted: Boolean,
+    ): Int = nativeAppendEncryptedResult(
+        token,
+        generation,
+        segmentId,
+        sequence,
+        startMs,
+        endMs,
+        envelopeJson,
+        microphonePermissionGranted,
+    )
+
+    fun endCaptureInterval(token: String, generation: Long): Int =
+        nativeEndCaptureInterval(token, generation)
+
+    fun finalize(token: String, lifecycle: String, reason: String): Int =
+        nativeFinalize(token, lifecycle, reason)
+
+    override fun close() {
+        val current = handle
+        if (current != 0L) {
+            nativeClose(current)
+            nativeFree(current)
+            handle = 0L
+        }
+    }
+
+    private external fun nativeCreate(
+        gateway: String,
+        bearer: String,
+        remoteAudioConsent: Boolean,
+        packStoreRoot: String,
+        sttModelId: String,
+        speechStagesJson: String,
+        ingressCapacityChunks: Int,
+        maxChunkSamples: Int,
+    ): Long
+    private external fun nativePushPcm(handle: Long, samples: ShortArray, sampleCount: Int, sequence: Long): Int
+    private external fun nativeStart(handle: Long, admissionToken: String, backgroundEligible: Boolean): Long
+    private external fun nativeFinish(handle: Long, generation: Long): Int
+    private external fun nativeCancel(handle: Long, generation: Long): Int
+    private external fun nativeTakeTranscript(handle: Long): String?
+    private external fun nativeStats(handle: Long): LongArray
+    private external fun nativeAppendEncryptedResult(
+        token: String,
+        generation: Long,
+        segmentId: String,
+        sequence: Long,
+        startMs: Long,
+        endMs: Long,
+        envelopeJson: String,
+        microphonePermissionGranted: Boolean,
+    ): Int
+    private external fun nativeEndCaptureInterval(token: String, generation: Long): Int
+    private external fun nativeFinalize(token: String, lifecycle: String, reason: String): Int
+    private external fun nativeClose(handle: Long)
+    private external fun nativeFree(handle: Long)
+
+    companion object {
+        init { System.loadLibrary("aurora_tauri_lib") }
+
+        @JvmStatic
+        external fun nativeAdmit(mode: String): String?
+
+        @JvmStatic
+        external fun nativeFinalizeAdmission(token: String, lifecycle: String, reason: String): Int
+    }
+}
+
 private enum class LiveTestIngressLeaseState {
     AVAILABLE,
     OWNED,
@@ -855,6 +997,7 @@ private class AuroraAudioCapture(
     private val onSnapshot: (AuroraVoiceCaptureSnapshot) -> Unit,
     private val closeBridgeOnClose: Boolean = true,
     liveTestIngressInitiallyArmed: Boolean = false,
+    private val onCaptureStarted: (() -> Unit)? = null,
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val sequenceGuard = Any()
@@ -915,6 +1058,7 @@ private class AuroraAudioCapture(
             return
         }
         recorder = initializedRecorder
+        onCaptureStarted?.invoke()
         readLoop(frameCapacity)
     }
 
@@ -1177,6 +1321,9 @@ enum class AuroraRuntimeForegroundReason(val id: String) {
     /** Microphone capture and the local speech session that consumes it. */
     VOICE("voice"),
 
+    /** Native transcription owns the same microphone without assistant or TTS work. */
+    TRANSCRIPTION("transcription"),
+
     /** A held connection to one of the user's other devices. */
     DEVICE_LINK("device_link"),
 }
@@ -1244,9 +1391,44 @@ object AuroraRuntimeForegroundLedger {
 }
 
 class AuroraRuntimeForegroundService : Service() {
+    private data class PendingTranscriptionResources(
+        val token: String,
+        val session: AuroraNativeTranscriptionSessionBridge,
+        val generation: Long,
+    )
+
     private var capture: AuroraAudioCapture? = null
     private var playback: AuroraAudioPlayback? = null
     private var session: AuroraNativeVoiceSessionBridge? = null
+    private var transcriptionCapture: AuroraAudioCapture? = null
+    private var transcriptionSession: AuroraNativeTranscriptionSessionBridge? = null
+    private var transcriptionToken: String? = null
+    private var transcriptionProfileId: String? = null
+    private var transcriptionLocalNodeId: String? = null
+    private var transcriptionSessionId: String? = null
+    private var transcriptionMode: String? = null
+    private var transcriptionSequence = 0L
+    private var transcriptionGeneration = 0L
+    @Volatile
+    private var transcriptionCaptureStartedAtMs = 0L
+    @Volatile
+    private var transcriptionCaptureStartedElapsedMs = 0L
+    private var transcriptionIntervalFinishRequested = false
+    @Volatile private var transcriptionIntervalEpoch = 0L
+    private var transcriptionReservationEpoch: Long? = null
+    private var transcriptionPollRunnable: Runnable? = null
+    private val transcriptionInitializationInFlight = AtomicBoolean(false)
+    private var transcriptionState = "idle"
+    private var transcriptionReason: String? = null
+    private var transcriptionPolicyJson: String? = null
+    private var transcriptionProfileDocumentJson: String? = null
+    private var transcriptionProfileGeneration = 0L
+    private var transcriptionCaptureProfileGeneration: Long? = null
+    private val pendingTranscriptionResources = AtomicReference<PendingTranscriptionResources?>(null)
+    @Volatile private var transcriptionArchiveFinalizedByStartFailure = false
+    @Volatile private var transcriptionStopRequested: Pair<String, String>? = null
+    private var transcriptionArchiveAvailable = false
+    private var transcriptionSttAvailable = false
     private var sessionGeneration: Long = 0L
     private val wakeLockGuard = Any()
 
@@ -1254,7 +1436,15 @@ class AuroraRuntimeForegroundService : Service() {
     private var audioFocusRequest: AudioFocusRequest? = null
     private val finishHandler = Handler(Looper.getMainLooper())
     private val initializationInFlight = AtomicBoolean(false)
+    private val profileChangeDrainWaiters = mutableListOf<(Boolean) -> Unit>()
+    private var profileChangeDrainInFlight = false
     private var pendingAssistantStartId: Int? = null
+    @Volatile private var speechStagesJson: String? = null
+    @Volatile private var confirmedProfileDocumentJson: String? = null
+    @Volatile private var admittedSttPackId: String? = null
+    @Volatile private var admittedTtsPackId: String? = null
+    @Volatile private var admittedVadPackId: String? = null
+    @Volatile private var admittedKwsPackId: String? = null
     private val lastNotificationFingerprint = AtomicReference<String?>(null)
     private val nativeLifecycleExecutor = ThreadPoolExecutor(
         0,
@@ -1353,11 +1543,115 @@ class AuroraRuntimeForegroundService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (intent?.action == ACTION_SYNC_REASONS) {
+        val action = intent?.action
+        val restoringBackground = action == ACTION_RESTORE_BACKGROUND
+        if ((action == ACTION_START_ASSISTANT || action == ACTION_START_BACKGROUND || restoringBackground) &&
+            transcriptionOwnsOrReservesMicrophone()
+        ) {
+            // Reject before updating persisted voice configuration or taking a
+            // voice lease. The active transcription/device-link owners remain
+            // untouched and the status stays explicit for the caller.
+            captureError = "microphone_busy"
+            updateNotification(captureSnapshot)
+            return START_NOT_STICKY
+        }
+        if (action == ACTION_SYNC_BACKGROUND_TRANSCRIPTION) {
+            val policy = intent.getStringExtra(EXTRA_TRANSCRIPTION_POLICY_JSON)
+            val profile = intent.getStringExtra(EXTRA_TRANSCRIPTION_PROFILE_DOCUMENT_JSON)
+            val generation = intent.getLongExtra(EXTRA_TRANSCRIPTION_PROFILE_GENERATION, -1L)
+            if (policy.isNullOrBlank() || profile.isNullOrBlank() || generation < 0L) {
+                transcriptionState = "failed"
+                transcriptionReason = "policy_unavailable"
+                return START_NOT_STICKY
+            }
+            val saved = getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(TRANSCRIPTION_POLICY_JSON_KEY, policy)
+                .putString(TRANSCRIPTION_PROFILE_DOCUMENT_JSON_KEY, profile)
+                .putLong(TRANSCRIPTION_PROFILE_GENERATION_KEY, generation)
+                .commit()
+            if (!saved) {
+                transcriptionState = "failed"
+                transcriptionReason = "policy_unavailable"
+                return START_NOT_STICKY
+            }
+            transcriptionPolicyJson = policy
+            transcriptionProfileDocumentJson = profile
+            transcriptionProfileGeneration = generation
+            val backgroundPolicy = runCatching { JSONObject(policy).getJSONObject("backgroundTranscription") }.getOrNull()
+            val enabled = backgroundPolicy?.optBoolean("enabled", false) == true
+            val ambient = backgroundPolicy?.optBoolean("ambient", false) == true
+            if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)) {
+                val activeMode = transcriptionMode
+                val modeStillEnabled = enabled && when (activeMode) {
+                    "ambient" -> ambient
+                    "notification" -> backgroundPolicy?.optBoolean("notification", false) == true && !ambient
+                    else -> false
+                }
+                val profileChanged = transcriptionCaptureProfileGeneration?.let { it != generation } == true
+                if (profileChanged || !modeStillEnabled) {
+                    stopTranscription(
+                        "interrupted",
+                        if (profileChanged) "profile_changed" else "policy_disabled",
+                    )
+                } else {
+                    syncForegroundReasons(startId)
+                }
+            } else if (enabled && ambient) {
+                if (!getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                        .getBoolean(TRANSCRIPTION_USER_STOPPED_KEY, false)
+                ) startTranscription("ambient", startId)
+            } else if (enabled && backgroundPolicy?.optBoolean("notification", false) == true) {
+                if (AuroraRuntimeForegroundLedger.activeReasons().isNotEmpty()) {
+                    syncForegroundReasons(startId)
+                } else {
+                    publishManualTranscriptionNotification(startId)
+                }
+            } else if (AuroraRuntimeForegroundLedger.activeReasons().isNotEmpty()) {
+                syncForegroundReasons(startId)
+            } else {
+                NotificationManagerCompat.from(this).cancel(AURORA_RUNTIME_NOTIFICATION_ID)
+                stopSelfResult(startId)
+            }
+            return START_NOT_STICKY
+        }
+        if (action == ACTION_START_TRANSCRIPTION_NOTIFICATION) {
+            startTranscription("notification", startId)
+            return START_NOT_STICKY
+        }
+        if (action == ACTION_STOP_TRANSCRIPTION) {
+            stopTranscription("completed", "user_stop")
+            return START_NOT_STICKY
+        }
+        if (action == null && getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .getBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, false)
+        ) {
+            loadPersistedTranscriptionPolicy()
+            startTranscription("ambient", startId)
+            return START_NOT_STICKY
+        }
+        if (action == ACTION_SYNC_REASONS) {
             syncForegroundReasons(startId)
             return START_NOT_STICKY
         }
+        if (profileChangeBlocked && (action == null ||
+                action == ACTION_START_BACKGROUND ||
+                restoringBackground ||
+                action == ACTION_START_ASSISTANT)
+        ) {
+            pendingAssistantStartId = null
+            AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
+            captureError = "profile_changed"
+            val reasons = AuroraRuntimeForegroundLedger.activeReasons()
+            runCatching { enterForeground(notificationTextFor(reasons, captureSnapshot)) }
+            if (reasons.isEmpty()) stopForegroundAndRemoveNotification()
+            return START_NOT_STICKY
+        }
         if (intent?.action == ACTION_STOP_BY_USER) {
+            if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)) {
+                stopTranscription("completed", "user_stop")
+                return START_NOT_STICKY
+            }
             if (backgroundSessionActive || backgroundSessionRequested()) {
                 markBackgroundStoppedByUser(this)
             }
@@ -1376,18 +1670,85 @@ class AuroraRuntimeForegroundService : Service() {
             }
             return START_NOT_STICKY
         }
+        if (intent != null && (intent.action == ACTION_START_ASSISTANT || intent.action == ACTION_START_BACKGROUND)) {
+            speechStagesJson = intent.getStringExtra(EXTRA_SPEECH_STAGES_JSON)
+            confirmedProfileDocumentJson = intent.getStringExtra(EXTRA_PROFILE_DOCUMENT_JSON)
+            admittedSttPackId = intent.getStringExtra(EXTRA_STT_PACK_ID)
+            admittedTtsPackId = intent.getStringExtra(EXTRA_TTS_PACK_ID)
+            admittedVadPackId = intent.getStringExtra(EXTRA_VAD_PACK_ID)
+            admittedKwsPackId = intent.getStringExtra(EXTRA_KWS_PACK_ID)
+            if (confirmedProfileDocumentJson.isNullOrBlank()) {
+                stopAfterTerminalFailure(startId)
+                return START_NOT_STICKY
+            }
+            getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putString(VOICE_SPEECH_STAGES_JSON_KEY, speechStagesJson)
+                .putString(VOICE_CONFIRMED_PROFILE_DOCUMENT_JSON_KEY, confirmedProfileDocumentJson)
+                .putString(VOICE_STT_PACK_ID_KEY, admittedSttPackId)
+                .putString(VOICE_TTS_PACK_ID_KEY, admittedTtsPackId)
+                .putString(VOICE_VAD_PACK_ID_KEY, admittedVadPackId)
+                .putString(VOICE_KWS_PACK_ID_KEY, admittedKwsPackId)
+                .commit()
+        } else if (intent == null || restoringBackground) {
+            val prefs = getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+            speechStagesJson = prefs.getString(VOICE_SPEECH_STAGES_JSON_KEY, null)
+            confirmedProfileDocumentJson = prefs.getString(VOICE_CONFIRMED_PROFILE_DOCUMENT_JSON_KEY, null)
+            admittedSttPackId = prefs.getString(VOICE_STT_PACK_ID_KEY, null)
+            admittedTtsPackId = prefs.getString(VOICE_TTS_PACK_ID_KEY, null)
+            admittedVadPackId = prefs.getString(VOICE_VAD_PACK_ID_KEY, null)
+            admittedKwsPackId = prefs.getString(VOICE_KWS_PACK_ID_KEY, null)
+            if (restoringBackground) {
+                val restoreIntent = intent
+                confirmedProfileDocumentJson = restoreIntent?.getStringExtra(EXTRA_PROFILE_DOCUMENT_JSON)
+                    ?.takeIf { it.isNotBlank() }
+                if (confirmedProfileDocumentJson.isNullOrBlank()) {
+                    stopAfterTerminalFailure(startId)
+                    return START_NOT_STICKY
+                }
+                if (restoreIntent?.hasExtra(EXTRA_STT_PACK_ID) == true) {
+                    admittedSttPackId = restoreIntent.getStringExtra(EXTRA_STT_PACK_ID)
+                }
+                if (restoreIntent?.hasExtra(EXTRA_TTS_PACK_ID) == true) {
+                    admittedTtsPackId = restoreIntent.getStringExtra(EXTRA_TTS_PACK_ID)
+                }
+                if (restoreIntent?.hasExtra(EXTRA_VAD_PACK_ID) == true) {
+                    admittedVadPackId = restoreIntent.getStringExtra(EXTRA_VAD_PACK_ID)
+                }
+                if (restoreIntent?.hasExtra(EXTRA_KWS_PACK_ID) == true) {
+                    admittedKwsPackId = restoreIntent.getStringExtra(EXTRA_KWS_PACK_ID)
+                }
+                prefs.edit()
+                    .putString(VOICE_CONFIRMED_PROFILE_DOCUMENT_JSON_KEY, confirmedProfileDocumentJson)
+                    .putString(VOICE_STT_PACK_ID_KEY, admittedSttPackId)
+                    .putString(VOICE_TTS_PACK_ID_KEY, admittedTtsPackId)
+                    .putString(VOICE_VAD_PACK_ID_KEY, admittedVadPackId)
+                    .putString(VOICE_KWS_PACK_ID_KEY, admittedKwsPackId)
+                    .commit()
+            }
+            if (confirmedProfileDocumentJson.isNullOrBlank()) {
+                stopAfterTerminalFailure(startId)
+                return START_NOT_STICKY
+            }
+        }
         val persistedBackgroundRequest = backgroundSessionRequested()
         val explicitBackgroundStart = intent?.action == ACTION_START_BACKGROUND
+        val backgroundRestoreStart = restoringBackground
         if (explicitBackgroundStart && backgroundStoppedByUser(this)) {
             stopAfterTerminalFailure(startId)
             return START_NOT_STICKY
         }
-        val stickyRestart = intent == null && persistedBackgroundRequest
+        if (backgroundRestoreStart && (!persistedBackgroundRequest || backgroundStoppedByUser(this))) {
+            stopAfterTerminalFailure(startId)
+            return START_NOT_STICKY
+        }
+        val stickyRestart = (intent == null || backgroundRestoreStart) && persistedBackgroundRequest
         if (intent == null && !stickyRestart) {
             stopAfterTerminalFailure(startId)
             return START_NOT_STICKY
         }
         if (intent != null && !explicitBackgroundStart &&
+            !backgroundRestoreStart &&
             persistedBackgroundRequest && !backgroundSessionActive
         ) {
             // An explicit non-background start after process recreation supersedes
@@ -1788,12 +2149,754 @@ class AuroraRuntimeForegroundService : Service() {
         }
     }
 
+    private fun canStartNotificationTranscription(): Boolean {
+        if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) ||
+            AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION) ||
+            checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED
+        ) return false
+        val policy = getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+            .getString(TRANSCRIPTION_POLICY_JSON_KEY, null)
+            ?.let { runCatching { JSONObject(it).getJSONObject("backgroundTranscription") }.getOrNull() }
+            ?: return false
+        return policy.optBoolean("enabled", false) &&
+            policy.optBoolean("notification", false) &&
+            !policy.optBoolean("ambient", false)
+    }
+
+    private fun manualTranscriptionNotificationEnabled(): Boolean {
+        val policy = getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+            .getString(TRANSCRIPTION_POLICY_JSON_KEY, null)
+            ?.let { runCatching { JSONObject(it).getJSONObject("backgroundTranscription") }.getOrNull() }
+            ?: return false
+        return policy.optBoolean("enabled", false) &&
+            policy.optBoolean("notification", false) &&
+            !policy.optBoolean("ambient", false)
+    }
+
+    private fun publishManualTranscriptionNotification(startId: Int?) {
+        transcriptionState = "idle"
+        if (!canPostNotifications()) {
+            setPersistedTranscriptionReason("notification_permission_missing")
+            if (startId == null) stopSelf() else stopSelfResult(startId)
+            return
+        }
+        val posted = runCatching {
+            NotificationManagerCompat.from(this).notify(
+                AURORA_RUNTIME_NOTIFICATION_ID,
+                foregroundNotification("Transcript recording is ready. Tap Start to begin."),
+            )
+        }.isSuccess
+        val reason = if (posted) null else "notification_unavailable"
+        transcriptionReason = reason
+        setPersistedTranscriptionReason(reason)
+        if (startId == null) stopSelf() else stopSelfResult(startId)
+    }
+
+    private fun setPersistedTranscriptionReason(reason: String?) {
+        getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .apply {
+                if (reason == null) remove(TRANSCRIPTION_REASON_KEY)
+                else putString(TRANSCRIPTION_REASON_KEY, reason)
+            }
+            .apply()
+    }
+
+    private fun loadPersistedTranscriptionPolicy() {
+        val preferences = getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+        transcriptionPolicyJson = preferences.getString(TRANSCRIPTION_POLICY_JSON_KEY, null)
+        transcriptionProfileDocumentJson = preferences.getString(TRANSCRIPTION_PROFILE_DOCUMENT_JSON_KEY, null)
+        transcriptionProfileGeneration = preferences.getLong(TRANSCRIPTION_PROFILE_GENERATION_KEY, 0L)
+    }
+
+    private fun transcriptionOwnsOrReservesMicrophone(): Boolean =
+        AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION) ||
+            transcriptionCapture != null || transcriptionSession != null ||
+            transcriptionState in setOf("starting", "listening", "transcribing")
+
+    private fun voiceOwnsOrReservesMicrophone(): Boolean =
+        AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) ||
+            initializationInFlight.get() || pendingAssistantStartId != null ||
+            capture != null || session != null
+
+    private fun startTranscription(mode: String, startId: Int) {
+        if (mode !in setOf("ambient", "notification")) return
+        if (transcriptionSession != null || transcriptionCapture != null ||
+            AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+        ) return
+        if (voiceOwnsOrReservesMicrophone()) {
+            transcriptionState = "failed"
+            transcriptionReason = "microphone_busy"
+            updateNotification(captureSnapshot)
+            return
+        }
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            transcriptionState = "failed"
+            transcriptionReason = "microphone_permission_missing"
+            updateNotification(captureSnapshot)
+            return
+        }
+        if (!canPostNotifications()) {
+            transcriptionState = "idle"
+            transcriptionReason = "notification_permission_missing"
+            setPersistedTranscriptionReason(transcriptionReason)
+            if (AuroraRuntimeForegroundLedger.activeReasons().isNotEmpty()) syncForegroundReasons(startId)
+            else stopSelfResult(startId)
+            return
+        }
+        val policyJson = transcriptionPolicyJson ?: getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+            .getString(TRANSCRIPTION_POLICY_JSON_KEY, null)
+        val policy = policyJson?.let { runCatching { JSONObject(it).getJSONObject("backgroundTranscription") }.getOrNull() }
+        if (policy?.optBoolean("enabled", false) != true ||
+            (mode == "ambient" && !policy.optBoolean("ambient", false)) ||
+            (mode == "notification" && (!policy.optBoolean("notification", false) || policy.optBoolean("ambient", false)))
+        ) {
+            transcriptionState = "failed"
+            transcriptionReason = "policy_disabled"
+            updateNotification(captureSnapshot)
+            return
+        }
+        val manifestReady = packageManager.checkPermission(
+            Manifest.permission.FOREGROUND_SERVICE,
+            packageName,
+        ) == PackageManager.PERMISSION_GRANTED &&
+            (Build.VERSION.SDK_INT < 34 || packageManager.checkPermission(
+                Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
+                packageName,
+            ) == PackageManager.PERMISSION_GRANTED)
+        if (!manifestReady) {
+            transcriptionState = "failed"
+            transcriptionReason = "foreground_service_unavailable"
+            updateNotification(captureSnapshot)
+            return
+        }
+        if (!AuroraRuntimeForegroundLedger.acquireOnce(AuroraRuntimeForegroundReason.TRANSCRIPTION)) return
+        if (!transcriptionInitializationInFlight.compareAndSet(false, true)) {
+            AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+            transcriptionState = "failed"
+            transcriptionReason = "microphone_busy"
+            updateNotification(captureSnapshot)
+            return
+        }
+        running = true
+        transcriptionMode = mode
+        transcriptionState = "starting"
+        transcriptionReason = null
+        transcriptionSequence = 0L
+        transcriptionStopRequested = null
+        cancelTranscriptionPoll()
+        val intervalEpoch = ++transcriptionIntervalEpoch
+        transcriptionReservationEpoch = intervalEpoch
+        if (mode == "ambient") {
+            getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, true)
+                .apply()
+        }
+        val promoted = runCatching {
+            enterForeground(notificationTextFor(AuroraRuntimeForegroundLedger.activeReasons(), captureSnapshot))
+        }.getOrDefault(false)
+        if (!promoted) {
+            failTranscription("foreground_service_unavailable", null, null, startId)
+            return
+        }
+        setPersistedTranscriptionReason(null)
+        updateNotification(captureSnapshot)
+        val setup = Runnable {
+            if (destroyed) {
+                transcriptionInitializationInFlight.set(false)
+                return@Runnable
+            }
+            if (intervalEpoch != transcriptionIntervalEpoch || transcriptionStopRequested != null ||
+                profileChangeBlocked
+            ) {
+                finishHandler.post {
+                    settleUnadmittedTranscriptionStart(startId, intervalEpoch, "capture_aborted")
+                }
+                return@Runnable
+            }
+            val admissionJson = AuroraNativeTranscriptionSessionBridge.nativeAdmit(mode)
+            val admission = admissionJson?.let { runCatching { JSONObject(it) }.getOrNull() }
+            if (admission == null) {
+                finishHandler.post {
+                    settleUnadmittedTranscriptionStart(startId, intervalEpoch, "archive_unavailable")
+                }
+                return@Runnable
+            }
+            val token = admission.optString("token").takeIf { it.length == 64 }
+            val profileId = admission.optString("profileId").takeIf { it.isNotBlank() }
+            val localNodeId = admission.optString("localNodeId").takeIf { it.isNotBlank() }
+            val sessionId = admission.optString("sessionId").takeIf { it.isNotBlank() }
+            val capturedProfileGeneration = admission.optLong("profileGeneration", -1L)
+            val profileDocument = admission.optString("confirmedProfileDocumentJson").takeIf { it.isNotBlank() }
+            val stagesJson = admission.optString("speechStagesJson").takeIf { it.isNotBlank() }
+            if (token == null || profileId == null || localNodeId == null || sessionId == null ||
+                capturedProfileGeneration < 0L || profileDocument == null || stagesJson == null
+            ) {
+                val retainedToken = token?.takeUnless {
+                    AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                        it, "failed", "admission_invalid",
+                    ) == 0
+                }
+                finishHandler.post {
+                    settleUnadmittedTranscriptionStart(
+                        startId, intervalEpoch, "archive_unavailable", retainedToken,
+                    )
+                }
+                return@Runnable
+            }
+            if (intervalEpoch != transcriptionIntervalEpoch || transcriptionStopRequested != null ||
+                profileChangeBlocked || destroyed
+            ) {
+                val terminal = transcriptionStopRequested
+                    ?: if (profileChangeBlocked) "interrupted" to "profile_changed"
+                    else "interrupted" to "capture_aborted"
+                val retainedToken = token.takeUnless {
+                    AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                        it, terminal.first, terminal.second,
+                    ) == 0
+                }
+                finishHandler.post {
+                    settleUnadmittedTranscriptionStart(
+                        startId, intervalEpoch, terminal.second, retainedToken,
+                    )
+                }
+                return@Runnable
+            }
+            val nativeConfig = AuroraVoiceNativeConfigStore.load(this, profileDocument)
+            if (nativeConfig == null) {
+                val terminal = transcriptionStopRequested ?: ("failed" to "profile_unavailable")
+                val retainedToken = token.takeUnless {
+                    AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                        it, terminal.first, terminal.second,
+                    ) == 0
+                }
+                finishHandler.post {
+                    settleUnadmittedTranscriptionStart(
+                        startId, intervalEpoch, "profile_unavailable", retainedToken,
+                    )
+                }
+                return@Runnable
+            }
+            val provider = admission.optString("preferredProvider")
+            val modelId = admission.optString("preferredModelId").takeIf { it.isNotBlank() && it != "null" }
+            val profileBoundSttModelId = AuroraVoiceNativeConfigStore.localSttPackId(profileDocument)
+            val sttModelId = if (provider == "local") {
+                modelId ?: profileBoundSttModelId
+            } else {
+                profileBoundSttModelId
+            }
+            val packRoot = if (sttModelId != null) auroraSpeechPackStoreRoot(this).path else null
+            val nativeSession = runCatching {
+                AuroraNativeTranscriptionSessionBridge(
+                    nativeConfig.gateway,
+                    nativeConfig.bearer,
+                    nativeConfig.remoteAudioConsent,
+                    packRoot,
+                    sttModelId,
+                    stagesJson,
+                )
+            }.getOrNull()
+            if (nativeSession == null) {
+                val terminal = transcriptionStopRequested ?: ("failed" to "stt_unavailable")
+                val retainedToken = token.takeUnless {
+                    AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                        it, terminal.first, terminal.second,
+                    ) == 0
+                }
+                finishHandler.post {
+                    settleUnadmittedTranscriptionStart(
+                        startId, intervalEpoch, "stt_unavailable", retainedToken,
+                    )
+                }
+                return@Runnable
+            }
+            val pendingResources = PendingTranscriptionResources(token, nativeSession, 0L)
+            pendingTranscriptionResources.set(pendingResources)
+            val generation = nativeSession.start(token, backgroundEligible = true)
+            if (generation <= 0L) {
+                nativeSession.close()
+                var retainedToken: String? = null
+                if (generation == 0L) {
+                    if (AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                            token, "failed", "capture_start_failed",
+                        ) != 0
+                    ) {
+                        retainedToken = token
+                    }
+                }
+                pendingTranscriptionResources.compareAndSet(pendingResources, null)
+                transcriptionArchiveFinalizedByStartFailure = generation < 0L
+                finishHandler.post {
+                    if (destroyed) return@post
+                    settleUnadmittedTranscriptionStart(
+                        startId, intervalEpoch, "capture_start_failed", retainedToken,
+                    )
+                }
+                return@Runnable
+            }
+            val startedResources = pendingResources.copy(generation = generation)
+            pendingTranscriptionResources.set(startedResources)
+            transcriptionArchiveFinalizedByStartFailure = false
+            finishHandler.post {
+                if (destroyed) {
+                    transcriptionInitializationInFlight.set(false)
+                    return@post
+                }
+                if (intervalEpoch != transcriptionIntervalEpoch || transcriptionStopRequested != null ||
+                    profileChangeBlocked ||
+                    !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+                ) {
+                    transcriptionState = "transcribing"
+                    val terminal = transcriptionStopRequested
+                        ?: if (profileChangeBlocked) "interrupted" to "profile_changed"
+                        else "interrupted" to "capture_aborted"
+                    try {
+                        nativeLifecycleExecutor.execute {
+                            runCatching { nativeSession.cancel(generation) }
+                            runCatching { nativeSession.endCaptureInterval(token, generation) }
+                            runCatching { nativeSession.close() }
+                            val finalized = AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                                token, terminal.first, terminal.second,
+                            ) == 0
+                            val posted = finishHandler.post {
+                                if (transcriptionReservationEpoch == intervalEpoch) {
+                                    pendingTranscriptionResources.compareAndSet(startedResources, null)
+                                    transcriptionState = if (finalized && terminal.first == "completed") "completed" else "failed"
+                                    transcriptionReason = if (finalized && terminal.first == "completed") null
+                                    else if (finalized) terminal.second else "archive_finalize_failed"
+                                    if (!finalized) {
+                                        transcriptionToken = token
+                                        transcriptionArchiveAvailable = false
+                                    }
+                                    setPersistedTranscriptionReason(transcriptionReason)
+                                    updateNotification(captureSnapshot)
+                                    transcriptionInitializationInFlight.set(false)
+                                    if (finalized) releaseTranscriptionReason(startId, intervalEpoch)
+                                }
+                            }
+                            if (!posted) transcriptionInitializationInFlight.set(false)
+                        }
+                    } catch (_: RejectedExecutionException) {
+                        transcriptionInitializationInFlight.set(false)
+                        transcriptionState = "failed"
+                        transcriptionReason = "native_runtime_unavailable"
+                        transcriptionArchiveAvailable = false
+                        updateNotification(captureSnapshot)
+                    }
+                    return@post
+                }
+                pendingTranscriptionResources.compareAndSet(startedResources, null)
+                transcriptionToken = token
+                transcriptionProfileId = profileId
+                transcriptionLocalNodeId = localNodeId
+                transcriptionSessionId = sessionId
+                transcriptionCaptureProfileGeneration = capturedProfileGeneration
+                transcriptionGeneration = generation
+                transcriptionSession = nativeSession
+                transcriptionArchiveAvailable = true
+                transcriptionSttAvailable = true
+                transcriptionInitializationInFlight.set(false)
+                val audioCapture = AuroraAudioCapture(this, nativeSession, { snapshot ->
+                    captureSnapshot = snapshot
+                    updateNotification(snapshot)
+                }, closeBridgeOnClose = false, onCaptureStarted = {
+                    transcriptionCaptureStartedAtMs = System.currentTimeMillis().coerceAtLeast(0L)
+                    transcriptionCaptureStartedElapsedMs = SystemClock.elapsedRealtime()
+                })
+                transcriptionCapture = audioCapture
+                if (!audioCapture.start()) {
+                    stopTranscription("failed", "microphone_start_failed")
+                    return@post
+                }
+                transcriptionIntervalFinishRequested = false
+                transcriptionState = "listening"
+                transcriptionReason = null
+                updateNotification(captureSnapshot)
+                pollTranscription(startId)
+            }
+        }
+        try {
+            nativeLifecycleExecutor.execute(setup)
+        } catch (_: RejectedExecutionException) {
+            transcriptionInitializationInFlight.set(false)
+            failTranscription("native_runtime_unavailable", null, null, startId, intervalEpoch)
+        }
+    }
+
+    private fun pollTranscription(startId: Int) {
+        // Interval startup/rearm owns the native generation until its result is
+        // published back to this handler. Do not attach a poll to the prior
+        // generation while that ownership is in flight; the settle callback
+        // will schedule the poll for the actual generation.
+        if (transcriptionInitializationInFlight.get()) return
+        if (transcriptionPollRunnable != null) return
+        val expectedSession = transcriptionSession ?: return
+        val expectedGeneration = transcriptionGeneration
+        val expectedEpoch = transcriptionIntervalEpoch
+        lateinit var poll: Runnable
+        poll = Runnable {
+            if (transcriptionPollRunnable !== poll) return@Runnable
+            transcriptionPollRunnable = null
+            if (transcriptionSession !== expectedSession ||
+                transcriptionGeneration != expectedGeneration ||
+                transcriptionIntervalEpoch != expectedEpoch
+            ) return@Runnable
+            val nativeSession = expectedSession
+            val stats = nativeSession.stats()
+            if (stats.getOrElse(7) { 0L } != expectedGeneration) return@Runnable
+            val phase = stats.getOrElse(6) { 0L }
+            if (phase == 4L) {
+                val token = transcriptionToken ?: return@Runnable
+                val generation = transcriptionGeneration
+                val transcript = nativeSession.takeTranscript()
+                val startMs = stats.getOrElse(12) { transcriptionCaptureStartedAtMs }
+                    .coerceAtLeast(transcriptionCaptureStartedAtMs)
+                val endMs = stats.getOrElse(13) { System.currentTimeMillis() }
+                    .coerceAtLeast(startMs)
+                if (transcript.isNullOrBlank()) {
+                    val ended = nativeSession.endCaptureInterval(token, generation) == 0
+                    transcriptionCapture?.close()
+                    transcriptionCapture = null
+                    if (!ended) {
+                        stopTranscription("failed", "capture_interval_end_failed")
+                    } else if (transcriptionStopRequested != null) {
+                        finishTranscriptionSession(startId)
+                    } else {
+                        restartTranscriptionInterval(startId)
+                    }
+                    return@Runnable
+                }
+                transcriptionState = "transcribing"
+                updateNotification(captureSnapshot)
+                val segmentId = java.util.UUID.randomUUID().toString()
+                val profileId = transcriptionProfileId ?: return@Runnable
+                val localNodeId = transcriptionLocalNodeId ?: return@Runnable
+                transcriptionCapture?.close()
+                transcriptionCapture = null
+                val envelope = runCatching {
+                    val envelope = AuroraLocalDataEnvelopeCrypto.encryptTranscriptText(
+                        this,
+                        profileId,
+                        localNodeId,
+                        segmentId,
+                        transcript,
+                    )
+                    envelope.toString()
+                }.getOrNull()
+                if (envelope == null) {
+                    stopTranscription("failed", "archive_write_failed")
+                    return@Runnable
+                }
+                val permissionGranted =
+                    checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+                val appendResult = nativeSession.appendEncrypted(
+                    token,
+                    generation,
+                    segmentId,
+                    transcriptionSequence,
+                    startMs,
+                    endMs,
+                    envelope,
+                    permissionGranted,
+                )
+                if (appendResult == -2) {
+                    transcriptionStopRequested = "interrupted" to "microphone_permission_revoked"
+                    finishTranscriptionSession(startId, archiveAlreadyFinalized = true)
+                    return@Runnable
+                }
+                if (appendResult != 0 || nativeSession.endCaptureInterval(token, generation) != 0) {
+                    stopTranscription("failed", "archive_write_failed")
+                    return@Runnable
+                }
+                transcriptionSequence += 1
+                if (transcriptionStopRequested != null) {
+                    finishTranscriptionSession(startId)
+                    return@Runnable
+                }
+                restartTranscriptionInterval(startId)
+                return@Runnable
+            }
+            if (phase == 5L) {
+                val reason = if (stats.getOrElse(11) { 0L } == 1L) "user_cancelled" else "transcription_failed"
+                if (transcriptionGeneration > 0L) {
+                    nativeSession.endCaptureInterval(transcriptionToken.orEmpty(), transcriptionGeneration)
+                }
+                if (transcriptionStopRequested == null) transcriptionStopRequested = "failed" to reason
+                finishTranscriptionSession(startId)
+                return@Runnable
+            }
+            if (phase == 2L && !transcriptionIntervalFinishRequested &&
+                SystemClock.elapsedRealtime() - transcriptionCaptureStartedElapsedMs >= TRANSCRIPTION_INTERVAL_MAX_MILLIS
+            ) {
+                transcriptionIntervalFinishRequested = true
+                nativeSession.finish(transcriptionGeneration)
+            }
+            transcriptionState = when (phase) {
+                1L, 2L -> "listening"
+                3L -> "transcribing"
+                else -> "starting"
+            }
+            updateNotification(captureSnapshot)
+            pollTranscription(startId)
+        }
+        transcriptionPollRunnable = poll
+        finishHandler.postDelayed(poll, TRANSCRIPTION_POLL_MS)
+    }
+
+    private fun cancelTranscriptionPoll() {
+        transcriptionPollRunnable?.let(finishHandler::removeCallbacks)
+        transcriptionPollRunnable = null
+    }
+
+    private fun settleUnadmittedTranscriptionStart(
+        startId: Int,
+        reservationEpoch: Long,
+        fallbackReason: String,
+        retainedToken: String? = null,
+    ) {
+        if (transcriptionReservationEpoch != reservationEpoch) return
+        if (retainedToken != null) {
+            transcriptionToken = retainedToken
+            transcriptionArchiveAvailable = false
+            transcriptionInitializationInFlight.set(false)
+            transcriptionState = "failed"
+            transcriptionReason = "archive_finalize_failed"
+            setPersistedTranscriptionReason(transcriptionReason)
+            updateNotification(captureSnapshot)
+            return
+        }
+        val terminal = transcriptionStopRequested
+            ?: if (profileChangeBlocked) "interrupted" to "profile_changed"
+            else "failed" to fallbackReason
+        transcriptionInitializationInFlight.set(false)
+        transcriptionState = if (terminal.first == "completed") "completed" else "failed"
+        transcriptionReason = terminal.second.takeIf { terminal.first != "completed" }
+        setPersistedTranscriptionReason(transcriptionReason)
+        releaseTranscriptionReason(startId, reservationEpoch)
+    }
+
+    private fun restartTranscriptionInterval(startId: Int) {
+        val token = transcriptionToken ?: return stopTranscription("failed", "admission_unavailable")
+        val nativeSession = transcriptionSession ?: return stopTranscription("failed", "stt_unavailable")
+        if (!transcriptionInitializationInFlight.compareAndSet(false, true)) {
+            return stopTranscription("failed", "native_runtime_unavailable")
+        }
+        cancelTranscriptionPoll()
+        val intervalEpoch = ++transcriptionIntervalEpoch
+        transcriptionState = "starting"
+        val restart = Runnable {
+            if (destroyed) {
+                transcriptionInitializationInFlight.set(false)
+                return@Runnable
+            }
+            val generation = nativeSession.start(token, backgroundEligible = true)
+            if (generation <= 0L) {
+                transcriptionArchiveFinalizedByStartFailure = generation < 0L
+                finishHandler.post {
+                    if (destroyed) return@post
+                    transcriptionInitializationInFlight.set(false)
+                    if (transcriptionStopRequested == null) {
+                        transcriptionStopRequested = "interrupted" to "policy_or_profile_changed"
+                    }
+                    finishTranscriptionSession(startId, archiveAlreadyFinalized = generation < 0L)
+                }
+                return@Runnable
+            }
+            transcriptionArchiveFinalizedByStartFailure = false
+            finishHandler.post {
+                if (destroyed) {
+                    transcriptionInitializationInFlight.set(false)
+                    return@post
+                }
+                transcriptionGeneration = generation
+                if (intervalEpoch != transcriptionIntervalEpoch || transcriptionStopRequested != null ||
+                    profileChangeBlocked ||
+                    !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+                ) {
+                    nativeSession.cancel(generation)
+                    nativeSession.endCaptureInterval(token, generation)
+                    transcriptionInitializationInFlight.set(false)
+                    if (transcriptionStopRequested == null) {
+                        transcriptionStopRequested = if (profileChangeBlocked) {
+                            "interrupted" to "profile_changed"
+                        } else {
+                            "interrupted" to "capture_aborted"
+                        }
+                    }
+                    pollTranscription(startId)
+                    return@post
+                }
+                val audioCapture = AuroraAudioCapture(this, nativeSession, { snapshot ->
+                    captureSnapshot = snapshot
+                    updateNotification(snapshot)
+                }, closeBridgeOnClose = false, onCaptureStarted = {
+                    transcriptionCaptureStartedAtMs = System.currentTimeMillis().coerceAtLeast(0L)
+                    transcriptionCaptureStartedElapsedMs = SystemClock.elapsedRealtime()
+                })
+                transcriptionCapture = audioCapture
+                if (!audioCapture.start()) {
+                    transcriptionInitializationInFlight.set(false)
+                    stopTranscription("failed", "microphone_start_failed")
+                } else {
+                    transcriptionInitializationInFlight.set(false)
+                    transcriptionState = "listening"
+                    transcriptionIntervalFinishRequested = false
+                    updateNotification(captureSnapshot)
+                    pollTranscription(startId)
+                }
+            }
+        }
+        runCatching { nativeLifecycleExecutor.execute(restart) }
+            .onFailure {
+                transcriptionInitializationInFlight.set(false)
+                stopTranscription("failed", "native_runtime_unavailable")
+            }
+    }
+
+    private fun stopTranscription(lifecycle: String, reason: String) {
+        if (lifecycle == "completed" && reason == "user_stop") {
+            getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(TRANSCRIPTION_USER_STOPPED_KEY, true)
+                .putBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, false)
+                .commit()
+        }
+        transcriptionIntervalEpoch += 1
+        cancelTranscriptionPoll()
+        transcriptionStopRequested = lifecycle to reason
+        if (transcriptionSession == null && transcriptionToken == null) {
+            transcriptionState = if (lifecycle == "completed") "completed" else "failed"
+            transcriptionReason = reason.takeIf { lifecycle != "completed" }
+            setPersistedTranscriptionReason(transcriptionReason)
+            updateNotification(captureSnapshot)
+            if (!transcriptionInitializationInFlight.get()) {
+                releaseTranscriptionReason(null, transcriptionReservationEpoch)
+            }
+            return
+        }
+        transcriptionState = "transcribing"
+        val nativeSession = transcriptionSession
+        val generation = transcriptionGeneration
+        val gracefulUserStop = lifecycle == "completed" && reason == "user_stop"
+        if (nativeSession != null && generation > 0L) {
+            val phase = nativeSession.stats().getOrElse(6) { 0L }
+            if (gracefulUserStop && (phase == 1L || phase == 2L)) {
+                nativeSession.finish(generation)
+            } else if (!gracefulUserStop && phase !in setOf(0L, 4L, 5L)) {
+                nativeSession.cancel(generation)
+            }
+        }
+        transcriptionCapture?.close()
+        transcriptionCapture = null
+        if (nativeSession == null) finishTranscriptionSession(null)
+        else pollTranscription(0)
+    }
+
+    private fun finishTranscriptionSession(startId: Int?, archiveAlreadyFinalized: Boolean = false) {
+        transcriptionIntervalEpoch += 1
+        cancelTranscriptionPoll()
+        val token = transcriptionToken
+        val session = transcriptionSession
+        val terminal = transcriptionStopRequested ?: ("completed" to "input_ended")
+        if (token != null && !archiveAlreadyFinalized) {
+            val finalized = session?.finalize(token, terminal.first, terminal.second)
+                ?: AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(token, terminal.first, terminal.second)
+            if (finalized != 0) {
+                transcriptionState = "failed"
+                transcriptionReason = "archive_finalize_failed"
+                transcriptionArchiveAvailable = false
+                updateNotification(captureSnapshot)
+                return
+            }
+        }
+        session?.close()
+        transcriptionSession = null
+        transcriptionToken = null
+        transcriptionProfileId = null
+        transcriptionLocalNodeId = null
+        transcriptionSessionId = null
+        transcriptionMode = null
+        transcriptionCaptureProfileGeneration = null
+        transcriptionGeneration = 0L
+        transcriptionIntervalFinishRequested = false
+        transcriptionStopRequested = null
+        transcriptionState = if (terminal.first == "completed") "completed" else "failed"
+        transcriptionReason = terminal.second.takeIf { terminal.first != "completed" }
+        setPersistedTranscriptionReason(transcriptionReason)
+        if (terminal.second == "user_stop" || terminal.second == "user_cancelled") {
+            getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(TRANSCRIPTION_USER_STOPPED_KEY, true)
+                .putBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, false)
+                .apply()
+        }
+        releaseTranscriptionReason(startId)
+    }
+
+    private fun failTranscription(
+        reason: String,
+        token: String?,
+        session: AuroraNativeTranscriptionSessionBridge?,
+        startId: Int?,
+        reservationEpoch: Long? = transcriptionReservationEpoch,
+    ) {
+        transcriptionIntervalEpoch += 1
+        cancelTranscriptionPoll()
+        token?.let { value ->
+            val result = session?.finalize(value, "failed", reason)
+                ?: AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(value, "failed", reason)
+            if (result != 0) {
+                transcriptionState = "failed"
+                transcriptionReason = "archive_finalize_failed"
+                transcriptionArchiveAvailable = false
+                return
+            }
+        }
+        session?.close()
+        transcriptionState = "failed"
+        transcriptionReason = reason
+        setPersistedTranscriptionReason(reason)
+        transcriptionArchiveAvailable = token != null
+        if (reservationEpoch != null) transcriptionInitializationInFlight.set(false)
+        releaseTranscriptionReason(startId, reservationEpoch)
+    }
+
+    private fun releaseTranscriptionReason(
+        startId: Int?,
+        reservationEpoch: Long? = transcriptionReservationEpoch,
+    ) {
+        if (reservationEpoch != null && transcriptionReservationEpoch != reservationEpoch) return
+        if (reservationEpoch != null) transcriptionReservationEpoch = null
+        AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+        if (transcriptionMode == "ambient" && transcriptionStopRequested?.second == "user_cancelled") {
+            getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, false)
+                .apply()
+        }
+        val reasons = AuroraRuntimeForegroundLedger.activeReasons()
+        if (reasons.isEmpty()) {
+            stopForegroundAndRemoveNotification()
+            if (manualTranscriptionNotificationEnabled()) {
+                publishManualTranscriptionNotification(startId)
+            } else if (startId == null) {
+                stopSelf()
+            } else {
+                stopSelfResult(startId)
+            }
+        } else {
+            syncForegroundReasons(startId)
+        }
+    }
+
     private fun createNativeVoiceSession(backgroundSession: Boolean): AuroraNativeVoiceSessionBridge? {
-        val nativeConfig = AuroraVoiceNativeConfigStore.load(this) ?: return null
-        val sttModelId = getActivePackId(AuroraSpeechPackTask.STT)
-        val ttsVoiceId = getActivePackId(AuroraSpeechPackTask.TTS)
-        val vadModelId = getActivePackId(AuroraSpeechPackTask.VAD)
-        val kwsModelId = getActivePackId(AuroraSpeechPackTask.KWS)
+        val profileDocument = confirmedProfileDocumentJson?.takeIf { it.isNotBlank() } ?: return null
+        val nativeConfig = AuroraVoiceNativeConfigStore.load(this, profileDocument) ?: return null
+        val sttModelId = admittedSttPackId
+        val ttsVoiceId = admittedTtsPackId
+        val vadModelId = admittedVadPackId
+        val kwsModelId = admittedKwsPackId
         val wakePhrase = wakePhraseSelection()
         val ttsReference = ttsReferenceSelection()
         val catalog = runCatching { readCatalogEntries() }.getOrElse { emptyList() }
@@ -1824,24 +2927,30 @@ class AuroraRuntimeForegroundService : Service() {
             referenceSelectionReady,
         )
         val backgroundPacksReady = vadReady && kwsReady && wakePhrase != null
-        if (sttModelId != null && ttsVoiceId != null && sttReady && ttsReady &&
-            (!backgroundSession || backgroundPacksReady)
-        ) {
+        if (!backgroundSession || backgroundPacksReady) {
+            val localSttReady = sttModelId != null && sttReady
+            val localTtsReady = ttsVoiceId != null && ttsReady
+            val localPackSelectionReady = if (speechStagesJson == null) {
+                localSttReady && localTtsReady
+            } else {
+                localSttReady || localTtsReady || backgroundPacksReady
+            }
             return AuroraNativeVoiceSessionBridge(
                 nativeConfig.gateway,
                 nativeConfig.bearer,
                 nativeConfig.remoteAudioConsent,
                 nativeConfig.assistantRouteMode,
                 nativeConfig.preferredStablePeerId,
-                auroraSpeechPackStoreRoot(this).path,
-                sttModelId,
-                ttsVoiceId,
+                auroraSpeechPackStoreRoot(this).path.takeIf { localPackSelectionReady },
+                sttModelId?.takeIf { sttReady },
+                ttsVoiceId?.takeIf { ttsReady },
                 vadModelId?.takeIf { backgroundPacksReady },
                 kwsModelId?.takeIf { backgroundPacksReady },
                 wakePhrase?.id?.takeIf { backgroundPacksReady },
                 wakePhrase?.text?.takeIf { backgroundPacksReady },
                 wakePhrase?.revision?.takeIf { backgroundPacksReady },
                 ttsReference,
+                speechStagesJson,
             )
         }
         return null
@@ -1911,6 +3020,10 @@ class AuroraRuntimeForegroundService : Service() {
 
     override fun onDestroy() {
         destroyed = true
+        profileChangeDrainInFlight = false
+        val profileChangeWaiters = profileChangeDrainWaiters.toList()
+        profileChangeDrainWaiters.clear()
+        profileChangeWaiters.forEach { waiter -> waiter(false) }
         pendingAssistantStartId = null
         if (activeInstance === this) activeInstance = null
         AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
@@ -1921,6 +3034,7 @@ class AuroraRuntimeForegroundService : Service() {
         invalidateNativeVoiceInitialization()
         running = false
         finishHandler.removeCallbacksAndMessages(null)
+        releaseNativeTranscriptionResourcesOnDestroy()
         releaseNativeVoiceResourcesAsync()
         abandonAudioFocus()
         audioFocusRequest = null
@@ -2006,6 +3120,70 @@ class AuroraRuntimeForegroundService : Service() {
         }
     }
 
+    private fun releaseNativeTranscriptionResourcesOnDestroy() {
+        transcriptionIntervalEpoch += 1L
+        cancelTranscriptionPoll()
+        val captureToClose = transcriptionCapture
+        val nativeSession = transcriptionSession
+        val token = transcriptionToken
+        transcriptionCapture = null
+        transcriptionSession = null
+        transcriptionToken = null
+        transcriptionProfileId = null
+        transcriptionLocalNodeId = null
+        transcriptionSessionId = null
+        transcriptionMode = null
+        transcriptionCaptureProfileGeneration = null
+        transcriptionGeneration = 0L
+        transcriptionArchiveAvailable = false
+        transcriptionSttAvailable = false
+        try {
+            nativeLifecycleExecutor.execute {
+                val pending = pendingTranscriptionResources.getAndSet(null)
+                val sessionToClose = nativeSession ?: pending?.session
+                val tokenToFinalize = token ?: pending?.token
+                val actualGeneration = runCatching {
+                    sessionToClose?.stats()?.getOrElse(7) { 0L } ?: 0L
+                }.getOrDefault(0L).takeIf { it > 0L }
+                    ?: pending?.generation?.takeIf { it > 0L }
+                    ?: 0L
+                val alreadyFinalized = transcriptionArchiveFinalizedByStartFailure
+                runCatching { captureToClose?.close() }
+                if (actualGeneration > 0L) runCatching { sessionToClose?.cancel(actualGeneration) }
+                runCatching { sessionToClose?.close() }
+                var archiveFinalized = tokenToFinalize == null || alreadyFinalized
+                if (tokenToFinalize != null && !alreadyFinalized) {
+                    if (actualGeneration > 0L) {
+                        runCatching { sessionToClose?.endCaptureInterval(tokenToFinalize, actualGeneration) }
+                    }
+                    archiveFinalized = runCatching {
+                        AuroraNativeTranscriptionSessionBridge.nativeFinalizeAdmission(
+                            tokenToFinalize,
+                            "interrupted",
+                            "service_stopped",
+                        ) == 0
+                    }.getOrDefault(false)
+                }
+                transcriptionArchiveAvailable = false
+                if (tokenToFinalize != null && !archiveFinalized) {
+                    transcriptionState = "failed"
+                    transcriptionReason = "archive_finalize_failed"
+                    setPersistedTranscriptionReason(transcriptionReason)
+                } else if (tokenToFinalize != null) {
+                    transcriptionState = "failed"
+                    transcriptionReason = "service_stopped"
+                    setPersistedTranscriptionReason(transcriptionReason)
+                }
+                AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+            }
+        } catch (_: RejectedExecutionException) {
+            transcriptionState = "failed"
+            transcriptionReason = "voice_runtime_shutdown_failed"
+            transcriptionArchiveAvailable = false
+            setPersistedTranscriptionReason(transcriptionReason)
+        }
+    }
+
     private fun closeOrphanNativeSessionAsync(
         nativeSession: AuroraNativeVoiceSessionBridge?,
         generationToCancel: Long,
@@ -2026,7 +3204,7 @@ class AuroraRuntimeForegroundService : Service() {
         playbackToClose: AuroraAudioPlayback?,
         nativeSession: AuroraNativeVoiceSessionBridge?,
         generationToCancel: Long,
-    ) {
+    ): Boolean {
         var closeFailed = runCatching { captureToClose?.close() }.isFailure
         if (nativeSession != null && generationToCancel != 0L) {
             closeFailed = runCatching { nativeSession.cancel(generationToCancel) }
@@ -2035,6 +3213,130 @@ class AuroraRuntimeForegroundService : Service() {
         closeFailed = runCatching { playbackToClose?.close() }.isFailure || closeFailed
         closeFailed = runCatching { nativeSession?.close() }.isFailure || closeFailed
         if (closeFailed) captureError = "voice_runtime_shutdown_failed"
+        return !closeFailed
+    }
+
+    private fun drainVoiceForProfileChange(onComplete: (Boolean) -> Unit) {
+        if (Looper.myLooper() != Looper.getMainLooper() || destroyed) {
+            onComplete(false)
+            return
+        }
+        profileChangeDrainWaiters += onComplete
+        if (profileChangeDrainInFlight) return
+        profileChangeDrainInFlight = true
+
+        fun finishDrain(released: Boolean) {
+            profileChangeDrainInFlight = false
+            val waiters = profileChangeDrainWaiters.toList()
+            profileChangeDrainWaiters.clear()
+            waiters.forEach { waiter -> waiter(released) }
+        }
+
+        invalidateNativeVoiceInitialization()
+        profileChangeBlocked = true
+        pendingAssistantStartId = null
+        resumeBackgroundAfterFocusedTurn = false
+        backgroundSessionRearmEnabled = false
+        clearBackgroundSessionPersistence()
+        backgroundSessionActive = false
+        AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.VOICE)
+        val transcriptionOwned = transcriptionReservationEpoch != null ||
+            transcriptionInitializationInFlight.get() ||
+            pendingTranscriptionResources.get() != null ||
+            transcriptionCapture != null || transcriptionSession != null || transcriptionToken != null ||
+            AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+        val transcriptionDrainDeadline =
+            SystemClock.elapsedRealtime() + PROFILE_CHANGE_TRANSCRIPTION_DRAIN_TIMEOUT_MS
+        if (transcriptionOwned) stopTranscription("interrupted", "profile_changed")
+        captureSnapshot = emptySnapshot(null)
+        if (AuroraRuntimeForegroundLedger.activeReasons().isEmpty()) {
+            stopForegroundAndRemoveNotification()
+        } else {
+            updateNotification(captureSnapshot)
+        }
+
+        fun drainAfterInitialization() {
+            if (destroyed) {
+                finishDrain(false)
+                return
+            }
+            if (initializationInFlight.get()) {
+                val posted = finishHandler.postDelayed(
+                    { drainAfterInitialization() }, PROFILE_CHANGE_DRAIN_POLL_MS,
+                )
+                if (!posted) finishDrain(false)
+                return
+            }
+
+            val captureToClose = capture
+            val playbackToClose = playback
+            val nativeSession = session
+            val generationToCancel = sessionGeneration
+            capture = null
+            playback = null
+            session = null
+            sessionGeneration = 0L
+            abandonAudioFocus()
+            audioFocusRequest = null
+
+            if (captureToClose == null && playbackToClose == null && nativeSession == null) {
+                val released =
+                    !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) &&
+                        captureError != "voice_runtime_shutdown_failed"
+                if (released) captureError = null
+                finishDrain(released)
+                return
+            }
+            try {
+                nativeLifecycleExecutor.execute {
+                    val closed = closeNativeResources(
+                        captureToClose,
+                        playbackToClose,
+                        nativeSession,
+                        generationToCancel,
+                    )
+                    finishHandler.post {
+                        val released = closed &&
+                            !destroyed &&
+                            capture == null &&
+                            playback == null &&
+                            session == null &&
+                            !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)
+                        if (released) captureError = null
+                        finishDrain(released)
+                    }
+                }
+            } catch (_: RejectedExecutionException) {
+                captureError = "voice_runtime_shutdown_failed"
+                finishDrain(false)
+            }
+        }
+
+        fun drainTranscriptionBeforeVoice() {
+            if (destroyed) {
+                finishDrain(false)
+                return
+            }
+            val stillOwned = transcriptionReservationEpoch != null ||
+                transcriptionInitializationInFlight.get() ||
+                pendingTranscriptionResources.get() != null ||
+                transcriptionCapture != null || transcriptionSession != null || transcriptionToken != null ||
+                AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+            if (!stillOwned) {
+                drainAfterInitialization()
+                return
+            }
+            if (SystemClock.elapsedRealtime() >= transcriptionDrainDeadline) {
+                finishDrain(false)
+                return
+            }
+            val posted = finishHandler.postDelayed(
+                { drainTranscriptionBeforeVoice() }, PROFILE_CHANGE_DRAIN_POLL_MS,
+            )
+            if (!posted) finishDrain(false)
+        }
+
+        drainTranscriptionBeforeVoice()
     }
 
     private fun finishNativeSession() {
@@ -2436,7 +3738,16 @@ class AuroraRuntimeForegroundService : Service() {
         snapshot: AuroraVoiceCaptureSnapshot,
     ): String {
         val voice = AuroraRuntimeForegroundReason.VOICE in reasons
+        val transcription = AuroraRuntimeForegroundReason.TRANSCRIPTION in reasons
         val deviceLink = AuroraRuntimeForegroundReason.DEVICE_LINK in reasons
+        if (transcription) {
+            val message = when (transcriptionState) {
+                "starting" -> "Starting transcript recording…"
+                "transcribing" -> "Saving a transcript on this device. Tap Stop to end."
+                else -> "Transcribing speech on this device. Tap Stop to end."
+            }
+            return if (deviceLink) "$message Connected to ${connectedPeers.get().size} devices." else message
+        }
         val voiceText = when {
             snapshot.errorCode != null || snapshot.runtimePhase == "faulted" ->
                 notificationErrorTextFor(snapshot.errorCode)
@@ -2512,7 +3823,7 @@ class AuroraRuntimeForegroundService : Service() {
      * once its permission is granted, so the connected-device type alone keeps
      * the service legal while voice is still being checked or torn down.
      */
-    private fun enterForeground(text: String) {
+    private fun enterForeground(text: String): Boolean {
         lastNotificationFingerprint.set(notificationFingerprint(text, connectedPeers.get()))
         val notification = foregroundNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -2527,7 +3838,8 @@ class AuroraRuntimeForegroundService : Service() {
                 // this branch; it is a final guard for vendor policy drift.
                 AuroraRuntimeForegroundLedger.clear(AuroraRuntimeForegroundReason.DEVICE_LINK)
                 val microphoneType = if (
-                    AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) &&
+                    (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) ||
+                        AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)) &&
                     checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
                 ) {
                     ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
@@ -2537,7 +3849,7 @@ class AuroraRuntimeForegroundService : Service() {
                 if (microphoneType == 0) {
                     running = false
                     stopSelf()
-                    return
+                    return false
                 }
                 startForeground(AURORA_RUNTIME_NOTIFICATION_ID, notification, microphoneType)
             }
@@ -2545,12 +3857,14 @@ class AuroraRuntimeForegroundService : Service() {
             startForeground(AURORA_RUNTIME_NOTIFICATION_ID, notification)
         }
         notificationsSuppressed = !canPostNotifications()
+        return true
     }
 
     private fun foregroundServiceTypes(reasons: Set<AuroraRuntimeForegroundReason>): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return 0
         var types = 0
-        if (AuroraRuntimeForegroundReason.VOICE in reasons &&
+        if ((AuroraRuntimeForegroundReason.VOICE in reasons ||
+                AuroraRuntimeForegroundReason.TRANSCRIPTION in reasons) &&
             checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         ) {
             types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
@@ -2574,6 +3888,7 @@ class AuroraRuntimeForegroundService : Service() {
             enterForeground(notificationTextFor(reasons, captureSnapshot))
             return
         }
+        if (profileChangeDrainInFlight) return
         if (capture != null || session != null || initializationInFlight.get()) return
         // A start command must reach the foreground before the service may stop,
         // even when the reason that started it was released first.
@@ -2594,8 +3909,10 @@ class AuroraRuntimeForegroundService : Service() {
     }
 
     private fun foregroundNotification(text: String): Notification {
+        val transcriptionOnly = AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION) &&
+            !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)
         val stopIntent = Intent(this, AuroraRuntimeForegroundService::class.java).apply {
-            action = ACTION_STOP_BY_USER
+            action = if (transcriptionOnly) ACTION_STOP_TRANSCRIPTION else ACTION_STOP_BY_USER
         }
         val stopPendingIntent = PendingIntent.getService(
             this,
@@ -2633,8 +3950,34 @@ class AuroraRuntimeForegroundService : Service() {
         }
         // Stop ends the microphone session, so it is offered only while one is
         // the reason Aurora is running.
-        if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)) {
+        if (AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) ||
+            AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+        ) {
             builder.addAction(0, "Stop", stopPendingIntent)
+        } else if (canStartNotificationTranscription()) {
+            val startIntent = Intent(this, AuroraRuntimeForegroundService::class.java).apply {
+                action = ACTION_START_TRANSCRIPTION_NOTIFICATION
+            }
+            val startPendingIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                PendingIntent.getForegroundService(
+                    this,
+                    4206,
+                    startIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            } else {
+                PendingIntent.getService(
+                    this,
+                    4206,
+                    startIntent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                )
+            }
+            builder.addAction(
+                0,
+                "Start transcription",
+                startPendingIntent,
+            )
         }
         return builder.build()
     }
@@ -2865,12 +4208,43 @@ class AuroraRuntimeForegroundService : Service() {
     }
 
     companion object {
+        private const val PROFILE_CHANGE_DRAIN_POLL_MS = 25L
+        private const val PROFILE_CHANGE_TRANSCRIPTION_DRAIN_TIMEOUT_MS = 15_000L
+        private const val TRANSCRIPTION_POLL_MS = 250L
+
         const val ACTION_STOP = "dev.aurora.tauri.nativeplugin.action.STOP_VOICE_CAPTURE"
         const val ACTION_STOP_BY_USER = "dev.aurora.tauri.nativeplugin.action.STOP_BACKGROUND_VOICE_BY_USER"
         const val ACTION_FINISH = "dev.aurora.tauri.nativeplugin.action.FINISH_VOICE_CAPTURE"
         const val ACTION_START_BACKGROUND = "dev.aurora.tauri.nativeplugin.action.START_BACKGROUND_VOICE"
+        const val ACTION_RESTORE_BACKGROUND = "dev.aurora.tauri.nativeplugin.action.RESTORE_BACKGROUND_VOICE"
         const val ACTION_START_ASSISTANT = "dev.aurora.tauri.nativeplugin.action.START_ASSISTANT_VOICE"
+        const val ACTION_SYNC_BACKGROUND_TRANSCRIPTION = "dev.aurora.tauri.nativeplugin.action.SYNC_BACKGROUND_TRANSCRIPTION"
+        const val ACTION_START_TRANSCRIPTION_NOTIFICATION = "dev.aurora.tauri.nativeplugin.action.START_TRANSCRIPTION_NOTIFICATION"
+        const val ACTION_STOP_TRANSCRIPTION = "dev.aurora.tauri.nativeplugin.action.STOP_TRANSCRIPTION"
         const val ACTION_SYNC_REASONS = "dev.aurora.tauri.nativeplugin.action.SYNC_FOREGROUND_REASONS"
+        const val EXTRA_SPEECH_STAGES_JSON = "dev.aurora.tauri.nativeplugin.extra.SPEECH_STAGES_JSON"
+        const val EXTRA_PROFILE_DOCUMENT_JSON = "dev.aurora.tauri.nativeplugin.extra.CONFIRMED_PROFILE_DOCUMENT_JSON"
+        const val EXTRA_STT_PACK_ID = "dev.aurora.tauri.nativeplugin.extra.ADMITTED_STT_PACK_ID"
+        const val EXTRA_TTS_PACK_ID = "dev.aurora.tauri.nativeplugin.extra.ADMITTED_TTS_PACK_ID"
+        const val EXTRA_VAD_PACK_ID = "dev.aurora.tauri.nativeplugin.extra.ADMITTED_VAD_PACK_ID"
+        const val EXTRA_KWS_PACK_ID = "dev.aurora.tauri.nativeplugin.extra.ADMITTED_KWS_PACK_ID"
+        const val EXTRA_TRANSCRIPTION_POLICY_JSON = "dev.aurora.tauri.nativeplugin.extra.TRANSCRIPTION_POLICY_JSON"
+        const val EXTRA_TRANSCRIPTION_PROFILE_DOCUMENT_JSON = "dev.aurora.tauri.nativeplugin.extra.TRANSCRIPTION_PROFILE_DOCUMENT_JSON"
+        const val EXTRA_TRANSCRIPTION_PROFILE_GENERATION = "dev.aurora.tauri.nativeplugin.extra.TRANSCRIPTION_PROFILE_GENERATION"
+        private const val VOICE_SPEECH_STAGES_JSON_KEY = "speech_stages_json"
+        private const val VOICE_CONFIRMED_PROFILE_DOCUMENT_JSON_KEY = "confirmed_profile_document_json"
+        private const val VOICE_STT_PACK_ID_KEY = "admitted_stt_pack_id"
+        private const val VOICE_TTS_PACK_ID_KEY = "admitted_tts_pack_id"
+        private const val VOICE_VAD_PACK_ID_KEY = "admitted_vad_pack_id"
+        private const val VOICE_KWS_PACK_ID_KEY = "admitted_kws_pack_id"
+        private const val TRANSCRIPTION_PREFS = "aurora_transcription_service"
+        private const val TRANSCRIPTION_POLICY_JSON_KEY = "policy_json"
+        private const val TRANSCRIPTION_PROFILE_DOCUMENT_JSON_KEY = "profile_document_json"
+        private const val TRANSCRIPTION_PROFILE_GENERATION_KEY = "profile_generation"
+        private const val TRANSCRIPTION_RESTORE_AMBIENT_KEY = "restore_ambient"
+        private const val TRANSCRIPTION_USER_STOPPED_KEY = "user_stopped"
+        private const val MICROPHONE_PERMISSION_REQUESTED_KEY = "microphone_permission_requested"
+        private const val TRANSCRIPTION_REASON_KEY = "last_reason"
 
         private val connectedPeers = AtomicReference<List<AuroraNotificationPeer>>(emptyList())
 
@@ -2960,6 +4334,115 @@ class AuroraRuntimeForegroundService : Service() {
 
         fun connectedPeerCount(): Int = connectedPeers.get().size
 
+        /** Persists only the Root-confirmed snapshot and asks the service to revalidate it natively. */
+        fun syncBackgroundTranscription(
+            context: Context,
+            policyJson: String,
+            confirmedProfileDocumentJson: String,
+            profileGeneration: Long,
+        ): JSONObject? {
+            if (policyJson.length !in 1..262_144 ||
+                confirmedProfileDocumentJson.length !in 1..131_072 || profileGeneration < 0L
+            ) return null
+            val policy = runCatching { JSONObject(policyJson).getJSONObject("backgroundTranscription") }.getOrNull()
+                ?: return null
+            val preferences = context.getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+            val previousPolicy = preferences.getString(TRANSCRIPTION_POLICY_JSON_KEY, null)
+                ?.let { runCatching { JSONObject(it).getJSONObject("backgroundTranscription") }.getOrNull() }
+            val enabled = policy.optBoolean("enabled", false)
+            val ambient = policy.optBoolean("ambient", false)
+            val explicitAmbientEnable = enabled && ambient &&
+                (previousPolicy?.optBoolean("enabled", false) != true ||
+                    previousPolicy?.optBoolean("ambient", false) != true)
+            val editor = preferences
+                .edit()
+                .putString(TRANSCRIPTION_POLICY_JSON_KEY, policyJson)
+                .putString(TRANSCRIPTION_PROFILE_DOCUMENT_JSON_KEY, confirmedProfileDocumentJson)
+                .putLong(TRANSCRIPTION_PROFILE_GENERATION_KEY, profileGeneration)
+            val manualEnabled = policy.optBoolean("enabled", false) &&
+                policy.optBoolean("notification", false) && !policy.optBoolean("ambient", false)
+            if (manualEnabled && !notificationPermissionAvailable(context)) {
+                editor.putString(TRANSCRIPTION_REASON_KEY, "notification_permission_missing")
+            } else {
+                editor.remove(TRANSCRIPTION_REASON_KEY)
+            }
+            if (!enabled || !ambient) {
+                editor.putBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, false)
+            } else {
+                editor.putBoolean(TRANSCRIPTION_RESTORE_AMBIENT_KEY, true)
+                if (explicitAmbientEnable) {
+                    editor.putBoolean(TRANSCRIPTION_USER_STOPPED_KEY, false)
+                }
+            }
+            if (!editor.commit()) return null
+            val intent = Intent(context, AuroraRuntimeForegroundService::class.java).apply {
+                action = ACTION_SYNC_BACKGROUND_TRANSCRIPTION
+                putExtra(EXTRA_TRANSCRIPTION_POLICY_JSON, policyJson)
+                putExtra(EXTRA_TRANSCRIPTION_PROFILE_DOCUMENT_JSON, confirmedProfileDocumentJson)
+                putExtra(EXTRA_TRANSCRIPTION_PROFILE_GENERATION, profileGeneration)
+            }
+            val started = runCatching { context.startService(intent) }.isSuccess
+            if (!started) return null
+            return transcriptionStatus(context)
+        }
+
+        fun transcriptionStatus(context: Context): JSONObject {
+            val instance = activeInstance
+            val preferences = context.getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+            val policy = preferences.getString(TRANSCRIPTION_POLICY_JSON_KEY, null)
+                ?.let { runCatching { JSONObject(it).getJSONObject("backgroundTranscription") }.getOrNull() }
+            val microphone = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+            val manifestReady = context.packageManager.checkPermission(
+                Manifest.permission.FOREGROUND_SERVICE,
+                context.packageName,
+            ) == PackageManager.PERMISSION_GRANTED &&
+                (Build.VERSION.SDK_INT < 34 || context.packageManager.checkPermission(
+                    Manifest.permission.FOREGROUND_SERVICE_MICROPHONE,
+                    context.packageName,
+                ) == PackageManager.PERMISSION_GRANTED)
+            val state = instance?.transcriptionState ?: "idle"
+            val mode = instance?.takeIf {
+                it.transcriptionState in setOf("starting", "listening", "transcribing") &&
+                    it.transcriptionToken != null && it.transcriptionSession != null
+            }?.transcriptionMode
+            val permission = when {
+                microphone -> "granted"
+                preferences.getBoolean(MICROPHONE_PERMISSION_REQUESTED_KEY, false) -> "denied"
+                else -> "not_requested"
+            }
+            val capability = when {
+                !manifestReady -> "unsupported"
+                Build.VERSION.SDK_INT < Build.VERSION_CODES.Q -> "foreground_only"
+                else -> "supported"
+            }
+            return JSONObject()
+                .put("capability", capability)
+                .put("permission", permission)
+                .put("foreground", AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION))
+                .put("sttAvailable", instance?.transcriptionSttAvailable == true)
+                .put("archiveAvailable", instance?.transcriptionArchiveAvailable == true)
+                .put("captureMode", mode ?: JSONObject.NULL)
+                .put("state", state)
+                .put(
+                    "reason",
+                    instance?.transcriptionReason
+                        ?: preferences.getString(TRANSCRIPTION_REASON_KEY, null)
+                        ?: if (policy == null) "policy_unavailable" else JSONObject.NULL,
+                )
+        }
+
+        private fun notificationPermissionAvailable(context: Context): Boolean =
+            (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) &&
+                NotificationManagerCompat.from(context).areNotificationsEnabled()
+
+        fun noteMicrophonePermissionRequested(context: Context) {
+            context.getSharedPreferences(TRANSCRIPTION_PREFS, Context.MODE_PRIVATE)
+                .edit()
+                .putBoolean(MICROPHONE_PERMISSION_REQUESTED_KEY, true)
+                .apply()
+        }
+
         /** The reasons currently keeping the one Aurora service alive. */
         fun activeForegroundReasonIds(): List<String> =
             AuroraRuntimeForegroundLedger.activeReasons().map { it.id }
@@ -2968,9 +4451,87 @@ class AuroraRuntimeForegroundService : Service() {
         fun foregroundVoiceSessionActive(): Boolean =
             AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE)
 
+        /** Cancels and drains native voice without terminating the reusable service. */
+        fun releaseVoiceSessionForProfileChange(context: Context, onComplete: (Boolean) -> Unit) {
+            profileChangeBlocked = true
+            clearSpeechStagesPolicy(context)
+            val instance = activeInstance
+            if (instance == null) {
+                onComplete(
+                    !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) &&
+                        !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION),
+                )
+                return
+            }
+            val posted = instance.finishHandler.post {
+                if (activeInstance !== instance) {
+                    onComplete(
+                        !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) &&
+                            !AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION),
+                    )
+                } else {
+                    instance.drainVoiceForProfileChange(onComplete)
+                }
+            }
+            if (!posted) onComplete(false)
+        }
+
+        fun completeVoiceProfileChange(): Boolean {
+            if (!profileChangeBlocked ||
+                AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.VOICE) ||
+                AuroraRuntimeForegroundLedger.isHeld(AuroraRuntimeForegroundReason.TRANSCRIPTION)
+            ) {
+                return false
+            }
+            val instance = activeInstance
+            if (instance != null && (
+                    instance.profileChangeDrainInFlight ||
+                        instance.initializationInFlight.get() ||
+                        instance.transcriptionInitializationInFlight.get() ||
+                        instance.transcriptionReservationEpoch != null ||
+                        instance.pendingTranscriptionResources.get() != null ||
+                        instance.transcriptionCapture != null ||
+                        instance.transcriptionSession != null ||
+                        instance.transcriptionToken != null ||
+                        instance.capture != null ||
+                        instance.playback != null ||
+                        instance.session != null
+                    )
+            ) {
+                return false
+            }
+            profileChangeBlocked = false
+            return true
+        }
+
+        private fun clearSpeechStagesPolicy(context: Context) {
+            activeInstance?.speechStagesJson = null
+            activeInstance?.confirmedProfileDocumentJson = null
+            activeInstance?.admittedSttPackId = null
+            activeInstance?.admittedTtsPackId = null
+            activeInstance?.admittedVadPackId = null
+            activeInstance?.admittedKwsPackId = null
+            context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+                ?.edit()
+                ?.remove(VOICE_SPEECH_STAGES_JSON_KEY)
+                ?.remove(VOICE_CONFIRMED_PROFILE_DOCUMENT_JSON_KEY)
+                ?.remove(VOICE_STT_PACK_ID_KEY)
+                ?.remove(VOICE_TTS_PACK_ID_KEY)
+                ?.remove(VOICE_VAD_PACK_ID_KEY)
+                ?.remove(VOICE_KWS_PACK_ID_KEY)
+                ?.apply()
+        }
+
         fun backgroundStoppedByUser(context: Context): Boolean =
             context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
                 .getBoolean(VOICE_BACKGROUND_STOPPED_BY_USER_KEY, false)
+
+        fun canRestoreBackgroundSession(context: Context, currentProfileDocumentJson: String): Boolean {
+            val preferences = context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
+            return preferences.getBoolean(VOICE_BACKGROUND_SESSION_REQUESTED_KEY, false) &&
+                preferences.getString(VOICE_CONFIRMED_PROFILE_DOCUMENT_JSON_KEY, null) == currentProfileDocumentJson &&
+                currentProfileDocumentJson.isNotBlank()
+        }
 
         fun clearBackgroundStoppedByUser(context: Context) {
             context.getSharedPreferences(VOICE_SERVICE_PREFS, Context.MODE_PRIVATE)
@@ -3022,6 +4583,9 @@ class AuroraRuntimeForegroundService : Service() {
 
         @Volatile
         private var activeInstance: AuroraRuntimeForegroundService? = null
+
+        @Volatile
+        private var profileChangeBlocked = false
 
         private val liveTestIngressArmGuard = Any()
         private var pendingLiveTestIngressArm = false

@@ -291,7 +291,12 @@ export function isRuntimeProfileConfigured(
   if (profile.nodeMode === 'remote-console') {
     return isHomeConnectionConfigured(profile.homeConnection)
   }
-  if (!profile.localNode.meshMembership) return false
+  if (!profile.localNode.meshMembership) {
+    return profile.runtimeTier === 'lightweight-ts'
+      && profile.homeConnection === undefined
+      && profile.localNode.enabledCapabilityPacks.length === 1
+      && profile.localNode.enabledCapabilityPacks[0] === 'local-inference'
+  }
   return profile.homeConnection === undefined || isHomeConnectionConfigured(profile.homeConnection)
 }
 
@@ -416,7 +421,14 @@ export function sanitizeRuntimeProfile(
   if (nodeMode === 'remote-console' && !homeConnection) {
     throw new Error('Remote console profiles require a home connection')
   }
-  const localNode = sanitizeLocalNode(profile.localNode, nodeMode)
+  const localNode = sanitizeLocalNode(profile.localNode, nodeMode, runtimeTier)
+  if (
+    nodeMode === 'mesh-node'
+    && !localNode.meshMembership
+    && homeConnection !== undefined
+  ) {
+    throw new Error('Offline local inference profiles cannot include a home connection')
+  }
   return {
     version: 2,
     id,
@@ -500,7 +512,11 @@ function sanitizeHomeConnection(value: AuroraHomeConnectionProfile): AuroraHomeC
   }
 }
 
-function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMode): AuroraLocalNodeProfile {
+function sanitizeLocalNode(
+  value: AuroraLocalNodeProfile,
+  nodeMode: AuroraNodeMode,
+  runtimeTier: AuroraRuntimeTier,
+): AuroraLocalNodeProfile {
   if (!isRecord(value)) throw new Error('Runtime profile local node is invalid')
   const nodeName = requiredText(value.nodeName, 'node name', 160)
   const stablePeerId = requiredText(value.stablePeerId, 'stable peer id', 160)
@@ -517,7 +533,12 @@ function sanitizeLocalNode(value: AuroraLocalNodeProfile, nodeMode: AuroraNodeMo
     throw new Error('Remote console profiles cannot enable local capability packs')
   }
   if (nodeMode === 'mesh-node' && !meshMembership) {
-    throw new Error('Mesh node profiles require WebRTC mesh membership')
+    const isOfflineLocalInference = runtimeTier === 'lightweight-ts'
+      && enabledCapabilityPacks.length === 1
+      && enabledCapabilityPacks[0] === 'local-inference'
+    if (!isOfflineLocalInference) {
+      throw new Error('Mesh node profiles require WebRTC mesh membership')
+    }
   }
   return {
     nodeName,

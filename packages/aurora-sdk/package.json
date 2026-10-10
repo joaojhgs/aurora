@@ -49,6 +49,11 @@
       "import": "./dist/lightweight-orchestrator/index.js",
       "default": "./dist/lightweight-orchestrator/index.js"
     },
+    "./local-inference": {
+      "types": "./dist/local-inference/index.d.ts",
+      "import": "./dist/local-inference/index.js",
+      "default": "./dist/local-inference/index.js"
+    },
     "./generated": {
       "types": "./dist/generated/index.d.ts",
       "import": "./dist/generated/index.js",

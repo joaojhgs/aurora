@@ -88,6 +88,18 @@ export {
 export { HttpGatewayTransport } from './http.js'
 export { MeshP2PTransport } from './mesh.js'
 export {
+  AuroraNativeNodeConfigError,
+  createAuroraNativeNodeConfigStore
+} from './native-node-config.js'
+export type {
+  AuroraNativeNodeConfigCompareAndSwapRequest,
+  AuroraNativeNodeConfigErrorCode,
+  AuroraNativeNodeConfigReadReceipt,
+  AuroraNativeNodeConfigSaveResult,
+  AuroraNativeNodeConfigTransport
+} from './native-node-config.js'
+
+export {
   AURORA_NODE_RUNTIME_MODULES_BY_POLICY,
   AURORA_NODE_CONFIG_MODULES,
   AURORA_NODE_CONFIG_STORAGE_KEY,
@@ -102,6 +114,7 @@ export {
   createAuroraNodeConfigV2TauriStore,
   emptyAuroraNodeConfigDocument,
   emptyAuroraNodeConfigDocumentV2,
+  defaultBackgroundTranscriptionPolicy,
   isAuroraNodeConfigModule,
   isAuroraNodeServiceExposed,
   migrateAuroraNodeConfigDocument,
@@ -121,6 +134,7 @@ export {
 } from './node-config.js'
 export type {
   AuroraNodeConfigDocumentV2,
+  AuroraBackgroundTranscriptionPolicy,
   AuroraNodeConfigSaveAck,
   AuroraNodeConfigV2Store,
   AuroraSpeechConfigV1,
@@ -155,6 +169,14 @@ export type {
   SpeechStageRoutingResolution
 } from './node-config.js'
 export { MockAuroraTransport } from './mock.js'
+export { resolveBackgroundTranscriptionState } from './background-transcription.js'
+export type {
+  BackgroundTranscriptionCapability,
+  BackgroundTranscriptionPermission,
+  BackgroundTranscriptionReason,
+  BackgroundTranscriptionFacts,
+  BackgroundTranscriptionState
+} from './background-transcription.js'
 export { TauriLocalTransport, resolveNativeTtsRequiresReferenceProfile } from './tauri.js'
 export { AuthSession } from './session.js'
 export { AuroraError, classifyHttpError, normalizeAuroraErrorForUi } from './errors.js'

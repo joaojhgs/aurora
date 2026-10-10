@@ -88,6 +88,16 @@ TARGETS = {
             f"onnxruntime-linux-x64-static_lib-{ORT_VERSION}-glibc2_17.zip",
         ),
     ),
+    "aarch64-unknown-linux-gnu": TargetPlan(
+        target="aarch64-unknown-linux-gnu",
+        host_system="Linux",
+        host_machine=("aarch64", "arm64"),
+        ort_pin=(
+            f"{ORT_RELEASE_ROOT}/onnxruntime-linux-aarch64-static_lib-{ORT_VERSION}-glibc2_17.zip",
+            "051131cfe80d07257631311f0b1f726b7302e85e1c7e2176cb84e461eea1fe27",
+            f"onnxruntime-linux-aarch64-static_lib-{ORT_VERSION}-glibc2_17.zip",
+        ),
+    ),
     "aarch64-apple-darwin": TargetPlan(
         target="aarch64-apple-darwin",
         host_system="Darwin",

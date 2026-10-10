@@ -2,6 +2,8 @@
 
 #![forbid(unsafe_code)]
 
+pub mod node_policy;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -15,6 +17,9 @@ use thiserror::Error;
 
 const MAX_TTS_RECOVERY_SEGMENTS: usize = 32;
 const MAX_VOICE_TRANSITION_HISTORY: usize = 256;
+
+/// Shared shape-preserving JSON text decoder for native command adapters.
+pub use aurora_voice_engine::json_text;
 
 pub use aurora_voice_engine::{
     BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
@@ -36,6 +41,121 @@ pub struct RouteRevision(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct TimestampMicros(pub u64);
+
+/// Payload-free semantic observation emitted at real speech lifecycle boundaries.
+///
+/// Identifiers are the same generation-scoped identifiers used by the native
+/// assistant request. Revisions and counts describe the accepted native turn;
+/// transcript and audio content are deliberately not representable here.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechLifecycleEventKind {
+    ActionAdmitted,
+    ConfigApplied,
+    RouteDecided,
+    AdmissionStarted,
+    AdmissionEnded,
+    QueueEnter,
+    QueueLeave,
+    ModelLoadStart,
+    ModelLoadEnd,
+    ModelWarmStart,
+    ModelWarmEnd,
+    ModelInvokeStart,
+    ModelInvokeEnd,
+    ModelUnloadStart,
+    ModelUnloadEnd,
+    PreprocessStart,
+    PreprocessEnd,
+    PostprocessStart,
+    PostprocessEnd,
+    StreamFirstInput,
+    StreamFirstOutput,
+    FinishRequested,
+    CancelRequested,
+    Terminal,
+    PlaybackFirst,
+    PlaybackDrained,
+    PlaybackAborted,
+    LifecycleSuspend,
+    LifecycleResume,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechLifecycleStage {
+    Capture,
+    Stt,
+    AssistantTransport,
+    Tts,
+    Playback,
+    Cleanup,
+    Kws,
+    Vad,
+    Tool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechLifecycleOutcome {
+    Started,
+    Completed,
+    Failed,
+    Canceled,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", deny_unknown_fields)]
+pub struct SpeechLifecycleEventV1 {
+    pub event: SpeechLifecycleEventKind,
+    pub operation_id: String,
+    pub attempt_id: String,
+    pub generation: Generation,
+    pub stage: SpeechLifecycleStage,
+    pub route_revision: Option<String>,
+    pub config_revision: Option<u64>,
+    pub outcome: SpeechLifecycleOutcome,
+    pub reason_code: Option<SpeechLifecycleReason>,
+    pub byte_count: Option<u64>,
+    pub sample_count: Option<u64>,
+    pub chunk_count: Option<u64>,
+    pub dropped_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpeechLifecycleReason {
+    Accepted,
+    InputEnded,
+    UserCancelled,
+    ProviderFailure,
+    OutputFailure,
+    CleanupFailure,
+}
+
+fn lifecycle_result_outcome(is_ok: bool, canceled: bool) -> SpeechLifecycleOutcome {
+    if is_ok {
+        SpeechLifecycleOutcome::Completed
+    } else if canceled {
+        SpeechLifecycleOutcome::Canceled
+    } else {
+        SpeechLifecycleOutcome::Failed
+    }
+}
+
+fn lifecycle_result_reason(
+    is_err: bool,
+    canceled: bool,
+    failure_reason: SpeechLifecycleReason,
+) -> Option<SpeechLifecycleReason> {
+    if !is_err {
+        None
+    } else if canceled {
+        Some(SpeechLifecycleReason::UserCancelled)
+    } else {
+        Some(failure_reason)
+    }
+}
 
 #[derive(Debug, Clone, Error, PartialEq)]
 pub enum VoiceCoreError {
@@ -367,9 +487,24 @@ impl BoundedPcmBuffer {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Clone, Default)]
 pub struct CancellationToken {
-    cancelled: Arc<AtomicBool>,
+    inner: Arc<CancellationState>,
+}
+
+#[derive(Default)]
+struct CancellationState {
+    cancelled: AtomicBool,
+    cancel_hook: Mutex<Option<Arc<dyn Fn() + Send + Sync>>>,
+}
+
+impl fmt::Debug for CancellationToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CancellationToken")
+            .field("cancelled", &self.is_cancelled())
+            .finish_non_exhaustive()
+    }
 }
 
 impl CancellationToken {
@@ -378,11 +513,27 @@ impl CancellationToken {
     }
 
     pub fn cancel(&self) {
-        self.cancelled.store(true, Ordering::SeqCst);
+        if !self.inner.cancelled.swap(true, Ordering::SeqCst) {
+            let hook = self
+                .inner
+                .cancel_hook
+                .lock()
+                .ok()
+                .and_then(|hook| hook.clone());
+            if let Some(hook) = hook {
+                let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| hook()));
+            }
+        }
+    }
+
+    fn set_cancel_hook(&self, hook: Option<Arc<dyn Fn() + Send + Sync>>) {
+        if let Ok(mut installed) = self.inner.cancel_hook.lock() {
+            *installed = hook;
+        }
     }
 
     pub fn is_cancelled(&self) -> bool {
-        self.cancelled.load(Ordering::SeqCst)
+        self.inner.cancelled.load(Ordering::SeqCst)
     }
 
     pub fn check(&self) -> Result<(), VoiceCoreError> {
@@ -549,13 +700,14 @@ fn bound_tts_synthesis_request(
     text: String,
     config: &TtsSynthesisConfig,
     generation: Generation,
+    language: Option<&str>,
 ) -> Result<BoundTtsSynthesisRequest, EngineError> {
     match binding {
         TtsSynthesisProviderBinding::LocalTask(binding) => {
             let task_request = BoundTaskRequest::new(
                 TaskRequest {
                     task: VoiceTask::TextToSpeech,
-                    language: None,
+                    language: language.map(str::to_owned),
                     generation: generation.0,
                 },
                 binding.as_ref().clone(),
@@ -563,7 +715,11 @@ fn bound_tts_synthesis_request(
             BoundTtsSynthesisRequest::new(task_request, text, config.clone())
         }
         TtsSynthesisProviderBinding::Route(route) => BoundTtsSynthesisRequest::new_route(
-            RouteTtsSynthesisRequest::new(route.clone(), None, generation.0)?,
+            RouteTtsSynthesisRequest::new(
+                route.clone(),
+                language.map(str::to_owned),
+                generation.0,
+            )?,
             text,
             config.clone(),
         ),
@@ -960,6 +1116,21 @@ pub trait RuntimeEventSink {
     async fn snapshot(&mut self, snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError>;
 
     async fn event(&mut self, event: RuntimeEvent) -> Result<(), VoiceCoreError>;
+
+    /// Receives a payload-free event at an actual native work boundary.
+    /// Implementations may forward it to an optional observer; the default is
+    /// intentionally allocation-free and has no effect on runtime behavior.
+    fn wants_speech_lifecycle(&self) -> bool {
+        false
+    }
+
+    fn speech_lifecycle_callback(
+        &self,
+    ) -> Option<Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync>> {
+        None
+    }
+
+    fn speech_lifecycle(&mut self, _event: SpeechLifecycleEventV1) {}
 }
 
 #[async_trait(?Send)]
@@ -1093,6 +1264,7 @@ struct WakeRuntime {
     vad: WakeVadProvider,
     kws: WakeKwsProvider,
     config: WakeOrchestrationConfig,
+    last_cancel_outcome: Option<(u64, CleanupCallbackOutcome)>,
 }
 
 struct WakeSessions {
@@ -1168,7 +1340,12 @@ impl WakeRuntime {
         config: WakeOrchestrationConfig,
     ) -> Result<Self, VoiceCoreError> {
         config.validate()?;
-        Ok(Self { vad, kws, config })
+        Ok(Self {
+            vad,
+            kws,
+            config,
+            last_cancel_outcome: None,
+        })
     }
 
     fn ready(&self) -> bool {
@@ -1179,10 +1356,43 @@ impl WakeRuntime {
     async fn cancel_generation(&mut self, generation: u64) -> Result<(), EngineError> {
         let vad_result = self.vad.cancel_generation(generation).await;
         let kws_result = self.kws.cancel_generation(generation).await;
-        match (vad_result, kws_result) {
+        let result = match (vad_result, kws_result) {
             (Err(error), _) | (Ok(()), Err(error)) => Err(error),
             (Ok(()), Ok(())) => Ok(()),
+        };
+        self.record_cancel_outcome(generation, &result);
+        result
+    }
+
+    fn record_cancel_outcome(&mut self, generation: u64, result: &Result<(), EngineError>) {
+        let outcome = cleanup_callback_outcome(result);
+        let next = match self.last_cancel_outcome {
+            Some((recorded_generation, CleanupCallbackOutcome::ReturnedError))
+                if recorded_generation == generation =>
+            {
+                CleanupCallbackOutcome::ReturnedError
+            }
+            Some((recorded_generation, previous)) if recorded_generation == generation => {
+                merge_cleanup_callback_outcomes(previous, outcome)
+            }
+            _ => outcome,
+        };
+        self.last_cancel_outcome = Some((generation, next));
+    }
+
+    fn take_cancel_outcome(&mut self, generation: u64) -> Option<CleanupCallbackOutcome> {
+        if self
+            .last_cancel_outcome
+            .is_some_and(|(recorded_generation, _)| recorded_generation == generation)
+        {
+            self.last_cancel_outcome.take().map(|(_, outcome)| outcome)
+        } else {
+            None
         }
+    }
+
+    fn clear_cancel_outcome(&mut self) {
+        self.last_cancel_outcome = None;
     }
 
     async fn push_vad_frame(
@@ -1261,6 +1471,121 @@ async fn apply_vad_result<S: RuntimeEventSink>(
     Ok(*speech_started && !segmented_samples.is_empty())
 }
 
+/// Returned outcome for one cleanup callback in a completed voice generation.
+///
+/// This records only what the callback returned. `ReturnedOk` is not a claim
+/// that local or remote resources are quiescent.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CleanupCallbackOutcome {
+    NotAttempted,
+    ReturnedOk,
+    ReturnedError,
+}
+
+/// Redacted callback outcomes for one completed voice generation.
+///
+/// The report has no serialization contract and can only be constructed by
+/// `VoiceRuntime`. It is not a readiness, authorization, or quiescence receipt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct VoiceCleanupReport {
+    generation: Generation,
+    capture_start_attempted: bool,
+    assistant_transport_attempted: bool,
+    wake_cancel: CleanupCallbackOutcome,
+    stt_cancel: CleanupCallbackOutcome,
+    tts_cancel: CleanupCallbackOutcome,
+    transport_cancel: CleanupCallbackOutcome,
+    output_stop: CleanupCallbackOutcome,
+    capture_stop: CleanupCallbackOutcome,
+    capture_lease_release: CleanupCallbackOutcome,
+    state_reset: CleanupCallbackOutcome,
+}
+
+impl VoiceCleanupReport {
+    fn not_attempted(generation: Generation) -> Self {
+        Self {
+            generation,
+            capture_start_attempted: false,
+            assistant_transport_attempted: false,
+            wake_cancel: CleanupCallbackOutcome::NotAttempted,
+            stt_cancel: CleanupCallbackOutcome::NotAttempted,
+            tts_cancel: CleanupCallbackOutcome::NotAttempted,
+            transport_cancel: CleanupCallbackOutcome::NotAttempted,
+            output_stop: CleanupCallbackOutcome::NotAttempted,
+            capture_stop: CleanupCallbackOutcome::NotAttempted,
+            capture_lease_release: CleanupCallbackOutcome::NotAttempted,
+            state_reset: CleanupCallbackOutcome::NotAttempted,
+        }
+    }
+
+    pub const fn generation(&self) -> Generation {
+        self.generation
+    }
+
+    pub const fn capture_start_attempted(&self) -> bool {
+        self.capture_start_attempted
+    }
+
+    pub const fn assistant_transport_attempted(&self) -> bool {
+        self.assistant_transport_attempted
+    }
+
+    pub const fn wake_cancel(&self) -> CleanupCallbackOutcome {
+        self.wake_cancel
+    }
+
+    pub const fn stt_cancel(&self) -> CleanupCallbackOutcome {
+        self.stt_cancel
+    }
+
+    pub const fn tts_cancel(&self) -> CleanupCallbackOutcome {
+        self.tts_cancel
+    }
+
+    pub const fn transport_cancel(&self) -> CleanupCallbackOutcome {
+        self.transport_cancel
+    }
+
+    pub const fn output_stop(&self) -> CleanupCallbackOutcome {
+        self.output_stop
+    }
+
+    pub const fn capture_stop(&self) -> CleanupCallbackOutcome {
+        self.capture_stop
+    }
+
+    pub const fn capture_lease_release(&self) -> CleanupCallbackOutcome {
+        self.capture_lease_release
+    }
+
+    pub const fn state_reset(&self) -> CleanupCallbackOutcome {
+        self.state_reset
+    }
+}
+
+fn cleanup_callback_outcome<T, E>(result: &Result<T, E>) -> CleanupCallbackOutcome {
+    match result {
+        Ok(_) => CleanupCallbackOutcome::ReturnedOk,
+        Err(_) => CleanupCallbackOutcome::ReturnedError,
+    }
+}
+
+fn merge_cleanup_callback_outcomes(
+    previous: CleanupCallbackOutcome,
+    current: CleanupCallbackOutcome,
+) -> CleanupCallbackOutcome {
+    match (previous, current) {
+        (CleanupCallbackOutcome::ReturnedError, _) | (_, CleanupCallbackOutcome::ReturnedError) => {
+            CleanupCallbackOutcome::ReturnedError
+        }
+        (CleanupCallbackOutcome::ReturnedOk, CleanupCallbackOutcome::ReturnedOk) => {
+            CleanupCallbackOutcome::ReturnedOk
+        }
+        (CleanupCallbackOutcome::NotAttempted, outcome)
+        | (outcome, CleanupCallbackOutcome::NotAttempted) => outcome,
+    }
+}
+
 pub struct VoiceRuntime<A, E, P, T, O, S> {
     audio: A,
     stt: E,
@@ -1273,6 +1598,13 @@ pub struct VoiceRuntime<A, E, P, T, O, S> {
     state: VoiceStateMachine,
     route_revision: RouteRevision,
     assistant_namespace: AssistantTurnNamespace,
+    lifecycle_config_revision: Option<u64>,
+    next_lifecycle_sequence: u64,
+    active_lifecycle_ids: Option<(String, String)>,
+    cleanup_report: Option<VoiceCleanupReport>,
+    pending_cleanup_report: Option<VoiceCleanupReport>,
+    stt_language: Option<String>,
+    tts_language: Option<String>,
 }
 
 impl<A, E, P, T, O, S> VoiceRuntime<A, E, P, T, O, S>
@@ -1308,7 +1640,29 @@ where
             state: VoiceStateMachine::new(surface),
             route_revision: RouteRevision(0),
             assistant_namespace,
+            lifecycle_config_revision: None,
+            next_lifecycle_sequence: 0,
+            active_lifecycle_ids: None,
+            cleanup_report: None,
+            pending_cleanup_report: None,
+            stt_language: None,
+            tts_language: None,
         })
+    }
+
+    /// Selects optional language hints for the STT and TTS ports.
+    ///
+    /// Native adapters use this to forward confirmed per-stage language
+    /// choices into the actual bound requests. `None` preserves the provider's
+    /// existing default or language-detection behavior.
+    pub fn with_speech_languages(
+        mut self,
+        stt_language: Option<String>,
+        tts_language: Option<String>,
+    ) -> Self {
+        self.stt_language = stt_language;
+        self.tts_language = tts_language;
+        self
     }
 
     pub fn with_wake_providers(
@@ -1325,12 +1679,174 @@ where
         self.state.state()
     }
 
+    /// Binds the trusted config revision used by subsequent lifecycle events.
+    /// `None` means this host adapter did not provide a confirmed revision.
+    pub fn set_lifecycle_config_revision(&mut self, revision: Option<u64>) {
+        self.lifecycle_config_revision = revision;
+    }
+
+    fn observe_speech_lifecycle(
+        &mut self,
+        lease: &VoiceCaptureLease,
+        event: SpeechLifecycleEventKind,
+        stage: SpeechLifecycleStage,
+        outcome: SpeechLifecycleOutcome,
+        reason_code: Option<SpeechLifecycleReason>,
+        sample_count: Option<u64>,
+        chunk_count: Option<u64>,
+    ) {
+        if !std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.sink.wants_speech_lifecycle()
+        }))
+        .unwrap_or(false)
+        {
+            return;
+        }
+        if event == SpeechLifecycleEventKind::ActionAdmitted || self.active_lifecycle_ids.is_none()
+        {
+            let Some(sequence) = self.next_lifecycle_sequence.checked_add(1) else {
+                return;
+            };
+            self.next_lifecycle_sequence = sequence;
+            let scope = self.assistant_namespace.as_str();
+            self.active_lifecycle_ids = Some((
+                format!("native-operation-{scope}-{sequence}-{}", lease.generation.0),
+                format!("native-attempt-{scope}-{sequence}-{}", lease.generation.0),
+            ));
+        }
+        let Some((operation_id, attempt_id)) = self.active_lifecycle_ids.as_ref().cloned() else {
+            return;
+        };
+        let lifecycle_event = SpeechLifecycleEventV1 {
+            event,
+            operation_id,
+            attempt_id,
+            generation: lease.generation,
+            stage,
+            route_revision: Some(lease.route_revision.0.to_string()),
+            config_revision: self.lifecycle_config_revision,
+            outcome,
+            reason_code,
+            byte_count: None,
+            sample_count,
+            chunk_count,
+            dropped_count: 0,
+        };
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.sink.speech_lifecycle(lifecycle_event)
+        }));
+        if event == SpeechLifecycleEventKind::ActionAdmitted
+            && self.lifecycle_config_revision.is_some()
+        {
+            self.observe_speech_lifecycle(
+                lease,
+                SpeechLifecycleEventKind::ConfigApplied,
+                stage,
+                SpeechLifecycleOutcome::Completed,
+                Some(SpeechLifecycleReason::Accepted),
+                None,
+                None,
+            );
+        }
+        if event == SpeechLifecycleEventKind::Terminal {
+            self.active_lifecycle_ids = None;
+        }
+    }
+
+    fn install_lifecycle_cancel_hook(
+        &mut self,
+        lease: &VoiceCaptureLease,
+        cancellation: &CancellationToken,
+    ) {
+        if !std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.sink.wants_speech_lifecycle()
+        }))
+        .unwrap_or(false)
+        {
+            return;
+        }
+        let callback = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.sink.speech_lifecycle_callback()
+        }))
+        .ok()
+        .flatten();
+        let Some(callback) = callback else {
+            return;
+        };
+        let Some((operation_id, attempt_id)) = self.active_lifecycle_ids.as_ref().cloned() else {
+            return;
+        };
+        let event = SpeechLifecycleEventV1 {
+            event: SpeechLifecycleEventKind::CancelRequested,
+            operation_id,
+            attempt_id,
+            generation: lease.generation,
+            stage: SpeechLifecycleStage::Cleanup,
+            route_revision: Some(lease.route_revision.0.to_string()),
+            config_revision: self.lifecycle_config_revision,
+            outcome: SpeechLifecycleOutcome::Canceled,
+            reason_code: Some(SpeechLifecycleReason::UserCancelled),
+            byte_count: None,
+            sample_count: None,
+            chunk_count: None,
+            dropped_count: 0,
+        };
+        cancellation.set_cancel_hook(Some(Arc::new(move || {
+            let _ =
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| callback(event.clone())));
+        })));
+    }
+
     pub fn wake_background_ready(&self) -> bool {
         self.wake.as_ref().is_some_and(WakeRuntime::ready)
     }
 
     pub fn has_active_capture(&self) -> bool {
         self.leases.has_active()
+    }
+
+    /// Returns the completed cleanup callback outcomes for `generation`, if present.
+    ///
+    /// A returned report records callback results only; it does not establish that
+    /// local or remote work has stopped.
+    pub fn cleanup_report_for_generation(
+        &self,
+        generation: Generation,
+    ) -> Option<VoiceCleanupReport> {
+        self.cleanup_report
+            .filter(|report| report.generation == generation)
+    }
+
+    fn begin_cleanup_reporting(&mut self) {
+        self.cleanup_report = None;
+        self.pending_cleanup_report = None;
+        if let Some(wake) = self.wake.as_mut() {
+            wake.clear_cancel_outcome();
+        }
+    }
+
+    fn begin_cleanup_generation(&mut self, generation: Generation) {
+        self.pending_cleanup_report = Some(VoiceCleanupReport::not_attempted(generation));
+    }
+
+    fn mark_capture_start_attempted(&mut self, generation: Generation) {
+        if let Some(report) = self
+            .pending_cleanup_report
+            .as_mut()
+            .filter(|report| report.generation == generation)
+        {
+            report.capture_start_attempted = true;
+        }
+    }
+
+    fn mark_assistant_transport_attempted(&mut self, generation: Generation) {
+        if let Some(report) = self
+            .pending_cleanup_report
+            .as_mut()
+            .filter(|report| report.generation == generation)
+        {
+            report.assistant_transport_attempted = true;
+        }
     }
 
     /// Returns the generation that the next accepted runtime capture will use.
@@ -1360,18 +1876,73 @@ where
         at: TimestampMicros,
         cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
+        self.begin_cleanup_reporting();
         lease.start_reason = CaptureStartReason::PushToTalk;
         let lease = self.leases.request_start(lease)?;
+        self.begin_cleanup_generation(lease.generation);
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ActionAdmitted,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Started,
+            Some(SpeechLifecycleReason::Accepted),
+            None,
+            None,
+        );
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::RouteDecided,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Completed,
+            Some(SpeechLifecycleReason::Accepted),
+            None,
+            None,
+        );
+        self.install_lifecycle_cancel_hook(&lease, &cancellation);
         let mut capture_started = false;
         let result = match cancellation.check() {
-            Ok(()) => match self.audio.start(lease.clone()).await {
-                Ok(()) => {
-                    capture_started = true;
-                    self.run_push_to_talk_turn_after_start(lease.clone(), at, cancellation.clone())
+            Ok(()) => {
+                self.mark_capture_start_attempted(lease.generation);
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::AdmissionStarted,
+                    SpeechLifecycleStage::Capture,
+                    SpeechLifecycleOutcome::Started,
+                    None,
+                    None,
+                    None,
+                );
+                let start_result = self.audio.start(lease.clone()).await;
+                let start_canceled = matches!(
+                    start_result.as_ref(),
+                    Err(VoiceCoreError::Cancelled | VoiceCoreError::Engine(EngineError::Cancelled))
+                );
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::AdmissionEnded,
+                    SpeechLifecycleStage::Capture,
+                    lifecycle_result_outcome(start_result.is_ok(), start_canceled),
+                    lifecycle_result_reason(
+                        start_result.is_err(),
+                        start_canceled,
+                        SpeechLifecycleReason::ProviderFailure,
+                    ),
+                    None,
+                    None,
+                );
+                match start_result {
+                    Ok(()) => {
+                        capture_started = true;
+                        self.run_push_to_talk_turn_after_start(
+                            lease.clone(),
+                            at,
+                            cancellation.clone(),
+                        )
                         .await
+                    }
+                    Err(error) => Err(error),
                 }
-                Err(error) => Err(error),
-            },
+            }
             Err(error) => Err(error),
         };
         self.finish_with_cleanup(result, lease, cancellation, capture_started)
@@ -1391,22 +1962,73 @@ where
         at: TimestampMicros,
         cancellation: CancellationToken,
     ) -> Result<String, VoiceCoreError> {
+        self.begin_cleanup_reporting();
         lease.start_reason = CaptureStartReason::PushToTalk;
         let lease = self.leases.request_start(lease)?;
+        self.begin_cleanup_generation(lease.generation);
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ActionAdmitted,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Started,
+            Some(SpeechLifecycleReason::Accepted),
+            None,
+            None,
+        );
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::RouteDecided,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Completed,
+            Some(SpeechLifecycleReason::Accepted),
+            None,
+            None,
+        );
+        self.install_lifecycle_cancel_hook(&lease, &cancellation);
         let mut capture_started = false;
         let result = match cancellation.check() {
-            Ok(()) => match self.audio.start(lease.clone()).await {
-                Ok(()) => {
-                    capture_started = true;
-                    self.run_push_to_talk_transcription_after_start(
-                        lease.clone(),
-                        at,
-                        cancellation.clone(),
-                    )
-                    .await
+            Ok(()) => {
+                self.mark_capture_start_attempted(lease.generation);
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::AdmissionStarted,
+                    SpeechLifecycleStage::Capture,
+                    SpeechLifecycleOutcome::Started,
+                    None,
+                    None,
+                    None,
+                );
+                let start_result = self.audio.start(lease.clone()).await;
+                let start_canceled = matches!(
+                    start_result.as_ref(),
+                    Err(VoiceCoreError::Cancelled | VoiceCoreError::Engine(EngineError::Cancelled))
+                );
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::AdmissionEnded,
+                    SpeechLifecycleStage::Capture,
+                    lifecycle_result_outcome(start_result.is_ok(), start_canceled),
+                    lifecycle_result_reason(
+                        start_result.is_err(),
+                        start_canceled,
+                        SpeechLifecycleReason::ProviderFailure,
+                    ),
+                    None,
+                    None,
+                );
+                match start_result {
+                    Ok(()) => {
+                        capture_started = true;
+                        self.run_push_to_talk_transcription_after_start(
+                            lease.clone(),
+                            at,
+                            cancellation.clone(),
+                        )
+                        .await
+                    }
+                    Err(error) => Err(error),
                 }
-                Err(error) => Err(error),
-            },
+            }
             Err(error) => Err(error),
         };
         self.finish_with_cleanup(result, lease, cancellation, capture_started)
@@ -1447,6 +2069,7 @@ where
         cancellation: CancellationToken,
         start_reason: CaptureStartReason,
     ) -> Result<String, VoiceCoreError> {
+        self.begin_cleanup_reporting();
         lease.start_reason = start_reason;
         if matches!(lease.start_reason, CaptureStartReason::BackgroundSession)
             && !lease.background_eligible
@@ -1457,6 +2080,26 @@ where
             return Err(VoiceCoreError::WakeUnavailable);
         }
         let lease = self.leases.request_start(lease)?;
+        self.begin_cleanup_generation(lease.generation);
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ActionAdmitted,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Started,
+            Some(SpeechLifecycleReason::Accepted),
+            None,
+            None,
+        );
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::RouteDecided,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Completed,
+            Some(SpeechLifecycleReason::Accepted),
+            None,
+            None,
+        );
+        self.install_lifecycle_cancel_hook(&lease, &cancellation);
         let mut capture_started = false;
         let prepared = match cancellation.check() {
             Ok(()) => self.prepare_wake_sessions(&lease).await,
@@ -1464,19 +2107,50 @@ where
         };
         let result = match prepared {
             Ok(sessions) => match cancellation.check() {
-                Ok(()) => match self.audio.start(lease.clone()).await {
-                    Ok(()) => {
-                        capture_started = true;
-                        self.run_wake_turn_after_start(
-                            lease.clone(),
-                            at,
-                            cancellation.clone(),
-                            sessions,
-                        )
-                        .await
+                Ok(()) => {
+                    self.mark_capture_start_attempted(lease.generation);
+                    self.observe_speech_lifecycle(
+                        &lease,
+                        SpeechLifecycleEventKind::AdmissionStarted,
+                        SpeechLifecycleStage::Capture,
+                        SpeechLifecycleOutcome::Started,
+                        None,
+                        None,
+                        None,
+                    );
+                    let start_result = self.audio.start(lease.clone()).await;
+                    let start_canceled = matches!(
+                        start_result.as_ref(),
+                        Err(VoiceCoreError::Cancelled
+                            | VoiceCoreError::Engine(EngineError::Cancelled))
+                    );
+                    self.observe_speech_lifecycle(
+                        &lease,
+                        SpeechLifecycleEventKind::AdmissionEnded,
+                        SpeechLifecycleStage::Capture,
+                        lifecycle_result_outcome(start_result.is_ok(), start_canceled),
+                        lifecycle_result_reason(
+                            start_result.is_err(),
+                            start_canceled,
+                            SpeechLifecycleReason::ProviderFailure,
+                        ),
+                        None,
+                        None,
+                    );
+                    match start_result {
+                        Ok(()) => {
+                            capture_started = true;
+                            self.run_wake_turn_after_start(
+                                lease.clone(),
+                                at,
+                                cancellation.clone(),
+                                sessions,
+                            )
+                            .await
+                        }
+                        Err(error) => Err(error),
                     }
-                    Err(error) => Err(error),
-                },
+                }
                 Err(error) => Err(error),
             },
             Err(error) => Err(error),
@@ -1892,7 +2566,7 @@ where
                 let task_request = BoundTaskRequest::new(
                     TaskRequest {
                         task: VoiceTask::SpeechToText,
-                        language: None,
+                        language: self.stt_language.clone(),
                         generation: lease.generation.0,
                     },
                     *binding,
@@ -1900,10 +2574,12 @@ where
                 FiniteSttAudioBuilder::new(task_request)?
             }
             FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
-                RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
+                RouteFiniteSttRequest::new(route, self.stt_language.clone(), lease.generation.0)?,
             )?,
         };
         cancellation.check()?;
+        let mut first_input = true;
+        let mut captured_samples = 0_u64;
         while let Some(frame) = self.audio.next_frame().await? {
             if cancellation.is_cancelled() {
                 stt_audio.clear();
@@ -1917,8 +2593,31 @@ where
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 return Err(VoiceCoreError::InvalidTransition);
             }
+            let sample_count = frame.samples().len() as u64;
             stt_audio.push_frame(frame.samples())?;
+            captured_samples = captured_samples.saturating_add(sample_count);
+            if first_input {
+                first_input = false;
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::StreamFirstInput,
+                    SpeechLifecycleStage::Capture,
+                    SpeechLifecycleOutcome::Started,
+                    None,
+                    Some(sample_count),
+                    Some(1),
+                );
+            }
         }
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::FinishRequested,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Started,
+            Some(SpeechLifecycleReason::InputEnded),
+            Some(captured_samples),
+            None,
+        );
         self.finish_voice_turn_with_builder(lease, at, cancellation, stt_binding, stt_audio)
             .await
     }
@@ -1940,7 +2639,7 @@ where
                 let task_request = BoundTaskRequest::new(
                     TaskRequest {
                         task: VoiceTask::SpeechToText,
-                        language: None,
+                        language: self.stt_language.clone(),
                         generation: lease.generation.0,
                     },
                     *binding,
@@ -1948,10 +2647,12 @@ where
                 FiniteSttAudioBuilder::new(task_request)?
             }
             FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
-                RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
+                RouteFiniteSttRequest::new(route, self.stt_language.clone(), lease.generation.0)?,
             )?,
         };
         cancellation.check()?;
+        let mut first_input = true;
+        let mut captured_samples = 0_u64;
         while let Some(frame) = self.audio.next_frame().await? {
             if cancellation.is_cancelled() {
                 stt_audio.clear();
@@ -1965,8 +2666,31 @@ where
                 self.route_revision = RouteRevision(self.route_revision.0.saturating_add(1));
                 return Err(VoiceCoreError::InvalidTransition);
             }
+            let sample_count = frame.samples().len() as u64;
             stt_audio.push_frame(frame.samples())?;
+            captured_samples = captured_samples.saturating_add(sample_count);
+            if first_input {
+                first_input = false;
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::StreamFirstInput,
+                    SpeechLifecycleStage::Capture,
+                    SpeechLifecycleOutcome::Started,
+                    None,
+                    Some(sample_count),
+                    Some(1),
+                );
+            }
         }
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::FinishRequested,
+            SpeechLifecycleStage::Capture,
+            SpeechLifecycleOutcome::Started,
+            Some(SpeechLifecycleReason::InputEnded),
+            Some(captured_samples),
+            None,
+        );
         self.transition_emit(
             VoiceState::Transcribing,
             TransitionReason::SpeechEnded,
@@ -1976,12 +2700,66 @@ where
         )
         .await?;
         cancellation.check()?;
-        self.stt.warm_finite_stt(stt_binding).await?;
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelWarmStart,
+            SpeechLifecycleStage::Stt,
+            SpeechLifecycleOutcome::Started,
+            None,
+            Some(captured_samples),
+            None,
+        );
+        let warm_result = self.stt.warm_finite_stt(stt_binding).await;
+        let warm_canceled = warm_result
+            .as_ref()
+            .err()
+            .is_some_and(|error| matches!(error, EngineError::Cancelled));
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelWarmEnd,
+            SpeechLifecycleStage::Stt,
+            lifecycle_result_outcome(warm_result.is_ok(), warm_canceled),
+            lifecycle_result_reason(
+                warm_result.is_err(),
+                warm_canceled,
+                SpeechLifecycleReason::ProviderFailure,
+            ),
+            None,
+            None,
+        );
+        warm_result?;
         let (stt_request, stt_audio) = stt_audio.finish()?;
-        let transcript = self
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelInvokeStart,
+            SpeechLifecycleStage::Stt,
+            SpeechLifecycleOutcome::Started,
+            None,
+            Some(captured_samples),
+            None,
+        );
+        let transcription_result = self
             .stt
             .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())
-            .await?;
+            .await;
+        let transcription_canceled = transcription_result
+            .as_ref()
+            .err()
+            .is_some_and(|error| matches!(error, EngineError::Cancelled));
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelInvokeEnd,
+            SpeechLifecycleStage::Stt,
+            lifecycle_result_outcome(transcription_result.is_ok(), transcription_canceled),
+            lifecycle_result_reason(
+                transcription_result.is_err(),
+                transcription_canceled,
+                SpeechLifecycleReason::ProviderFailure,
+            ),
+            None,
+            None,
+        );
+        let transcript = transcription_result?;
         cancellation.check()?;
         self.sink
             .event(RuntimeEvent::Transcript {
@@ -2021,7 +2799,7 @@ where
                 let task_request = BoundTaskRequest::new(
                     TaskRequest {
                         task: VoiceTask::SpeechToText,
-                        language: None,
+                        language: self.stt_language.clone(),
                         generation: lease.generation.0,
                     },
                     *binding,
@@ -2029,7 +2807,7 @@ where
                 FiniteSttAudioBuilder::new(task_request)?
             }
             FiniteSttProviderBinding::Route(route) => FiniteSttAudioBuilder::new_route(
-                RouteFiniteSttRequest::new(route, None, lease.generation.0)?,
+                RouteFiniteSttRequest::new(route, self.stt_language.clone(), lease.generation.0)?,
             )?,
         };
         for samples in sample_frames {
@@ -2061,12 +2839,66 @@ where
         )
         .await?;
         cancellation.check()?;
-        self.stt.warm_finite_stt(stt_binding).await?;
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelWarmStart,
+            SpeechLifecycleStage::Stt,
+            SpeechLifecycleOutcome::Started,
+            None,
+            None,
+            None,
+        );
+        let warm_result = self.stt.warm_finite_stt(stt_binding).await;
+        let warm_canceled = warm_result
+            .as_ref()
+            .err()
+            .is_some_and(|error| matches!(error, EngineError::Cancelled));
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelWarmEnd,
+            SpeechLifecycleStage::Stt,
+            lifecycle_result_outcome(warm_result.is_ok(), warm_canceled),
+            lifecycle_result_reason(
+                warm_result.is_err(),
+                warm_canceled,
+                SpeechLifecycleReason::ProviderFailure,
+            ),
+            None,
+            None,
+        );
+        warm_result?;
         let (stt_request, stt_audio) = stt_audio.finish()?;
-        let transcript = self
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelInvokeStart,
+            SpeechLifecycleStage::Stt,
+            SpeechLifecycleOutcome::Started,
+            None,
+            None,
+            None,
+        );
+        let transcription_result = self
             .stt
             .transcribe_finite(stt_request, stt_audio, &|| cancellation.is_cancelled())
-            .await?;
+            .await;
+        let transcription_canceled = transcription_result
+            .as_ref()
+            .err()
+            .is_some_and(|error| matches!(error, EngineError::Cancelled));
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelInvokeEnd,
+            SpeechLifecycleStage::Stt,
+            lifecycle_result_outcome(transcription_result.is_ok(), transcription_canceled),
+            lifecycle_result_reason(
+                transcription_result.is_err(),
+                transcription_canceled,
+                SpeechLifecycleReason::ProviderFailure,
+            ),
+            None,
+            None,
+        );
+        let transcript = transcription_result?;
         cancellation.check()?;
         self.sink
             .event(RuntimeEvent::Transcript {
@@ -2091,10 +2923,40 @@ where
             lease.generation,
             transcript.transcript().to_owned(),
         );
-        let response = self
+        self.mark_assistant_transport_attempted(lease.generation);
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelInvokeStart,
+            SpeechLifecycleStage::AssistantTransport,
+            SpeechLifecycleOutcome::Started,
+            None,
+            None,
+            None,
+        );
+        let response_result = self
             .transport
             .assistant_turn(request, cancellation.clone())
-            .await?;
+            .await;
+        let response_canceled = response_result.as_ref().err().is_some_and(|error| {
+            matches!(
+                error,
+                VoiceCoreError::Cancelled | VoiceCoreError::Engine(EngineError::Cancelled)
+            )
+        });
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelInvokeEnd,
+            SpeechLifecycleStage::AssistantTransport,
+            lifecycle_result_outcome(response_result.is_ok(), response_canceled),
+            lifecycle_result_reason(
+                response_result.is_err(),
+                response_canceled,
+                SpeechLifecycleReason::ProviderFailure,
+            ),
+            None,
+            None,
+        );
+        let response = response_result?;
         cancellation.check()?;
         self.transition_emit(
             VoiceState::AwaitingResponse,
@@ -2116,7 +2978,34 @@ where
             1024,
             None,
         )?;
-        self.tts.warm_synthesis(tts_binding.clone()).await?;
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelWarmStart,
+            SpeechLifecycleStage::Tts,
+            SpeechLifecycleOutcome::Started,
+            None,
+            None,
+            None,
+        );
+        let warm_result = self.tts.warm_synthesis(tts_binding.clone()).await;
+        let warm_canceled = warm_result
+            .as_ref()
+            .err()
+            .is_some_and(|error| matches!(error, EngineError::Cancelled));
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::ModelWarmEnd,
+            SpeechLifecycleStage::Tts,
+            lifecycle_result_outcome(warm_result.is_ok(), warm_canceled),
+            lifecycle_result_reason(
+                warm_result.is_err(),
+                warm_canceled,
+                SpeechLifecycleReason::ProviderFailure,
+            ),
+            None,
+            None,
+        );
+        warm_result?;
         let mut pending_segments = VecDeque::from([spoken_text]);
         let mut synthesized_segments = Vec::new();
         while let Some(segment) = pending_segments.pop_front() {
@@ -2126,12 +3015,39 @@ where
                 segment.clone(),
                 &tts_config,
                 lease.generation,
+                self.tts_language.as_deref(),
             )?;
-            match self
+            self.observe_speech_lifecycle(
+                &lease,
+                SpeechLifecycleEventKind::ModelInvokeStart,
+                SpeechLifecycleStage::Tts,
+                SpeechLifecycleOutcome::Started,
+                None,
+                None,
+                None,
+            );
+            let synthesis_result = self
                 .tts
                 .synthesize_text(request, &|| cancellation.is_cancelled())
-                .await
-            {
+                .await;
+            let synthesis_canceled = synthesis_result
+                .as_ref()
+                .err()
+                .is_some_and(|error| matches!(error, EngineError::Cancelled));
+            self.observe_speech_lifecycle(
+                &lease,
+                SpeechLifecycleEventKind::ModelInvokeEnd,
+                SpeechLifecycleStage::Tts,
+                lifecycle_result_outcome(synthesis_result.is_ok(), synthesis_canceled),
+                lifecycle_result_reason(
+                    synthesis_result.is_err(),
+                    synthesis_canceled,
+                    SpeechLifecycleReason::ProviderFailure,
+                ),
+                None,
+                None,
+            );
+            match synthesis_result {
                 Ok(audio) => synthesized_segments.push(audio),
                 Err(EngineError::ResourceLimit) => {
                     cancellation.check()?;
@@ -2173,16 +3089,68 @@ where
                 route_revision: lease.route_revision,
                 started_at: completed_at,
             };
-            let receipt = self
+            let playback_result = self
                 .output
                 .play(playback_context, audio, &|| cancellation.is_cancelled())
-                .await?;
-            cancellation.check()?;
+                .await;
+            let receipt = match playback_result {
+                Ok(receipt) => receipt,
+                Err(error) => {
+                    self.observe_speech_lifecycle(
+                        &lease,
+                        SpeechLifecycleEventKind::PlaybackAborted,
+                        SpeechLifecycleStage::Playback,
+                        if cancellation.is_cancelled() {
+                            SpeechLifecycleOutcome::Canceled
+                        } else {
+                            SpeechLifecycleOutcome::Failed
+                        },
+                        Some(if cancellation.is_cancelled() {
+                            SpeechLifecycleReason::UserCancelled
+                        } else {
+                            SpeechLifecycleReason::OutputFailure
+                        }),
+                        None,
+                        None,
+                    );
+                    return Err(error);
+                }
+            };
+            if cancellation.is_cancelled() {
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::PlaybackAborted,
+                    SpeechLifecycleStage::Playback,
+                    SpeechLifecycleOutcome::Canceled,
+                    Some(SpeechLifecycleReason::UserCancelled),
+                    None,
+                    None,
+                );
+                return Err(VoiceCoreError::Cancelled);
+            }
             if receipt.generation != lease.generation
                 || receipt.route_revision != lease.route_revision
             {
+                self.observe_speech_lifecycle(
+                    &lease,
+                    SpeechLifecycleEventKind::PlaybackAborted,
+                    SpeechLifecycleStage::Playback,
+                    SpeechLifecycleOutcome::Failed,
+                    Some(SpeechLifecycleReason::OutputFailure),
+                    None,
+                    None,
+                );
                 return Err(VoiceCoreError::StaleGeneration);
             }
+            self.observe_speech_lifecycle(
+                &lease,
+                SpeechLifecycleEventKind::PlaybackDrained,
+                SpeechLifecycleStage::Playback,
+                SpeechLifecycleOutcome::Completed,
+                None,
+                Some(receipt.sample_count),
+                Some(receipt.chunk_count),
+            );
             completed_at = receipt.completed_at;
         }
         self.transition_emit(
@@ -2203,30 +3171,48 @@ where
         cancellation: CancellationToken,
         capture_started: bool,
     ) -> Result<String, VoiceCoreError> {
+        let mut cleanup_report = self
+            .pending_cleanup_report
+            .take()
+            .filter(|report| report.generation == lease.generation);
         let result = match result {
             Ok(_) if cancellation.is_cancelled() => Err(VoiceCoreError::Cancelled),
             other => other,
         };
-        let (wake_cancel_result, stt_cancel_result, tts_cancel_result) =
-            if result.is_err() || cancellation.is_cancelled() {
-                let wake_result = match self.wake.as_mut() {
-                    Some(wake) => wake.cancel_generation(lease.generation.0).await,
-                    None => Ok(()),
-                };
-                let stt_result = self
-                    .stt
-                    .cancel_finite_stt_generation(lease.generation.0)
-                    .await;
-                let tts_result = self
-                    .tts
-                    .cancel_synthesis_generation(lease.generation.0)
-                    .await;
-                let _ = self.transport.cancel_session(lease.generation).await;
-                (wake_result, stt_result, tts_result)
-            } else {
-                (Ok(()), Ok(()), Ok(()))
-            };
-        let output_stop_result = if result.is_err() || cancellation.is_cancelled() {
+        let cancel_for_cleanup = result.is_err() || cancellation.is_cancelled();
+        let (wake_cancel_result, wake_cancel_attempted) = if cancel_for_cleanup {
+            match self.wake.as_mut() {
+                Some(wake) => (wake.cancel_generation(lease.generation.0).await, true),
+                None => (Ok(()), false),
+            }
+        } else {
+            (Ok(()), false)
+        };
+        let recorded_wake_cancel = self
+            .wake
+            .as_mut()
+            .and_then(|wake| wake.take_cancel_outcome(lease.generation.0));
+        let stt_cancel_result = if cancel_for_cleanup {
+            self.stt
+                .cancel_finite_stt_generation(lease.generation.0)
+                .await
+        } else {
+            Ok(())
+        };
+        let tts_cancel_result = if cancel_for_cleanup {
+            self.tts
+                .cancel_synthesis_generation(lease.generation.0)
+                .await
+        } else {
+            Ok(())
+        };
+        let transport_cancel_result = if cancel_for_cleanup {
+            Some(self.transport.cancel_session(lease.generation).await)
+        } else {
+            None
+        };
+        let output_stop_attempted = result.is_err() || cancellation.is_cancelled();
+        let output_stop_result = if output_stop_attempted {
             self.output
                 .stop(lease.generation, TransitionReason::Cancel)
                 .await
@@ -2252,6 +3238,84 @@ where
         } else {
             Ok(())
         };
+
+        if let Some(report) = cleanup_report.as_mut() {
+            report.wake_cancel = recorded_wake_cancel.unwrap_or_else(|| {
+                if wake_cancel_attempted {
+                    cleanup_callback_outcome(&wake_cancel_result)
+                } else {
+                    CleanupCallbackOutcome::NotAttempted
+                }
+            });
+            report.stt_cancel = if cancel_for_cleanup {
+                cleanup_callback_outcome(&stt_cancel_result)
+            } else {
+                CleanupCallbackOutcome::NotAttempted
+            };
+            report.tts_cancel = if cancel_for_cleanup {
+                cleanup_callback_outcome(&tts_cancel_result)
+            } else {
+                CleanupCallbackOutcome::NotAttempted
+            };
+            report.transport_cancel = transport_cancel_result.as_ref().map_or(
+                CleanupCallbackOutcome::NotAttempted,
+                cleanup_callback_outcome,
+            );
+            report.output_stop = if output_stop_attempted {
+                cleanup_callback_outcome(&output_stop_result)
+            } else {
+                CleanupCallbackOutcome::NotAttempted
+            };
+            report.capture_stop = if capture_started {
+                cleanup_callback_outcome(&stop_result)
+            } else {
+                CleanupCallbackOutcome::NotAttempted
+            };
+            report.capture_lease_release = cleanup_callback_outcome(&release_result);
+            report.state_reset = if result.is_err() {
+                cleanup_callback_outcome(&state_reset_result)
+            } else {
+                CleanupCallbackOutcome::NotAttempted
+            };
+        }
+        self.cleanup_report = cleanup_report;
+
+        let cleanup_failed = output_stop_result.is_err()
+            || wake_cancel_result.is_err()
+            || stt_cancel_result.is_err()
+            || tts_cancel_result.is_err()
+            || transport_cancel_result
+                .as_ref()
+                .is_some_and(|result| result.is_err())
+            || stop_result.is_err()
+            || release_result.is_err()
+            || state_reset_result.is_err();
+        let terminal_outcome = if cancellation.is_cancelled() {
+            SpeechLifecycleOutcome::Canceled
+        } else if result.is_err() || cleanup_failed {
+            SpeechLifecycleOutcome::Failed
+        } else {
+            SpeechLifecycleOutcome::Completed
+        };
+        let terminal_reason = if cleanup_failed {
+            Some(SpeechLifecycleReason::CleanupFailure)
+        } else if cancellation.is_cancelled() {
+            Some(SpeechLifecycleReason::UserCancelled)
+        } else if result.is_err() {
+            Some(SpeechLifecycleReason::ProviderFailure)
+        } else {
+            None
+        };
+        cancellation.set_cancel_hook(None);
+        self.observe_speech_lifecycle(
+            &lease,
+            SpeechLifecycleEventKind::Terminal,
+            SpeechLifecycleStage::Cleanup,
+            terminal_outcome,
+            terminal_reason,
+            None,
+            None,
+        );
 
         match result {
             Ok(value) => {
@@ -2461,6 +3525,24 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn lifecycle_cancel_hook_observes_first_real_cancel_without_changing_state() {
+        let cancellation = CancellationToken::new();
+        let observed = Arc::new(Mutex::new(0_u8));
+        let observed_by_hook = Arc::clone(&observed);
+        cancellation.set_cancel_hook(Some(Arc::new(move || {
+            if let Ok(mut count) = observed_by_hook.lock() {
+                *count += 1;
+            }
+        })));
+
+        cancellation.cancel();
+        cancellation.cancel();
+
+        assert!(cancellation.is_cancelled());
+        assert_eq!(*observed.lock().expect("hook count lock"), 1);
+    }
 
     fn frame(sequence: u64, generation: Generation) -> Result<PcmFrame, VoiceCoreError> {
         PcmFrame::new(
@@ -2675,6 +3757,10 @@ mod tests {
         frames: Rc<RefCell<VecDeque<PcmFrame>>>,
         stopped: Rc<RefCell<Vec<TransitionReason>>>,
         preparation_events: Arc<Mutex<Vec<&'static str>>>,
+        start_error: Rc<RefCell<Option<VoiceCoreError>>>,
+        stop_error: Rc<RefCell<Option<VoiceCoreError>>>,
+        stop_pending: Rc<RefCell<bool>>,
+        stop_entered: Rc<RefCell<bool>>,
     }
 
     impl FakeAudioInput {
@@ -2683,7 +3769,26 @@ mod tests {
                 frames: Rc::new(RefCell::new(frames.into())),
                 stopped: Rc::new(RefCell::new(Vec::new())),
                 preparation_events: Arc::new(Mutex::new(Vec::new())),
+                start_error: Rc::new(RefCell::new(None)),
+                stop_error: Rc::new(RefCell::new(None)),
+                stop_pending: Rc::new(RefCell::new(false)),
+                stop_entered: Rc::new(RefCell::new(false)),
             }
+        }
+
+        fn with_start_error(self, error: VoiceCoreError) -> Self {
+            *self.start_error.borrow_mut() = Some(error);
+            self
+        }
+
+        fn with_stop_error(self, error: VoiceCoreError) -> Self {
+            *self.stop_error.borrow_mut() = Some(error);
+            self
+        }
+
+        fn with_pending_stop(self) -> Self {
+            *self.stop_pending.borrow_mut() = true;
+            self
         }
 
         fn stopped(&self) -> Vec<TransitionReason> {
@@ -2710,12 +3815,16 @@ mod tests {
                 .lock()
                 .map_err(|_| VoiceCoreError::LockPoisoned)?
                 .push("audio.start");
-            Ok(())
+            self.start_error.borrow_mut().take().map_or(Ok(()), Err)
         }
 
         async fn stop(&mut self, reason: TransitionReason) -> Result<(), VoiceCoreError> {
             self.stopped.borrow_mut().push(reason);
-            Ok(())
+            *self.stop_entered.borrow_mut() = true;
+            if *self.stop_pending.borrow() {
+                std::future::pending::<()>().await;
+            }
+            self.stop_error.borrow_mut().take().map_or(Ok(()), Err)
         }
 
         async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
@@ -2732,6 +3841,8 @@ mod tests {
         transcript: String,
         transcribed: Rc<RefCell<Vec<Vec<f32>>>>,
         synthesized_text: Rc<RefCell<Vec<String>>>,
+        stt_languages: Rc<RefCell<Vec<Option<String>>>>,
+        tts_languages: Rc<RefCell<Vec<Option<String>>>>,
         tts_text_limit: Rc<RefCell<Option<usize>>>,
         tts_error: Rc<RefCell<Option<EngineError>>>,
         tts_cancel_on_resource: Rc<RefCell<Option<CancellationToken>>>,
@@ -2745,6 +3856,8 @@ mod tests {
                 transcript: transcript.to_owned(),
                 transcribed: Rc::new(RefCell::new(Vec::new())),
                 synthesized_text: Rc::new(RefCell::new(Vec::new())),
+                stt_languages: Rc::new(RefCell::new(Vec::new())),
+                tts_languages: Rc::new(RefCell::new(Vec::new())),
                 tts_text_limit: Rc::new(RefCell::new(None)),
                 tts_error: Rc::new(RefCell::new(None)),
                 tts_cancel_on_resource: Rc::new(RefCell::new(None)),
@@ -2774,6 +3887,14 @@ mod tests {
 
         fn synthesized_text(&self) -> Vec<String> {
             self.synthesized_text.borrow().clone()
+        }
+
+        fn stt_languages(&self) -> Vec<Option<String>> {
+            self.stt_languages.borrow().clone()
+        }
+
+        fn tts_languages(&self) -> Vec<Option<String>> {
+            self.tts_languages.borrow().clone()
         }
     }
 
@@ -2805,6 +3926,9 @@ mod tests {
             if cancellation() {
                 return Err(EngineError::Cancelled);
             }
+            self.stt_languages
+                .borrow_mut()
+                .push(request.binding().language().map(str::to_owned));
             self.transcribed.borrow_mut().push(audio.samples().to_vec());
             FiniteSttResult::new(&request, &audio, self.transcript.clone())
         }
@@ -2844,6 +3968,9 @@ mod tests {
             if cancellation() {
                 return Err(EngineError::Cancelled);
             }
+            self.tts_languages
+                .borrow_mut()
+                .push(request.binding().language().map(str::to_owned));
             self.synthesized_text
                 .borrow_mut()
                 .push(request.text().to_owned());
@@ -2885,6 +4012,7 @@ mod tests {
         error_code: Option<String>,
         invoked: Rc<RefCell<Vec<AssistantTurnRequest>>>,
         cancelled: Rc<RefCell<Vec<Generation>>>,
+        cancel_error: Rc<RefCell<Option<VoiceCoreError>>>,
     }
 
     impl FakeTransport {
@@ -2894,6 +4022,7 @@ mod tests {
                 error_code: None,
                 invoked: Rc::new(RefCell::new(Vec::new())),
                 cancelled: Rc::new(RefCell::new(Vec::new())),
+                cancel_error: Rc::new(RefCell::new(None)),
             }
         }
 
@@ -2903,7 +4032,13 @@ mod tests {
                 error_code: Some(code.to_owned()),
                 invoked: Rc::new(RefCell::new(Vec::new())),
                 cancelled: Rc::new(RefCell::new(Vec::new())),
+                cancel_error: Rc::new(RefCell::new(None)),
             }
+        }
+
+        fn with_cancel_error(self, error: VoiceCoreError) -> Self {
+            *self.cancel_error.borrow_mut() = Some(error);
+            self
         }
     }
 
@@ -2929,24 +4064,31 @@ mod tests {
 
         async fn cancel_session(&mut self, generation: Generation) -> Result<(), VoiceCoreError> {
             self.cancelled.borrow_mut().push(generation);
-            Ok(())
+            self.cancel_error.borrow_mut().take().map_or(Ok(()), Err)
         }
     }
 
     #[derive(Clone)]
     struct FakeAudioOutput {
         played: Rc<RefCell<Vec<Generation>>>,
+        stop_error: Rc<RefCell<Option<VoiceCoreError>>>,
     }
 
     impl FakeAudioOutput {
         fn new() -> Self {
             Self {
                 played: Rc::new(RefCell::new(Vec::new())),
+                stop_error: Rc::new(RefCell::new(None)),
             }
         }
 
         fn played_generations(&self) -> Vec<Generation> {
             self.played.borrow().clone()
+        }
+
+        fn with_stop_error(self, error: VoiceCoreError) -> Self {
+            *self.stop_error.borrow_mut() = Some(error);
+            self
         }
     }
 
@@ -2975,24 +4117,48 @@ mod tests {
             _generation: Generation,
             _reason: TransitionReason,
         ) -> Result<(), VoiceCoreError> {
-            Ok(())
+            self.stop_error.borrow_mut().take().map_or(Ok(()), Err)
         }
     }
 
     #[derive(Default)]
     struct FakeEventSink {
         events: Vec<RuntimeEvent>,
+        lifecycle_events: Vec<SpeechLifecycleEventV1>,
+        lifecycle_enabled: bool,
+        fail_idle_reset: bool,
     }
 
     #[async_trait(?Send)]
     impl RuntimeEventSink for FakeEventSink {
+        fn wants_speech_lifecycle(&self) -> bool {
+            self.lifecycle_enabled
+        }
+
+        fn speech_lifecycle(&mut self, event: SpeechLifecycleEventV1) {
+            self.lifecycle_events.push(event);
+        }
+
         async fn snapshot(&mut self, _snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
             Ok(())
         }
 
         async fn event(&mut self, event: RuntimeEvent) -> Result<(), VoiceCoreError> {
+            let fail_idle_reset = self.fail_idle_reset
+                && matches!(
+                    &event,
+                    RuntimeEvent::State { transition }
+                        if transition.to == VoiceState::Idle
+                            && transition.reason == TransitionReason::Stop
+                );
             self.events.push(event);
-            Ok(())
+            if fail_idle_reset {
+                Err(VoiceCoreError::TransportFault {
+                    code: "test_state_reset_failure".to_owned(),
+                })
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -3005,6 +4171,7 @@ mod tests {
         preparation_events: Arc<Mutex<Vec<&'static str>>>,
         vad_frames: Arc<Mutex<Vec<(u64, usize, bool)>>>,
         fail_vad_cancel: Arc<Mutex<bool>>,
+        vad_cancel_failures_remaining: Arc<Mutex<usize>>,
         fail_kws_cancel: Arc<Mutex<bool>>,
         fail_vad_reset: Arc<Mutex<bool>>,
         fail_kws_reset: Arc<Mutex<bool>>,
@@ -3058,6 +4225,13 @@ mod tests {
                 .fail_vad_cancel
                 .lock()
                 .expect("VAD failure handle should not be poisoned") = true;
+        }
+
+        fn fail_vad_cancel_once(&self) {
+            *self
+                .vad_cancel_failures_remaining
+                .lock()
+                .expect("VAD one-shot failure handle should not be poisoned") = 1;
         }
     }
 
@@ -3284,6 +4458,19 @@ mod tests {
                     code: EngineFaultCode::Provider,
                 })?
                 .push(generation);
+            let mut failures_remaining = self
+                .handles
+                .vad_cancel_failures_remaining
+                .lock()
+                .map_err(|_| EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                })?;
+            if *failures_remaining > 0 {
+                *failures_remaining -= 1;
+                return Err(EngineError::ProviderFault {
+                    code: EngineFaultCode::Provider,
+                });
+            }
             if *self
                 .handles
                 .fail_vad_cancel
@@ -3823,6 +5010,450 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn configured_speech_languages_reach_finite_provider_requests(
+    ) -> Result<(), VoiceCoreError> {
+        let engine = FakeEngine::new("spoken transcript");
+        let observed = engine.clone();
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::new("spoken answer"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "speech-language-routing",
+        )?
+        .with_speech_languages(Some("en".to_owned()), Some("fr".to_owned()));
+
+        assert_eq!(
+            runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    CancellationToken::new(),
+                )
+                .await?,
+            "spoken answer"
+        );
+        assert_eq!(observed.stt_languages(), vec![Some("en".to_owned())]);
+        assert_eq!(observed.tts_languages(), vec![Some("fr".to_owned())]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cleanup_report_records_successful_capture_and_transport_callbacks(
+    ) -> Result<(), VoiceCoreError> {
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            FakeEngine::new("spoken transcript"),
+            FakeEngine::new("spoken transcript"),
+            FakeTransport::new("answer"),
+            FakeAudioOutput::new(),
+            FakeEventSink {
+                lifecycle_enabled: true,
+                ..FakeEventSink::default()
+            },
+            "test",
+            "cleanup-report-success",
+        )?;
+
+        assert_eq!(
+            runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    CancellationToken::new(),
+                )
+                .await?,
+            "answer"
+        );
+
+        let lifecycle = &runtime.sink.lifecycle_events;
+        let kinds: Vec<_> = lifecycle.iter().map(|event| event.event).collect();
+        assert_eq!(
+            kinds,
+            [
+                SpeechLifecycleEventKind::ActionAdmitted,
+                SpeechLifecycleEventKind::RouteDecided,
+                SpeechLifecycleEventKind::AdmissionStarted,
+                SpeechLifecycleEventKind::AdmissionEnded,
+                SpeechLifecycleEventKind::StreamFirstInput,
+                SpeechLifecycleEventKind::FinishRequested,
+                SpeechLifecycleEventKind::ModelWarmStart,
+                SpeechLifecycleEventKind::ModelWarmEnd,
+                SpeechLifecycleEventKind::ModelInvokeStart,
+                SpeechLifecycleEventKind::ModelInvokeEnd,
+                SpeechLifecycleEventKind::ModelInvokeStart,
+                SpeechLifecycleEventKind::ModelInvokeEnd,
+                SpeechLifecycleEventKind::ModelWarmStart,
+                SpeechLifecycleEventKind::ModelWarmEnd,
+                SpeechLifecycleEventKind::ModelInvokeStart,
+                SpeechLifecycleEventKind::ModelInvokeEnd,
+                SpeechLifecycleEventKind::PlaybackDrained,
+                SpeechLifecycleEventKind::Terminal,
+            ]
+        );
+        assert!(lifecycle
+            .iter()
+            .all(|event| event.operation_id != event.attempt_id));
+        assert!(lifecycle
+            .iter()
+            .all(|event| event.operation_id == lifecycle[0].operation_id));
+        assert!(lifecycle
+            .iter()
+            .all(|event| event.attempt_id == lifecycle[0].attempt_id));
+        assert!(lifecycle
+            .iter()
+            .all(|event| event.config_revision.is_none()));
+
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("completed generation report");
+        assert_eq!(report.generation(), Generation(1));
+        assert!(report.capture_start_attempted());
+        assert!(report.assistant_transport_attempted());
+        assert_eq!(report.capture_stop(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(
+            report.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(report.state_reset(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(report.wake_cancel(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(report.stt_cancel(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(report.tts_cancel(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(
+            report.transport_cancel(),
+            CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(report.output_stop(), CleanupCallbackOutcome::NotAttempted);
+        assert!(runtime
+            .cleanup_report_for_generation(Generation(2))
+            .is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cleanup_report_distinguishes_prestart_cancel_and_failed_start(
+    ) -> Result<(), VoiceCoreError> {
+        let engine = FakeEngine::new("unused");
+        let mut cancelled_runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![]),
+            engine.clone(),
+            engine.clone(),
+            FakeTransport::new("unused"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "cleanup-report-prestart-cancel",
+        )?;
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+        assert_eq!(
+            cancelled_runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    cancellation,
+                )
+                .await,
+            Err(VoiceCoreError::Cancelled)
+        );
+        let cancelled = cancelled_runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("cancelled generation report");
+        assert!(!cancelled.capture_start_attempted());
+        assert!(!cancelled.assistant_transport_attempted());
+        assert_eq!(
+            cancelled.capture_stop(),
+            CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(
+            cancelled.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(cancelled.stt_cancel(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(cancelled.tts_cancel(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(
+            cancelled.transport_cancel(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+
+        let engine = FakeEngine::new("unused");
+        let mut failed_start_runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![]).with_start_error(VoiceCoreError::TransportFault {
+                code: "start_failed".to_owned(),
+            }),
+            engine.clone(),
+            engine,
+            FakeTransport::new("unused"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "cleanup-report-failed-start",
+        )?;
+        assert_eq!(
+            failed_start_runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    CancellationToken::new(),
+                )
+                .await,
+            Err(VoiceCoreError::TransportFault {
+                code: "start_failed".to_owned()
+            })
+        );
+        let failed_start = failed_start_runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("failed-start generation report");
+        assert!(failed_start.capture_start_attempted());
+        assert!(!failed_start.assistant_transport_attempted());
+        assert_eq!(
+            failed_start.capture_stop(),
+            CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(
+            failed_start.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+
+        let engine = FakeEngine::new("unused");
+        let mut output_failure_runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![]),
+            engine.clone(),
+            engine,
+            FakeTransport::new("unused"),
+            FakeAudioOutput::new().with_stop_error(VoiceCoreError::TransportFault {
+                code: "output_stop_failed".to_owned(),
+            }),
+            FakeEventSink::default(),
+            "test",
+            "cleanup-report-output-stop-error",
+        )?;
+        let cancellation = CancellationToken::new();
+        cancellation.cancel();
+        assert_eq!(
+            output_failure_runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    cancellation,
+                )
+                .await,
+            Err(VoiceCoreError::TransportFault {
+                code: "playback_cleanup_transport_fault".to_owned()
+            })
+        );
+        let output_failure = output_failure_runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("output-stop generation report");
+        assert_eq!(
+            output_failure.output_stop(),
+            CleanupCallbackOutcome::ReturnedError
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cleanup_report_preserves_primary_error_when_cancel_and_capture_stop_fail(
+    ) -> Result<(), VoiceCoreError> {
+        let engine = FakeEngine::new("spoken transcript");
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?])
+                .with_stop_error(VoiceCoreError::TransportFault {
+                    code: "capture_stop_failed".to_owned(),
+                }),
+            engine.clone(),
+            engine,
+            FakeTransport::failing("primary_transport_failure").with_cancel_error(
+                VoiceCoreError::TransportFault {
+                    code: "transport_cancel_failed".to_owned(),
+                },
+            ),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "cleanup-report-callback-failures",
+        )?;
+
+        assert_eq!(
+            runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    CancellationToken::new(),
+                )
+                .await,
+            Err(VoiceCoreError::TransportFault {
+                code: "primary_transport_failure".to_owned()
+            })
+        );
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("failed generation report");
+        assert!(report.assistant_transport_attempted());
+        assert_eq!(
+            report.transport_cancel(),
+            CleanupCallbackOutcome::ReturnedError
+        );
+        assert_eq!(report.capture_stop(), CleanupCallbackOutcome::ReturnedError);
+        assert_eq!(
+            report.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cleanup_report_records_ignored_invalid_transition_reset_error(
+    ) -> Result<(), VoiceCoreError> {
+        let frame = frame_with_samples_and_discontinuity(1, Generation(1), vec![0.1], true)?;
+        let engine = FakeEngine::new("unused");
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame]),
+            engine.clone(),
+            engine,
+            FakeTransport::new("unused"),
+            FakeAudioOutput::new(),
+            FakeEventSink {
+                events: Vec::new(),
+                lifecycle_events: Vec::new(),
+                lifecycle_enabled: false,
+                fail_idle_reset: true,
+            },
+            "test",
+            "cleanup-report-state-reset-error",
+        )?;
+
+        assert_eq!(
+            runtime
+                .run_push_to_talk_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                    TimestampMicros(10),
+                    CancellationToken::new(),
+                )
+                .await,
+            Err(VoiceCoreError::InvalidTransition)
+        );
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("invalid-transition report");
+        assert_eq!(report.state_reset(), CleanupCallbackOutcome::ReturnedError);
+        assert_eq!(report.capture_stop(), CleanupCallbackOutcome::ReturnedOk);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cleanup_report_is_cleared_before_early_wake_rejection() -> Result<(), VoiceCoreError> {
+        let engine = FakeEngine::new("spoken transcript");
+        let mut runtime = VoiceRuntime::new(
+            FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?]),
+            engine.clone(),
+            engine,
+            FakeTransport::new("answer"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "cleanup-report-early-rejection",
+        )?;
+        runtime
+            .run_push_to_talk_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+                TimestampMicros(10),
+                CancellationToken::new(),
+            )
+            .await?;
+        assert!(runtime
+            .cleanup_report_for_generation(Generation(1))
+            .is_some());
+
+        assert_eq!(
+            runtime
+                .run_wake_turn(
+                    default_test_lease(CaptureOwnerKind::Native, TimestampMicros(20)),
+                    TimestampMicros(20),
+                    CancellationToken::new(),
+                )
+                .await,
+            Err(VoiceCoreError::WakeUnavailable)
+        );
+        assert!(runtime
+            .cleanup_report_for_generation(Generation(1))
+            .is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cleanup_report_covers_shared_background_wake_path() -> Result<(), VoiceCoreError> {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2; VAD_WINDOW_SIZE_SAMPLES])?,
+            frame_with_samples(3, Generation(1), vec![0.4; VAD_WINDOW_SIZE_SAMPLES])?,
+        ];
+        let (mut runtime, _, _) = runtime_with_wake_handles(frames, [1], [2, 3], [3], 4, 4)?;
+        let mut lease = default_test_lease(CaptureOwnerKind::Native, TimestampMicros(40));
+        lease.background_eligible = true;
+        assert_eq!(
+            runtime
+                .run_background_turn(lease, TimestampMicros(40), CancellationToken::new())
+                .await?,
+            "wake answer"
+        );
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("background generation report");
+        assert!(report.capture_start_attempted());
+        assert!(report.assistant_transport_attempted());
+        assert_eq!(report.wake_cancel(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(report.capture_stop(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(
+            report.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        Ok(())
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn dropped_pending_cleanup_has_no_completed_report() -> Result<(), VoiceCoreError> {
+        let audio = FakeAudioInput::new(vec![frame_with_samples(1, Generation(1), vec![0.1])?])
+            .with_pending_stop();
+        let stop_entered = Rc::clone(&audio.stop_entered);
+        let engine = FakeEngine::new("spoken transcript");
+        let mut runtime = VoiceRuntime::new(
+            audio,
+            engine.clone(),
+            engine,
+            FakeTransport::new("answer"),
+            FakeAudioOutput::new(),
+            FakeEventSink::default(),
+            "test",
+            "cleanup-report-dropped-future",
+        )?;
+        let mut future = Box::pin(runtime.run_push_to_talk_turn(
+            default_test_lease(CaptureOwnerKind::Native, TimestampMicros(10)),
+            TimestampMicros(10),
+            CancellationToken::new(),
+        ));
+        struct NoopWake;
+        impl std::task::Wake for NoopWake {
+            fn wake(self: Arc<Self>) {}
+        }
+        let waker = std::task::Waker::from(Arc::new(NoopWake));
+        let mut context = std::task::Context::from_waker(&waker);
+        assert!(matches!(
+            std::future::Future::poll(future.as_mut(), &mut context),
+            std::task::Poll::Pending
+        ));
+        assert!(*stop_entered.borrow());
+        drop(future);
+        assert!(runtime
+            .cleanup_report_for_generation(Generation(1))
+            .is_none());
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn focused_transcription_returns_text_without_transport_or_playback(
     ) -> Result<(), VoiceCoreError> {
         let engine = FakeEngine::new("focused transcript");
@@ -3855,6 +5486,28 @@ mod tests {
         assert!(tts_probe.synthesized_text().is_empty());
         assert!(output_probe.played_generations().is_empty());
         assert_eq!(runtime.state(), VoiceState::Idle);
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("transcription-only generation report");
+        assert!(report.capture_start_attempted());
+        assert!(!report.assistant_transport_attempted());
+        assert_eq!(report.capture_stop(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(
+            report.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(report.wake_cancel(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(report.stt_cancel(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(report.tts_cancel(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(
+            report.transport_cancel(),
+            CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(report.output_stop(), CleanupCallbackOutcome::NotAttempted);
+        assert_eq!(report.state_reset(), CleanupCallbackOutcome::NotAttempted);
+        assert!(runtime
+            .cleanup_report_for_generation(Generation(2))
+            .is_none());
         Ok(())
     }
 
@@ -4146,6 +5799,25 @@ mod tests {
         assert!(matches!(result, Err(VoiceCoreError::WakeNotDetected)));
         assert_eq!(runtime.state(), VoiceState::Idle);
         assert!(engine.transcribed_audio().is_empty());
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("wake generation report");
+        assert!(report.capture_start_attempted());
+        assert!(!report.assistant_transport_attempted());
+        assert_eq!(report.wake_cancel(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(report.stt_cancel(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(report.tts_cancel(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(
+            report.transport_cancel(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(report.output_stop(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(report.capture_stop(), CleanupCallbackOutcome::ReturnedOk);
+        assert_eq!(
+            report.capture_lease_release(),
+            CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(report.state_reset(), CleanupCallbackOutcome::ReturnedOk);
         let (_audio, _engine, _tts, _transport, _output, sink) = runtime.into_parts();
         let states = observed_states(&sink);
         assert_eq!(
@@ -4419,6 +6091,37 @@ mod tests {
             .all(|generation| *generation == 1));
         assert!(!handles.kws_cancelled().is_empty());
         assert!(engine.transcribed_audio().is_empty());
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn wake_cancel_report_keeps_early_error_after_later_success() -> Result<(), VoiceCoreError>
+    {
+        let frames = vec![
+            frame_with_samples(1, Generation(1), vec![0.1])?,
+            frame_with_samples(2, Generation(1), vec![0.2])?,
+        ];
+        let (mut runtime, _, handles) = runtime_with_wake_handles(frames, [1], [2], [2], 4, 4)?;
+        handles.fail_vad_cancel_once();
+
+        let result = runtime
+            .run_wake_turn(
+                default_test_lease(CaptureOwnerKind::Native, TimestampMicros(47)),
+                TimestampMicros(47),
+                CancellationToken::new(),
+            )
+            .await;
+
+        assert!(matches!(
+            result,
+            Err(VoiceCoreError::TransportFault { code }) if code == "wake_cleanup_provider_fault"
+        ));
+        assert_eq!(handles.vad_cancelled(), vec![1, 1]);
+        assert_eq!(handles.kws_cancelled(), vec![1, 1]);
+        let report = runtime
+            .cleanup_report_for_generation(Generation(1))
+            .expect("completed failed-wake generation report");
+        assert_eq!(report.wake_cancel(), CleanupCallbackOutcome::ReturnedError);
         Ok(())
     }
 

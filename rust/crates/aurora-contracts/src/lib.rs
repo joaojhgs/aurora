@@ -10,10 +10,12 @@ use serde_json::Value;
 use thiserror::Error;
 
 mod extensions;
+pub mod runtime_profile_text;
 
 struct CompiledSchema {
     schema: Value,
     validator: jsonschema::Validator,
+    opaque_branch_validators: extensions::OpaqueBranchValidators,
 }
 
 static COMPILED_SCHEMAS: LazyLock<Result<HashMap<&'static str, CompiledSchema>, String>> =
@@ -25,7 +27,17 @@ static COMPILED_SCHEMAS: LazyLock<Result<HashMap<&'static str, CompiledSchema>, 
                     .map_err(|error| format!("{}: {error}", descriptor.schema_id))?;
                 let validator = jsonschema::validator_for(&schema)
                     .map_err(|error| format!("{}: {error}", descriptor.schema_id))?;
-                Ok((descriptor.schema_id, CompiledSchema { schema, validator }))
+                let opaque_branch_validators =
+                    extensions::compile_opaque_branch_validators(&schema)
+                        .map_err(|message| format!("{}: {message}", descriptor.schema_id))?;
+                Ok((
+                    descriptor.schema_id,
+                    CompiledSchema {
+                        schema,
+                        validator,
+                        opaque_branch_validators,
+                    },
+                ))
             })
             .collect()
     });
@@ -228,6 +240,30 @@ fn validate_normalized_contract_schema(
             ),
         })?;
     Ok(())
+}
+
+fn decode_generated_contract(
+    schema_id: &str,
+    compiled: &'static CompiledSchema,
+    normalized: Value,
+    decode: impl FnOnce(Value) -> Result<Value, ContractParseError>,
+) -> Result<Value, ContractParseError> {
+    let (decode_input, opaque_values) = extensions::mask_opaque_json_values(
+        &compiled.schema,
+        &compiled.opaque_branch_validators,
+        &normalized,
+    )
+    .map_err(|_| ContractParseError::Decode {
+        schema_id: schema_id.to_owned(),
+    })?;
+    let mut decoded = decode(decode_input)?;
+    extensions::restore_opaque_json_values(&mut decoded, opaque_values).map_err(|_| {
+        ContractParseError::Decode {
+            schema_id: schema_id.to_owned(),
+        }
+    })?;
+    validate_normalized_contract_schema(schema_id, compiled, &decoded)?;
+    Ok(decoded)
 }
 
 mod generated;

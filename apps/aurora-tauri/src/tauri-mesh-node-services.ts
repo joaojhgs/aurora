@@ -4,6 +4,7 @@ import type {
   NativeCapabilityManifest,
   TauriSidecarStatus,
 } from "@aurora/client";
+import { listen } from "@tauri-apps/api/event";
 import type {
   EnvelopeCryptoPort,
   JsonValue as LocalDataJsonValue,
@@ -23,7 +24,11 @@ import {
   type PeerGrantManagerPort,
   type PeerRevocationController,
   SecureInboundCredentialVerifierStore,
+  createPeerHostLocalSpeechSource,
   type InboundVerifierSecretStoragePort,
+  type PeerHostLocalSpeechRuntimePort,
+  type PeerHostLocalSpeechSource,
+  type PeerHostLocalSpeechStage,
   type PeerGrantRepository,
   type RustAuthorityAuditFailureReporter,
 } from "@aurora/client/webrtc";
@@ -66,6 +71,7 @@ export interface TauriMeshNodeServicesOptions {
   readonly exportDecision?: LocalToolExportDecisionPort | undefined;
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined;
   readonly invokeCommand?: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+  readonly subscribeNativeNodeConfigPolicyChanges?: (listener: () => void) => Promise<() => void>;
   readonly reportAuthorityAuditFailure?: RustAuthorityAuditFailureReporter | undefined;
 }
 
@@ -165,6 +171,7 @@ export async function createTauriMeshNodeServices(
   });
   let registered: Awaited<ReturnType<typeof registerTauriNativeCapabilityPack>>;
   let localToolApprovals: ProviderLocalApprovalControllerPort | null = null;
+  let unsubscribeNodeConfigPolicy: (() => void) | undefined;
   try {
     registered = await registerTauriNativeCapabilityPack({
       registry,
@@ -287,6 +294,22 @@ export async function createTauriMeshNodeServices(
         ...(options.now ? { nowMs: options.now } : {}),
       });
     localToolApprovals = approvalController;
+    let scheduleProviderRefresh: (() => void) | undefined;
+    let policyChangedBeforeProviderReady = false;
+    try {
+      const subscribe = options.subscribeNativeNodeConfigPolicyChanges
+        ?? ((listener: () => void) => listen("aurora-node-config-policy-changed", listener));
+      unsubscribeNodeConfigPolicy = await subscribe(() => {
+        if (scheduleProviderRefresh) scheduleProviderRefresh();
+        else policyChangedBeforeProviderReady = true;
+      });
+    } catch {
+      // Without the change signal, a cached capability snapshot could outlive
+      // the policy that authorized it. Keep tooling available without speech.
+    }
+    const speechHost = unsubscribeNodeConfigPolicy
+      ? await createRefreshableTauriNativeSpeechHost(options.invokeCommand, localPeerId)
+      : undefined;
     const localToolProvider = createMeshNodeLocalToolProvider({
       nodeMode: "mesh-node",
       localPeerId,
@@ -300,10 +323,13 @@ export async function createTauriMeshNodeServices(
       providerEnabled: true,
       approvalController,
       approvalPolicy: localFeatureSharing,
+      ...(speechHost ? { speechHost } : {}),
       ...(options.now ? { clock: options.now } : {}),
       ...(options.randomId ? { randomId: options.randomId } : {}),
     });
     if (!localToolProvider.enabled) {
+      await speechHost?.close().catch(() => undefined);
+      unsubscribeNodeConfigPolicy?.();
       approvalController.close();
       await backend.close().catch(() => undefined);
       return disabled("native_tools_unavailable", {
@@ -314,12 +340,17 @@ export async function createTauriMeshNodeServices(
 
     let providerRefreshClosed = false;
     let providerRefreshQueue = Promise.resolve();
-    const scheduleProviderRefresh = () => {
+    scheduleProviderRefresh = () => {
       providerRefreshQueue = providerRefreshQueue.then(async () => {
+        if (providerRefreshClosed) return;
+        speechHost?.setVisible(false);
+        await localToolProvider.peerHost.suspendLocalProvider("speech_policy_changed").catch(() => undefined);
+        await speechHost?.refresh().catch(() => undefined);
         if (providerRefreshClosed) return;
         await localToolProvider.peerHost.resumeLocalProvider().catch(() => undefined);
       });
     };
+    if (policyChangedBeforeProviderReady) scheduleProviderRefresh();
     let initialFeatureSnapshotSeen = false;
     const unsubscribeFeatureSharing = localFeatureSharing.subscribe(() => {
       if (!initialFeatureSnapshotSeen) {
@@ -364,13 +395,19 @@ export async function createTauriMeshNodeServices(
         providerRefreshClosed = true;
         unsubscribeFeatureSharing();
         unsubscribeApprovalPolicy();
+        unsubscribeNodeConfigPolicy?.();
         await providerRefreshQueue;
-        approvalController.close();
         localToolProvider.peerHost.suspend("provider_closed");
-        await backend.close();
+        try {
+          await speechHost?.close();
+        } finally {
+          approvalController.close();
+          await backend.close();
+        }
       },
     };
   } catch (error) {
+    unsubscribeNodeConfigPolicy?.();
     localToolApprovals?.close();
     await backend.close().catch(() => undefined);
     return disabled(error instanceof LocalToolAuditUnavailableError
@@ -380,6 +417,238 @@ export async function createTauriMeshNodeServices(
       registeredToolIds: registered.registered,
     });
   }
+}
+
+interface NativeSpeechSnapshot {
+  readonly revision: number;
+  readonly stt: PeerHostLocalSpeechStage | null;
+  readonly tts: PeerHostLocalSpeechStage | null;
+}
+
+async function createTauriNativeSpeechHost(
+  invokeCommand: (command: string, args?: Record<string, unknown>) => Promise<unknown>,
+  peerId: string,
+): Promise<PeerHostLocalSpeechSource | undefined> {
+  let snapshot: NativeSpeechSnapshot;
+  try {
+    const value = await invokeCommand("aurora_native_speech_host_snapshot");
+    if (!isNativeSpeechSnapshot(value)) return undefined;
+    snapshot = value;
+  } catch {
+    // A missing command registration or unavailable local engine simply means
+    // this host has no local speech capability. It never enables a fake path.
+    return undefined;
+  }
+  if (!snapshot.stt?.enabled && !snapshot.tts?.enabled) return undefined;
+
+  const activeOperations = new Map<string, { readonly settled: Promise<void>; finish(): void }>();
+  const startOperation = (): { readonly id: string; readonly settled: Promise<void>; finish(): void } => {
+    const id = globalThis.crypto.randomUUID();
+    let resolveSettled!: () => void;
+    const settled = new Promise<void>((resolve) => { resolveSettled = resolve; });
+    let finished = false;
+    const operation = {
+      settled,
+      finish() {
+        if (finished) return;
+        finished = true;
+        activeOperations.delete(id);
+        resolveSettled();
+      },
+    };
+    activeOperations.set(id, operation);
+    return { id, ...operation };
+  };
+  const runtime: PeerHostLocalSpeechRuntimePort = {
+    async transcribeSpeech(request) {
+      const stage = snapshot.stt;
+      if (!stage?.enabled || !stage.modelId) throw new Error("Local transcription is unavailable");
+      const operation = startOperation();
+      try {
+        const result = await invokeCommand("aurora_peer_host_local_speech_transcribe", {
+          request: {
+            operationId: operation.id,
+            modelId: stage.modelId,
+            language: request.language ?? null,
+            sampleRateHz: 16_000,
+            audioBase64: encodePcmBase64(request.pcm),
+          },
+        });
+        if (!isTextResult(result)) throw new Error("Local transcription is unavailable");
+        return { text: result.text };
+      } finally {
+        operation.finish();
+      }
+    },
+    async synthesizeSpeech(request) {
+      const stage = snapshot.tts;
+      if (!stage?.enabled || !stage.voiceId) throw new Error("Local synthesis is unavailable");
+      const operation = startOperation();
+      try {
+        const result = await invokeCommand("aurora_peer_host_local_speech_synthesize", {
+          request: {
+            operationId: operation.id,
+            modelId: stage.modelId,
+            voiceId: request.voiceId,
+            language: stage.language,
+            text: request.text,
+            speed: request.speed,
+          },
+        });
+        if (!isNativeSpeechAudioResult(result)) throw new Error("Local synthesis is unavailable");
+        return {
+          pcm: decodePcmBase64(result.audioBase64),
+          sampleRateHz: result.sampleRateHz,
+          durationMs: result.durationMs,
+        };
+      } finally {
+        operation.finish();
+      }
+    },
+    async cancel() {
+      const operations = [...activeOperations.entries()];
+      const cancellations = await Promise.allSettled(operations.map(async ([id]) => {
+        await invokeCommand("aurora_peer_host_local_speech_cancel", { operationId: id });
+      }));
+      await Promise.all(operations.map(([, operation]) => operation.settled));
+      const failure = cancellations.find((result): result is PromiseRejectedResult => result.status === "rejected");
+      if (failure) throw failure.reason;
+    },
+  };
+  return createPeerHostLocalSpeechSource({
+    peerId,
+    runtime,
+    revision: snapshot.revision,
+    ...(snapshot.stt ? { stt: { ...snapshot.stt, implementation: "native" } } : {}),
+    ...(snapshot.tts ? { tts: { ...snapshot.tts, implementation: "native" } } : {}),
+  });
+}
+
+type RefreshablePeerHostLocalSpeechSource = PeerHostLocalSpeechSource & {
+  refresh(): Promise<void>;
+};
+
+async function createRefreshableTauriNativeSpeechHost(
+  invokeCommand: (command: string, args?: Record<string, unknown>) => Promise<unknown>,
+  peerId: string,
+): Promise<RefreshablePeerHostLocalSpeechSource> {
+  let source = await createTauriNativeSpeechHost(invokeCommand, peerId);
+  let registry: Parameters<PeerHostLocalSpeechSource["register"]>[0] | undefined;
+  let closed = false;
+
+  return {
+    register(nextRegistry) {
+      registry = nextRegistry;
+      source?.register(nextRegistry);
+    },
+    capabilities() {
+      return source?.capabilities() ?? [];
+    },
+    setReady(readiness) {
+      source?.setReady(readiness);
+    },
+    setVisible(visible) {
+      source?.setVisible(visible);
+    },
+    async refresh() {
+      if (closed) return;
+      const previous = source;
+      source = undefined;
+      previous?.setVisible(false);
+      await previous?.close();
+
+      const next = await createTauriNativeSpeechHost(invokeCommand, peerId);
+      if (closed) {
+        await next?.close();
+        return;
+      }
+      source = next;
+      if (registry) next?.register(registry);
+    },
+    async close() {
+      closed = true;
+      const previous = source;
+      source = undefined;
+      await previous?.close();
+    },
+  };
+}
+
+function isNativeSpeechSnapshot(value: unknown): value is NativeSpeechSnapshot {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<NativeSpeechSnapshot>;
+  return Number.isSafeInteger(candidate.revision)
+    && candidate.revision! >= 0
+    && (candidate.stt === null || isNativeSpeechStage(candidate.stt, "stt"))
+    && (candidate.tts === null || isNativeSpeechStage(candidate.tts, "tts"));
+}
+
+function isNativeSpeechStage(
+  value: unknown,
+  kind: "stt" | "tts",
+): value is PeerHostLocalSpeechStage {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Partial<PeerHostLocalSpeechStage>;
+  const commonValid = typeof candidate.enabled === "boolean"
+    && (typeof candidate.modelId === "string" || candidate.modelId === null)
+    && (typeof candidate.language === "string" || candidate.language === null)
+    && (candidate.voiceId === undefined || typeof candidate.voiceId === "string" || candidate.voiceId === null)
+    && (candidate.modelId === null || (candidate.modelId.length > 0 && candidate.modelId.length <= 128))
+    && (candidate.language === null || (candidate.language.length > 0 && candidate.language.length <= 64))
+    && (candidate.voiceId == null || (candidate.voiceId.length > 0 && candidate.voiceId.length <= 128));
+  if (!commonValid || !candidate.enabled) return false;
+  return kind === "stt"
+    ? typeof candidate.modelId === "string" && candidate.modelId.length > 0
+    : typeof candidate.voiceId === "string" && candidate.voiceId.length > 0;
+}
+
+function isTextResult(value: unknown): value is { readonly text: string } {
+  return typeof value === "object" && value !== null && typeof (value as { text?: unknown }).text === "string";
+}
+
+function isNativeSpeechAudioResult(
+  value: unknown,
+): value is { readonly audioBase64: string; readonly durationMs: number; readonly sampleRateHz: number } {
+  if (typeof value !== "object" || value === null) return false;
+  const result = value as { audioBase64?: unknown; durationMs?: unknown; sampleRateHz?: unknown };
+  return typeof result.audioBase64 === "string"
+    && result.audioBase64.length > 0
+    && result.audioBase64.length <= 7_680_000
+    && typeof result.durationMs === "number"
+    && Number.isSafeInteger(result.durationMs)
+    && result.durationMs >= 0
+    && result.durationMs <= 60_000
+    && typeof result.sampleRateHz === "number"
+    && Number.isSafeInteger(result.sampleRateHz)
+    && result.sampleRateHz > 0
+    && result.sampleRateHz <= 48_000;
+}
+
+function encodePcmBase64(pcm: Int16Array): string {
+  const bytes = new Uint8Array(pcm.length * 2);
+  const view = new DataView(bytes.buffer);
+  pcm.forEach((sample, index) => view.setInt16(index * 2, sample, true));
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(offset, Math.min(bytes.length, offset + 0x8000)));
+  }
+  return btoa(binary);
+}
+
+function decodePcmBase64(encoded: string): Int16Array {
+  if (encoded.length === 0 || encoded.length > 7_680_000) {
+    throw new Error("Invalid local synthesis audio");
+  }
+  const binary = atob(encoded);
+  if (binary.length % 2 !== 0) throw new Error("Invalid local synthesis audio");
+  const pcm = new Int16Array(binary.length / 2);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  const view = new DataView(bytes.buffer);
+  for (let index = 0; index < pcm.length; index += 1) {
+    pcm[index] = view.getInt16(index * 2, true);
+  }
+  return pcm;
 }
 
 function reportTauriAuthorityAuditFailure(

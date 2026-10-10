@@ -9,7 +9,12 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
-from app.services.orchestrator.native_worker import drain_native, run_native
+from app.services.orchestrator.native_worker import (
+    RetirementResult,
+    provider_owner,
+    retire_native,
+    run_native,
+)
 from app.services.orchestrator.remote_mesh_chat_model import RemoteMeshChatModel
 from app.services.orchestrator.state import State
 from app.services.orchestrator.tool_bindings import (
@@ -128,29 +133,17 @@ async def _run_native_llm(provider, function, *args):
     return await run_native(provider, function, *args)
 
 
-def _close_llm_instance(instance) -> None:
-    """Close a provider when it exposes an explicit cleanup hook."""
+async def dispose_llm(instance) -> RetirementResult:
+    """Retire one provider instance and return its retained local result."""
 
-    seen: set[int] = set()
-    for candidate in (instance, getattr(instance, "client", None)):
-        if candidate is None or id(candidate) in seen:
-            continue
-        seen.add(id(candidate))
-        for method_name in ("close", "dispose"):
-            method = getattr(candidate, method_name, None)
-            if callable(method):
-                try:
-                    method()
-                except Exception as exc:
-                    log_warning(f"LLM provider cleanup failed: {type(exc).__name__}")
-                break
+    # ChatLlamaCpp's backend client is the explicit close owner. Do not guess
+    # by trying both a runnable wrapper and its nested client.
+    from app.services.orchestrator.chat_llama_cpp import ChatLlamaCpp
 
-
-async def dispose_llm(instance) -> None:
-    """Close a provider outside the event-loop thread."""
-
-    await drain_native(instance)
-    await asyncio.to_thread(_close_llm_instance, instance)
+    owner = provider_owner(instance)
+    if isinstance(ChatLlamaCpp, type) and isinstance(owner, ChatLlamaCpp):
+        return await retire_native(owner, close_target=owner.client)
+    return await retire_native(owner)
 
 
 async def _initialize_llm_for_generation(generation: int) -> None:

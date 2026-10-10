@@ -1151,12 +1151,12 @@ def _render_validator(contract_schema: Mapping[str, Any], model_modules: Mapping
         module_name = model_modules[model_name]
         rust_name = rust_type_name(model_name)
         arms.append(
-            f"        {rust_string(item['schema_id'])} => "
+            f"            {rust_string(item['schema_id'])} => "
             f"serde_json::from_value::<models::{module_name}::{rust_name}>(normalized)"
             ".and_then(serde_json::to_value).map_err(|_| ContractParseError::Decode { "
             "schema_id: schema_id.to_owned() }),"
         )
-    arms.append("        _ => Err(ContractParseError::UnknownSchema(schema_id.to_owned())),")
+    arms.append("            _ => Err(ContractParseError::UnknownSchema(schema_id.to_owned())),")
     return "\n".join(
         [
             "pub fn normalize_generated_contract(",
@@ -1165,9 +1165,11 @@ def _render_validator(contract_schema: Mapping[str, Any], model_modules: Mapping
             ") -> Result<serde_json::Value, ContractParseError> {",
             "    let (normalized, compiled) = normalize_contract_value(schema_id, value)?;",
             "    validate_normalized_contract_schema(schema_id, compiled, &normalized)?;",
-            "    match schema_id {",
+            "    decode_generated_contract(schema_id, compiled, normalized, |normalized| {",
+            "        match schema_id {",
             *arms,
-            "    }",
+            "        }",
+            "    })",
             "}",
             "",
             "pub fn validate_generated_contract(",
@@ -1186,7 +1188,7 @@ def render_rust_module(contract_schema: Mapping[str, Any]) -> str:
     models, model_modules = _render_models(contract_schema)
     sections = [
         GENERATED_HEADER,
-        "use crate::{normalize_contract_value, validate_normalized_contract_schema, ContractParseError, EnvelopeDescriptor, EventDescriptor, MethodDescriptor, SchemaDescriptor, StreamingDescriptor};",
+        "use crate::{decode_generated_contract, normalize_contract_value, validate_normalized_contract_schema, ContractParseError, EnvelopeDescriptor, EventDescriptor, MethodDescriptor, SchemaDescriptor, StreamingDescriptor};",
         _render_identity_constants(contract_schema),
         models,
         _render_schema_descriptors(contract_schema, model_modules),

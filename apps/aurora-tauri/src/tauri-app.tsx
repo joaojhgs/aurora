@@ -36,6 +36,8 @@ import {
   type AuroraOwlLoaderStageId,
 } from "@aurora/ui/owl-loader";
 import { Button } from "@aurora/ui/primitives";
+import { LocalInferenceSettingsView } from "@aurora/ui/local-inference-settings-view";
+import { DEFAULT_OFFLINE_ASSISTANT_MODEL } from "./tauri-local-inference";
 import { EvidenceBadge } from "@aurora/ui/status-badges";
 import {
   type OnboardingModePreferenceStore,
@@ -492,6 +494,7 @@ export const tauriRouteRegistry = {
           route={route}
           surfaceProfile={nativeContext.surfaceProfile}
           thinPeer={nativeContext.thinPeer}
+          nativeProfileController={nativeContext.thinProfileController}
           initialInviteText={inviteParam}
           localFeatureSharing={nativeContext.localFeatureSharing}
           localNode={localNode}
@@ -598,6 +601,14 @@ export const tauriRouteRegistry = {
       snapshot={snapshot}
       modePreferenceStore={modePreferenceStore}
       onApplyModePreference={applyModePreference}
+      {...(isMobileTauriShell() && nativeContext.createOfflineProfile
+        ? {
+            onUseOfflineProfile: async () => {
+              await nativeContext.createOfflineProfile?.();
+              navigate("/assistant");
+            },
+          }
+        : {})}
       {...(nativeContext.thinPeer && nativeContext.thinProfileController
         ? {
             setupRequired: true,
@@ -792,6 +803,20 @@ export function AuroraTauriApp({
     useState<TauriNativeSpeechCatalogReadiness | null>(null);
 
   useEffect(() => {
+    if (import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST !== "1") return;
+    let active = true;
+    let unregister: (() => void) | undefined;
+    void import("./ios-voice-main-flow").then(({ registerIosVoiceMainFlowRuntimeDisposer }) => {
+      if (!active) return;
+      unregister = registerIosVoiceMainFlowRuntimeDisposer(() => runtime.dispose());
+    });
+    return () => {
+      active = false;
+      unregister?.();
+    };
+  }, [runtime]);
+
+  useEffect(() => {
     const nativeVoice = runtime.nativeMobileVoice ?? runtime.nativeVoice;
     setNativeVoiceAvailable(false);
     if (!nativeVoice) return;
@@ -902,6 +927,15 @@ export function AuroraTauriApp({
       ),
     [rebuildThinRuntime],
   );
+  const createOfflineProfile = useCallback(
+    () => rebuildThinRuntime((controller) => {
+      if (!controller.createOfflineProfile) {
+        throw new Error("On-device answers are unavailable for this device setup");
+      }
+      return controller.createOfflineProfile();
+    }),
+    [rebuildThinRuntime],
+  );
 
   const saveLocalSpeechSelection = useCallback(
     (
@@ -925,6 +959,15 @@ export function AuroraTauriApp({
         }
         return controller.updateActiveDesktopOverlay(overlay);
       }),
+    [rebuildThinRuntime],
+  );
+  const saveLocalInference = useCallback(
+    (enabled: boolean) => rebuildThinRuntime((controller) => {
+      if (!controller.updateActiveLocalInference) {
+        throw new Error("Offline answers are unavailable for this device setup");
+      }
+      return controller.updateActiveLocalInference(enabled);
+    }),
     [rebuildThinRuntime],
   );
 
@@ -1100,6 +1143,7 @@ export function AuroraTauriApp({
               detail,
             ),
         );
+        const authIdentityReady = runtime.client.authApi.whoAmI().catch(() => null);
         const [
           nextSnapshot,
           nextSidecar,
@@ -1161,7 +1205,7 @@ export function AuroraTauriApp({
         ]);
         modelsPhaseActive = false;
         reportStage("assistant");
-        await runtime.client.authApi.whoAmI().catch(() => null);
+        await authIdentityReady;
         if (!cancelled) {
           reportStage("workspace");
           setSnapshot((current) =>
@@ -1362,12 +1406,15 @@ export function AuroraTauriApp({
     nativeVoice: runtime.nativeVoice,
     nativeMobileVoice: runtime.nativeMobileVoice,
     localSpeechCatalog: runtime.localSpeechCatalog,
+    localInference: runtime.localInference,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
+    createOfflineProfile,
     selectThinProfile,
     saveLocalSpeechSelection,
     saveDesktopOverlay,
+    saveLocalInference,
     requestNativeAccess,
   };
 
@@ -1404,6 +1451,14 @@ export function AuroraTauriApp({
           snapshot={snapshot}
           modePreferenceStore={runtime.modePreferenceStore}
           setupRequired
+          {...(isMobileTauriShell() && runtime.thinProfileController?.createOfflineProfile
+            ? {
+                onUseOfflineProfile: async () => {
+                  await createOfflineProfile();
+                  navigate("/assistant");
+                },
+              }
+            : {})}
           onUseManualAddress={async (address) => {
             await saveThinProfile(
               thinConnectionProfileWithManualAddress(runtime.thinProfile, address),
@@ -2040,8 +2095,10 @@ interface NativeContext {
   nativeVoice?: AuroraTauriRuntime["nativeVoice"];
   nativeMobileVoice?: AuroraTauriRuntime["nativeMobileVoice"];
   localSpeechCatalog?: AuroraTauriRuntime["localSpeechCatalog"];
+  localInference?: AuroraTauriRuntime["localInference"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
+  createOfflineProfile?: (() => Promise<void>) | undefined;
   saveThinProfile: (
     profile: AuroraThinConnectionProfile,
     roomSecret?: WebThinRoomSecret,
@@ -2054,6 +2111,7 @@ interface NativeContext {
   saveDesktopOverlay: (
     overlay: AuroraDesktopOverlayPreferences,
   ) => Promise<void>;
+  saveLocalInference: (enabled: boolean) => Promise<void>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;
   iosInvocationStatus: TauriIosInvocationStatus | null;
@@ -2075,6 +2133,13 @@ function localMeshNodeIdentity(
   return { peerId, nodeName };
 }
 
+const NO_LOCAL_ASSISTANT_TOOLS: NonNullable<LightweightAssistantDependencies["tools"]> = {
+  prepareExecution: async () => { throw new Error("No tools are available for this assistant."); },
+  requestApproval: async () => { throw new Error("No tools are available for this assistant."); },
+  confirmExecution: async () => { throw new Error("No tools are available for this assistant."); },
+  execute: async () => { throw new Error("No tools are available for this assistant."); },
+};
+
 function tauriLocalAssistant(
   nativeContext: NativeContext,
   client: AuroraClient,
@@ -2082,15 +2147,20 @@ function tauriLocalAssistant(
   const localData = nativeContext.localData;
   const localToolProvider = nativeContext.localToolProvider;
   const localAssistant = nativeContext.localAssistant;
-  if (
-    nativeContext.thinFeatures?.lightweightOrchestratorEnabled !== true
-    || !localData
-    || !localData.ownerAvailable
-    || !localToolProvider
-    || !localAssistant
-  ) {
-    return null;
+  const enabledCapabilityPacks = nativeContext.runtimeProfile?.localNode.enabledCapabilityPacks ?? [];
+  if (!localData || !localData.ownerAvailable || !localAssistant) return null;
+  if (!localToolProvider) {
+    if (!enabledCapabilityPacks.includes("local-inference") || enabledCapabilityPacks.includes("native-actions")) return null;
+    return {
+      provider: localAssistant.provider,
+      tools: NO_LOCAL_ASSISTANT_TOOLS,
+      localData: localData.session,
+      envelopeCrypto: localData.crypto,
+      scope: { profileId: localData.session.profileId, localNodeId: localData.session.localNodeId },
+      availableTools: [],
+    };
   }
+  if (nativeContext.thinFeatures?.lightweightOrchestratorEnabled !== true) return null;
   const localTools = localToolProvider.localToolRegistry.publicTools();
   const availableTools = mergeLightweightAssistantTools(
     localTools,
@@ -2601,6 +2671,14 @@ function TauriSettingsPage({
             </section>
           ) : null
         }
+        localAssistantContent={nativeContext.localInference ? (
+          <LocalInferenceSettingsView
+            client={nativeContext.localInference}
+            modelId={DEFAULT_OFFLINE_ASSISTANT_MODEL}
+            enabled={nativeContext.surfaceProfile.localInferenceEnabled}
+            onEnabledChange={nativeContext.saveLocalInference}
+          />
+        ) : null}
       />
     </div>
   );

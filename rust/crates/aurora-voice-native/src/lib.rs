@@ -20,8 +20,20 @@ mod gateway_capture_handoff;
 mod gateway_stt;
 mod gateway_tts;
 mod ios_session;
+mod mesh_speech;
+mod mobile_session_close;
 mod model_store;
 mod native_event_observer;
+pub mod native_publication_fence;
+pub mod native_settings_root;
+pub mod node_config;
+pub mod node_config_coordinator;
+pub mod node_config_drafts;
+pub mod node_config_file;
+pub mod node_config_profile;
+pub mod runtime_profile;
+pub mod runtime_profile_file;
+pub mod speech_lifecycle_observer;
 mod speech_pack_manager;
 mod transport;
 mod trust;
@@ -34,7 +46,8 @@ pub use android_playback::{AndroidAudioOutput, AndroidPcmPlaybackChunk};
 #[cfg(feature = "native-sherpa-tts")]
 pub use android_session::AndroidTtsReferenceProfile;
 pub use android_session::{
-    AndroidAssistantRouteMode, AndroidBackgroundVoiceTurnResult, AndroidVoiceSession,
+    AndroidAssistantRouteMode, AndroidBackgroundVoiceTurnResult, AndroidTranscriptionPhase,
+    AndroidTranscriptionSession, AndroidTranscriptionStatus, AndroidVoiceSession,
     AndroidVoiceSessionCommandError, AndroidVoiceSessionConfig, AndroidVoiceSessionPhase,
     AndroidVoiceSessionStatus,
 };
@@ -72,12 +85,21 @@ pub use ios_session::{
     IosVoiceSession, IosVoiceSessionCommandError, IosVoiceSessionConfig, IosVoiceSessionPhase,
     IosVoiceSessionStatus, IosVoiceStartMode, MAX_IOS_PACK_BINDINGS,
 };
+pub use mesh_speech::{
+    NativeMeshFiniteStt, NativeMeshFiniteSttConfig, NativeMeshTtsConfig, NativeMeshTtsSynthesizer,
+};
+pub use mobile_session_close::MobileSessionCloseError;
 pub use model_store::{NativeImmutableModelFile, NativeModelStore, NativeModelStoreConfig};
 pub use native_event_observer::{
     begin_native_voice_observation_producer, clear_native_voice_observation_sink,
     emit_native_voice_observation, emit_native_voice_observation_from_wire,
     install_native_voice_observation_sink, NativeVoiceObservation, NativeVoiceObservationSink,
     NativeVoiceObservationToken, NativeVoiceTurnIds, NativeVoiceTurnSnapshot,
+};
+pub use speech_lifecycle_observer::{
+    clear_native_speech_lifecycle_observer, emit_native_speech_lifecycle,
+    install_native_speech_lifecycle_observer, native_speech_lifecycle_observer_enabled,
+    NativeSpeechLifecycleObserver, NativeSpeechLifecycleRecordV1,
 };
 pub use speech_pack_manager::{
     InstalledSpeechModel, InstalledSpeechPack, SpeechModelBindings, SpeechPackBindings,
@@ -91,7 +113,7 @@ pub use transport::{
     NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, NativeMeshAssistantTransport,
     NativeMeshAssistantTransportFactory, NativeMeshAssistantTransportOptions,
     NativeMeshAssistantTurnLink, NativeMeshExternalUserInput, NativeMeshExternalUserInputStream,
-    NativeMeshInterruptRequest, NativeRequestOptions, SseSubscription, TransportError,
-    TransportLimits,
+    NativeMeshInterruptRequest, NativeMeshSpeechCall, NativeMeshSpeechMethod, NativeRequestOptions,
+    SseSubscription, TransportError, TransportLimits,
 };
 pub use trust::Ed25519TrustStore;

@@ -36,6 +36,8 @@ export interface LightweightProviderRequest {
   readonly maxToolCalls: number
   readonly providerId?: string | null
   readonly modelId?: string | null
+  /** Stable lifetime across provider calls and approval pauses in one assistant turn. */
+  readonly turnSignal?: AbortSignal
   readonly signal: AbortSignal
 }
 

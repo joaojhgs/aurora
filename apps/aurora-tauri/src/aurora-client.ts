@@ -75,6 +75,7 @@ import {
   type WebRtcPeerConnectionProfile,
 } from "@aurora/client/webrtc";
 import type { EnvelopeCryptoPort, LocalDataSession } from "@aurora/client/local-data";
+import { TauriEnvelopeCryptoPort, TauriSqliteLocalDataBackend } from "./local-data/index.js";
 import {
   createAuroraInferenceProvider,
   loadLightweightRemoteProjectionCatalog,
@@ -100,6 +101,8 @@ import {
   type MeshSurfaceLifecycleFailure,
 } from "./mesh-session-link";
 import { createTauriAssistantProviderClient } from "./tauri-assistant-provider";
+import { createTauriLocalAssistantRouter } from "./tauri-local-inference";
+import type { LocalInferenceClient } from "@aurora/client/local-inference";
 import {
   createTauriMeshNodeServices,
   type EnabledTauriMeshNodeServices,
@@ -189,6 +192,7 @@ export interface AuroraTauriRuntime {
   localToolProvider?: EnabledTauriMeshNodeServices["localToolProvider"] | undefined;
   localToolApprovals?: ProviderLocalApprovalControllerPort | undefined;
   localAssistant?: AuroraTauriLightweightAssistantConfig | undefined;
+  localInference?: LocalInferenceClient | undefined;
   localData?: AuroraTauriLocalDataRuntime | undefined;
   nativeVoice?: NativeDesktopVoicePort | undefined;
   nativeMobileVoice?: NativeMobileVoicePort | undefined;
@@ -325,6 +329,7 @@ export interface AuroraThinProfileController {
     },
   ) => Promise<AuroraThinProfileDocument>;
   selectProfile: (profileId: string) => Promise<AuroraThinProfileDocument>;
+  createOfflineProfile?: () => Promise<AuroraThinProfileDocument>;
   updateActiveLocalSpeechSelection?: (
     selection: AuroraLocalSpeechSelectionProfile,
     languages?: AuroraLocalSpeechLanguagePrefs,
@@ -332,6 +337,7 @@ export interface AuroraThinProfileController {
   updateActiveDesktopOverlay?: (
     overlay: AuroraDesktopOverlayPreferences,
   ) => Promise<AuroraThinProfileDocument>;
+  updateActiveLocalInference?: (enabled: boolean) => Promise<AuroraThinProfileDocument>;
   recreateRuntime?: () => Promise<AuroraTauriRuntime>;
   createRuntime: (
     document: AuroraThinProfileDocument,
@@ -506,11 +512,16 @@ export async function bootstrapAuroraTauriRuntime(
     ),
     localAssistantPromise,
   ]);
+  const localConversationOwner = meshNodeServices?.enabled
+    ? undefined
+    : await openMobileLocalConversationOwner(configuredRuntimeProfile);
   return createAuroraTauriRuntime({
     runtimeProfileStore: runtimeStore,
     runtimeProfileDocument: document,
     packageCapabilities,
     meshNodeServices,
+    localData: localConversationOwner?.runtime,
+    closeLocalDataOwner: localConversationOwner?.close,
     localAssistant: resolvedLocalAssistant,
     thinInviteText,
     consumeThinInvite: false,
@@ -633,6 +644,8 @@ export function createAuroraTauriRuntime({
   runtimeProfileDocument,
   packageCapabilities = resolveTauriPackageCapabilities(),
   meshNodeServices,
+  localData: injectedLocalData,
+  closeLocalDataOwner,
   localAssistant = null,
   thinInviteText: explicitThinInviteText,
   consumeThinInvite = true,
@@ -644,6 +657,8 @@ export function createAuroraTauriRuntime({
   runtimeProfileDocument?: AuroraRuntimeProfileDocument;
   packageCapabilities?: AuroraTauriPackageCapabilities;
   meshNodeServices?: TauriMeshNodeServices | null | undefined;
+  localData?: AuroraTauriLocalDataRuntime | undefined;
+  closeLocalDataOwner?: (() => Promise<void>) | undefined;
   localAssistant?: AuroraTauriLightweightAssistantConfig | null | undefined;
   thinInviteText?: string | null;
   consumeThinInvite?: boolean;
@@ -743,10 +758,39 @@ export function createAuroraTauriRuntime({
         const releaseMobileLifecycle = isAndroidTauriRuntime()
           ? installAndroidLifecyclePolicy(thinRuntime)
           : async () => undefined;
+        const assistantSurface = getAuroraSurfaceProfile({
+          runtimeMode: "mobile-native",
+          nativePlatform: mobilePlatform,
+          nodeMode: runtimeNodeMode,
+          runtimeTier,
+          enabledCapabilityPacks: configuredRuntimeProfile?.localNode.enabledCapabilityPacks,
+        });
+        const offlineAssistant = assistantSurface.canManageLocalAssistant
+          ? createTauriLocalAssistantRouter({
+              invoke,
+              enabled: assistantSurface.localInferenceEnabled,
+              peerReady: () => thinRuntime.peer.snapshot().status === "authorized",
+              peerProvider: connectedAuroraInferenceAssistant(thinRuntime.client).provider,
+            })
+          : null;
         const closeRuntime = closeOnce(async () => {
-          await releaseMobileLifecycle();
-          await thinRuntime.close();
-          await meshNodeServices?.close();
+          try {
+            await offlineAssistant?.close();
+          } finally {
+            try {
+              await releaseMobileLifecycle();
+            } finally {
+              try {
+                await thinRuntime.close();
+              } finally {
+                try {
+                  await meshNodeServices?.close();
+                } finally {
+                  await closeLocalDataOwner?.();
+                }
+              }
+            }
+          }
         });
         return {
           client: thinRuntime.client,
@@ -778,11 +822,15 @@ export function createAuroraTauriRuntime({
           localToolApprovals: meshNodeServices?.enabled
             ? meshNodeServices.localToolApprovals
             : undefined,
-          localAssistant: thinRuntime.features.lightweightOrchestratorEnabled
-            && meshNodeServices?.enabled
-            ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
-            : undefined,
-          localData: localDataRuntime(meshNodeServices),
+          localAssistant: assistantSurface.canManageLocalAssistant
+            && assistantSurface.localInferenceEnabled && offlineAssistant
+            ? { provider: offlineAssistant.provider, remoteTools: [] }
+            : thinRuntime.features.lightweightOrchestratorEnabled
+              && meshNodeServices?.enabled
+              ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
+              : undefined,
+          localInference: offlineAssistant?.client,
+          localData: injectedLocalData ?? localDataRuntime(meshNodeServices),
           nativeMobileVoice,
           localSpeechCatalog,
           thinProfileConfigured: runtimeProfileConfigured,
@@ -940,7 +988,7 @@ export function createAuroraTauriRuntime({
           && meshNodeServices?.enabled
           ? localAssistant ?? connectedAuroraInferenceAssistant(thinRuntime.client)
           : undefined,
-        localData: localDataRuntime(meshNodeServices),
+        localData: injectedLocalData ?? localDataRuntime(meshNodeServices),
         nativeVoice,
         localSpeechCatalog,
         thinProfileConfigured: runtimeProfileConfigured,
@@ -1135,6 +1183,45 @@ export function createAuroraTauriRuntime({
     ...noopOverlayControls(),
     shutdown: async () => undefined,
   };
+}
+
+async function openMobileLocalConversationOwner(
+  profile: AuroraRuntimeProfileV2 | undefined,
+): Promise<{ runtime: AuroraTauriLocalDataRuntime; close: () => Promise<void> } | undefined> {
+  const mobilePlatform = isAndroidTauriRuntime()
+    ? "android"
+    : isIosTauriRuntime()
+      ? "ios"
+      : null;
+  const packs = profile?.localNode.enabledCapabilityPacks ?? [];
+  if (!mobilePlatform || !profile || packs.includes("native-actions")) return undefined;
+  const surface = getAuroraSurfaceProfile({
+    runtimeMode: "mobile-native",
+    nativePlatform: mobilePlatform,
+    nodeMode: profile.nodeMode,
+    runtimeTier: profile.runtimeTier,
+    enabledCapabilityPacks: packs,
+  });
+  const localNodeId = profile.localNode.stablePeerId;
+  if (!surface.canManageLocalAssistant || !surface.localInferenceEnabled || !localNodeId) return undefined;
+
+  const backend = new TauriSqliteLocalDataBackend({ invokeCommand: invoke });
+  try {
+    const session = await backend.open(profile.id, localNodeId);
+    return {
+      runtime: {
+        profileId: profile.id,
+        localNodeId,
+        session,
+        crypto: new TauriEnvelopeCryptoPort({ profileId: profile.id, localNodeId, invokeCommand: invoke }),
+        ownerAvailable: true,
+      },
+      close: () => backend.close(),
+    };
+  } catch {
+    await backend.close().catch(() => undefined);
+    return undefined;
+  }
 }
 
 function localDataRuntime(
@@ -2088,6 +2175,73 @@ function createRuntimeBackedThinProfileController(
       );
       return currentThinDocument;
     },
+    createOfflineProfile: async () => {
+      if (!isIosTauriRuntime() && !isAndroidTauriRuntime()) {
+        throw new Error("On-device answers are available on mobile devices");
+      }
+      const id = globalThis.crypto?.randomUUID?.();
+      if (!id) throw new Error("A secure on-device profile identifier is unavailable");
+      const suffix = id.toLowerCase();
+      const offlineProfile = sanitizeRuntimeProfile(
+        {
+          version: 2,
+          id: `local-${suffix}`,
+          label: "On this device",
+          nodeMode: "mesh-node",
+          runtimeTier: "lightweight-ts",
+          localNode: {
+            nodeName: "Aurora on this device",
+            stablePeerId: `aurora-local-${suffix}`,
+            enabledCapabilityPacks: ["local-inference"],
+          },
+        },
+        { allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities) },
+      );
+      const next: AuroraRuntimeProfileDocument = {
+        version: 2,
+        activeProfileId: offlineProfile.id,
+        profiles: [
+          ...currentRuntimeDocument.profiles.filter(
+            (candidate) => candidate.id !== offlineProfile.id,
+          ),
+          offlineProfile,
+        ],
+      };
+      const [modeSaved, tierSaved] = await Promise.all([
+        modePreferenceStore?.writeSelectedMode("mesh-node") ?? Promise.resolve(true),
+        modePreferenceStore?.writeSelectedRuntimeTier?.("lightweight-ts") ?? Promise.resolve(true),
+      ]);
+      if (!modeSaved || !tierSaved) throw new Error("On-device setup choice could not be saved");
+      const previousRoomSecretRefs = runtimeDocumentRoomSecretRefs(currentRuntimeDocument);
+      await store.save(next);
+      const readback = sanitizeRuntimeProfileDocument(await store.load(), {
+        allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities),
+      });
+      const saved = readback.profiles.find((candidate) => candidate.id === offlineProfile.id);
+      if (
+        readback.activeProfileId !== offlineProfile.id
+        || !saved
+        || !isRuntimeProfileConfigured(saved)
+        || saved.nodeMode !== "mesh-node"
+        || saved.runtimeTier !== "lightweight-ts"
+        || saved.homeConnection !== undefined
+        || saved.localNode.meshMembership !== undefined
+        || saved.localNode.enabledCapabilityPacks.length !== 1
+        || saved.localNode.enabledCapabilityPacks[0] !== "local-inference"
+        || saved.localNode.stablePeerId !== offlineProfile.localNode.stablePeerId
+      ) {
+        throw new Error("On-device profile could not be verified after saving");
+      }
+      currentRuntimeDocument = readback;
+      currentThinDocument = thinDocumentFromRuntimeDocument(readback);
+      controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      await cleanupStaleRoomSecrets(
+        previousRoomSecretRefs,
+        runtimeDocumentRoomSecretRefs(readback),
+      );
+      return currentThinDocument;
+    },
     selectProfile: async (profileId) => {
       if (!currentRuntimeDocument.profiles.some((profile) => profile.id === profileId))
         throw new Error("Runtime profile does not exist");
@@ -2138,6 +2292,29 @@ function createRuntimeBackedThinProfileController(
       currentRuntimeDocument = next;
       currentThinDocument = thinDocumentFromRuntimeDocument(currentRuntimeDocument);
       controller.runtimeDocument = currentRuntimeDocument;
+      controller.document = currentThinDocument;
+      return currentThinDocument;
+    },
+    updateActiveLocalInference: async (enabled) => {
+      const activeId = currentRuntimeDocument.activeProfileId;
+      const active = currentRuntimeDocument.profiles.find((profile) => profile.id === activeId);
+      if (!active || active.nodeMode !== "mesh-node" || active.runtimeTier !== "lightweight-ts") {
+        throw new Error("Offline answers are unavailable for this device setup");
+      }
+      const packs = active.localNode.enabledCapabilityPacks.filter((pack) => pack !== "local-inference");
+      const next: AuroraRuntimeProfileDocument = {
+        ...currentRuntimeDocument,
+        profiles: currentRuntimeDocument.profiles.map((profile) => profile.id === activeId
+          ? sanitizeRuntimeProfile({
+              ...profile,
+              localNode: { ...profile.localNode, enabledCapabilityPacks: enabled ? [...packs, "local-inference"] : packs },
+            }, { allowPythonFull: hasPythonFullRuntimeCapability(packageCapabilities) })
+          : profile),
+      };
+      await store.save(next);
+      currentRuntimeDocument = next;
+      currentThinDocument = thinDocumentFromRuntimeDocument(next);
+      controller.runtimeDocument = next;
       controller.document = currentThinDocument;
       return currentThinDocument;
     },
@@ -2384,7 +2561,7 @@ function thinDocumentFromRuntimeDocument(
   document: AuroraRuntimeProfileDocument,
 ): AuroraThinProfileDocument {
   const profiles = document.profiles.flatMap((profile) => {
-    const projected = thinProfileFromRuntimeProfile(profile);
+    const projected = thinRuntimeProfileFromRuntimeProfile(profile);
     return projected ? [projected] : [];
   });
   const activeProfileId = profiles.some((profile) => profile.id === document.activeProfileId)

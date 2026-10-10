@@ -1,0 +1,29 @@
+[package]
+name = "aurora-local-inference"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Profile-scoped offline chat over Aurora's pinned llama.cpp runtime"
+
+[features]
+default = []
+native-llamacpp = []
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[build-dependencies]
+cc = "1"
+serde_json.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

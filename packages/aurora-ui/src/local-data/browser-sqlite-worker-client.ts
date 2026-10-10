@@ -9,6 +9,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSessionRecord,
+  parseTranscriptSegmentRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
   type DeleteConversationResult,
@@ -24,8 +26,21 @@ import {
   type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
-  , type ConversationListQuery, type MessageListQuery
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionListQuery,
+  type TranscriptSegmentListQuery,
+  type FinalizeTranscriptSessionInput,
+  type AppendTranscriptSegmentResult,
+  type RecoverTranscriptSessionsResult,
+  type DeleteTranscriptSessionResult,
+  type DeleteExpiredTranscriptSessionsResult,
+  LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT,
+  type ConversationListQuery,
+  type MessageListQuery
 } from '@aurora/client/local-data'
 
 import {
@@ -120,9 +135,11 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
     try {
       const status = await client.open(profileId, localNodeId, probe.identity, browserSqliteMigrationSql, this.wasmAssetUrl)
       this.statusValue = status
+      const session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
+      await session.transcripts.recoverActiveSessions(Date.now())
       this.client = client
-      this.session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
-      return this.session
+      this.session = session
+      return session
     } catch (error) {
       await client.close().catch(() => undefined)
       this.statusValue = {
@@ -337,6 +354,7 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
   readonly localTools: BrowserSqliteLocalToolStateRepository
   readonly peerGrants: BrowserSqlitePeerGrantRepository
   readonly localAudit: BrowserSqliteLocalAuditRepository
+  readonly transcripts: BrowserSqliteTranscriptArchiveRepository
   private closed = false
 
   constructor(
@@ -351,6 +369,7 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
     this.localTools = new BrowserSqliteLocalToolStateRepository(client, txId)
     this.peerGrants = new BrowserSqlitePeerGrantRepository(client, txId)
     this.localAudit = new BrowserSqliteLocalAuditRepository(client, txId)
+    this.transcripts = new BrowserSqliteTranscriptArchiveRepository(client, txId)
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
@@ -495,6 +514,54 @@ class BrowserSqliteLocalAuditRepository {
   }
 }
 
+class BrowserSqliteTranscriptArchiveRepository {
+  constructor(private readonly client: BrowserSqliteWorkerClient, private readonly txId?: string) {}
+
+  async createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord>({ kind: 'transcripts.createSession', record: parseTranscriptSessionRecord(record) }, this.txId)
+    return parseTranscriptSessionRecord(result)
+  }
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord>({ kind: 'transcripts.startSession', sessionId, startedAtMs }, this.txId)
+    return parseTranscriptSessionRecord(result)
+  }
+  async appendSegment(record: TranscriptSegmentRecord): Promise<AppendTranscriptSegmentResult> {
+    const result = await this.client.repositoryOperation<AppendTranscriptSegmentResult>({ kind: 'transcripts.appendSegment', record: parseTranscriptSegmentRecord(record) }, this.txId)
+    return { appended: result.appended, record: parseTranscriptSegmentRecord(result.record) }
+  }
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord | null>({ kind: 'transcripts.getSession', sessionId }, this.txId)
+    return result === null ? null : parseTranscriptSessionRecord(result)
+  }
+  async listSessions(options?: TranscriptSessionListQuery): Promise<TranscriptSessionRecord[]> {
+    validateTranscriptSessionQuery(options)
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord[]>({ kind: 'transcripts.listSessions', ...(options === undefined ? {} : { options }) }, this.txId)
+    return result.map(parseTranscriptSessionRecord)
+  }
+  async listSegments(sessionId: string, options?: TranscriptSegmentListQuery): Promise<TranscriptSegmentRecord[]> {
+    validateLocalQueryId(sessionId, 'transcript.session_id')
+    validateTranscriptSegmentQuery(options)
+    const result = await this.client.repositoryOperation<TranscriptSegmentRecord[]>({ kind: 'transcripts.listSegments', sessionId, ...(options === undefined ? {} : { options }) }, this.txId)
+    return result.map(parseTranscriptSegmentRecord)
+  }
+  async finalizeSession(input: FinalizeTranscriptSessionInput): Promise<TranscriptSessionRecord> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord>({ kind: 'transcripts.finalizeSession', input }, this.txId)
+    return parseTranscriptSessionRecord(result)
+  }
+  async recoverActiveSessions(nowMs: number, terminalReason?: string): Promise<RecoverTranscriptSessionsResult> {
+    return await this.client.repositoryOperation<RecoverTranscriptSessionsResult>({ kind: 'transcripts.recoverActiveSessions', nowMs, ...(terminalReason === undefined ? {} : { terminalReason }) }, this.txId)
+  }
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    validateLocalQueryId(sessionId, 'transcript.session_id')
+    return await this.client.repositoryOperation<DeleteTranscriptSessionResult>({ kind: 'transcripts.deleteSession', sessionId }, this.txId)
+  }
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<DeleteExpiredTranscriptSessionsResult> {
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0 || Object.is(nowMs, -0)) throw transcriptError('transcript_delete_now')
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT) throw transcriptError('transcript_delete_limit')
+    return await this.client.repositoryOperation<DeleteExpiredTranscriptSessionsResult>({ kind: 'transcripts.deleteExpiredSessions', nowMs, limit }, this.txId)
+  }
+}
+
 export const browserSqliteMigrationSql: readonly BrowserSqliteMigrationSql[] = Object.freeze([
   {
     version: 1,
@@ -624,6 +691,55 @@ CREATE INDEX idx_aurora_grants_profile_node_claimant_active
 CREATE INDEX idx_aurora_audit_profile_node_created
   ON aurora_local_audit (profile_id, local_node_id, created_at_ms DESC);
 `
+  },
+  {
+    version: 4,
+    sql: `PRAGMA foreign_keys = ON;
+
+CREATE TABLE aurora_transcript_sessions (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  local_node_id TEXT NOT NULL,
+  capture_mode TEXT NOT NULL CHECK (capture_mode IN ('ambient', 'notification')),
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  started_at_ms INTEGER NOT NULL CHECK (started_at_ms >= created_at_ms),
+  ended_at_ms INTEGER CHECK (ended_at_ms >= started_at_ms),
+  lifecycle TEXT NOT NULL CHECK (lifecycle IN ('active', 'completed', 'interrupted', 'failed')),
+  terminal_reason TEXT,
+  expires_at_ms INTEGER CHECK (expires_at_ms >= created_at_ms),
+  language TEXT,
+  model_provenance_json TEXT NOT NULL,
+  diarization_state TEXT NOT NULL CHECK (diarization_state IN ('not_requested', 'pending', 'partial', 'available', 'unavailable')),
+  CHECK ((lifecycle = 'active' AND ended_at_ms IS NULL AND terminal_reason IS NULL)
+    OR (lifecycle <> 'active' AND ended_at_ms IS NOT NULL AND terminal_reason IS NOT NULL AND length(trim(terminal_reason)) > 0))
+);
+
+CREATE TABLE aurora_transcript_segments (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES aurora_transcript_sessions(id) ON DELETE CASCADE,
+  sequence INTEGER NOT NULL CHECK (sequence >= 0),
+  start_at_ms INTEGER NOT NULL CHECK (start_at_ms >= 0),
+  end_at_ms INTEGER NOT NULL CHECK (end_at_ms >= start_at_ms),
+  text_envelope_json TEXT NOT NULL,
+  confidence REAL CHECK (confidence >= 0 AND confidence <= 1),
+  speaker_id TEXT,
+  speaker_label TEXT,
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  UNIQUE (session_id, sequence)
+);
+
+CREATE INDEX idx_aurora_transcripts_profile_node_created
+  ON aurora_transcript_sessions (profile_id, local_node_id, created_at_ms DESC, id DESC);
+
+CREATE INDEX idx_aurora_transcripts_profile_node_expiry
+  ON aurora_transcript_sessions (profile_id, local_node_id, expires_at_ms, id);
+
+CREATE INDEX idx_aurora_transcripts_profile_node_lifecycle
+  ON aurora_transcript_sessions (profile_id, local_node_id, lifecycle);
+
+CREATE INDEX idx_aurora_transcript_segments_session_sequence
+  ON aurora_transcript_segments (session_id, sequence, id);
+`
   }
 ])
 
@@ -717,6 +833,19 @@ function validateMessageQuery(query: MessageListQuery): void {
   if (query.beforeSequence !== undefined && (!Number.isSafeInteger(query.beforeSequence) || query.beforeSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_before_sequence' })
   if (query.afterSequence !== undefined && (!Number.isSafeInteger(query.afterSequence) || query.afterSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_after_sequence' })
 }
+
+function validateTranscriptSessionQuery(query?: TranscriptSessionListQuery): void {
+  if (query?.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX)) throw transcriptError('transcript_session_limit')
+  if (query?.cursor !== undefined) {
+    if (!Number.isSafeInteger(query.cursor.createdAtMs) || query.cursor.createdAtMs < 0 || Object.is(query.cursor.createdAtMs, -0)) throw transcriptError('transcript_session_cursor_created_at')
+    validateLocalQueryId(query.cursor.id, 'transcript_session_cursor_id')
+  }
+}
+function validateTranscriptSegmentQuery(query?: TranscriptSegmentListQuery): void {
+  if (query?.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX)) throw transcriptError('transcript_segment_limit')
+  if (query?.afterSequence !== undefined && (!Number.isSafeInteger(query.afterSequence) || query.afterSequence < 0 || Object.is(query.afterSequence, -0))) throw transcriptError('transcript_segment_after_sequence')
+}
+function transcriptError(reason: string): LocalDataError { return new LocalDataError('invalid_record', 'Invalid transcript archive operation', { reason }) }
 function validateConversationIds(ids: readonly string[] | undefined): void {
   if (ids !== undefined && ids.length > 500) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set_limit' })
   if (ids !== undefined) ids.forEach((id) => validateLocalQueryId(id, 'conversation.id'))

@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "updatedAtMs": 100,
+  "services": {
+    "tooling": { "routing": { "prefer": "local", "fallback": "network" }, "expose": { "enabled": true } },
+    "tts": { "routing": { "prefer": "local", "fallback": "network" }, "expose": { "enabled": false } },
+    "stt": { "routing": { "prefer": "local", "fallback": "network" }, "expose": { "enabled": false } },
+    "orchestrator": { "routing": { "prefer": "local", "fallback": "network" }, "expose": { "enabled": false } },
+    "memory": { "routing": { "prefer": "network_only", "fallback": "error" }, "expose": { "enabled": false } }
+  },
+  "expose": { "featureOverrides": {} }
+}
