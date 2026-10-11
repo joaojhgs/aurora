@@ -2715,9 +2715,24 @@ fn validate_android_speech_stages(
     };
 
     for stage in [&stages.stt, &stages.tts] {
-        if matches!(&stage.network_kind, Omitted::Value(SpeechNetworkKind::Mesh))
-            || matches!(&stage.target, NullableField::Value(_))
-        {
+        let valid_route = match (&stage.network_kind, &stage.target) {
+            (Omitted::Value(SpeechNetworkKind::Mesh), NullableField::Value(target)) => {
+                let network_configured = matches!(
+                    stage.routing.prefer,
+                    RoutingPreference::Network | RoutingPreference::NetworkOnly
+                ) || (stage.routing.prefer == RoutingPreference::Local
+                    && stage.routing.fallback == RoutingFallback::Network);
+                network_configured
+                    && !target.peer_id.trim().is_empty()
+                    && matches!(&target.resource_id, NullableField::Value(resource) if !resource.trim().is_empty())
+            }
+            (
+                Omitted::Missing | Omitted::Value(SpeechNetworkKind::Gateway),
+                NullableField::Missing | NullableField::Null,
+            ) => true,
+            _ => false,
+        };
+        if !valid_route {
             return Err(AuroraCommandError::UnsupportedFeature(
                 "This speech route is unavailable on this device".to_string(),
             ));
@@ -10267,6 +10282,29 @@ mod tests {
             .expect("valid stage selectors");
 
         assert!(validate_android_speech_stages(&stages).is_ok());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_speech_stage_admission_accepts_mesh_with_local_companion() {
+        let mut stages: aurora_voice_core::node_policy::SpeechStages =
+            serde_json::from_value(json!({
+                "stt": {
+                    "routing": { "prefer": "network_only", "fallback": "error" },
+                    "networkKind": "mesh",
+                    "target": { "peerId": "peer-a", "resourceId": "remote:peer-a:STT", "modelId": "stt:model-a" },
+                    "language": "en",
+                    "experimentalRemote": false
+                },
+                "tts": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+                "kws": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+                "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+            }))
+            .expect("valid mixed speech route");
+
+        assert!(validate_android_speech_stages(&stages).is_ok());
+        stages.stt.target = aurora_voice_core::node_policy::NullableField::Missing;
+        assert!(validate_android_speech_stages(&stages).is_err());
     }
 
     impl LoopbackFixture {

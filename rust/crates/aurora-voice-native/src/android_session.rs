@@ -24,11 +24,11 @@ use crate::{
     AndroidAudioInput, AndroidAudioOutput, AndroidCaptureControl, AndroidPcmIngress, GatewayAuth,
     MicrophoneAudioPolicy, NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig,
     NativeGatewayTransport, NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer,
-    NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, TransportLimits,
+    NativeMeshAssistantRoute, NativeMeshAssistantSpeechTransport, NativeMeshFiniteStt,
+    NativeMeshFiniteSttConfig, NativeMeshTtsConfig, NativeMeshTtsSynthesizer, TransportLimits,
 };
 use async_trait::async_trait;
 use aurora_voice_core::node_policy::SpeechStages;
-#[cfg(any(test, all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
 use aurora_voice_core::EngineError;
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_core::WakeOrchestrationConfig;
@@ -38,16 +38,17 @@ use aurora_voice_core::{
     SpeechTransport, TimestampMicros, TransitionReason, VoiceCaptureLease, VoiceCoreError,
     VoiceRuntime, VoiceState,
 };
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 use aurora_voice_engine::{
-    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttResult, KwsConfig,
-    TaskPackBinding, TtsSynthesisProviderBinding, TtsSynthesisResult, VadConfig,
+    BoundFiniteSttRequest, BoundTtsSynthesisRequest, FiniteSttAudio, FiniteSttResult,
+    TtsSynthesisProviderBinding, TtsSynthesisResult,
 };
 use aurora_voice_engine::{
     BoundTaskRequest, FiniteSttAudioBuilder, FiniteSttPort, FiniteSttProviderBinding,
     FiniteSttRouteScope, RouteFiniteSttBinding, RouteFiniteSttRequest, RouteTtsBinding,
     TaskRequest, TtsSynthesisPort, VoiceTask, MAX_FINITE_STT_SAMPLES, VAD_SAMPLE_RATE_HZ,
 };
+#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
+use aurora_voice_engine::{KwsConfig, TaskPackBinding, VadConfig};
 #[cfg(feature = "native-sherpa")]
 use aurora_voice_sherpa::{
     NativeKwsBackend, NativeSttBackend, NativeVadBackend, SherpaFiniteSttEngine,
@@ -75,7 +76,6 @@ const ANDROID_RUNTIME_ID: &str = "android-native-voice";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(75);
 const STREAM_IDLE_TIMEOUT: Duration = Duration::from_secs(75);
 
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 type RuntimeCore = VoiceRuntime<
     AndroidAudioInput,
     AndroidFiniteSttProvider,
@@ -143,20 +143,11 @@ where
     }
 }
 
-#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
-type RuntimeCore = VoiceRuntime<
-    AndroidAudioInput,
-    NativeGatewayFiniteStt,
-    NativeGatewayTtsSynthesizer,
-    AndroidAssistantTransport,
-    AndroidAudioOutput,
-    AndroidSessionSink,
->;
-
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 enum AndroidFiniteSttProvider {
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     Local(Box<LazyInstalledSttProvider>),
     Gateway(Box<NativeGatewayFiniteStt>),
+    Mesh(Box<NativeMeshFiniteStt>),
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
@@ -256,13 +247,14 @@ impl FiniteSttPort for LazyInstalledSttProvider {
     }
 }
 
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 #[async_trait(?Send)]
 impl FiniteSttPort for AndroidFiniteSttProvider {
     fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.finite_stt_binding(),
             Self::Gateway(provider) => provider.finite_stt_binding(),
+            Self::Mesh(provider) => provider.finite_stt_binding(),
         }
     }
 
@@ -271,8 +263,10 @@ impl FiniteSttPort for AndroidFiniteSttProvider {
         binding: FiniteSttProviderBinding,
     ) -> Result<(), EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.warm_finite_stt(binding).await,
             Self::Gateway(provider) => provider.warm_finite_stt(binding).await,
+            Self::Mesh(provider) => provider.warm_finite_stt(binding).await,
         }
     }
 
@@ -283,6 +277,7 @@ impl FiniteSttPort for AndroidFiniteSttProvider {
         cancellation: &dyn Fn() -> bool,
     ) -> Result<FiniteSttResult, EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => {
                 provider
                     .transcribe_finite(request, audio, cancellation)
@@ -293,21 +288,29 @@ impl FiniteSttPort for AndroidFiniteSttProvider {
                     .transcribe_finite(request, audio, cancellation)
                     .await
             }
+            Self::Mesh(provider) => {
+                provider
+                    .transcribe_finite(request, audio, cancellation)
+                    .await
+            }
         }
     }
 
     async fn cancel_finite_stt_generation(&mut self, generation: u64) -> Result<(), EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.cancel_finite_stt_generation(generation).await,
             Self::Gateway(provider) => provider.cancel_finite_stt_generation(generation).await,
+            Self::Mesh(provider) => provider.cancel_finite_stt_generation(generation).await,
         }
     }
 }
 
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 enum AndroidTtsProvider {
+    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     Local(Box<LazyInstalledTtsProvider>),
     Gateway(Box<NativeGatewayTtsSynthesizer>),
+    Mesh(Box<NativeMeshTtsSynthesizer>),
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
@@ -457,13 +460,14 @@ type AndroidWakeRuntimeParts = (
     WakeOrchestrationConfig,
 );
 
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 #[async_trait(?Send)]
 impl TtsSynthesisPort for AndroidTtsProvider {
     fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.synthesis_binding(),
             Self::Gateway(provider) => provider.synthesis_binding(),
+            Self::Mesh(provider) => provider.synthesis_binding(),
         }
     }
 
@@ -472,8 +476,10 @@ impl TtsSynthesisPort for AndroidTtsProvider {
         binding: TtsSynthesisProviderBinding,
     ) -> Result<(), EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.warm_synthesis(binding).await,
             Self::Gateway(provider) => provider.warm_synthesis(binding).await,
+            Self::Mesh(provider) => provider.warm_synthesis(binding).await,
         }
     }
 
@@ -483,15 +489,19 @@ impl TtsSynthesisPort for AndroidTtsProvider {
         cancellation: &dyn Fn() -> bool,
     ) -> Result<TtsSynthesisResult, EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.synthesize_text(request, cancellation).await,
             Self::Gateway(provider) => provider.synthesize_text(request, cancellation).await,
+            Self::Mesh(provider) => provider.synthesize_text(request, cancellation).await,
         }
     }
 
     async fn cancel_synthesis_generation(&mut self, generation: u64) -> Result<(), EngineError> {
         match self {
+            #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
             Self::Local(provider) => provider.cancel_synthesis_generation(generation).await,
             Self::Gateway(provider) => provider.cancel_synthesis_generation(generation).await,
+            Self::Mesh(provider) => provider.cancel_synthesis_generation(generation).await,
         }
     }
 }
@@ -1104,9 +1114,8 @@ fn build_runtime(
     #[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
     {
         if let Some(stages) = config.speech_stages.as_ref() {
-            validate_android_stage_provider(config, &stages.stt, false, false)?;
-            validate_android_stage_provider(config, &stages.tts, false, false)?;
             validate_android_wake_stages(config, stages)?;
+            return build_runtime_for_remote_stages(config, stages, input, output, sink);
         }
         build_gateway_runtime(config, input, output, sink)
     }
@@ -1158,6 +1167,149 @@ fn stage_uses_android_local(
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum AndroidSpeechNetworkBackend {
+    Gateway,
+    Mesh,
+}
+
+fn android_selected_speech_network_backend(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+    local_available: bool,
+) -> Result<Option<AndroidSpeechNetworkBackend>, AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::{
+        Omitted, RoutingFallback, RoutingPreference, SpeechNetworkKind,
+    };
+    let network_selected = match stage.routing.prefer {
+        RoutingPreference::LocalOnly => false,
+        RoutingPreference::Local if local_available => false,
+        RoutingPreference::Local => stage.routing.fallback == RoutingFallback::Network,
+        RoutingPreference::Network | RoutingPreference::NetworkOnly => true,
+    };
+    if !network_selected {
+        return Ok(None);
+    }
+    Ok(Some(match &stage.network_kind {
+        Omitted::Value(SpeechNetworkKind::Mesh) => AndroidSpeechNetworkBackend::Mesh,
+        Omitted::Missing | Omitted::Value(SpeechNetworkKind::Gateway) => {
+            AndroidSpeechNetworkBackend::Gateway
+        }
+    }))
+}
+
+#[derive(Clone)]
+struct AndroidMeshSpeechStage {
+    peer_id: String,
+    resource_id: String,
+    model_id: Option<String>,
+    language: Option<String>,
+}
+
+fn android_mesh_stage_route(
+    stage: &aurora_voice_core::node_policy::SpeechStageConfig,
+    local_available: bool,
+) -> Result<Option<AndroidMeshSpeechStage>, AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::NullableField;
+    if android_selected_speech_network_backend(stage, local_available)?
+        != Some(AndroidSpeechNetworkBackend::Mesh)
+    {
+        return Ok(None);
+    }
+    let target = match &stage.target {
+        NullableField::Value(v) => v,
+        _ => return Err(AndroidVoiceSessionCommandError::Unavailable),
+    };
+    let resource_id = match &target.resource_id {
+        NullableField::Value(v) if !v.trim().is_empty() => v.clone(),
+        _ => return Err(AndroidVoiceSessionCommandError::Unavailable),
+    };
+    if target.peer_id.trim().is_empty() {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+    let target_model = match &target.model_id {
+        NullableField::Value(v) if !v.trim().is_empty() => Some(v.clone()),
+        NullableField::Value(_) => return Err(AndroidVoiceSessionCommandError::Unavailable),
+        _ => None,
+    };
+    let stage_model = match &stage.model_id {
+        NullableField::Value(v) if !v.trim().is_empty() => Some(v.clone()),
+        NullableField::Value(_) => return Err(AndroidVoiceSessionCommandError::Unavailable),
+        _ => None,
+    };
+    if target_model.is_some() && stage_model.is_some() && target_model != stage_model {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+    let language = match &stage.language {
+        NullableField::Value(v) if !v.trim().is_empty() => Some(v.clone()),
+        NullableField::Value(_) => return Err(AndroidVoiceSessionCommandError::Unavailable),
+        _ => None,
+    };
+    Ok(Some(AndroidMeshSpeechStage {
+        peer_id: target.peer_id.clone(),
+        resource_id,
+        model_id: stage_model.or(target_model),
+        language,
+    }))
+}
+
+fn build_android_mesh_stt(
+    config: &AndroidVoiceSessionConfig,
+    selected: &AndroidMeshSpeechStage,
+) -> Result<AndroidFiniteSttProvider, AndroidVoiceSessionCommandError> {
+    if !config.remote_audio_consent {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
+    }
+    let route = RouteFiniteSttBinding::new(
+        "mesh.stt",
+        FiniteSttRouteScope::RemoteGateway,
+        VAD_SAMPLE_RATE_HZ,
+        MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+        ROUTE_REVISION,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let provider = NativeMeshFiniteStt::new(
+        NativeMeshFiniteSttConfig::new(
+            route,
+            selected.peer_id.clone(),
+            selected.resource_id.clone(),
+            selected.model_id.clone(),
+            selected.language.clone(),
+            true,
+            transport_limits(MicrophoneAudioPolicy::ExplicitRemoteConsent),
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    Ok(AndroidFiniteSttProvider::Mesh(Box::new(provider)))
+}
+
+fn build_android_mesh_tts(
+    selected: &AndroidMeshSpeechStage,
+) -> Result<AndroidTtsProvider, AndroidVoiceSessionCommandError> {
+    let route = RouteTtsBinding::new(
+        "mesh.tts",
+        "mesh.default",
+        VAD_SAMPLE_RATE_HZ,
+        ROUTE_REVISION,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let provider = NativeMeshTtsSynthesizer::new(
+        NativeMeshTtsConfig::new(
+            route,
+            selected.peer_id.clone(),
+            selected.resource_id.clone(),
+            selected.model_id.clone(),
+            None,
+            selected.language.clone(),
+            TransportLimits::default(),
+            16_000 * 30,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+    )
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    Ok(AndroidTtsProvider::Mesh(Box::new(provider)))
+}
+
 fn validate_android_gateway_stage(
     stage: &aurora_voice_core::node_policy::SpeechStageConfig,
 ) -> Result<(), AndroidVoiceSessionCommandError> {
@@ -1174,14 +1326,36 @@ fn validate_android_gateway_stage(
 fn validate_android_local_stage(
     stage: &aurora_voice_core::node_policy::SpeechStageConfig,
 ) -> Result<(), AndroidVoiceSessionCommandError> {
-    use aurora_voice_core::node_policy::{NullableField, Omitted};
+    use aurora_voice_core::node_policy::{
+        NullableField, Omitted, RoutingFallback, RoutingPreference, SpeechNetworkKind,
+    };
 
-    if !matches!(&stage.network_kind, Omitted::Missing)
-        || matches!(&stage.target, NullableField::Value(_))
+    if matches!(&stage.network_kind, Omitted::Missing)
+        && !matches!(&stage.target, NullableField::Value(_))
     {
-        return Err(AndroidVoiceSessionCommandError::Unavailable);
+        return Ok(());
     }
-    Ok(())
+    // A configured network alternative is dormant when the Local preference is available.
+    // Validate its shape without binding this operation to the target or comparing its model
+    // against the selected local pack; the fallback selector is resolved only if Local fails.
+    if stage.routing.prefer == RoutingPreference::Local
+        && stage.routing.fallback == RoutingFallback::Network
+    {
+        return match (&stage.network_kind, &stage.target) {
+            (Omitted::Value(SpeechNetworkKind::Mesh), NullableField::Value(target))
+                if !target.peer_id.trim().is_empty()
+                    && matches!(&target.resource_id, NullableField::Value(resource) if !resource.trim().is_empty()) =>
+            {
+                Ok(())
+            }
+            (
+                Omitted::Missing | Omitted::Value(SpeechNetworkKind::Gateway),
+                NullableField::Missing | NullableField::Null,
+            ) => Ok(()),
+            _ => Err(AndroidVoiceSessionCommandError::Unavailable),
+        };
+    }
+    Err(AndroidVoiceSessionCommandError::Unavailable)
 }
 
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
@@ -1263,6 +1437,130 @@ fn validate_android_wake_stages(
     Ok(())
 }
 
+fn build_runtime_for_remote_stages(
+    config: &AndroidVoiceSessionConfig,
+    stages: &SpeechStages,
+    input: AndroidAudioInput,
+    output: AndroidAudioOutput,
+    sink: AndroidSessionSink,
+) -> Result<RuntimeCore, AndroidVoiceSessionCommandError> {
+    use aurora_voice_core::node_policy::{NullableField, RoutingFallback, RoutingPreference};
+    for stage in [&stages.stt, &stages.tts] {
+        if stage.routing.prefer == RoutingPreference::LocalOnly
+            || (stage.routing.prefer == RoutingPreference::Local
+                && stage.routing.fallback != RoutingFallback::Network)
+        {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
+    }
+    let mesh_stt = android_mesh_stage_route(&stages.stt, false)?;
+    let mesh_tts = android_mesh_stage_route(&stages.tts, false)?;
+    let gateway_stt = if mesh_stt.is_none() {
+        validate_android_gateway_stage(&stages.stt)?;
+        let policy = android_gateway_audio_policy(config)?;
+        let route = RouteFiniteSttBinding::new(
+            "gateway.default",
+            if matches!(policy, MicrophoneAudioPolicy::LoopbackOnly) {
+                FiniteSttRouteScope::LoopbackSidecar
+            } else {
+                FiniteSttRouteScope::RemoteGateway
+            },
+            VAD_SAMPLE_RATE_HZ,
+            MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+            ROUTE_REVISION,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let model = match &stages.stt.model_id {
+            NullableField::Value(v) => v.clone(),
+            _ => "realtime".to_owned(),
+        };
+        let transport = NativeGatewayTransport::new(
+            config
+                .gateway
+                .clone()
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+            config.auth.clone(),
+            transport_limits(policy),
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        Some(AndroidFiniteSttProvider::Gateway(Box::new(
+            NativeGatewayFiniteStt::new(
+                transport,
+                NativeGatewayFiniteSttConfig::new(route, model, policy)
+                    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+            )
+            .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+        )))
+    } else {
+        None
+    };
+    let gateway_tts = if mesh_tts.is_none() {
+        validate_android_gateway_stage(&stages.tts)?;
+        if matches!(&stages.tts.model_id, NullableField::Value(_)) {
+            return Err(AndroidVoiceSessionCommandError::Unavailable);
+        }
+        let policy = android_gateway_audio_policy(config)?;
+        let route = RouteTtsBinding::new(
+            "gateway.default",
+            "voice.default",
+            VAD_SAMPLE_RATE_HZ,
+            ROUTE_REVISION,
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        let transport = NativeGatewayTransport::new(
+            config
+                .gateway
+                .clone()
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+            config.auth.clone(),
+            transport_limits(policy),
+        )
+        .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+        Some(AndroidTtsProvider::Gateway(Box::new(
+            NativeGatewayTtsSynthesizer::new(
+                transport,
+                NativeGatewayTtsConfig::new(route, None, 1.0, 16_000 * 30)
+                    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
+            ),
+        )))
+    } else {
+        None
+    };
+    let stt = match mesh_stt {
+        Some(route) => build_android_mesh_stt(config, &route)?,
+        None => gateway_stt.ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+    };
+    let tts = match mesh_tts {
+        Some(route) => build_android_mesh_tts(&route)?,
+        None => gateway_tts.ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
+    };
+    let policy = if let Some(gateway) = config.gateway.as_ref() {
+        android_gateway_audio_policy(config)?
+    } else if config.remote_audio_consent {
+        MicrophoneAudioPolicy::ExplicitRemoteConsent
+    } else {
+        MicrophoneAudioPolicy::Blocked
+    };
+    let assistant = build_assistant_transport(config, transport_limits(policy))?;
+    VoiceRuntime::new(
+        input,
+        stt,
+        tts,
+        assistant,
+        output,
+        sink,
+        ANDROID_SURFACE,
+        ANDROID_RUNTIME_ID,
+    )
+    .map(|runtime| {
+        runtime.with_speech_languages(
+            android_stage_language(&stages.stt).map(str::to_owned),
+            android_stage_language(&stages.tts).map(str::to_owned),
+        )
+    })
+    .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
+}
+
 #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 fn build_runtime_for_stages(
     config: &AndroidVoiceSessionConfig,
@@ -1281,10 +1579,18 @@ fn build_runtime_for_stages(
             .tts_voice_id
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty());
-    let mut local_stt =
-        validate_android_stage_provider(config, &stages.stt, local_stt_available, false)?;
-    let mut local_tts =
-        validate_android_stage_provider(config, &stages.tts, local_tts_available, false)?;
+    let initial_mesh_stt = android_mesh_stage_route(&stages.stt, local_stt_available)?;
+    let initial_mesh_tts = android_mesh_stage_route(&stages.tts, local_tts_available)?;
+    let mut local_stt = if initial_mesh_stt.is_some() {
+        false
+    } else {
+        validate_android_stage_provider(config, &stages.stt, local_stt_available, false)?
+    };
+    let mut local_tts = if initial_mesh_tts.is_some() {
+        false
+    } else {
+        validate_android_stage_provider(config, &stages.tts, local_tts_available, false)?
+    };
     validate_android_wake_stages(config, stages)?;
 
     if local_stt {
@@ -1391,7 +1697,10 @@ fn build_runtime_for_stages(
         }
     }
 
+    let mesh_stt_selected = !local_stt && android_mesh_stage_route(&stages.stt, false)?.is_some();
+    let mesh_tts_selected = !local_tts && android_mesh_stage_route(&stages.tts, false)?.is_some();
     if !local_tts
+        && !mesh_tts_selected
         && matches!(
             &stages.tts.model_id,
             aurora_voice_core::node_policy::NullableField::Value(_)
@@ -1410,7 +1719,8 @@ fn build_runtime_for_stages(
             | aurora_voice_core::node_policy::NullableField::Null => None,
         }
     };
-    let gateway_policy = if !local_stt || !local_tts {
+    let gateway_policy = if (!local_stt && !mesh_stt_selected) || (!local_tts && !mesh_tts_selected)
+    {
         Some(android_gateway_audio_policy(config)?)
     } else {
         None
@@ -1419,6 +1729,8 @@ fn build_runtime_for_stages(
 
     let stt = if local_stt {
         local_stt_provider.ok_or(AndroidVoiceSessionCommandError::Unavailable)?
+    } else if let Some(route) = android_mesh_stage_route(&stages.stt, false)? {
+        build_android_mesh_stt(config, &route)?
     } else {
         let gateway = config
             .gateway
@@ -1454,6 +1766,8 @@ fn build_runtime_for_stages(
 
     let tts = if local_tts {
         local_tts_provider.ok_or(AndroidVoiceSessionCommandError::Unavailable)?
+    } else if let Some(route) = android_mesh_stage_route(&stages.tts, false)? {
+        build_android_mesh_tts(&route)?
     } else {
         let gateway = config
             .gateway
@@ -1477,7 +1791,10 @@ fn build_runtime_for_stages(
         AndroidTtsProvider::Gateway(Box::new(provider))
     };
 
-    let assistant_policy = microphone_policy(config)?;
+    let assistant_policy = match gateway_policy {
+        Some(policy) => policy,
+        None => microphone_policy(config)?,
+    };
     let assistant_limits = gateway_limits.unwrap_or_else(|| transport_limits(assistant_policy));
     let assistant_transport = build_assistant_transport(config, assistant_limits)?;
     let mut runtime = VoiceRuntime::new(
@@ -1742,9 +2059,7 @@ fn build_gateway_runtime(
         NativeGatewayTtsConfig::new(tts_route, None, 1.0, 16_000 * 30)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     );
-    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     let stt = AndroidFiniteSttProvider::Gateway(Box::new(stt));
-    #[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
     let tts = AndroidTtsProvider::Gateway(Box::new(tts));
     VoiceRuntime::new(
         input,
@@ -2515,10 +2830,7 @@ enum TranscriptionCommand {
     Shutdown,
 }
 
-#[cfg(all(feature = "native-sherpa", feature = "native-sherpa-tts"))]
 type AndroidTranscriptionStt = AndroidFiniteSttProvider;
-#[cfg(not(all(feature = "native-sherpa", feature = "native-sherpa-tts")))]
-type AndroidTranscriptionStt = NativeGatewayFiniteStt;
 
 impl AndroidTranscriptionSession {
     pub fn new(
@@ -2812,6 +3124,9 @@ fn build_transcription_stt(
             .stt_model_id
             .as_deref()
             .is_some_and(|value| !value.trim().is_empty());
+    if let Some(route) = android_mesh_stage_route(&stages.stt, local_available)? {
+        return build_android_mesh_stt(config, &route);
+    }
     let local = validate_android_stage_provider(config, &stages.stt, local_available, false)?;
     if local {
         let model_id = config
@@ -2842,6 +3157,15 @@ fn build_transcription_stt(
         if !android_gateway_fallback_allowed(&stages.stt) {
             return Err(AndroidVoiceSessionCommandError::Unavailable);
         }
+    }
+    if let Some(backend) = android_selected_speech_network_backend(&stages.stt, false)? {
+        if backend == AndroidSpeechNetworkBackend::Mesh {
+            let route = android_mesh_stage_route(&stages.stt, false)?
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+            return build_android_mesh_stt(config, &route);
+        }
+    } else {
+        return Err(AndroidVoiceSessionCommandError::Unavailable);
     }
     {
         use aurora_voice_core::node_policy::NullableField;
@@ -2886,6 +3210,20 @@ fn build_transcription_stt(
 fn build_transcription_stt(
     config: &AndroidVoiceSessionConfig,
 ) -> Result<AndroidTranscriptionStt, AndroidVoiceSessionCommandError> {
+    let stages = config
+        .speech_stages
+        .as_ref()
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+    match android_selected_speech_network_backend(&stages.stt, false)?
+        .ok_or(AndroidVoiceSessionCommandError::Unavailable)?
+    {
+        AndroidSpeechNetworkBackend::Mesh => {
+            let route = android_mesh_stage_route(&stages.stt, false)?
+                .ok_or(AndroidVoiceSessionCommandError::Unavailable)?;
+            return build_android_mesh_stt(config, &route);
+        }
+        AndroidSpeechNetworkBackend::Gateway => validate_android_gateway_stage(&stages.stt)?,
+    }
     let gateway = config
         .gateway
         .as_ref()
@@ -2909,11 +3247,17 @@ fn build_transcription_stt(
         transport_limits(policy),
     )
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?;
+    let model_id = match &stages.stt.model_id {
+        aurora_voice_core::node_policy::NullableField::Value(model) => model.clone(),
+        aurora_voice_core::node_policy::NullableField::Missing
+        | aurora_voice_core::node_policy::NullableField::Null => "realtime".to_owned(),
+    };
     NativeGatewayFiniteStt::new(
         transport,
-        NativeGatewayFiniteSttConfig::new(route, "realtime", policy)
+        NativeGatewayFiniteSttConfig::new(route, model_id, policy)
             .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)?,
     )
+    .map(|provider| AndroidFiniteSttProvider::Gateway(Box::new(provider)))
     .map_err(|_| AndroidVoiceSessionCommandError::Unavailable)
 }
 
@@ -3119,6 +3463,41 @@ mod tests {
                 .expect("empty capture stop");
         });
         assert_eq!(stt.calls.load(std::sync::atomic::Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn android_mesh_stage_resolution_keeps_exact_selector_and_rejects_mismatch() {
+        let mesh: aurora_voice_core::node_policy::SpeechStageConfig = serde_json::from_value(serde_json::json!({
+            "routing": { "prefer": "network_only", "fallback": "error" },
+            "networkKind": "mesh",
+            "target": { "peerId": "peer-a", "resourceId": "remote:peer-a:STT", "modelId": "stt:model-a" },
+            "modelId": "stt:model-a", "language": "en", "experimentalRemote": false
+        })).expect("valid mesh stage");
+        let selected = android_mesh_stage_route(&mesh, false)
+            .expect("valid selected route")
+            .expect("mesh selected");
+        assert_eq!(selected.peer_id, "peer-a");
+        assert_eq!(selected.resource_id, "remote:peer-a:STT");
+        assert_eq!(selected.model_id.as_deref(), Some("stt:model-a"));
+        assert_eq!(selected.language.as_deref(), Some("en"));
+        let mismatch: aurora_voice_core::node_policy::SpeechStageConfig = serde_json::from_value(serde_json::json!({
+            "routing": { "prefer": "network_only", "fallback": "error" }, "networkKind": "mesh",
+            "target": { "peerId": "peer-a", "resourceId": "remote:peer-a:STT", "modelId": "stt:model-a" },
+            "modelId": "stt:model-b", "experimentalRemote": false
+        })).expect("valid selector shape");
+        assert!(android_mesh_stage_route(&mismatch, false).is_err());
+        let local_preferred = serde_json::from_value(serde_json::json!({
+            "routing": { "prefer": "local", "fallback": "network" }, "networkKind": "mesh",
+            "target": { "peerId": "peer-a", "resourceId": "remote:peer-a:STT", "modelId": "stt:model-a" },
+            "experimentalRemote": false
+        })).expect("valid fallback stage");
+        assert!(android_mesh_stage_route(&local_preferred, true)
+            .expect("local remains preferred")
+            .is_none());
+        assert!(
+            validate_android_local_stage(&local_preferred).is_ok(),
+            "dormant Mesh fallback must not block an available Local binding"
+        );
     }
 
     #[test]
