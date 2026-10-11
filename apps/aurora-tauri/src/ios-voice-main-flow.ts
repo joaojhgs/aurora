@@ -3,7 +3,7 @@ import {
   iosVoiceMainFlowCounters,
   pushIosVoiceMainFlowPcm,
 } from './native-ios-voice'
-import { createIosVoiceMainFlowAdapter, type IosVoiceMainFlowAdapter } from './aurora-client'
+import { createIosVoiceMainFlowAdapter, type IosVoiceMainFlowAdapter, type IosVoiceMainFlowControlResult } from './aurora-client'
 import {
   emptyRuntimeProfileDocument,
   parseRuntimeProfileDocument,
@@ -30,8 +30,8 @@ type LoopbackResult = {
   ownedAssetsRemoved: boolean
 }
 
-type IosVoiceSetupStep = 'profile_read' | 'profile_validation' | 'preferences_read' | 'model_status' | 'speech_catalog' | 'ownership_capture' | 'device_option' | 'onboarding_navigation' | 'profile_creation' | 'profile_readback'
-type IosVoiceSetupFailureCode = 'profile_not_empty' | 'model_not_owned' | 'speech_catalog_unavailable' | 'offline_profile_option_unavailable' | 'setup_timeout' | 'setup_failed'
+type IosVoiceSetupStep = NonNullable<IosVoiceMainFlowControlResult['setupStep']>
+type IosVoiceSetupFailureCode = NonNullable<IosVoiceMainFlowControlResult['failureCode']>
 
 let started = false
 let assistantRuntimeDisposer: (() => Promise<void>) | null = null
@@ -118,7 +118,14 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
     result.profileCreated = true
     result.stage = 'profile_created'
     result.stage = 'speech_setup'
-    await prepareSpeech(ownership, setupDeadline)
+    try {
+      await prepareSpeech(ownership, setupDeadline, (step) => { result.setupStep = step })
+      result.setupStep = null
+      result.failureCode = null
+    } catch (error) {
+      result.failureCode = classifySpeechSetupFailure(error, result.setupStep)
+      throw error
+    }
     result.speechReady = true
     result.stage = 'speech_ready'
     result.stage = 'model_setup'
@@ -287,11 +294,14 @@ function classifySetupFailure(error: unknown): IosVoiceSetupFailureCode {
   return 'setup_failed'
 }
 
-async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: number): Promise<void> {
+async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: number, onStep: (step: IosVoiceSetupStep) => void): Promise<void> {
   const deadline = Math.min(Date.now() + 650_000, setupDeadline)
+  onStep('settings_navigation')
   await openSettings()
+  onStep('speech_catalog')
   const catalog = await ownership.speech.listCatalog()
   if (catalog.state !== 'ready') throw new Error('speech_catalog_unavailable')
+  onStep('speech_pack_selection')
   const rawValue = await ownership.adapter.listIosVoicePacks()
   const rawEntries = Array.isArray(rawValue) ? rawValue : []
   const supportedFamilies = new Set(['silero_vad', 'zipformer', 'whisper', 'vits_piper', 'pockettts'])
@@ -310,16 +320,40 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
   const selected = rawSelected ? catalog.items.find((item) => item.packId === rawSelected.packId && item.task === 'stt') : undefined
   if (!selected) throw new Error('speech_pack_unavailable')
   ownership.selectedSttPackId = selected.packId
+  onStep('speech_profile_readback')
   const current = await readOwnedProfile(ownership)
   if (current.localNode.localSpeechSelection?.stt?.packId !== selected.packId) {
+    onStep('speech_picker_selection')
     await chooseSpeechOption('Choose transcription', selected.displayName, deadline)
   }
+  onStep('speech_readiness')
   await waitFor(async () => {
     const document = await readOwnedProfile(ownership)
     const ready = await ownership.speech.getReadiness()
     return document.localNode.localSpeechSelection?.stt?.packId === selected.packId
       && ready.available && ready.activeSlots.stt === selected.packId
   }, remaining(deadline, 650_000))
+}
+
+function classifySpeechSetupFailure(error: unknown, step: IosVoiceSetupStep | null): IosVoiceSetupFailureCode {
+  const code = error instanceof Error ? error.message : ''
+  if (code === 'speech_catalog_unavailable') return 'speech_catalog_unavailable'
+  if (code === 'speech_pack_unavailable') return 'speech_pack_unavailable'
+  if (code === 'speech_pack_not_selectable') return 'speech_pack_not_selectable'
+  if (code === 'main_flow_timeout' || code === 'main flow timed out') {
+    if (step === 'speech_readiness') return 'speech_readiness_timeout'
+    if (step === 'speech_picker_selection') return 'speech_picker_timeout'
+    return 'speech_setup_timeout'
+  }
+  switch (step) {
+    case 'settings_navigation': return 'speech_settings_navigation_failed'
+    case 'speech_catalog': return 'speech_catalog_failed'
+    case 'speech_pack_selection': return 'speech_pack_selection_failed'
+    case 'speech_profile_readback': return 'speech_profile_readback_failed'
+    case 'speech_picker_selection': return 'speech_picker_failed'
+    case 'speech_readiness': return 'speech_readiness_failed'
+    default: return 'speech_setup_failed'
+  }
 }
 
 async function prepareModel(ownership: OfflineSetupOwnership, setupDeadline: number): Promise<void> {

@@ -480,8 +480,8 @@ export type IosVoiceMainFlowControlResult = {
   nonce: string;
   status: "passed" | "failed";
   stage: string;
-  setupStep: "profile_read" | "profile_validation" | "preferences_read" | "model_status" | "speech_catalog" | "ownership_capture" | "device_option" | "onboarding_navigation" | "profile_creation" | "profile_readback" | null;
-  failureCode: "profile_not_empty" | "model_not_owned" | "speech_catalog_unavailable" | "offline_profile_option_unavailable" | "setup_timeout" | "setup_failed" | null;
+  setupStep: "profile_read" | "profile_validation" | "preferences_read" | "model_status" | "speech_catalog" | "ownership_capture" | "device_option" | "onboarding_navigation" | "profile_creation" | "profile_readback" | "settings_navigation" | "speech_pack_selection" | "speech_profile_readback" | "speech_picker_selection" | "speech_readiness" | null;
+  failureCode: "profile_not_empty" | "model_not_owned" | "speech_catalog_unavailable" | "offline_profile_option_unavailable" | "setup_timeout" | "setup_failed" | "speech_settings_navigation_failed" | "speech_catalog_failed" | "speech_pack_unavailable" | "speech_pack_selection_failed" | "speech_pack_not_selectable" | "speech_profile_readback_failed" | "speech_picker_failed" | "speech_picker_timeout" | "speech_readiness_timeout" | "speech_readiness_failed" | "speech_setup_timeout" | "speech_setup_failed" | null;
   chunks: number;
   samples: number;
   transcriptReceived: boolean;
