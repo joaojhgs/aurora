@@ -348,7 +348,7 @@ public final class AuroraIOSVoiceSessionHost {
     }
     guard let capture else { throw AuroraIOSVoiceSessionHostError.audioStateUnavailable }
     guard !capture.stats().running else {
-      throw AuroraIOSVoiceSessionHostError.commandFailed(AURORA_IOS_VOICE_ALREADY_ACTIVE)
+      throw AuroraIOSVoiceSessionHostError.commandFailed(Int32(AURORA_IOS_VOICE_ALREADY_ACTIVE))
     }
     try capture.beginFixtureIngress()
     var generation: UInt64 = 0
@@ -367,7 +367,7 @@ public final class AuroraIOSVoiceSessionHost {
       let nativeSession, let capture,
       let status = self.status(), status.active != 0,
       status.has_generation != 0, status.generation == generation
-    else { throw AuroraIOSVoiceSessionHostError.commandFailed(AURORA_IOS_VOICE_NOT_ACTIVE) }
+    else { throw AuroraIOSVoiceSessionHostError.commandFailed(Int32(AURORA_IOS_VOICE_NOT_ACTIVE)) }
     return try capture.pushFixturePCM(samples)
   }
   #endif

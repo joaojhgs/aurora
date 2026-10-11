@@ -903,6 +903,39 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(syncResult.stdout).toContain(
       'Staged Android native speech runtime libraries for arm64-v8a, x86_64',
     )
+    const stagedTauriAndroid = join(root, 'aurora-kotlin-compat', 'tauri-android')
+    const generatedBuildConfigMarker = join(
+      stagedTauriAndroid,
+      'build',
+      'generated',
+      'source',
+      'buildConfig',
+      'debug',
+      'preserved-marker.txt',
+    )
+    const gradleOutputMarker = join(stagedTauriAndroid, '.gradle', 'aurora-stage-test', 'preserved-marker.txt')
+    mkdirSync(dirname(generatedBuildConfigMarker), { recursive: true })
+    mkdirSync(dirname(gradleOutputMarker), { recursive: true })
+    writeFileSync(generatedBuildConfigMarker, 'generated output survives source reconciliation\n')
+    writeFileSync(gradleOutputMarker, 'gradle output survives source reconciliation\n')
+    const repeatedSyncResult = spawnSync(process.execPath, [syncNativePlugin], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_NATIVE_TARGETS: 'aarch64,x86_64',
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+      },
+    })
+    expect(repeatedSyncResult.status, repeatedSyncResult.stderr).toBe(0)
+    expect(readFileSync(generatedBuildConfigMarker, 'utf8')).toBe(
+      'generated output survives source reconciliation\n',
+    )
+    expect(readFileSync(gradleOutputMarker, 'utf8')).toBe(
+      'gradle output survives source reconciliation\n',
+    )
     for (const [abi, sourceDir] of [
       ['arm64-v8a', arm64NativeLibDir],
       ['x86_64', x86_64NativeLibDir],

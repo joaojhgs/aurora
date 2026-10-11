@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
 const genAndroidDir = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
@@ -293,10 +293,29 @@ function syncIncludedAndroidKotlinProjects() {
     throw new Error(`Generated barcode scanner project must resolve to the vendored Android source: ${vendorBarcodeScannerAndroidDir}`)
   }
 
-  // Validate every source/build script before replacing any generated copy.
+  // Reconcile staged source without deleting Gradle outputs generated between
+  // repeated Cargo builds. Upstream transient directories are never copied in.
   for (const project of plannedProjects) {
-    rmSync(project.stageDir, { recursive: true, force: true })
     mkdirSync(resolve(project.stageDir, '..'), { recursive: true })
+    if (existsSync(project.stageDir)) {
+      const stageStat = lstatSync(project.stageDir)
+      if (!stageStat.isDirectory() || stageStat.isSymbolicLink()) {
+        throw new Error(`Generated Android compatibility project is not a real directory: ${project.stageDir}`)
+      }
+      for (const entry of readdirSync(project.stageDir)) {
+        const entryPath = resolve(project.stageDir, entry)
+        if (entry === 'build' || entry === '.gradle') {
+          const outputStat = lstatSync(entryPath)
+          if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
+            throw new Error(`Generated Android build output is not a real directory: ${entryPath}`)
+          }
+          continue
+        }
+        rmSync(entryPath, { recursive: true, force: true })
+      }
+    } else {
+      mkdirSync(project.stageDir, { recursive: true })
+    }
     cpSync(project.sourceDir, project.stageDir, {
       recursive: true,
       force: true,
