@@ -71,6 +71,30 @@ export function resolveLlamaCppRuntime({
     }
 
     resolvedEnv[envName] = runtimePath
+    if (target === 'android-arm64') {
+      const python = existsSync(join(root, '.venv/bin/python'))
+        ? { command: join(root, '.venv/bin/python'), prefix: [] }
+        : { command: 'uv', prefix: ['run', '--no-sync', 'python'] }
+      const artifactRoot = resolve(join(root, '.artifacts/local-inference'))
+      const runtimeNeedleRoot = join(runtimePath, 'needle2')
+      const needleRoot = resolve(runtimeNeedleRoot).startsWith(`${artifactRoot}${sep}`)
+        ? runtimeNeedleRoot
+        : join(outputRoot, 'android-arm64', 'needle2')
+      const result = runCommand(
+        python.command,
+        [
+          ...python.prefix,
+          join(root, 'tools/local-inference/fetch_needle_native.py'),
+          '--lock-variant', 'android-v2',
+          '--target', 'android-arm64',
+          '--output-root', needleRoot,
+        ],
+        { cwd: root, env, stdio: 'inherit' },
+      )
+      if (result.error) throw result.error
+      if (result.status !== 0) throw new Error('Pinned Needle2 Android ARM64 assets could not be verified')
+      resolvedEnv.AURORA_NEEDLE2_ANDROID_ARM64_LIB_DIR = join(needleRoot, 'android-arm64')
+    }
     records.push({
       target,
       version: metadata.source.version,

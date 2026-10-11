@@ -36,6 +36,12 @@ pub use cactus::CactusBackend;
     target_arch = "aarch64"
 ))]
 pub use needle::Needle2Backend;
+#[cfg(all(
+    feature = "native-needle2",
+    target_os = "android",
+    target_arch = "aarch64"
+))]
+static BUNDLED_NEEDLE2_MODEL: &[u8] = include_bytes!(env!("AURORA_NEEDLE2_BUNDLED_MODEL"));
 #[cfg(feature = "native-llamacpp")]
 use tokio::sync::oneshot;
 
@@ -339,6 +345,74 @@ impl LocalInferenceState {
         })
     }
 
+    /// Install the pinned Android ARM64 Needle model into app-private storage.
+    #[cfg(all(
+        feature = "native-needle2",
+        target_os = "android",
+        target_arch = "aarch64"
+    ))]
+    pub fn install_bundled_needle2_model(&self) -> Result<(), LocalInferenceError> {
+        use std::fs::{self, OpenOptions};
+        use std::io::Write;
+
+        const MODEL_ID: &str = "actions-needle2";
+        const FILE_NAME: &str = "needle2.cact";
+        const MODEL_BYTES: u64 = 13_737_807;
+        const MODEL_SHA256: &str =
+            "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba";
+
+        let model = find_model(&self.inner.config, MODEL_ID)?;
+        if !is_needle_model(model)
+            || model.file_name != FILE_NAME
+            || model.byte_size != MODEL_BYTES
+            || model.sha256 != MODEL_SHA256
+        {
+            return Err(LocalInferenceError::ModelUnverified);
+        }
+        let digest = format!("{:x}", Sha256::digest(BUNDLED_NEEDLE2_MODEL));
+        if BUNDLED_NEEDLE2_MODEL.len() as u64 != MODEL_BYTES || digest != MODEL_SHA256 {
+            return Err(LocalInferenceError::ModelUnverified);
+        }
+
+        let root = &self.inner.config.app_private_root;
+        fs::create_dir_all(root).map_err(|_| LocalInferenceError::ModelUnavailable)?;
+        let destination = model_path(&self.inner.config, model)?;
+        match fs::symlink_metadata(&destination) {
+            Ok(metadata) if metadata.file_type().is_file() => {
+                return verify_model_file(&destination, model)
+            }
+            Ok(_) => return Err(LocalInferenceError::ModelUnverified),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(LocalInferenceError::ModelUnavailable),
+        }
+
+        let staging = root.join(format!(".needle2-{}.partial", std::process::id()));
+        let mut output = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&staging)
+            .map_err(|_| LocalInferenceError::ModelUnavailable)?;
+        let staged = (|| {
+            output
+                .write_all(BUNDLED_NEEDLE2_MODEL)
+                .map_err(|_| LocalInferenceError::ModelUnavailable)?;
+            output
+                .sync_all()
+                .map_err(|_| LocalInferenceError::ModelUnavailable)?;
+            drop(output);
+            verify_model_file(&staging, model)?;
+            match fs::hard_link(&staging, &destination) {
+                Ok(()) => Ok(()),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    verify_model_file(&destination, model)
+                }
+                Err(_) => Err(LocalInferenceError::ModelUnavailable),
+            }
+        })();
+        let _ = fs::remove_file(&staging);
+        staged
+    }
+
     /// Install the platform bridge before any non-llama model is loaded.
     pub fn install_native_backend(
         &self,
@@ -389,7 +463,7 @@ impl LocalInferenceState {
             .collect()
     }
 
-    /// Advertise only the engine compiled into this native target.
+    /// Advertise only engines compiled into this native target.
     pub fn engines(&self) -> Vec<EngineInfo> {
         let engines = vec![EngineInfo {
             engine: "llamacpp".to_owned(),
@@ -399,7 +473,7 @@ impl LocalInferenceState {
             max_concurrent_models: 1,
         }];
         #[cfg(all(feature = "native-cactus", target_os = "ios", target_arch = "aarch64"))]
-        {
+        let engines = {
             let mut engines = engines;
             engines.push(EngineInfo {
                 engine: "cactus".to_owned(),
@@ -409,11 +483,24 @@ impl LocalInferenceState {
                 max_concurrent_models: 1,
             });
             engines
-        }
-        #[cfg(not(all(feature = "native-cactus", target_os = "ios", target_arch = "aarch64")))]
-        {
+        };
+        #[cfg(all(
+            feature = "native-needle2",
+            target_os = "android",
+            target_arch = "aarch64"
+        ))]
+        let engines = {
+            let mut engines = engines;
+            engines.push(EngineInfo {
+                engine: "needle2".to_owned(),
+                surface: "android".to_owned(),
+                version: "2.0.1".to_owned(),
+                accelerators: vec!["cpu".to_owned()],
+                max_concurrent_models: 1,
+            });
             engines
-        }
+        };
+        engines
     }
 
     /// Return one catalog entry to trusted native download code.

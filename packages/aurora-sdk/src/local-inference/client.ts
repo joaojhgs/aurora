@@ -318,7 +318,7 @@ export class LocalInferenceClient implements LocalInferenceSessionPort {
 }
 
 function parseEngineDescriptor(value: unknown): LocalInferenceEngineDescriptor {
-  if (!isRecord(value) || !isOneOf(value.engine, ['cactus', 'llamacpp', 'litert']) ||
+  if (!isRecord(value) || !isOneOf(value.engine, ['cactus', 'llamacpp', 'litert', 'needle2']) ||
     !isOneOf(value.surface, ['android', 'ios', 'desktop']) || typeof value.version !== 'string' ||
     !Array.isArray(value.accelerators) ||
     !isPositiveInteger(value.maxConcurrentModels)) throw malformed()

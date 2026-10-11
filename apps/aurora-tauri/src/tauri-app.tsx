@@ -37,7 +37,7 @@ import {
 } from "@aurora/ui/owl-loader";
 import { Button } from "@aurora/ui/primitives";
 import { LocalInferenceSettingsView } from "@aurora/ui/local-inference-settings-view";
-import { DEFAULT_OFFLINE_ASSISTANT_MODEL } from "./tauri-local-inference";
+import { resolveNativeLocalInferenceSelection } from "./tauri-local-inference";
 import { EvidenceBadge } from "@aurora/ui/status-badges";
 import {
   type OnboardingModePreferenceStore,
@@ -2620,6 +2620,19 @@ function TauriSettingsPage({
   navigate: (href: string) => void;
   onChangeDeviceSetup: () => void;
 }) {
+  const [offlineAssistantModelId, setOfflineAssistantModelId] = useState<string | null>(null);
+  useEffect(() => {
+    const inference = nativeContext.localInference;
+    let current = true;
+    setOfflineAssistantModelId(null);
+    if (inference) {
+      void resolveNativeLocalInferenceSelection(inference).then(
+        (selection) => { if (current) setOfflineAssistantModelId(selection.chatModelId); },
+        () => { if (current) setOfflineAssistantModelId(null); },
+      );
+    }
+    return () => { current = false; };
+  }, [nativeContext.localInference]);
   const configRoute = embeddedRoute("config", snapshot) ?? route;
   const dataRoute = embeddedRoute("data", snapshot) ?? route;
   return (
@@ -2677,10 +2690,10 @@ function TauriSettingsPage({
             </section>
           ) : null
         }
-        localAssistantContent={nativeContext.localInference ? (
+        localAssistantContent={nativeContext.localInference && offlineAssistantModelId ? (
           <LocalInferenceSettingsView
             client={nativeContext.localInference}
-            modelId={DEFAULT_OFFLINE_ASSISTANT_MODEL}
+            modelId={offlineAssistantModelId}
             enabled={nativeContext.surfaceProfile.localInferenceEnabled}
             onEnabledChange={nativeContext.saveLocalInference}
           />

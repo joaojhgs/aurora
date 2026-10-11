@@ -642,6 +642,18 @@ def build(args: argparse.Namespace) -> Path:
     output = ensure_bounded(output_root / target, artifact_root, "runtime output")
     output.parent.mkdir(parents=True, exist_ok=True)
     stage_runtime(install_dir, build_dir, source_root, output, target, cmake_args[6:])
+    if target == "android-arm64":
+        subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "tools/local-inference/fetch_needle_native.py"),
+                "--lock-variant", "android-v2",
+                "--target", "android-arm64",
+                "--output-root", str(output / "needle2"),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
     return output
 
 
@@ -712,6 +724,18 @@ def stage_existing_build(args: argparse.Namespace) -> Path:
     output = ensure_bounded(output_root / target, artifact_root, "runtime output")
     output.parent.mkdir(parents=True, exist_ok=True)
     stage_runtime(install, build_dir, source_root, output, target, cmake_args[6:])
+    if target == "android-arm64":
+        subprocess.run(
+            [
+                sys.executable,
+                str(REPO_ROOT / "tools/local-inference/fetch_needle_native.py"),
+                "--lock-variant", "android-v2",
+                "--target", "android-arm64",
+                "--output-root", str(output / "needle2"),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+        )
     return output
 
 

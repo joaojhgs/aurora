@@ -304,11 +304,16 @@ fn link_needle2_android_arm64() {
     const ENV_KEY: &str = "AURORA_NEEDLE2_ANDROID_ARM64_LIB_DIR";
     println!("cargo:rerun-if-env-changed={ENV_KEY}");
     println!("cargo:rerun-if-env-changed=CARGO_{ENV_KEY}");
-    let root = PathBuf::from(
-        env::var_os(ENV_KEY)
-            .or_else(|| env::var_os(format!("CARGO_{ENV_KEY}")))
-            .expect("Stage the pinned Needle2 Android ARM64 runtime first"),
-    );
+    let root = env::var_os(ENV_KEY)
+        .or_else(|| env::var_os(format!("CARGO_{ENV_KEY}")))
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR")
+                .or_else(|| env::var_os("CARGO_AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR"))
+                .map(PathBuf::from)
+                .map(|llama_root| llama_root.join("needle2").join("android-arm64"))
+        })
+        .expect("Stage the pinned Needle2 Android ARM64 runtime first");
     let metadata_path = root.join("aurora-needle-runtime.json");
     println!("cargo:rerun-if-changed={}", metadata_path.display());
     let metadata: serde_json::Value = serde_json::from_slice(
@@ -376,6 +381,47 @@ fn link_needle2_android_arm64() {
     assert_eq!(
         &magic, b"!<arch>\n",
         "Needle2 must use a real static archive"
+    );
+    let model = root
+        .parent()
+        .expect("Needle2 cache parent is required")
+        .join("needle2.cact");
+    let model_metadata = fs::symlink_metadata(&model).expect("Pinned Needle2 model is missing");
+    assert!(
+        model_metadata.file_type().is_file(),
+        "Needle2 model must be a regular file"
+    );
+    assert_eq!(
+        model_metadata.len(),
+        13_737_807,
+        "Pinned Needle2 model size mismatch"
+    );
+    println!("cargo:rerun-if-changed={}", model.display());
+    let mut file = File::open(&model).expect("Pinned Needle2 model is unreadable");
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = file
+            .read(&mut buffer)
+            .expect("Pinned Needle2 model is unreadable");
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    assert_eq!(
+        format!("{:x}", digest.finalize()),
+        NEEDLE2_MODEL_SHA256,
+        "Pinned Needle2 model checksum mismatch"
+    );
+    println!("cargo:rerun-if-env-changed=AURORA_NEEDLE2_ANDROID_ARM64_LIB_DIR");
+    println!("cargo:rerun-if-env-changed=CARGO_AURORA_NEEDLE2_ANDROID_ARM64_LIB_DIR");
+    let model = model
+        .canonicalize()
+        .expect("Pinned Needle2 model path is invalid");
+    println!(
+        "cargo:rustc-env=AURORA_NEEDLE2_BUNDLED_MODEL={}",
+        model.display()
     );
     println!("cargo:rustc-link-search=native={}", root.display());
     println!("cargo:rustc-link-lib=static=needle");

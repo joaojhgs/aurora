@@ -48,7 +48,7 @@ export type LocalInferenceCompletionResponse =
       readonly usage?: Readonly<Record<string, number | undefined>>
     }
 
-export type LocalInferenceEngineKind = 'cactus' | 'llamacpp' | 'litert'
+export type LocalInferenceEngineKind = 'cactus' | 'llamacpp' | 'litert' | 'needle2'
 export type LocalInferenceSurface = 'android' | 'ios' | 'desktop'
 export type LocalInferenceModelState = 'absent' | 'downloading' | 'verifying' | 'ready' | 'corrupt' | 'incompatible'
 

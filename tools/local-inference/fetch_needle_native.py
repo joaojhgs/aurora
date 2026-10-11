@@ -57,6 +57,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lock-variant", choices=tuple(LOCK_FILES), default="original")
     parser.add_argument("--target", required=True)
+    parser.add_argument("--output-root", type=Path)
     args = parser.parse_args()
     lock = json.loads(LOCK_FILES[args.lock_variant].read_text())
     if args.target not in lock["targets"]:
@@ -64,7 +65,17 @@ def main() -> None:
     if args.lock_variant == "android-v2" and args.target != "android-arm64":
         parser.error("android-v2 is pinned only for android-arm64")
     target = lock["targets"][args.target]
-    cache = ROOT / ".artifacts/local-inference/needle2" / lock["revision"]
+    if args.output_root is not None:
+        if args.lock_variant != "android-v2" or args.target != "android-arm64":
+            parser.error("--output-root is reserved for the pinned Android ARM64 cache")
+        artifact_root = (ROOT / ".artifacts/local-inference").resolve()
+        cache = args.output_root.resolve()
+        try:
+            cache.relative_to(artifact_root)
+        except ValueError:
+            parser.error("--output-root must remain within the local inference artifact cache")
+    else:
+        cache = ROOT / ".artifacts/local-inference/needle2" / lock["revision"]
     library_root = cache / target["directory"]
     origin = f"https://huggingface.co/{lock['publisher']}/resolve/{lock['revision']}/"
     model = lock["model"]

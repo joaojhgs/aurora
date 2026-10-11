@@ -39,6 +39,8 @@ impl NativeLocalInferenceState {
         #[cfg(all(target_os = "ios", target_arch = "aarch64"))]
         let private_root = config.app_private_root.clone();
         let engine = LocalInferenceState::new(config)?;
+        #[cfg(all(target_os = "android", target_arch = "aarch64"))]
+        engine.install_bundled_needle2_model()?;
         #[cfg(target_os = "android")]
         engine.install_native_backend(Arc::new(AndroidNativeInferenceBackend::new(app)))?;
         #[cfg(all(target_os = "ios", target_arch = "aarch64"))]
@@ -101,14 +103,14 @@ impl AndroidLiteRtBackend {
 #[derive(Clone, Copy)]
 enum AndroidInferenceRoute {
     LiteRt,
-    #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+    #[cfg(all(target_arch = "aarch64"))]
     Needle2,
 }
 
 #[cfg(target_os = "android")]
 struct AndroidNativeInferenceBackend {
     lite_rt: AndroidLiteRtBackend,
-    #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+    #[cfg(all(target_arch = "aarch64"))]
     needle: aurora_local_inference::Needle2Backend,
     active: std::sync::Mutex<Option<AndroidInferenceRoute>>,
 }
@@ -118,7 +120,7 @@ impl AndroidNativeInferenceBackend {
     fn new(app: AppHandle<tauri::Wry>) -> Self {
         Self {
             lite_rt: AndroidLiteRtBackend { app },
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             needle: aurora_local_inference::Needle2Backend,
             active: std::sync::Mutex::new(None),
         }
@@ -146,11 +148,11 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
             if model_path.extension().and_then(|ext| ext.to_str()) != Some("cact") {
                 return Err(LocalInferenceError::ModelUnavailable);
             }
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             {
                 AndroidInferenceRoute::Needle2
             }
-            #[cfg(not(all(target_arch = "aarch64", feature = "android-arm64-needle2")))]
+            #[cfg(not(all(target_arch = "aarch64")))]
             {
                 return Err(LocalInferenceError::Unsupported);
             }
@@ -161,7 +163,7 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
         };
         match route {
             AndroidInferenceRoute::LiteRt => self.lite_rt.load(model_id, model_path, cache_path)?,
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             AndroidInferenceRoute::Needle2 => self.needle.load(model_id, model_path, cache_path)?,
         }
         *self
@@ -178,7 +180,7 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
     ) -> Result<String, LocalInferenceError> {
         match self.active()? {
             AndroidInferenceRoute::LiteRt => self.lite_rt.complete(request_id, request_json),
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             AndroidInferenceRoute::Needle2 => self.needle.complete(request_id, request_json),
         }
     }
@@ -186,7 +188,7 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
     fn cancel(&self, request_id: &str) -> bool {
         match self.active() {
             Ok(AndroidInferenceRoute::LiteRt) => self.lite_rt.cancel(request_id),
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             Ok(AndroidInferenceRoute::Needle2) => self.needle.cancel(request_id),
             Err(_) => false,
         }
@@ -195,7 +197,7 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
     fn reset(&self) -> Result<(), LocalInferenceError> {
         match self.active()? {
             AndroidInferenceRoute::LiteRt => self.lite_rt.reset(),
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             AndroidInferenceRoute::Needle2 => self.needle.reset(),
         }
     }
@@ -204,7 +206,7 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
         let route = self.active()?;
         let result = match route {
             AndroidInferenceRoute::LiteRt => self.lite_rt.destroy(),
-            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_arch = "aarch64"))]
             AndroidInferenceRoute::Needle2 => self.needle.destroy(),
         };
         if result.is_ok() {
@@ -436,26 +438,43 @@ pub(crate) async fn aurora_local_inference_delete_model(
         Ok(descriptor) => descriptor,
         Err(error) => return Ok(CommandEnvelope::failure(error)),
     };
+    let is_cactus = model_id == "chat-qwen3-06b-cactus";
+    if state.engine().session_loaded(&model_id) {
+        return Ok(CommandEnvelope::failure(LocalInferenceError::SessionBusy));
+    }
     match state.model_status(model_id.clone()).await {
-        Ok(status) if status.state == "ready" && state.engine().session_loaded(&model_id) => {
-            return Ok(CommandEnvelope::failure(LocalInferenceError::SessionBusy))
+        Ok(status) if status.state == "absent" && !is_cactus => {
+            return Ok(CommandEnvelope::success(status));
         }
-        Ok(status) if status.state == "absent" => return Ok(CommandEnvelope::success(status)),
         Err(error) => return Ok(CommandEnvelope::failure(error)),
         _ => {}
     }
     let root = state.engine().app_private_root();
-    Ok(
-        match confined_model_path(root, &descriptor.file_name).and_then(|path| {
-            std::fs::remove_file(path).map_err(|_| LocalInferenceError::ModelUnavailable)
-        }) {
-            Ok(()) => match state.model_status(model_id.clone()).await {
-                Ok(status) => CommandEnvelope::success(status),
-                Err(error) => CommandEnvelope::failure(error),
-            },
-            Err(_) => CommandEnvelope::failure(LocalInferenceError::ModelUnavailable),
+    let cleanup = (|| {
+        if is_cactus {
+            remove_cactus_model_cache(root)?;
+        }
+        let archive = root.join(&descriptor.file_name);
+        match std::fs::symlink_metadata(&archive) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(LocalInferenceError::ModelUnavailable);
+            }
+            Ok(_) => {
+                let path = confined_model_path(root, &descriptor.file_name)?;
+                std::fs::remove_file(path).map_err(|_| LocalInferenceError::ModelUnavailable)?;
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound && is_cactus => {}
+            Err(_) => return Err(LocalInferenceError::ModelUnavailable),
+        }
+        Ok(())
+    })();
+    match cleanup {
+        Ok(()) => match state.model_status(model_id.clone()).await {
+            Ok(status) => Ok(CommandEnvelope::success(status)),
+            Err(error) => Ok(CommandEnvelope::failure(error)),
         },
-    )
+        Err(error) => Ok(CommandEnvelope::failure(error)),
+    }
 }
 
 #[tauri::command]
@@ -594,7 +613,11 @@ async fn verify_staged_file(
     {
         &magic == b"PK\x03\x04"
     } else {
-        descriptor.file_name.ends_with(".litertlm") || &magic == b"GGUF"
+        (cfg!(all(target_os = "android", target_arch = "aarch64"))
+            && descriptor.model_id == "actions-needle2"
+            && descriptor.file_name == "needle2.cact")
+            || descriptor.file_name.ends_with(".litertlm")
+            || &magic == b"GGUF"
     };
     if !valid_magic {
         return Err(LocalInferenceError::ModelUnverified);
@@ -629,6 +652,50 @@ async fn promote_staged_file(
         let _ = tokio::fs::remove_file(backup).await;
     }
     Ok(())
+}
+
+fn remove_cactus_model_cache(root: &Path) -> Result<(), LocalInferenceError> {
+    let canonical_root = root
+        .canonicalize()
+        .map_err(|_| LocalInferenceError::ModelUnavailable)?;
+    let cache_root = canonical_root.join("cache");
+    let model_cache = cache_root.join("chat-qwen3-06b-cactus");
+    let extracted_model = model_cache.join("model");
+
+    for directory in [&cache_root, &model_cache] {
+        match std::fs::symlink_metadata(directory) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(_) => return Err(LocalInferenceError::ModelUnavailable),
+            Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+                return Err(LocalInferenceError::ModelUnavailable)
+            }
+            Ok(_) => {
+                let canonical = directory
+                    .canonicalize()
+                    .map_err(|_| LocalInferenceError::ModelUnavailable)?;
+                if canonical != *directory || !canonical.starts_with(&canonical_root) {
+                    return Err(LocalInferenceError::ModelUnavailable);
+                }
+            }
+        }
+    }
+
+    match std::fs::symlink_metadata(&extracted_model) {
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(_) => Err(LocalInferenceError::ModelUnavailable),
+        Ok(metadata) if metadata.file_type().is_symlink() || !metadata.is_dir() => {
+            Err(LocalInferenceError::ModelUnavailable)
+        }
+        Ok(_) => {
+            let canonical = extracted_model
+                .canonicalize()
+                .map_err(|_| LocalInferenceError::ModelUnavailable)?;
+            if canonical != extracted_model || !canonical.starts_with(&canonical_root) {
+                return Err(LocalInferenceError::ModelUnavailable);
+            }
+            std::fs::remove_dir_all(canonical).map_err(|_| LocalInferenceError::ModelUnavailable)
+        }
+    }
 }
 
 fn confined_model_path(root: &Path, file_name: &str) -> Result<PathBuf, LocalInferenceError> {

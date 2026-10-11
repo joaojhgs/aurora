@@ -9739,7 +9739,7 @@ pub fn run() {
                 max_output_tokens: 512,
                 capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: true },
             });
-            #[cfg(all(target_os = "android", target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            #[cfg(all(target_os = "android", target_arch = "aarch64"))]
             local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
                 model_id: "actions-needle2".into(),
                 display_label: "Device actions (Needle2)".into(),

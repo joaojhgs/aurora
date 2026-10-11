@@ -4,6 +4,7 @@ import {
   pushIosVoiceMainFlowPcm,
 } from './native-ios-voice'
 import { createIosVoiceMainFlowAdapter, type IosVoiceMainFlowAdapter, type IosVoiceMainFlowControlResult } from './aurora-client'
+import { CACTUS_OFFLINE_ASSISTANT_MODEL, DEFAULT_OFFLINE_ASSISTANT_MODEL } from './tauri-local-inference'
 import {
   emptyRuntimeProfileDocument,
   parseRuntimeProfileDocument,
@@ -200,6 +201,7 @@ type OfflineSetupOwnership = {
   readonly originalProfileValue: string
   readonly originalProfileWasNull: boolean
   readonly initialModelState: 'absent' | 'ready'
+  readonly modelId: string
   readonly simulatorArchitecture: 'arm64' | 'x86_64'
   readonly initialSpeechCache: ReadonlyMap<string, boolean>
   createdProfileId: string | null
@@ -222,7 +224,17 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
   // absent and the profile readback below is their authoritative restoration.
   const inference = adapter.inference
   onStep('model_status')
-  const model = await inference.modelStatus('chat-qwen3-0b8')
+  const modelId = simulatorArchitecture === 'arm64'
+    ? CACTUS_OFFLINE_ASSISTANT_MODEL
+    : DEFAULT_OFFLINE_ASSISTANT_MODEL
+  if (simulatorArchitecture === 'arm64') {
+    const [engines, catalog] = await Promise.all([inference.engines(), inference.catalog()])
+    if (!engines.some((engine) => engine.engine === 'cactus')
+      || !catalog.some((entry) => entry.modelId === modelId && entry.capabilities.chat)) {
+      throw new Error('cactus_engine_unavailable')
+    }
+  }
+  const model = await inference.modelStatus(modelId)
   if (model.state !== 'absent' && model.state !== 'ready') throw new Error('model_not_owned')
   const speech = adapter.speech
   onStep('speech_catalog')
@@ -238,6 +250,7 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     originalProfileValue,
     originalProfileWasNull,
     initialModelState: model.state,
+    modelId,
     simulatorArchitecture,
     initialSpeechCache,
     createdProfileId: null,
@@ -367,12 +380,12 @@ function classifySpeechSetupFailure(error: unknown, step: IosVoiceSetupStep | nu
 
 async function prepareModel(ownership: OfflineSetupOwnership, setupDeadline: number): Promise<void> {
   const deadline = Math.min(Date.now() + 650_000, setupDeadline)
-  const before = await ownership.inference.modelStatus('chat-qwen3-0b8')
+  const before = await ownership.inference.modelStatus(ownership.modelId)
   if (before.state !== 'absent' && before.state !== 'ready') throw new Error('model_not_owned')
   if (before.state !== 'ready') {
     const button = await waitForButtonText('Download offline answers', 30_000)
     button.click()
-    await waitFor(async () => (await ownership.inference.modelStatus('chat-qwen3-0b8')).state === 'ready', remaining(deadline, 650_000))
+    await waitFor(async () => (await ownership.inference.modelStatus(ownership.modelId)).state === 'ready', remaining(deadline, 650_000))
   }
   let toggle = await waitForElement<HTMLButtonElement>('#offline-assistant-enabled[role="switch"]', 30_000)
   if (toggle.getAttribute('aria-checked') !== 'true') toggle.click()
@@ -464,14 +477,14 @@ async function restoreOfflineSetup(ownership: OfflineSetupOwnership, deadline: n
       }
       if (ownership.initialModelState === 'absent') {
         if (Date.now() >= deadline) throw new Error('cleanup_timeout')
-        const model = await ownership.inference.modelStatus('chat-qwen3-0b8')
-        if (model.state !== 'absent') await ownership.inference.deleteModel('chat-qwen3-0b8')
-        if ((await ownership.inference.modelStatus('chat-qwen3-0b8')).state !== 'absent') throw new Error('model_cleanup_failed')
+        const model = await ownership.inference.modelStatus(ownership.modelId)
+        if (model.state !== 'absent') await ownership.inference.deleteModel(ownership.modelId)
+        if ((await ownership.inference.modelStatus(ownership.modelId)).state !== 'absent') throw new Error('model_cleanup_failed')
       }
     }
     const speechCatalog = await ownership.speech.listCatalog()
     const speechEntry = speechCatalog.items.find((item) => item.task === 'stt' && item.packId === ownership.selectedSttPackId)
-    const modelStatus = await ownership.inference.modelStatus('chat-qwen3-0b8')
+    const modelStatus = await ownership.inference.modelStatus(ownership.modelId)
     const speechWasCached = ownership.selectedSttPackId
       ? ownership.initialSpeechCache.get(`stt:${ownership.selectedSttPackId}`) === true
       : false

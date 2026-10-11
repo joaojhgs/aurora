@@ -23,7 +23,6 @@ desktop-live-webdriver = ["dep:tauri-plugin-wdio-webdriver"]
 desktop-native-voice-e2e = []
 android-voice-live-test = ["aurora-voice-native/android-voice-live-test"]
 ios-voice-live-test = []
-android-arm64-needle2 = ["aurora-local-inference/native-needle2"]
 
 [build-dependencies]
 swift-rs = { version = "1.0.7", features = ["build"] }
@@ -80,6 +79,9 @@ aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
 aurora-voice-sherpa = { path = "../../../rust/crates/aurora-voice-sherpa" }
 aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }
 aurora-voice-native = { path = "../../../rust/crates/aurora-voice-native", features = ["ios-sherpa"] }
+
+[target.'cfg(all(target_os = "android", target_arch = "aarch64"))'.dependencies]
+aurora-local-inference = { path = "../../../rust/crates/aurora-local-inference", features = ["native-needle2"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
