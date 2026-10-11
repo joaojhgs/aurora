@@ -74,8 +74,53 @@ export async function enterAndroidInvite(client, inviteText, timeoutMs = DEFAULT
   )
 }
 
-async function readAndroidPairReadiness(client) {
+export async function readAndroidPairReadiness(client) {
   const expression = `(() => {
+    const classifyPeerSessionError = (message) => {
+      if (!message) return null;
+      if (message.includes('Production MQTT signaling requires wss:// broker URLs')) return 'broker_policy_wss_required';
+      if (message.includes('ws:// signaling is only allowed for explicit loopback development')) return 'broker_policy_loopback_opt_in_required';
+      if (message.includes('ws:// signaling is restricted to loopback development brokers')) return 'broker_policy_loopback_host_required';
+      if (message.includes('Browser MQTT signaling requires ws:// or wss:// broker URLs')) return 'broker_policy_unsupported_scheme';
+      if (message.startsWith('MQTT signaling failed to connect to ')) {
+        return message.includes('Timed out connecting to') ? 'mqtt_connect_timeout' : 'mqtt_signaling_all_brokers_failed';
+      }
+
+      switch (message) {
+        case 'signaling timeout': return 'signaling_timeout';
+        case 'peer discovery timeout': return 'peer_discovery_timeout';
+        case 'pairing exchange timeout':
+        case 'pairing timeout': return 'pairing_timeout';
+        case 'auth timeout': return 'authentication_timeout';
+        case 'negotiation timeout': return 'negotiation_timeout';
+        case 'remote signaling identity mismatch':
+        case 'remote stable identity mismatch':
+        case 'remote stable identity changed':
+        case 'remote signaling identity changed': return 'peer_identity_mismatch';
+        case 'offer missing sdp':
+        case 'answer missing sdp': return 'negotiation_protocol_error';
+        case 'unexpected data channel label':
+        case 'offerer received unexpected data channel': return 'data_channel_protocol_error';
+        case 'invalid protocol hello': return 'protocol_hello_invalid';
+        case 'preauth frame retry required':
+        case 'authorized auth retry required':
+        case 'reconnect retry required': return 'authentication_retry_required';
+        case 'preauth frame denied':
+        case 'authorized auth frame denied':
+        case 'reconnect denied': return 'authentication_denied';
+        case 'auth port with handleFrame is required': return 'authentication_configuration_missing';
+        case 'remote signaling session changed':
+        case 'remote signaling session departed': return 'signaling_peer_session_changed';
+        case 'data channel closed':
+        case 'data channel error':
+        case 'peer connection failed':
+        case 'peer connection disconnected': return 'peer_transport_disconnected';
+        default:
+          if (message.startsWith('preauth frame ') || message.startsWith('authorized auth ')) return 'authentication_protocol_error';
+          if (message.startsWith('encrypted data channel frame rejected: ')) return 'data_channel_frame_rejected';
+          return 'unclassified_peer_session_error';
+      }
+    };
     const safeLabel = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,64}$/iu.test(value) ? value : null;
     const anchor = [...document.querySelectorAll('button')].slice(0, 2000)
       .find((button) => button.textContent?.trim() === 'Connect device');
@@ -100,19 +145,7 @@ async function readAndroidPairReadiness(client) {
       const errorCode = safeLabel(rawError?.code);
       const rawMessage = typeof rawError?.message === 'string' ? rawError.message : '';
       // Classify only fixed SDK source messages; never return message text, URL, or credentials.
-      const errorCategory = rawMessage.includes('Production MQTT signaling requires wss:// broker URLs')
-        ? 'broker_policy_wss_required'
-        : rawMessage.includes('ws:// signaling is only allowed for explicit loopback development')
-          ? 'broker_policy_loopback_opt_in_required'
-          : rawMessage.includes('ws:// signaling is restricted to loopback development brokers')
-            ? 'broker_policy_loopback_host_required'
-            : rawMessage.includes('Browser MQTT signaling requires ws:// or wss:// broker URLs')
-              ? 'broker_policy_unsupported_scheme'
-              : rawMessage.startsWith('MQTT signaling failed to connect to ') && rawMessage.includes('Timed out connecting to')
-                ? 'mqtt_connect_timeout'
-                : rawMessage.startsWith('MQTT signaling failed to connect to ')
-                  ? 'mqtt_signaling_all_brokers_failed'
-                  : rawMessage ? 'unclassified_peer_session_error' : null;
+      const errorCategory = classifyPeerSessionError(rawMessage);
       const lastRedactedError = errorCode && rawMessage
         ? { code: errorCode, messagePresent: true, category: errorCategory }
         : null;

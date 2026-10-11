@@ -747,9 +747,11 @@ export async function runAcceptance() {
         gatewayApiKey: runEnvironment.AURORA_THREE_NODE_GATEWAY_API_KEY,
         inviteText,
         pythonPeerId: ownedStack.mesh.local?.peer_id,
+        permissions: HOSTED_PEER_PYTHON_PERMISSIONS,
       },
       modelFixture: fixtureTurn,
       hostedSpeechConsumer,
+      remoteConsoleShellMain: environment.AURORA_ANDROID_MAIN_FLOW_ONLY === '1',
     })
     if (childExited(python)) throw new Error(`Aurora main.py exited with status ${python.exitCode ?? python.signalCode ?? 'unknown'}.`)
   } catch (error) {

@@ -8,6 +8,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { acquireAndroidSmokeLock, resolveAndroidSmokeLockPath } from './android-emulator-smoke-runner.mjs'
 import { connectAndroidWebviewCdp } from './android-webview-cdp.mjs'
 import { pairFreshPythonWithAndroid } from './android-native-turn-pairing.mjs'
+import { runAndroidRemoteConsoleShellMain } from './android-remote-console-shell-main.mjs'
 
 const DEFAULT_APP_ID = 'dev.aurora.desktop'
 const DEFAULT_PACK_TIMEOUT_MS = 30 * 60_000
@@ -360,7 +361,7 @@ export function wakePhraseRevision({ phrase, language, packId, packRevision }) {
   return `wakephrase-v1-${hash.toString(36).padStart(7, '0')}`
 }
 
-export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null, hostedSpeechConsumer = null } = {}) {
+export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null, hostedSpeechConsumer = null, remoteConsoleShellMain = false } = {}) {
   const inheritedEnvironment = process.env
   const environmentOverlay = environment === inheritedEnvironment ? null : Object.fromEntries(
     Object.entries(environment).map(([key, value]) => [key, inheritedEnvironment[key]]),
@@ -425,6 +426,23 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     const readyPacks = resolveSelectedCatalogEntries(readyCatalog, packs)
     const storedProfile = await invoke('aurora_thin_profile_get')
     originalProfileValue = storedProfile?.value
+    if (remoteConsoleShellMain) {
+      if (!pairing) throw new Error('Android remote-console shell continuity requires the owned Python pairing fixture.')
+      await runAndroidRemoteConsoleShellMain({
+        session: { client: webview.client, invoke },
+        originalProfileValue,
+        pairing,
+        restart: async () => {
+          try { webview?.close() } catch { /* restart below establishes a new owner */ }
+          adbRun(context, ['shell', 'am', 'force-stop', '--user', 'current', context.appId])
+          launchApp(context)
+          webview = await connectInstalledWebview(context)
+          invoke = (command, args) => invokeTauri(webview.client, command, args)
+          await waitForTauriInvoke(webview.client, Date.now() + DEFAULT_WEBVIEW_TIMEOUT_MS)
+          return { client: webview.client, invoke }
+        },
+      })
+    }
     const existingProfile = parseStoredRuntimeProfile(originalProfileValue)
     const existingActiveProfile = existingProfile?.profiles?.find((candidate) => candidate?.id === existingProfile.activeProfileId)
     const ownedGatewayUrl = pairing?.gatewayUrl ?? environment.AURORA_THREE_NODE_GATEWAY_URL
