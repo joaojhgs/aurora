@@ -9727,6 +9727,18 @@ pub fn run() {
                 max_output_tokens: 512,
                 capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: false },
             });
+            #[cfg(all(target_os = "android", target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
+                model_id: "actions-needle2".into(),
+                display_label: "Device actions (Needle2)".into(),
+                file_name: "needle2.cact".into(),
+                byte_size: 13_737_807,
+                sha256: "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba".into(),
+                source_url: "https://huggingface.co/Cactus-Compute/needle2/resolve/32e9e3a93b205f786929697446ae669cf0a84579/needle2.cact".into(),
+                context_tokens: 256,
+                max_output_tokens: 512,
+                capabilities: aurora_local_inference::ModelCapabilities { chat: false, tools: true },
+            });
             #[cfg(any(target_os = "android", target_os = "ios"))]
             app.manage(
                 NativeLocalInferenceState::new(

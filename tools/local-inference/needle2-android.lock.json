@@ -1,0 +1,23 @@
+{
+  "format": 1,
+  "publisher": "Cactus-Compute/needle2",
+  "revision": "32e9e3a93b205f786929697446ae669cf0a84579",
+  "model": {
+    "path": "needle2.cact",
+    "bytes": 13737807,
+    "sha256": "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba"
+  },
+  "header": {
+    "name": "needle.h",
+    "bytes": 562,
+    "sha256": "cb7a720eba7bc895b5bbfa5d6f6fc635906938fdc569eb2520a2c09ba06d9eed"
+  },
+  "targets": {
+    "android-arm64": {
+      "directory": "android-arm64",
+      "libraryBytes": 20729982,
+      "librarySha256": "93738ae3a9488cbc3104eb65bf49093683c26eb01b0d257e980e499d1d06a9f4"
+    }
+  },
+  "licenseContext": "Preserve the user's personal, educational and nonprofit use basis. The Needle2 model card declares Apache-2.0; public redistribution requires separate runtime-license review."
+}

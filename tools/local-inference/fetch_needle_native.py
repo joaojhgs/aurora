@@ -9,7 +9,11 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-LOCK_PATH = Path(__file__).with_name("needle2.lock.json")
+LOCK_DIR = Path(__file__).parent
+LOCK_FILES = {
+    "original": LOCK_DIR / "needle2.lock.json",
+    "android-v2": LOCK_DIR / "needle2-android.lock.json",
+}
 
 
 def fetch_verified(url: str, destination: Path, size: int, expected_sha256: str) -> None:
@@ -50,10 +54,15 @@ def verify_file(path: Path, size: int, expected_sha256: str) -> None:
 
 def main() -> None:
     """Fetch one target's library/header and the shared model into the local cache."""
-    lock = json.loads(LOCK_PATH.read_text())
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target", choices=tuple(lock["targets"]), required=True)
+    parser.add_argument("--lock-variant", choices=tuple(LOCK_FILES), default="original")
+    parser.add_argument("--target", required=True)
     args = parser.parse_args()
+    lock = json.loads(LOCK_FILES[args.lock_variant].read_text())
+    if args.target not in lock["targets"]:
+        parser.error(f"target is not pinned for {args.lock_variant}")
+    if args.lock_variant == "android-v2" and args.target != "android-arm64":
+        parser.error("android-v2 is pinned only for android-arm64")
     target = lock["targets"][args.target]
     cache = ROOT / ".artifacts/local-inference/needle2" / lock["revision"]
     library_root = cache / target["directory"]

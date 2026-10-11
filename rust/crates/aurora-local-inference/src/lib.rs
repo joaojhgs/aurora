@@ -19,6 +19,19 @@ use std::sync::Arc;
 #[cfg(feature = "native-llamacpp")]
 use std::sync::{mpsc, Mutex, RwLock};
 use thiserror::Error;
+
+#[cfg(all(
+    feature = "native-needle2",
+    target_os = "android",
+    target_arch = "aarch64"
+))]
+mod needle;
+#[cfg(all(
+    feature = "native-needle2",
+    target_os = "android",
+    target_arch = "aarch64"
+))]
+pub use needle::Needle2Backend;
 #[cfg(feature = "native-llamacpp")]
 use tokio::sync::oneshot;
 
@@ -463,7 +476,7 @@ impl LocalInferenceState {
             });
         }
         let (reply, result) = oneshot::channel();
-        let use_native_backend = model.file_name.ends_with(".litertlm");
+        let use_native_backend = model.file_name.ends_with(".litertlm") || is_needle_model(&model);
         let cache_path = self
             .inner
             .config
@@ -604,10 +617,15 @@ impl LocalInferenceState {
 
     /// Cancel only the exact currently admitted request.
     pub fn cancel(&self, session_id: &str, request_id: &str) -> CancelResult {
-        if validate_identifier(session_id).is_err()
-            || validate_identifier(request_id).is_err()
-            || self.active_session(session_id).is_err()
-        {
+        if validate_identifier(session_id).is_err() || validate_identifier(request_id).is_err() {
+            return CancelResult { cancelled: false };
+        }
+        let Ok(active) = self.active_session(session_id) else {
+            return CancelResult { cancelled: false };
+        };
+        // Needle2 has no interrupt symbol. Refuse cancellation before entering
+        // either the admitted-operation or pending-cancellation path.
+        if find_model(&self.inner.config, &active.model_id).is_ok_and(is_needle_model) {
             return CancelResult { cancelled: false };
         }
         let key = (session_id.to_owned(), request_id.to_owned());
@@ -884,6 +902,16 @@ fn validate_identifier(value: &str) -> Result<(), LocalInferenceError> {
 }
 
 #[cfg(feature = "native-llamacpp")]
+fn is_needle_model(model: &TrustedModelDescriptor) -> bool {
+    cfg!(all(
+        feature = "native-needle2",
+        target_os = "android",
+        target_arch = "aarch64"
+    )) && model.model_id == "actions-needle2"
+        && model.file_name == "needle2.cact"
+}
+
+#[cfg(feature = "native-llamacpp")]
 fn verify_model_file(
     path: &Path,
     model: &TrustedModelDescriptor,
@@ -909,7 +937,7 @@ fn verify_model_file(
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)
         .map_err(|_| LocalInferenceError::ModelUnverified)?;
-    if !model.file_name.ends_with(".litertlm") && &magic != b"GGUF" {
+    if !model.file_name.ends_with(".litertlm") && !is_needle_model(model) && &magic != b"GGUF" {
         return Err(LocalInferenceError::ModelUnverified);
     }
     file.rewind()

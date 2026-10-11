@@ -23,6 +23,7 @@ desktop-live-webdriver = ["dep:tauri-plugin-wdio-webdriver"]
 desktop-native-voice-e2e = []
 android-voice-live-test = ["aurora-voice-native/android-voice-live-test"]
 ios-voice-live-test = []
+android-arm64-needle2 = ["aurora-local-inference/native-needle2"]
 
 [build-dependencies]
 swift-rs = { version = "1.0.7", features = ["build"] }

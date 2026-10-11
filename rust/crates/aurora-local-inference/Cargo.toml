@@ -9,6 +9,7 @@ description = "Profile-scoped offline chat over Aurora's pinned llama.cpp runtim
 [features]
 default = []
 native-llamacpp = []
+native-needle2 = ["native-llamacpp"]
 
 [dependencies]
 serde.workspace = true

@@ -38,7 +38,7 @@ impl NativeLocalInferenceState {
     ) -> Result<Self, LocalInferenceError> {
         let engine = LocalInferenceState::new(config)?;
         #[cfg(target_os = "android")]
-        engine.install_native_backend(Arc::new(AndroidLiteRtBackend { app }))?;
+        engine.install_native_backend(Arc::new(AndroidNativeInferenceBackend::new(app)))?;
         #[cfg(not(target_os = "android"))]
         let _ = app;
         Ok(Self {
@@ -88,6 +88,120 @@ impl AndroidLiteRtBackend {
             .ok_or(LocalInferenceError::Unsupported)?;
         super::run_android_plugin_command(native, command, payload)
             .map_err(|_| LocalInferenceError::WorkerUnavailable)
+    }
+}
+
+#[cfg(target_os = "android")]
+#[derive(Clone, Copy)]
+enum AndroidInferenceRoute {
+    LiteRt,
+    #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+    Needle2,
+}
+
+#[cfg(target_os = "android")]
+struct AndroidNativeInferenceBackend {
+    lite_rt: AndroidLiteRtBackend,
+    #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+    needle: aurora_local_inference::Needle2Backend,
+    active: std::sync::Mutex<Option<AndroidInferenceRoute>>,
+}
+
+#[cfg(target_os = "android")]
+impl AndroidNativeInferenceBackend {
+    fn new(app: AppHandle<tauri::Wry>) -> Self {
+        Self {
+            lite_rt: AndroidLiteRtBackend { app },
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            needle: aurora_local_inference::Needle2Backend,
+            active: std::sync::Mutex::new(None),
+        }
+    }
+
+    fn active(&self) -> Result<AndroidInferenceRoute, LocalInferenceError> {
+        self.active
+            .lock()
+            .map_err(|_| LocalInferenceError::WorkerUnavailable)?
+            .as_ref()
+            .copied()
+            .ok_or(LocalInferenceError::SessionUnavailable)
+    }
+}
+
+#[cfg(target_os = "android")]
+impl NativeInferenceBackend for AndroidNativeInferenceBackend {
+    fn load(
+        &self,
+        model_id: &str,
+        model_path: &Path,
+        cache_path: &Path,
+    ) -> Result<(), LocalInferenceError> {
+        let route = if model_id == "actions-needle2" {
+            if model_path.extension().and_then(|ext| ext.to_str()) != Some("cact") {
+                return Err(LocalInferenceError::ModelUnavailable);
+            }
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            {
+                AndroidInferenceRoute::Needle2
+            }
+            #[cfg(not(all(target_arch = "aarch64", feature = "android-arm64-needle2")))]
+            {
+                return Err(LocalInferenceError::Unsupported);
+            }
+        } else if model_path.extension().and_then(|ext| ext.to_str()) == Some("litertlm") {
+            AndroidInferenceRoute::LiteRt
+        } else {
+            return Err(LocalInferenceError::ModelUnavailable);
+        };
+        match route {
+            AndroidInferenceRoute::LiteRt => self.lite_rt.load(model_id, model_path, cache_path)?,
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            AndroidInferenceRoute::Needle2 => self.needle.load(model_id, model_path, cache_path)?,
+        }
+        *self.active.lock().map_err(|_| LocalInferenceError::WorkerUnavailable)? = Some(route);
+        Ok(())
+    }
+
+    fn complete(
+        &self,
+        request_id: &str,
+        request_json: &str,
+    ) -> Result<String, LocalInferenceError> {
+        match self.active()? {
+            AndroidInferenceRoute::LiteRt => self.lite_rt.complete(request_id, request_json),
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            AndroidInferenceRoute::Needle2 => self.needle.complete(request_id, request_json),
+        }
+    }
+
+    fn cancel(&self, request_id: &str) -> bool {
+        match self.active() {
+            Ok(AndroidInferenceRoute::LiteRt) => self.lite_rt.cancel(request_id),
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            Ok(AndroidInferenceRoute::Needle2) => self.needle.cancel(request_id),
+            Err(_) => false,
+        }
+    }
+
+    fn reset(&self) -> Result<(), LocalInferenceError> {
+        match self.active()? {
+            AndroidInferenceRoute::LiteRt => self.lite_rt.reset(),
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            AndroidInferenceRoute::Needle2 => self.needle.reset(),
+        }
+    }
+
+    fn destroy(&self) -> Result<(), LocalInferenceError> {
+        let route = self.active()?;
+        let result = match route {
+            AndroidInferenceRoute::LiteRt => self.lite_rt.destroy(),
+            #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
+            AndroidInferenceRoute::Needle2 => self.needle.destroy(),
+        };
+        if result.is_ok() {
+            *self.active.lock().map_err(|_| LocalInferenceError::WorkerUnavailable)? = None;
+        }
+        result
     }
 }
 
