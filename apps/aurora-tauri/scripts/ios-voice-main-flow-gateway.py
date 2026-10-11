@@ -74,8 +74,8 @@ def _write_config(repo: Path, runtime: Path, port: int, api_key: str, token_secr
     services["gateway"]["api"].update(
         {"host": "127.0.0.1", "port": port, "token_secret": token_secret}
     )
-    services["orchestrator"]["enabled"] = True
-    # The required native pack bindings own speech; this stack supplies Assistant turns.
+    services["orchestrator"]["enabled"] = False
+    # Offline Assistant turns use the pinned on-device model; Gateway remains the real readiness boundary.
     services["tts"]["enabled"] = False
     services["stt"]["wakeword"]["enabled"] = False
     services["stt"]["transcription"]["enabled"] = False

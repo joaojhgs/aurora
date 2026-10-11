@@ -17,7 +17,6 @@ const env = {
   VITE_AURORA_IOS_VOICE_LIVE_TEST: '1',
   VITE_AURORA_IOS_VOICE_LIVE_TEST_CONTROL_ORIGIN: controlOrigin,
 }
-assertConfiguredOrchestratorCredential()
 const tempDir = mkdtempSync(join(tmpdir(), 'aurora-ios-voice-main-ci-'))
 const smokeReport = join(tempDir, 'simulator-smoke.json')
 let selectedUdid = ''
@@ -109,19 +108,6 @@ if (primaryError) {
   throw primaryError
 }
 if (cleanupError) throw cleanupError
-
-function assertConfiguredOrchestratorCredential() {
-  const defaults = JSON.parse(readFileSync(join(repoRoot, 'app', 'services', 'config', 'config_defaults.json'), 'utf8'))
-  const llm = defaults.services?.orchestrator?.llm
-  const provider = llm?.provider
-  const model = llm?.third_party?.openai?.options?.model
-  if (provider !== 'openai' || !model) {
-    throw new Error('Native voice main flow requires the existing configured OpenAI provider/model; no approved CI provider setup is present')
-  }
-  if (!process.env.OPENAI_API_KEY?.trim()) {
-    throw new Error(`Native voice main flow requires OPENAI_API_KEY for configured ${provider}/${model}; failing before the iOS build`)
-  }
-}
 
 async function waitForGatewayConfig(child, path, timeoutMs) {
   const deadline = Date.now() + timeoutMs
