@@ -27,6 +27,7 @@ let launched = false
 let bundleId = ''
 let simulatorSelected = false
 let report = { schema: 'aurora.ios-voice-main-flow.v2', status: 'failed', stage: 'preflight', setupStep: null, failureCode: null, chunks: 0, samples: 0, transcriptReceived: false, assistantFinalRendered: false, cancelled: false, profileCreated: false, speechReady: false, modelReady: false, profileRestored: false, preferencesRestored: false, ownedAssetsRemoved: false }
+const architectureDiagnostic = { operation: null, hostArchitecture: 'unknown', appSupportsHost: null, failureCategory: null, commandFailure: null }
 
 try {
   if (process.platform !== 'darwin') throw new Error('macOS is required for this simulator runner')
@@ -44,11 +45,44 @@ try {
   if (!all.some((device) => device.udid === udid && device.state === 'Booted')) throw new Error('the exact requested simulator must already be booted')
   simulatorSelected = true
   report = { ...report, stage: 'architecture_validation' }
-  const simulatorArchitecture = execFileSync('/usr/bin/uname', ['-m'], { encoding: 'utf8', timeout: 5_000 }).trim()
-  if (!['arm64', 'x86_64'].includes(simulatorArchitecture)) throw new Error('simulator_architecture_unavailable')
-  const executableName = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', appInfo], { encoding: 'utf8', timeout: 10_000 }).trim()
-  const appArchitectures = execFileSync('/usr/bin/lipo', ['-archs', join(appPath, executableName)], { encoding: 'utf8', timeout: 10_000 }).trim().split(/\s+/u)
-  if (!appArchitectures.includes(simulatorArchitecture)) throw new Error('simulator_architecture_unavailable')
+  architectureDiagnostic.operation = 'host_architecture'
+  let simulatorArchitecture
+  try {
+    simulatorArchitecture = execFileSync('/usr/bin/uname', ['-m'], { encoding: 'utf8', timeout: 5_000 }).trim()
+  } catch (error) {
+    architectureDiagnostic.failureCategory = 'command_failed'
+    architectureDiagnostic.commandFailure = safeArchitectureCommandFailure(error)
+    throw error
+  }
+  architectureDiagnostic.hostArchitecture = safeArchitectureValue(simulatorArchitecture)
+  if (!['arm64', 'x86_64'].includes(simulatorArchitecture)) {
+    architectureDiagnostic.failureCategory = 'unsupported_host_architecture'
+    throw new Error('simulator_architecture_unavailable')
+  }
+  architectureDiagnostic.operation = 'executable_metadata'
+  let executableName
+  try {
+    executableName = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', appInfo], { encoding: 'utf8', timeout: 10_000 }).trim()
+  } catch (error) {
+    architectureDiagnostic.failureCategory = 'command_failed'
+    architectureDiagnostic.commandFailure = safeArchitectureCommandFailure(error)
+    throw error
+  }
+  architectureDiagnostic.operation = 'app_architectures'
+  let appArchitectures
+  try {
+    appArchitectures = execFileSync('/usr/bin/lipo', ['-archs', join(appPath, executableName)], { encoding: 'utf8', timeout: 10_000 }).trim().split(/\s+/u)
+  } catch (error) {
+    architectureDiagnostic.failureCategory = 'command_failed'
+    architectureDiagnostic.commandFailure = safeArchitectureCommandFailure(error)
+    throw error
+  }
+  architectureDiagnostic.operation = 'architecture_agreement'
+  architectureDiagnostic.appSupportsHost = appArchitectures.includes(simulatorArchitecture)
+  if (!architectureDiagnostic.appSupportsHost) {
+    architectureDiagnostic.failureCategory = 'architecture_mismatch'
+    throw new Error('simulator_architecture_unavailable')
+  }
   report = { ...report, stage: 'fixture_generation' }
   const wavPath = await makeSyntheticWav(workDir)
   const wavBytes = readFileSync(wavPath)
@@ -77,7 +111,18 @@ try {
   }
   if (server) await close(server)
   rmSync(workDir, { recursive: true, force: true })
-  report = { ...report, simulatorSelected, appInstalled: installed, appLaunched: launched, audioDeleted: true }
+  report = {
+    ...report,
+    architectureOperation: architectureDiagnostic.operation,
+    architectureHost: architectureDiagnostic.hostArchitecture,
+    architectureAppSupportsHost: architectureDiagnostic.appSupportsHost,
+    architectureFailureCategory: architectureDiagnostic.failureCategory,
+    architectureCommandFailure: architectureDiagnostic.commandFailure,
+    simulatorSelected,
+    appInstalled: installed,
+    appLaunched: launched,
+    audioDeleted: true,
+  }
   process.stdout.write(`${JSON.stringify(report)}\n`)
   if (report.status !== 'passed') process.exitCode = 1
 }
@@ -179,4 +224,17 @@ function deferred() { let resolve; const promise = new Promise((done) => { resol
 function listen(server, port) { return new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) }) }
 function close(server) { return new Promise((resolve) => server.close(resolve)) }
 function withTimeout(promise, ms) { let timer; return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('voice_timeout')), ms) })]).finally(() => clearTimeout(timer)) }
+function safeArchitectureValue(value) {
+  if (value === 'arm64' || value === 'x86_64') return value
+  return 'unsupported'
+}
+
+function safeArchitectureCommandFailure(error) {
+  if (error?.code === 'ENOENT') return 'command_not_found'
+  if (error?.code === 'EACCES' || error?.code === 'EPERM') return 'permission_denied'
+  if (error?.code === 'ETIMEDOUT') return 'timeout'
+  if (Number.isInteger(error?.status)) return 'nonzero_exit'
+  return 'other_command_error'
+}
+
 function safeFailureStage(error, operation) { const text = error instanceof Error ? error.message : ''; if (text === 'fixture_generation') return 'fixture_prerequisite'; if (text === 'voice_timeout') return 'voice_timeout'; if (operation === 'architecture_validation' || operation === 'fixture_generation' || operation === 'control_listener' || operation === 'app_install' || operation === 'app_launch') return operation; return 'prerequisite_or_main_flow_failed' }
