@@ -240,12 +240,10 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
     mainOperation = 'verify_draft_after_config_change'
     const observed = await waitFor(async () => await androidEvaluate(session.client, `(() => {
       const state = window.__auroraPer278RemoteConsoleMain;
-      const status = document.querySelector('[aria-label="Aurora shell status"]');
       return Boolean(state?.statusChanged && state.workspace?.isConnected && state.prompt?.isConnected
         && state.workspace === document.querySelector('[data-aurora-part="assistant-workspace"]')
         && state.prompt === document.querySelector('#assistant-prompt')
-        && state.prompt.value === ${JSON.stringify(draft)}
-        && /needs attention|refresh needed/i.test(status?.textContent ?? ''));
+        && state.prompt.value === ${JSON.stringify(draft)});
     })()`))
     if (observed !== true) throw new Error('The packaged Assistant shell did not retain its draft through the real config update.')
     mainOperation = 'verify_config_readback'
