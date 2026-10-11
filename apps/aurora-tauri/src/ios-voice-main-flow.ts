@@ -29,7 +29,14 @@ type LoopbackResult = {
   profileRestored: boolean
   preferencesRestored: boolean
   ownedAssetsRemoved: boolean
+  speechReadinessObserved: boolean | null
+  speechReadinessProfileSelected: boolean | null
+  speechReadinessAvailable: boolean | null
+  speechReadinessActiveSttMatches: boolean | null
 }
+
+type SpeechReadinessDiagnostic = Pick<LoopbackResult,
+  'speechReadinessObserved' | 'speechReadinessProfileSelected' | 'speechReadinessAvailable' | 'speechReadinessActiveSttMatches'>
 
 type IosVoiceSetupStep = NonNullable<IosVoiceMainFlowControlResult['setupStep']>
 type IosVoiceSetupFailureCode = NonNullable<IosVoiceMainFlowControlResult['failureCode']>
@@ -96,6 +103,10 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
     profileRestored: false,
     preferencesRestored: false,
     ownedAssetsRemoved: false,
+    speechReadinessObserved: null,
+    speechReadinessProfileSelected: null,
+    speechReadinessAvailable: null,
+    speechReadinessActiveSttMatches: null,
   }
   let ownership: OfflineSetupOwnership | null = null
   const overallDeadline = Date.now() + 2_100_000
@@ -120,7 +131,12 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
     result.stage = 'profile_created'
     result.stage = 'speech_setup'
     try {
-      await prepareSpeech(ownership, setupDeadline, (step) => { result.setupStep = step })
+      await prepareSpeech(
+        ownership,
+        setupDeadline,
+        (step) => { result.setupStep = step },
+        (diagnostic) => { Object.assign(result, diagnostic) },
+      )
       result.setupStep = null
       result.failureCode = null
     } catch (error) {
@@ -349,7 +365,12 @@ function classifySetupFailure(error: unknown): IosVoiceSetupFailureCode {
   return 'setup_failed'
 }
 
-async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: number, onStep: (step: IosVoiceSetupStep) => void): Promise<void> {
+async function prepareSpeech(
+  ownership: OfflineSetupOwnership,
+  setupDeadline: number,
+  onStep: (step: IosVoiceSetupStep) => void,
+  onReadinessDiagnostic: (diagnostic: SpeechReadinessDiagnostic) => void,
+): Promise<void> {
   const deadline = Math.min(Date.now() + 650_000, setupDeadline)
   onStep('settings_navigation')
   await openSettings()
@@ -396,12 +417,29 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
     await chooseSpeechOption('Choose transcription', selected.displayName, deadline)
   }
   onStep('speech_readiness')
-  await waitFor(async () => {
-    const document = await readOwnedProfile(ownership)
-    const ready = await ownership.speech.getReadiness()
-    return document.localNode.localSpeechSelection?.stt?.packId === selected.packId
-      && ready.available && ready.activeSlots.stt === selected.packId
-  }, remaining(deadline, 650_000))
+  let lastReadiness: SpeechReadinessDiagnostic = {
+    speechReadinessObserved: false,
+    speechReadinessProfileSelected: null,
+    speechReadinessAvailable: null,
+    speechReadinessActiveSttMatches: null,
+  }
+  try {
+    await waitFor(async () => {
+      const document = await readOwnedProfile(ownership)
+      const ready = await ownership.speech.getReadiness()
+      const profileSelected = document.localNode.localSpeechSelection?.stt?.packId === selected.packId
+      lastReadiness = {
+        speechReadinessObserved: true,
+        speechReadinessProfileSelected: profileSelected,
+        speechReadinessAvailable: ready.available,
+        speechReadinessActiveSttMatches: ready.activeSlots.stt === selected.packId,
+      }
+      return profileSelected && ready.available && ready.activeSlots.stt === selected.packId
+    }, remaining(deadline, 650_000))
+  } catch (error) {
+    if (classifySpeechSetupFailure(error, 'speech_readiness') === 'speech_readiness_timeout') onReadinessDiagnostic(lastReadiness)
+    throw error
+  }
 
   onStep('voice_pack_setup')
   const requiredPacks: Partial<Record<'vad' | 'kws' | 'stt' | 'tts', { packId: string; sha256: string; revision: string }>> = {
