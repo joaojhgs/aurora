@@ -2219,7 +2219,7 @@ class RPCHandler:
             return
         import contextlib
 
-        safe_details = redacted_copy(details or {})
+        safe_details = redacted_copy(details or {}, method_id=method_name)
         audit_details = {
             "method": method_name,
             "peer_id": self._peer_id,
