@@ -30,6 +30,8 @@ import {
   androidWebRtcBrokerUrl,
   androidWebRtcComposeArgs,
   androidMobileInteropHarnessHtml,
+  ANDROID_MOBILE_INTEROP_MODULE_BOOTSTRAP_TIMEOUT_MS,
+  ANDROID_MOBILE_INTEROP_RESULT_POST_TIMEOUT_MS,
   androidWebRtcServicesComposeYaml,
   androidWebRtcStunUrl,
   androidWebRtcTurnUrl,
@@ -107,6 +109,8 @@ const interopLane = (() => {
   }
   return lane
 })()
+const browserResultWaitMarginMs = ANDROID_MOBILE_INTEROP_MODULE_BOOTSTRAP_TIMEOUT_MS
+  + ANDROID_MOBILE_INTEROP_RESULT_POST_TIMEOUT_MS
 const testTimeoutMs = Math.max(480_000, interopTimeoutMs + 120_000)
 const adb = resolveAdbCommand()
 
@@ -141,7 +145,7 @@ describe('Android mobile-browser WebRTC interoperability', () => {
       let mobileResult: MobileResult | undefined
       try {
         mobileResult = await resources.waitForMobileResult(
-          resources.timeoutMs,
+          resources.timeoutMs + browserResultWaitMarginMs,
         )
         if (!mobileResult.ok || !mobileResult.result) {
           throw new Error(

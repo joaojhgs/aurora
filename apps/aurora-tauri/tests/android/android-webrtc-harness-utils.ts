@@ -1,3 +1,6 @@
+export const ANDROID_MOBILE_INTEROP_MODULE_BOOTSTRAP_TIMEOUT_MS = 120_000
+export const ANDROID_MOBILE_INTEROP_RESULT_POST_TIMEOUT_MS = 10_000
+
 export type AndroidHarnessRequestKind =
   | 'document'
   | 'bundle'
@@ -172,7 +175,7 @@ export function androidMobileInteropHarnessHtml(
           const request = new XMLHttpRequest();
           request.open('POST', '/interop-result');
           request.setRequestHeader('content-type', 'application/json');
-          request.timeout = 10000;
+          request.timeout = ${ANDROID_MOBILE_INTEROP_RESULT_POST_TIMEOUT_MS};
           request.onload = () => {
             if (request.status >= 200 && request.status < 300) {
               resolve();
@@ -192,7 +195,7 @@ export function androidMobileInteropHarnessHtml(
             throw new Error('Could not load the interop configuration');
           }
           const config = await configResponse.json();
-          const moduleDeadline = Date.now() + 120000;
+          const moduleDeadline = Date.now() + ${ANDROID_MOBILE_INTEROP_MODULE_BOOTSTRAP_TIMEOUT_MS};
           while (
             typeof globalThis.runAuroraWebRtcInterop !== 'function' &&
             Date.now() < moduleDeadline
@@ -202,7 +205,20 @@ export function androidMobileInteropHarnessHtml(
           if (typeof globalThis.runAuroraWebRtcInterop !== 'function') {
             throw new Error('runAuroraWebRtcInterop was not installed');
           }
-          const result = await globalThis.runAuroraWebRtcInterop(config);
+          let runnerTimer;
+          let result;
+          try {
+            result = await Promise.race([
+              globalThis.runAuroraWebRtcInterop(config),
+              new Promise((_, reject) => {
+                runnerTimer = setTimeout(() => {
+                  reject(new Error('Android mobile WebRTC interop timed out'));
+                }, config.timeoutMs);
+              })
+            ]);
+          } finally {
+            clearTimeout(runnerTimer);
+          }
           status.dataset.status = 'passed';
           status.textContent = 'Paired with the Python peer over WebRTC.';
           await publish({ ok: true, result });
