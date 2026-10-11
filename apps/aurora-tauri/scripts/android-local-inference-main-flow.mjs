@@ -151,7 +151,13 @@ export async function runAndroidLocalInferenceMainFlow({
     mainOperation = 'submit_offline_prompt'
     await submitPrompt(webview.client, PROMPT)
     mainOperation = 'wait_for_offline_answer'
-    const firstAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, assistantTurnTimeoutMs)
+    let firstAnswer
+    try {
+      firstAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, assistantTurnTimeoutMs)
+    } catch (error) {
+      await emitOfflineAnswerWaitObservation(webview.client, PROMPT)
+      throw error
+    }
 
     mainPhase = 'saved_history'
     mainOperation = 'open_saved_conversations'
@@ -332,6 +338,45 @@ async function waitForPureAssistantAnswer(client, prompt, timeoutMs) {
   })()`), timeoutMs, 'tools-empty on-device answer and rendered history')
 }
 
+async function emitOfflineAnswerWaitObservation(client, prompt) {
+  const event = 'AURORA_ANDROID_LOCAL_INFERENCE_ANSWER_WAIT_OBSERVATION'
+  try {
+    const observation = await evaluate(client, `(() => {
+      const items = [...document.querySelectorAll('[data-slot="message-scroller-item"]')];
+      const entries = items.map((item) => {
+        const status = [...item.querySelectorAll('span.sr-only')]
+          .map((node) => node.textContent?.trim() ?? '')
+          .find((text) => text.startsWith('Aurora · '));
+        return status ? { item, status: status.slice('Aurora · '.length) } : null;
+      });
+      const latest = [...entries].reverse().find(Boolean);
+      const answerItem = latest?.item ?? null;
+      const allowedStatuses = new Set(['sent', 'sending', 'streaming', 'failed', 'cancelled']);
+      const rawStatus = latest?.status ?? '';
+      const assistantStatus = rawStatus === 'failed' ? 'error'
+        : allowedStatuses.has(rawStatus) ? rawStatus : 'absent';
+      const answerText = answerItem?.querySelector('p')?.textContent?.trim() ?? '';
+      const answerLength = Array.from(answerText).length;
+      const allText = items.map((item) => item.innerText ?? '').join(' ');
+      return {
+        assistantStatus,
+        promptHistoryPresent: allText.includes(${JSON.stringify(prompt)}),
+        busy: Boolean(answerItem?.querySelector('[role="status"][aria-busy="true"]')),
+        paragraphPresent: Boolean(answerItem?.querySelector('p')),
+        answerNonempty: answerText.length > 0,
+        answerCharCount: Math.min(answerLength, 9999),
+        answerCharCountCapped: answerLength > 9999,
+        answerMatchesExpected: /^4[.!]?$/.test(answerText),
+        toolCardsPresent: Boolean(answerItem?.querySelector('[aria-label="Assistant tool call cards"]')
+          || document.querySelector('[aria-label="Assistant tool call cards"]'))
+      };
+    })()`, 2000);
+    console.error(JSON.stringify({ event, observation }))
+  } catch {
+    try { console.error(JSON.stringify({ event, observation: 'unavailable' })) } catch { /* Diagnostics must not change main-flow behavior. */ }
+  }
+}
+
 async function openSettings(client) {
   await waitForVisibleEnabledControl(client, 'Settings')
   await clickVisibleText(client, 'Settings')
@@ -509,12 +554,12 @@ async function bodyText(client) {
   return evaluate(client, 'document.body?.innerText ?? ""')
 }
 
-async function evaluate(client, expression) {
+async function evaluate(client, expression, timeoutMs = 30_000) {
   const response = await client.send('Runtime.evaluate', {
     expression: `(async () => JSON.stringify(await (${expression})))()`,
     returnByValue: true,
     awaitPromise: true,
-  }, 30_000)
+  }, timeoutMs)
   if (response.exceptionDetails) {
     throw new Error(`WebView evaluation failed: ${JSON.stringify(response.exceptionDetails)}`)
   }
