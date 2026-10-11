@@ -1,11 +1,11 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:net'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { resolve, join } from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { runAndroidVoiceLiveSmoke } from './android-voice-live-smoke.mjs'
+import { resolveAndroidDeviceSerial, runAndroidVoiceLiveSmoke } from './android-voice-live-smoke.mjs'
 
 const APP_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const WORKSPACE_ROOT = resolve(APP_ROOT, '../..')
@@ -234,6 +234,7 @@ export async function runAcceptance() {
   let fixtureUrl = ''
   let python
   let configDir
+  let brokerReverse
   let primaryError
   const fixture = spawn('node', [FIXTURE], { cwd: WORKSPACE_ROOT, env: fixtureEnvironment, stdio: ['ignore', 'pipe', 'inherit'], detached: true })
   try {
@@ -243,6 +244,7 @@ export async function runAcceptance() {
       OPENAI_BASE_URL: `${fixtureUrl}/v1`,
     }
     const gatewayPort = await allocateLocalPort()
+    brokerReverse = await reverseLoopbackBroker(environment, environment.AURORA_THREE_NODE_BROKER_URL)
     const appId = `aurora-native-turn-${randomUUID().slice(0, 8)}`
     const room = `native-turn-${randomUUID().slice(0, 8)}`
     const roomPassword = `fixture-room-${randomUUID()}`
@@ -319,8 +321,100 @@ export async function runAcceptance() {
     primaryError = error
   } finally {
     const cleanupErrors = await cleanupAcceptanceResources({ python, fixture, configDir })
+    if (brokerReverse) {
+      try {
+        await cleanupLoopbackBrokerReverse(brokerReverse)
+      } catch (error) {
+        cleanupErrors.push(error)
+      }
+    }
     throwAcceptanceErrors(primaryError, cleanupErrors)
   }
+}
+
+async function reverseLoopbackBroker(environment, brokerUrl) {
+  const port = loopbackWebSocketPort(brokerUrl)
+  if (port === null) return null
+  const adb = resolveAdbCommand(environment)
+  const explicitSerial = environment.AURORA_ANDROID_DEVICE_SERIAL ?? environment.ANDROID_SERIAL
+  const devices = execFileSync(adb, ['devices', '-l'], { encoding: 'utf8', timeout: 30_000 })
+  const serial = resolveAndroidDeviceSerial(devices, explicitSerial)
+  const existing = listReverseMappings(adb, serial)
+    .filter((mapping) => mapping.local === `tcp:${port}`)
+  if (existing.length > 1) throw new Error(`Android device ${serial} has ambiguous reverse mappings for tcp:${port}.`)
+  if (existing.length === 1) {
+    if (existing[0].remote !== `tcp:${port}`) {
+      throw new Error(`Android device ${serial} already maps tcp:${port} to a different host port.`)
+    }
+    return { adb, serial, port, owned: false }
+  }
+  execFileSync(adb, ['-s', serial, 'reverse', '--no-rebind', `tcp:${port}`, `tcp:${port}`], { stdio: 'ignore', timeout: 30_000 })
+  return { adb, serial, port, owned: true }
+}
+
+async function cleanupLoopbackBrokerReverse({ adb, serial, port, owned }) {
+  if (!owned) return
+  const local = `tcp:${port}`
+  const remote = `tcp:${port}`
+  const mappings = listReverseMappings(adb, serial).filter((mapping) => mapping.local === local)
+  if (mappings.length === 0) return
+  if (mappings.length !== 1 || mappings[0].remote !== remote) {
+    throw new Error(`Android device ${serial} reverse mapping for ${local} changed before cleanup; refusing to remove it.`)
+  }
+  execFileSync(adb, ['-s', serial, 'reverse', '--remove', local], { stdio: 'ignore', timeout: 30_000 })
+}
+
+function listReverseMappings(adb, serial) {
+  const output = execFileSync(adb, ['-s', serial, 'reverse', '--list'], { encoding: 'utf8', timeout: 30_000 })
+  const mappings = []
+  for (const line of output.split(/\r?\n/u)) {
+    const fields = line.trim().split(/\s+/u).filter(Boolean)
+    if (fields.length === 0) continue
+    let local
+    let remote
+    if (fields.length === 2) {
+      [local, remote] = fields
+    } else if (fields.length === 3) {
+      [, local, remote] = fields
+    } else {
+      throw new Error(`Android device ${serial} returned an unrecognized reverse mapping list.`)
+    }
+    if (!/^(?:tcp:\d+|localabstract:.+|localreserved:.+|localfilesystem:.+)$/u.test(local)
+      || !/^(?:tcp:\d+|localabstract:.+|localreserved:.+|localfilesystem:.+)$/u.test(remote)) {
+      throw new Error(`Android device ${serial} returned an unrecognized reverse mapping list.`)
+    }
+    mappings.push({ local, remote })
+  }
+  return mappings
+}
+
+function loopbackWebSocketPort(value) {
+  try {
+    const url = new URL(value)
+    if (!['ws:', 'wss:'].includes(url.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)) return null
+    return Number(url.port || (url.protocol === 'wss:' ? 443 : 80))
+  } catch {
+    return null
+  }
+}
+
+function resolveAdbCommand(environment) {
+  const candidates = [
+    environment.ADB,
+    environment.ANDROID_HOME ? join(environment.ANDROID_HOME, 'platform-tools', 'adb') : undefined,
+    environment.ANDROID_SDK_ROOT ? join(environment.ANDROID_SDK_ROOT, 'platform-tools', 'adb') : undefined,
+    join(os.homedir(), 'Android/Sdk/platform-tools/adb'),
+    join(os.homedir(), '.local/share/android-sdk/platform-tools/adb'),
+    'adb',
+  ].filter(Boolean)
+  for (const candidate of candidates) {
+    if (candidate !== 'adb' && !existsSync(candidate)) continue
+    try {
+      execFileSync(candidate, ['version'], { stdio: 'ignore', timeout: 5_000 })
+      return candidate
+    } catch { /* try the next installed adb location */ }
+  }
+  throw new Error('Android adb is required to route a loopback signaling broker to the selected device.')
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

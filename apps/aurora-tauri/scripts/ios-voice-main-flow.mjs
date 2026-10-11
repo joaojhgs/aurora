@@ -9,6 +9,8 @@ import { createServer } from 'node:http'
 const MAX_SECONDS = 30
 const RUN_TIMEOUT_MS = 2_700_000
 const CONTROL_HEADER = 'x-aurora-ios-voice-test'
+const SETUP_STEPS = ['profile_read','profile_validation','preferences_read','model_status','speech_catalog','ownership_capture','device_option','onboarding_navigation','profile_creation','profile_readback']
+const SETUP_FAILURE_CODES = ['profile_not_empty','model_not_owned','speech_catalog_unavailable','offline_profile_option_unavailable','setup_timeout','setup_failed']
 const controlOrigin = process.env.AURORA_IOS_VOICE_LIVE_TEST_CONTROL_ORIGIN ?? 'http://127.0.0.1:39461'
 const webviewOrigin = process.env.AURORA_IOS_VOICE_LIVE_TEST_WEBVIEW_ORIGIN ?? 'tauri://localhost'
 const args = parseArgs(process.argv.slice(2))
@@ -22,7 +24,7 @@ let installed = false
 let launched = false
 let bundleId = ''
 let simulatorSelected = false
-let report = { schema: 'aurora.ios-voice-main-flow.v2', status: 'failed', stage: 'preflight', chunks: 0, samples: 0, transcriptReceived: false, assistantFinalRendered: false, cancelled: false, profileCreated: false, speechReady: false, modelReady: false, profileRestored: false, preferencesRestored: false, ownedAssetsRemoved: false }
+let report = { schema: 'aurora.ios-voice-main-flow.v2', status: 'failed', stage: 'preflight', setupStep: null, failureCode: null, chunks: 0, samples: 0, transcriptReceived: false, assistantFinalRendered: false, cancelled: false, profileCreated: false, speechReady: false, modelReady: false, profileRestored: false, preferencesRestored: false, ownedAssetsRemoved: false }
 
 try {
   if (process.platform !== 'darwin') throw new Error('macOS is required for this simulator runner')
@@ -122,9 +124,9 @@ function handleRequest(req, res, state) {
     req.on('end', () => {
       try {
         const value = JSON.parse(body)
-        const keys = ['nonce','status','stage','chunks','samples','transcriptReceived','assistantFinalRendered','cancelled','profileCreated','speechReady','modelReady','profileRestored','preferencesRestored','ownedAssetsRemoved']
-        if (Object.keys(value).sort().join() !== keys.sort().join() || value.nonce !== state.nonce || !['passed','failed'].includes(value.status) || !Number.isSafeInteger(value.chunks) || !Number.isSafeInteger(value.samples) || value.chunks < 0 || value.chunks > 118 || value.samples < 0 || value.samples > MAX_SECONDS * 16_000 || !['profile_setup','profile_created','speech_setup','speech_ready','model_setup','model_ready','voice_started','pcm_injected','transcript_returned','assistant_final_rendered','cancelled','unavailable'].includes(value.stage) || typeof value.transcriptReceived !== 'boolean' || typeof value.assistantFinalRendered !== 'boolean' || typeof value.cancelled !== 'boolean' || typeof value.profileCreated !== 'boolean' || typeof value.speechReady !== 'boolean' || typeof value.modelReady !== 'boolean' || typeof value.profileRestored !== 'boolean' || typeof value.preferencesRestored !== 'boolean' || typeof value.ownedAssetsRemoved !== 'boolean') return send(res, 400)
-        if (value.status === 'passed' && (value.stage !== 'assistant_final_rendered' || !value.transcriptReceived || !value.assistantFinalRendered || value.cancelled || !value.profileCreated || !value.speechReady || !value.modelReady || value.chunks <= 0 || value.samples <= 0 || !value.profileRestored || !value.preferencesRestored || !value.ownedAssetsRemoved)) return send(res, 400)
+        const keys = ['nonce','status','stage','setupStep','failureCode','chunks','samples','transcriptReceived','assistantFinalRendered','cancelled','profileCreated','speechReady','modelReady','profileRestored','preferencesRestored','ownedAssetsRemoved']
+        if (Object.keys(value).sort().join() !== keys.sort().join() || value.nonce !== state.nonce || !['passed','failed'].includes(value.status) || !Number.isSafeInteger(value.chunks) || !Number.isSafeInteger(value.samples) || value.chunks < 0 || value.chunks > 118 || value.samples < 0 || value.samples > MAX_SECONDS * 16_000 || !['profile_setup','profile_created','speech_setup','speech_ready','model_setup','model_ready','voice_started','pcm_injected','transcript_returned','assistant_final_rendered','cancelled','unavailable'].includes(value.stage) || (value.setupStep !== null && !SETUP_STEPS.includes(value.setupStep)) || (value.failureCode !== null && !SETUP_FAILURE_CODES.includes(value.failureCode)) || ((value.setupStep !== null || value.failureCode !== null) && (value.status !== 'failed' || value.stage !== 'profile_setup')) || ((value.setupStep === null) !== (value.failureCode === null)) || typeof value.transcriptReceived !== 'boolean' || typeof value.assistantFinalRendered !== 'boolean' || typeof value.cancelled !== 'boolean' || typeof value.profileCreated !== 'boolean' || typeof value.speechReady !== 'boolean' || typeof value.modelReady !== 'boolean' || typeof value.profileRestored !== 'boolean' || typeof value.preferencesRestored !== 'boolean' || typeof value.ownedAssetsRemoved !== 'boolean') return send(res, 400)
+        if (value.status === 'passed' && (value.stage !== 'assistant_final_rendered' || value.setupStep !== null || value.failureCode !== null || !value.transcriptReceived || !value.assistantFinalRendered || value.cancelled || !value.profileCreated || !value.speechReady || !value.modelReady || value.chunks <= 0 || value.samples <= 0 || !value.profileRestored || !value.preferencesRestored || !value.ownedAssetsRemoved)) return send(res, 400)
         state.resultPromise.resolve(Object.fromEntries(keys.filter((key) => key !== 'nonce').map((key) => [key, value[key]])))
         return send(res, 204)
       } catch { return send(res, 400) }

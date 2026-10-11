@@ -15,6 +15,8 @@ type LoopbackResult = {
   nonce: string
   status: 'passed' | 'failed'
   stage: 'profile_setup' | 'profile_created' | 'speech_setup' | 'speech_ready' | 'model_setup' | 'model_ready' | 'voice_started' | 'pcm_injected' | 'transcript_returned' | 'assistant_final_rendered' | 'cancelled' | 'unavailable'
+  setupStep: IosVoiceSetupStep | null
+  failureCode: IosVoiceSetupFailureCode | null
   chunks: number
   samples: number
   transcriptReceived: boolean
@@ -27,6 +29,9 @@ type LoopbackResult = {
   preferencesRestored: boolean
   ownedAssetsRemoved: boolean
 }
+
+type IosVoiceSetupStep = 'profile_read' | 'profile_validation' | 'preferences_read' | 'model_status' | 'speech_catalog' | 'ownership_capture' | 'device_option' | 'onboarding_navigation' | 'profile_creation' | 'profile_readback'
+type IosVoiceSetupFailureCode = 'profile_not_empty' | 'model_not_owned' | 'speech_catalog_unavailable' | 'offline_profile_option_unavailable' | 'setup_timeout' | 'setup_failed'
 
 let started = false
 let assistantRuntimeDisposer: (() => Promise<void>) | null = null
@@ -77,6 +82,8 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
     nonce: run.nonce,
     status: 'failed',
     stage: 'unavailable',
+    setupStep: null,
+    failureCode: null,
     chunks: 0,
     samples: 0,
     transcriptReceived: false,
@@ -94,7 +101,20 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
   try {
     const setupDeadline = overallDeadline - 480_000
     result.stage = 'profile_setup'
-    ownership = await prepareOfflineSetup(adapter, run.simulatorArchitecture, setupDeadline, (captured) => { ownership = captured })
+    result.setupStep = 'profile_read'
+    try {
+      ownership = await prepareOfflineSetup(
+        adapter,
+        run.simulatorArchitecture,
+        setupDeadline,
+        (step) => { result.setupStep = step },
+        (captured) => { ownership = captured },
+      )
+    } catch (error) {
+      result.failureCode = classifySetupFailure(error)
+      throw error
+    }
+    result.setupStep = null
     result.profileCreated = true
     result.stage = 'profile_created'
     result.stage = 'speech_setup'
@@ -182,20 +202,25 @@ type OfflineSetupOwnership = {
   selectedSttPackId: string | null
 }
 
-async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorArchitecture: 'arm64' | 'x86_64', deadline: number, onOwnershipReady: (ownership: OfflineSetupOwnership) => void): Promise<OfflineSetupOwnership> {
+async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorArchitecture: 'arm64' | 'x86_64', deadline: number, onStep: (step: IosVoiceSetupStep) => void, onOwnershipReady: (ownership: OfflineSetupOwnership) => void): Promise<OfflineSetupOwnership> {
+  onStep('profile_read')
   const profileValue = await adapter.getProfile()
+  onStep('profile_validation')
   const originalProfileWasNull = profileValue.value == null
   const originalProfileValue = originalProfileWasNull
     ? serializeRuntimeProfileDocument(emptyRuntimeProfileDocument())
     : requireCanonicalEmptyProfile(profileValue.value)
+  onStep('preferences_read')
   const [mode, tier] = await Promise.all([
     adapter.getPreference('onboarding-mode'),
     adapter.getPreference('runtime-tier'),
   ])
   const inference = adapter.inference
+  onStep('model_status')
   const model = await inference.modelStatus('chat-qwen3-0b8')
   if (model.state !== 'absent' && model.state !== 'ready') throw new Error('model_not_owned')
   const speech = adapter.speech
+  onStep('speech_catalog')
   const catalog = await speech.listCatalog()
   if (catalog.state !== 'ready' || !catalog.items.some((item) => item.task === 'stt')) {
     throw new Error('speech_catalog_unavailable')
@@ -216,11 +241,14 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     createdLocalNodeId: null,
     selectedSttPackId: null,
   }
+  onStep('ownership_capture')
   onOwnershipReady(ownership)
   const setupTimeout = remaining(deadline, 120_000)
+  onStep('device_option')
   const deviceRadio = await waitForElement<HTMLButtonElement>('button[role="radio"][title="Make this device available"]', setupTimeout)
   if (deviceRadio.disabled) throw new Error('offline_profile_option_unavailable')
   if (deviceRadio.getAttribute('aria-checked') !== 'true') deviceRadio.click()
+  onStep('onboarding_navigation')
   await waitFor(async () => {
     const step = document.querySelector<HTMLElement>('[data-step="detect"]')
     if (!step) return false
@@ -230,8 +258,10 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     return true
   }, setupTimeout)
   await waitForElement<HTMLElement>('[data-step="setup"]', remaining(deadline, setupTimeout))
+  onStep('profile_creation')
   const continueButton = await waitForButtonText('Continue on this device', remaining(deadline, setupTimeout))
   continueButton.click()
+  onStep('profile_readback')
   await waitFor(async () => {
     try {
       const current = await ownership.adapter.getProfile()
@@ -249,6 +279,16 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     } catch { return false }
   }, remaining(deadline, setupTimeout))
   return ownership
+}
+
+function classifySetupFailure(error: unknown): IosVoiceSetupFailureCode {
+  const code = error instanceof Error ? error.message : ''
+  if (code === 'profile_not_empty') return 'profile_not_empty'
+  if (code === 'model_not_owned') return 'model_not_owned'
+  if (code === 'speech_catalog_unavailable') return 'speech_catalog_unavailable'
+  if (code === 'offline_profile_option_unavailable') return 'offline_profile_option_unavailable'
+  if (code === 'main_flow_timeout' || code === 'main flow timed out') return 'setup_timeout'
+  return 'setup_failed'
 }
 
 async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: number): Promise<void> {

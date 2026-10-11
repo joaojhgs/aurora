@@ -178,6 +178,7 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
   language = 'en',
   profileId = 'aurora-waydroid-voice-live',
   wakePhrase = undefined,
+  homeGatewayUrl = undefined,
 } = {}) {
   for (const task of TASKS) {
     if (!packs?.[task]?.packId || !packs[task].engineRuntimeRevision) {
@@ -188,6 +189,9 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
   const selectedWakePhrase = sanitizeWakePhraseSelection(wakePhrase, wakeLanguage)
   const { phraseId, phrase } = selectedWakePhrase
   const kwsSelection = speechSelection(packs.kws)
+  const homeConnection = homeGatewayUrl === undefined
+    ? undefined
+    : { mode: 'http-only', gatewayUrl: normalizeAndroidVoiceGatewayUrl(homeGatewayUrl) }
   const wakeRevision = wakePhraseRevision({
     phrase,
     language: selectedWakePhrase.language,
@@ -203,6 +207,7 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
       label: 'Android voice live check',
       nodeMode: 'mesh-node',
       runtimeTier: 'lightweight-ts',
+      ...(homeConnection ? { homeConnection } : {}),
       localNode: {
         nodeName: 'Android voice device',
         stablePeerId: profileId,
@@ -261,6 +266,42 @@ function androidVoiceLiveTestMeshMembership() {
       signalingBrokers: ['wss://signal.example.test'],
     },
   }
+}
+
+function normalizeAndroidVoiceGatewayUrl(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    throw new Error('A configured owned Android voice gateway endpoint is required for a new voice profile.')
+  }
+  let endpoint
+  try {
+    endpoint = new URL(value)
+  } catch {
+    throw new Error('The configured Android voice gateway endpoint is invalid.')
+  }
+  if (!['http:', 'https:'].includes(endpoint.protocol)
+    || !endpoint.hostname
+    || endpoint.username
+    || endpoint.password
+    || endpoint.search
+    || endpoint.hash) {
+    throw new Error('The configured Android voice gateway endpoint must be an HTTP(S) origin/path without credentials, query, or fragment.')
+  }
+  return endpoint.toString().replace(/\/$/u, '')
+}
+
+function hasAndroidVoiceHomeConnection(profile) {
+  const connection = profile?.homeConnection
+  if (!connection || typeof connection !== 'object') return false
+  const hasGateway = typeof connection.gatewayUrl === 'string' && Boolean(connection.gatewayUrl.trim())
+  const webrtc = connection.webrtcProfile
+  const hasWebRtcProfile = Boolean(webrtc && typeof webrtc === 'object')
+  const hasExpectedHomePeer = typeof connection.homePeerId === 'string' && Boolean(connection.homePeerId.trim())
+    || typeof webrtc?.expectedStablePeerId === 'string' && Boolean(webrtc.expectedStablePeerId.trim())
+
+  if (connection.mode === 'http-only') return hasGateway
+  if (connection.mode === 'webrtc-only') return hasWebRtcProfile && hasExpectedHomePeer
+  if (connection.mode === 'webrtc-preferred') return hasGateway && hasWebRtcProfile
+  return false
 }
 
 function cloneRuntimeProfileDocument(value) {
@@ -337,6 +378,7 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
   let fixtures
   let webview
   let originalProfileValue
+  let profileRestoration = 'not_attempted'
   let pairingCleanup
   let pairingEvidence
   let primaryError
@@ -383,17 +425,30 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     const readyPacks = resolveSelectedCatalogEntries(readyCatalog, packs)
     const storedProfile = await invoke('aurora_thin_profile_get')
     originalProfileValue = storedProfile?.value
-    const profile = mergeAndroidVoiceRuntimeProfile(parseStoredRuntimeProfile(originalProfileValue), readyPacks, {
+    const existingProfile = parseStoredRuntimeProfile(originalProfileValue)
+    const existingActiveProfile = existingProfile?.profiles?.find((candidate) => candidate?.id === existingProfile.activeProfileId)
+    const ownedGatewayUrl = pairing?.gatewayUrl ?? environment.AURORA_THREE_NODE_GATEWAY_URL
+    const profile = mergeAndroidVoiceRuntimeProfile(existingProfile, readyPacks, {
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
       wakePhrase: wakePhraseSelectionFromEnvironment(process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en'),
+      ...(!existingActiveProfile && ownedGatewayUrl ? { homeGatewayUrl: ownedGatewayUrl } : {}),
     })
+    let activeProfile = profile.profiles.find((candidate) => candidate.id === profile.activeProfileId)
+    if (!hasAndroidVoiceHomeConnection(activeProfile)) {
+      throw new Error('Android voice profile has no admitted home route; configure an owned reachable gateway or retain an existing home connection.')
+    }
     await armLiveTestPcmIngress(invoke)
     const profileResult = await invoke('aurora_thin_profile_set', { value: JSON.stringify(profile) })
     if (profileResult?.ok !== true) {
       throw new Error(`Android voice profile was not applied: ${JSON.stringify(profileResult)}`)
     }
-
-    let activeProfile = profile.profiles.find((candidate) => candidate.id === profile.activeProfileId)
+    const profileReadback = parseStoredRuntimeProfile((await invoke('aurora_thin_profile_get'))?.value)
+    const readbackActiveProfile = profileReadback?.profiles?.find((candidate) => candidate?.id === profileReadback.activeProfileId)
+    if (readbackActiveProfile?.id !== activeProfile?.id
+      || JSON.stringify(readbackActiveProfile?.homeConnection) !== JSON.stringify(activeProfile?.homeConnection)) {
+      throw new Error('Android voice profile home route did not match the public save readback.')
+    }
+    activeProfile = readbackActiveProfile
     if (!activeProfile?.localNode?.localSpeechSelection?.wakePhrase?.phrase) {
       throw new Error('Android voice profile has no active wake phrase after preserving device identity.')
     }
@@ -423,6 +478,9 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       pairingEvidence = paired
       const pairedProfile = parseStoredRuntimeProfile((await invoke('aurora_thin_profile_get'))?.value)
       activeProfile = pairedProfile?.profiles.find((candidate) => candidate.id === pairedProfile.activeProfileId) ?? activeProfile
+      if (!hasAndroidVoiceHomeConnection(activeProfile)) {
+        throw new Error('Android pairing removed the admitted home route required for background voice.')
+      }
     }
     fixtures = prepareVoiceFixtures({
       wakeText: activeProfile.localNode.localSpeechSelection.wakePhrase.phrase,
@@ -511,10 +569,13 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       console.log(JSON.stringify(result, null, 2))
       return result
     }
-    const automaticBackgroundStart = await proveAutomaticBackgroundStart(invoke)
+    await stopVoiceAndRequireRelease(context, invoke)
+    const explicitBackgroundStart = await proveExplicitBackgroundStart(invoke)
     const notificationStop = await proveNotificationStop(context, invoke, {
       interactionMode: notificationInteractionMode(),
     })
+    await stopVoiceAndRequireRelease(context, invoke)
+    notificationStop.publicCancelConfirmed = true
     webview.close()
     webview = null
     adbRun(context, ['shell', 'am', 'force-stop', context.appId])
@@ -523,11 +584,16 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     invoke = (command, args) => invokeTauri(webview.client, command, args)
     await pollVoiceStatus(
       invoke,
-      backgroundMicrophoneReadyForInjection,
-      'background restart after foreground app reopen',
+      (status) => status.running !== true
+        && status.captureActive !== true
+        && status.backgroundSessionActive !== true,
+      'notification Stop remains effective after app reopen',
       { allowRecoverableBackgroundErrors: true },
     )
-    notificationStop.restartedOnReopen = true
+    delete notificationStop.remainedStoppedUntilReopen
+    notificationStop.remainedStoppedAfterReopen = true
+    notificationStop.restartedOnReopen = false
+    const explicitBackgroundReenable = await proveExplicitBackgroundStart(invoke)
     await stopVoiceAndRequireRelease(context, invoke)
     const foreground = await proveForegroundVoice(context, invoke, fixtures.foregroundPcm)
     webview.close()
@@ -536,6 +602,15 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     launchApp(context)
     webview = await connectInstalledWebview(context)
     invoke = (command, args) => invokeTauri(webview.client, command, args)
+    await pollVoiceStatus(
+      invoke,
+      (status) => status.running !== true
+        && status.captureActive !== true
+        && status.backgroundSessionActive !== true,
+      'foreground cancellation remains effective after app reopen',
+      { allowRecoverableBackgroundErrors: true },
+    )
+    const explicitBackgroundAfterForeground = await proveExplicitBackgroundStart(invoke)
     const background = await proveBackgroundVoice(context, invoke, fixtures.backgroundPcm, {
       successful: successfulNativeTurnAcceptance,
       activeProfile,
@@ -605,7 +680,9 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       device: deviceMetadata(context, devicesOutput),
       apk: { path: apk, sha256: sha256File(apk) },
       packs: Object.fromEntries(TASKS.map((task) => [task, readyPacks[task].packId])),
-      automaticBackgroundStart,
+      explicitBackgroundStart,
+      explicitBackgroundReenable,
+      explicitBackgroundAfterForeground,
       foreground,
       background: {
         acceptedSamples: background.status.acceptedSamples,
@@ -636,11 +713,17 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     const diagnostics = context ? collectDiagnostics(context) : { unavailable: true }
     console.error(JSON.stringify({
       ok: false,
-      error: errorMessage(error),
+      stage: 'main',
+      code: fixedFailureCode(error),
       diagnostics,
     }, null, 2))
   } finally {
     const cleanupErrors = []
+    const cleanupFailures = []
+    const recordCleanupFailure = (stage, error) => {
+      cleanupErrors.push(error)
+      cleanupFailures.push({ stage, code: fixedFailureCode(error) })
+    }
     try {
       if (pairingCleanup) {
         if (!webview?.client) {
@@ -658,7 +741,7 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
         await pairingCleanup()
       }
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('pairing_cleanup', error)
     }
     try {
       if (originalProfileValue !== undefined) {
@@ -666,35 +749,43 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
           launchApp(context)
           webview = await connectInstalledWebview(context)
         }
-        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: originalProfileValue })
-        if (restored?.ok !== true) throw new Error(`Android profile restoration was rejected: ${JSON.stringify(restored)}`)
+        const restoreValue = originalProfileValue === null
+          ? JSON.stringify({ version: 2, activeProfileId: null, profiles: [] })
+          : originalProfileValue
+        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: restoreValue })
+        if (restored?.ok !== true) throw new Error('Android profile restoration was rejected.')
         const readback = await invokeTauri(webview.client, 'aurora_thin_profile_get')
-        if (readback?.value !== originalProfileValue) throw new Error('Android profile restoration readback did not match the original profile.')
+        if (readback?.value !== restoreValue) throw new Error('Android profile restoration readback did not match the expected original value.')
+        profileRestoration = originalProfileValue === null
+          ? 'semantic_empty_verified'
+          : 'exact_original_value_verified'
+      } else {
+        profileRestoration = 'not_required'
       }
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('profile_restore', error)
     }
     try {
       await bestEffortStopVoice(context, webview)
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('voice_stop', error)
     }
     try {
       webview?.close()
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('webview_close', error)
     }
-    try { if (context) adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce']) } catch (error) { cleanupErrors.push(error) }
-    try { if (context) adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']) } catch (error) { cleanupErrors.push(error) }
+    try { if (context) adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce']) } catch (error) { recordCleanupFailure('device_idle_unforce', error) }
+    try { if (context) adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']) } catch (error) { recordCleanupFailure('device_wakeup', error) }
     try {
       fixtures?.close()
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('fixtures_close', error)
     }
     try {
       releaseLock()
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('lock_release', error)
     }
     try {
       if (environmentOverlay) {
@@ -704,28 +795,46 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
         }
       }
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('environment_restore', error)
     }
+    console.error(JSON.stringify({
+      stage: 'cleanup',
+      cleanupOk: cleanupFailures.length === 0,
+      errorCount: cleanupFailures.length,
+      failures: cleanupFailures,
+      originalProfile: {
+        valuePresent: originalProfileValue !== undefined,
+        valueIsNull: originalProfileValue === null,
+        valueIsString: typeof originalProfileValue === 'string',
+      },
+      profileRestoration,
+    }))
     if (primaryError && cleanupErrors.length > 0) throw new AggregateError([primaryError, ...cleanupErrors], 'Android voice smoke failed and cleanup also failed.')
     if (primaryError) throw primaryError
     if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, 'Android voice smoke cleanup failed.')
   }
 }
 
-async function proveAutomaticBackgroundStart(invoke) {
+async function proveExplicitBackgroundStart(invoke) {
+  const start = await invoke('aurora_android_voice_foreground_service_start', {
+    request: { remoteAudioConsent: false, backgroundSession: true },
+  })
+  if (start?.started !== true) {
+    throw new Error(`Explicit Android background voice start was rejected: ${JSON.stringify(start)}`)
+  }
   const active = await pollVoiceStatus(
     invoke,
     backgroundMicrophoneReadyForInjection,
-    'automatic background start after hands-free configuration',
+    'explicit initial background start',
     { allowRecoverableBackgroundErrors: true },
   )
-  if (active.backgroundStoppedByUser === true) {
-    throw new Error(`Automatic background start retained a stale user-stop marker: ${JSON.stringify(active)}`)
-  }
+  assertReadyVoiceStatus(active, { background: true })
   return {
-    started: true,
+    accepted: true,
+    mode: 'explicit',
+    backgroundSession: true,
+    remoteAudioConsent: false,
     captureBackend: active.captureBackend,
-    acceptedSamples: active.acceptedSamples,
   }
 }
 
@@ -3560,6 +3669,13 @@ function bounded(value) {
   return text.length <= MAX_DIAGNOSTIC_BYTES ? text : text.slice(-MAX_DIAGNOSTIC_BYTES)
 }
 
+function fixedFailureCode(error) {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  if (['EACCES', 'EEXIST', 'EISDIR', 'ENOENT', 'ENOTDIR', 'EPERM', 'ETIMEDOUT'].includes(code)) return code
+  if (error instanceof AggregateError) return 'aggregate_failure'
+  return 'operation_failed'
+}
+
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error ?? 'unknown_error')
 }
@@ -3574,7 +3690,12 @@ const invokedAsScript = process.argv[1]
 if (invokedAsScript) {
   try {
     await runAndroidVoiceLiveSmoke()
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({
+      ok: false,
+      stage: 'cli',
+      code: fixedFailureCode(error),
+    }))
     process.exitCode = 1
   }
 }

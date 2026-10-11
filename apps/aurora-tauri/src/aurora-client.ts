@@ -480,6 +480,8 @@ export type IosVoiceMainFlowControlResult = {
   nonce: string;
   status: "passed" | "failed";
   stage: string;
+  setupStep: "profile_read" | "profile_validation" | "preferences_read" | "model_status" | "speech_catalog" | "ownership_capture" | "device_option" | "onboarding_navigation" | "profile_creation" | "profile_readback" | null;
+  failureCode: "profile_not_empty" | "model_not_owned" | "speech_catalog_unavailable" | "offline_profile_option_unavailable" | "setup_timeout" | "setup_failed" | null;
   chunks: number;
   samples: number;
   transcriptReceived: boolean;

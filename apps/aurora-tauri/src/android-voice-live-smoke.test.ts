@@ -16,6 +16,7 @@ async function liveSmokeModule() {
       options?: {
         language?: string
         wakePhrase?: { phraseId: string; phrase: string; language: string }
+        homeGatewayUrl?: string
       },
     ): RuntimeDocument
     mergeAndroidVoiceRuntimeProfile(
@@ -24,6 +25,7 @@ async function liveSmokeModule() {
       options?: {
         language?: string
         wakePhrase?: { phraseId: string; phrase: string; language: string }
+        homeGatewayUrl?: string
       },
     ): RuntimeDocument
     wakePhraseRevision(input: {
@@ -1843,13 +1845,17 @@ describe('Android packaged voice live smoke harness', () => {
     }
     const profile = module.buildAndroidVoiceRuntimeProfile(packs, {
       language: 'en',
+      homeGatewayUrl: 'https://gateway.example.test',
     })
     const selection = profile.profiles[0].localNode.localSpeechSelection
 
     expect(profile.version).toBe(2)
     expect(profile.profiles[0].nodeMode).toBe('mesh-node')
     expect(profile.profiles[0].runtimeTier).toBe('lightweight-ts')
-    expect(profile.profiles[0].homeConnection).toBeUndefined()
+    expect(profile.profiles[0].homeConnection).toEqual({
+      mode: 'http-only',
+      gatewayUrl: 'https://gateway.example.test',
+    })
     expect(selection.tts).toMatchObject({
       packId: packs.tts.packId,
       packRevision: packs.tts.engineRuntimeRevision,
@@ -2005,7 +2011,7 @@ describe('Android packaged voice live smoke harness', () => {
     expect(module.focusedTranscriptionCompleted(activeFocusedSession, completedFocusedSession)).toBe(true)
   })
 
-  it('checks automatic background start, user Stop, reopen, foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {
+  it('checks explicit initial background start, user Stop, reopen, foreground, screen-off, sticky restart, force-stop, and final cleanup', () => {
     const source = readFileSync(scriptPath, 'utf8')
     for (const invariant of [
       'captureBackend === \'android-audiorecord-rust-queue\'',
@@ -2022,8 +2028,15 @@ describe('Android packaged voice live smoke harness', () => {
       'wakeLockIsHeld(context)',
       'assertSelectedPacksPersisted',
       'stopVoiceAndRequireRelease',
-      'proveAutomaticBackgroundStart',
+      'proveExplicitBackgroundStart',
+      'notification Stop remains effective after app reopen',
+      'foreground cancellation remains effective after app reopen',
+      'explicitBackgroundReenable',
+      'remainedStoppedAfterReopen',
+      'notificationStop.publicCancelConfirmed = true',
       'proveNotificationStop',
+      "request: { remoteAudioConsent: false, backgroundSession: true }",
+      "invoke('aurora_thin_profile_get')",
       'captureUiAutomatorHierarchy(context)',
       "resourceId: 'android:id/action0'",
       "contentDesc: 'Expand'",

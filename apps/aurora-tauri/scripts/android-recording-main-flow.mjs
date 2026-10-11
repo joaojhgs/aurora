@@ -62,10 +62,11 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
   try {
     console.log(`Android recording main flow uses ${serial}; microphone route: ${audioSource}`)
     commandRun(context, ['wait-for-device'], 60_000)
-    commandRun(context, ['install', '-r', apk], 10 * 60_000)
+    context.currentUserId = readCurrentAndroidUser(context)
+    installApk(context, apk)
     grantMicrophone(context)
     launchApp(context)
-    webview = await connectInstalledWebview(context)
+    webview = await connectSelectedUserWebview(context)
     let invoke = (command, args) => invokeTauri(webview.client, command, args)
 
     const initialProfile = parseStoredProfile(await invoke('aurora_thin_profile_get'))
@@ -77,8 +78,10 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
     scope = { profileId: activeProfile.id, localNodeId: activeProfile.localNode.stablePeerId }
 
     originalPolicy = await readPolicy(invoke, webview.client)
+    assertCurrentAndroidUser(context)
     await openSettings(webview.client)
     policyChanged = true
+    assertCurrentAndroidUser(context)
     await setNotificationPolicyFromSettings(webview.client, timeoutMs)
     const enabledPolicy = await waitForPolicy(invoke, webview.client, (document) =>
       document.backgroundTranscription?.enabled === true
@@ -88,6 +91,7 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
     )
     savedPolicyRevision = enabledPolicy.revision
 
+    assertCurrentAndroidUser(context)
     const synchronized = await invoke('aurora_android_background_transcription_sync')
     const readiness = await pollStatus(invoke, (status) => status.transcription?.permission === 'granted'
       && status.transcription?.sttAvailable === true
@@ -118,6 +122,8 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
 
     const activeSession = await pollForOwnedSession(invoke, scope, sessionIdsBefore, sessionStartedAt, timeoutMs)
     ownedSessionId = activeSession.id
+    assertCurrentAndroidUser(context)
+    commandRun(context, ['shell', 'input', 'keyevent', 'HOME'], 10_000)
     await runMicrophoneFeed(microphoneFeedArgv, feedTimeoutMs)
 
     await tapNotificationAction(context, 'Stop')
@@ -130,9 +136,10 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
 
     webview.close()
     webview = null
-    commandRun(context, ['shell', 'am', 'force-stop', APP_ID], 30_000)
+    assertCurrentAndroidUser(context)
+    commandRun(context, ['shell', 'am', 'force-stop', '--user', context.currentUserId, APP_ID], 30_000)
     launchApp(context)
-    webview = await connectInstalledWebview(context)
+    webview = await connectSelectedUserWebview(context)
     invoke = (command, args) => invokeTauri(webview.client, command, args)
 
     const reopenedProfile = parseStoredProfile(await invoke('aurora_thin_profile_get'))
@@ -144,10 +151,12 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
 
     await openArchive(invoke, scope)
     const persisted = await readAndVerifyTranscript(invoke, scope, ownedSessionId, expectedNormalized)
+    assertCurrentAndroidUser(context)
     await deleteOwnedSession(invoke, scope, ownedSessionId)
     ownedSessionId = undefined
 
     if (policyChanged) {
+      assertCurrentAndroidUser(context)
       await assertOriginalProfile(invoke, originalProfileId, scope)
       await restorePolicy(invoke, webview.client, originalPolicy.document.backgroundTranscription)
       policyChanged = false
@@ -190,6 +199,7 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
     }
     try {
       if (webview && ownedSessionId && scope) {
+        assertCurrentAndroidUser(context)
         const invoke = (command, args) => invokeTauri(webview.client, command, args)
         await openArchive(invoke, scope)
         await deleteOwnedSession(invoke, scope, ownedSessionId)
@@ -200,6 +210,7 @@ export async function runAndroidRecordingMainFlow({ environment = process.env } 
     }
     try {
       if (webview && policyChanged && originalPolicy) {
+        assertCurrentAndroidUser(context)
         const invoke = (command, args) => invokeTauri(webview.client, command, args)
         await assertOriginalProfile(invoke, originalProfileId, scope)
         await restorePolicy(invoke, webview.client, originalPolicy.document.backgroundTranscription)
@@ -418,6 +429,7 @@ async function repositoryOperation(invoke, operation) {
 }
 
 async function tapNotificationAction(context, label) {
+  assertCurrentAndroidUser(context)
   await commandTry(context, ['shell', 'cmd', 'statusbar', 'collapse'])
   await commandTry(context, ['shell', 'input', 'keyevent', 'WAKEUP'])
   await commandTry(context, ['shell', 'wm', 'dismiss-keyguard'])
@@ -543,13 +555,66 @@ async function runMicrophoneFeed(argv, timeoutMs) {
   })
 }
 
+function installApk(context, apk) {
+  assertCurrentAndroidUser(context)
+  commandRun(context, ['install', '-r', '--user', context.currentUserId, apk], 10 * 60_000)
+}
+
 function grantMicrophone(context) {
-  commandRun(context, ['shell', 'pm', 'grant', APP_ID, 'android.permission.RECORD_AUDIO'], 15_000)
-  commandTry(context, ['shell', 'pm', 'grant', APP_ID, 'android.permission.POST_NOTIFICATIONS'])
+  assertCurrentAndroidUser(context)
+  commandRun(context, ['shell', 'pm', 'grant', '--user', context.currentUserId, APP_ID, 'android.permission.RECORD_AUDIO'], 15_000)
+  assertCurrentAndroidUser(context)
+  commandTry(context, ['shell', 'pm', 'grant', '--user', context.currentUserId, APP_ID, 'android.permission.POST_NOTIFICATIONS'])
 }
 
 function launchApp(context) {
-  commandRun(context, ['shell', 'monkey', '-p', context.appId, '1'], 30_000)
+  assertCurrentAndroidUser(context)
+  commandRun(context, ['shell', 'am', 'start', '--user', context.currentUserId, '-W', '-n', `${context.appId}/.MainActivity`], 30_000)
+}
+
+function readCurrentAndroidUser(context) {
+  const value = commandRun(context, ['shell', 'am', 'get-current-user']).trim()
+  if (!/^(?:0|[1-9]\d*)$/u.test(value)) throw new Error('android_current_user_unavailable')
+  return value
+}
+
+function assertCurrentAndroidUser(context) {
+  const currentUserId = readCurrentAndroidUser(context)
+  if (currentUserId !== context.currentUserId) throw new Error('android_current_user_changed')
+}
+
+async function connectSelectedUserWebview(context) {
+  const webview = await connectInstalledWebview(context)
+  try {
+    assertWebviewOwnedByCurrentUser(context, webview)
+    return webview
+  } catch {
+    try { webview.close() } catch { /* Best-effort close before failing closed. */ }
+    throw new Error('android_webview_user_owner_unconfirmed')
+  }
+}
+
+function assertWebviewOwnedByCurrentUser(context, webview) {
+  assertCurrentAndroidUser(context)
+  if (typeof webview?.pid !== 'string' || !/^[1-9]\d*$/u.test(webview.pid)) {
+    throw new Error('webview_pid_unavailable')
+  }
+  // Match the kernel-reported WebView process UID to PackageManager's UID
+  // for this exact package and selected Android user; do not infer user ids.
+  const packageRows = commandRun(context, [
+    'shell', 'pm', 'list', 'packages', '-U', '--user', context.currentUserId, context.appId,
+  ]).split(/\r?\n/u).filter((line) => line.trim().startsWith(`package:${context.appId} `))
+  if (packageRows.length !== 1) throw new Error('selected_user_package_uid_ambiguous')
+  const packageMatch = /^package:(\S+)\s+uid:(\d+)$/u.exec(packageRows[0].trim())
+  if (!packageMatch || packageMatch[1] !== context.appId) throw new Error('selected_user_package_uid_unavailable')
+
+  const processStatus = commandRun(context, ['shell', 'cat', `/proc/${webview.pid}/status`])
+  const uidLine = processStatus.split(/\r?\n/u).find((line) => /^Uid:\s/u.test(line))
+  const processUids = uidLine?.match(/^Uid:\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*$/u)
+  if (!processUids || processUids.slice(1).some((uid) => uid !== packageMatch[2])) {
+    throw new Error('webview_process_uid_mismatch')
+  }
+  assertCurrentAndroidUser(context)
 }
 
 function commandRun(context, args, timeoutMs = COMMAND_TIMEOUT_MS) {

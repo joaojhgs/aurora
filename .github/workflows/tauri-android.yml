@@ -215,6 +215,8 @@ jobs:
           cp "${SMOKE_APKS[0]}" apps/aurora-tauri/reports/android-client-smoke.apk
 
       - name: Build Android local native voice x86_64 live APK
+        env:
+          VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "1"
         run: pnpm --filter @aurora/tauri-ui android:build:voice-live:apk:x86_64
 
       - name: Retain Android local native voice live APK
@@ -326,7 +328,10 @@ jobs:
           script: |
             pnpm --filter @aurora/tauri-ui android:smoke
             AURORA_ANDROID_MOBILE_WEBRTC_LANE=turn pnpm --filter @aurora/tauri-ui android:webrtc:interop
-            env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 pnpm --filter @aurora/tauri-ui android:voice:live
+            export COMPOSE_PROJECT_NAME="aurora-native-voice-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+            trap 'flow_status=$?; if ! ./scripts/webrtc_interop_services.sh down; then exit 1; fi; exit "$flow_status"' EXIT
+            ./scripts/webrtc_interop_services.sh up
+            env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 AURORA_ANDROID_MAIN_FLOW_ONLY=1 AURORA_THREE_NODE_BROKER_URL=ws://127.0.0.1:9001/mqtt node apps/aurora-tauri/scripts/run-android-native-turn-ui-acceptance.mjs
 
       - name: Upload Android to Python WebRTC evidence
         if: always()
