@@ -40,6 +40,12 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
     || !['ws:', 'wss:'].includes(safeUrlProtocol(broker))) {
     throw new Error('The owned Python invite did not provide a complete WebRTC connection.')
   }
+  const brokerUrl = new URL(broker)
+  const loopbackBroker = brokerUrl.protocol === 'ws:'
+    && ['localhost', '127.0.0.1', '[::1]'].includes(brokerUrl.hostname.toLowerCase())
+  if (brokerUrl.protocol === 'ws:' && !loopbackBroker) {
+    throw new Error('The owned Python invite uses an insecure non-loopback WebRTC broker.')
+  }
 
   const invoke = session.invoke
   const profileId = `android-remote-console-${randomUUID()}`
@@ -76,6 +82,7 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
           room: invite.signaling.room,
           roomSecretRef,
           signalingBrokers: [broker],
+          ...(loopbackBroker ? { production: false, allowInsecureLoopbackSignaling: true } : {}),
           expectedStablePeerId: pairing.pythonPeerId,
           nodeName: invite.node.node_name,
           requireAppLayerE2ee: invite.webrtc?.enable_app_layer_e2ee === true,

@@ -39,6 +39,7 @@ export async function runAndroidLocalInferenceMainFlow({
   let networkOffline = false
   let result
   let primaryError
+  let mainPhase = 'preflight'
 
   try {
     serial = resolveAndroidDeviceSerial(run(adb, ['devices', '-l']), serial)
@@ -51,6 +52,7 @@ export async function runAndroidLocalInferenceMainFlow({
     await waitForApp(context)
     webview = await connectInstalledWebview(context)
 
+    mainPhase = 'profile_setup'
     const stored = await invokeTauri(webview.client, 'aurora_thin_profile_get')
     originalProfileValue = typeof stored?.value === 'string' ? stored.value : null
     const originalProfile = parseRuntimeProfile(originalProfileValue)
@@ -77,6 +79,7 @@ export async function runAndroidLocalInferenceMainFlow({
       throw new Error('The owned offline profile identity changed.')
     }
 
+    mainPhase = 'model_preparation'
     const catalog = await invokeTauri(webview.client, 'aurora_local_inference_catalog')
     const model = catalog?.data?.find((entry) => entry?.modelId === MODEL_ID)
     if (catalog?.ok !== true || model?.capabilities?.chat !== true) {
@@ -106,6 +109,7 @@ export async function runAndroidLocalInferenceMainFlow({
       throw new Error('The owned offline profile identity changed.')
     }
 
+    mainPhase = 'offline_answer'
     await setOfflineNetwork(webview.client, true)
     networkOffline = true
     await waitFor(webview.client, async () => (await readNetworkState(webview.client)).online === false,
@@ -115,6 +119,7 @@ export async function runAndroidLocalInferenceMainFlow({
     await submitPrompt(webview.client, PROMPT)
     const firstAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, assistantTurnTimeoutMs)
 
+    mainPhase = 'saved_history'
     await waitForVisibleEnabledControl(webview.client, 'Open conversations')
     await clickVisibleText(webview.client, 'Open conversations')
     await waitFor(webview.client, async () => evaluate(webview.client, `(() => {
@@ -137,6 +142,7 @@ export async function runAndroidLocalInferenceMainFlow({
     }
   } catch (error) {
     primaryError = error
+    emitFailureRecord({ stage: mainPhase, code: 'phase_failed' })
     throw error
   } finally {
     const cleanupErrors = []
@@ -183,6 +189,9 @@ export async function runAndroidLocalInferenceMainFlow({
     }
     try { webview?.close() } catch (error) { cleanupErrors.push(error) }
     try { releaseDeviceLock?.() } catch (error) { cleanupErrors.push(error) }
+    if (cleanupErrors.length) {
+      emitFailureRecord({ stage: 'cleanup', code: 'cleanup_failed', count: cleanupErrors.length })
+    }
     if (primaryError && cleanupErrors.length) {
       throw new AggregateError([primaryError, ...cleanupErrors], 'Android offline main flow failed and cleanup also failed.')
     }
@@ -237,6 +246,12 @@ async function waitForOfflineProfile(client) {
 async function assertOfflineProfile(client) {
   const profile = await waitForOfflineProfile(client)
   return profile
+}
+
+function emitFailureRecord({ stage, code, count }) {
+  const record = { event: 'AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FAILURE', stage, code }
+  if (Number.isInteger(count)) record.cleanupFailureCount = Math.min(Math.max(count, 0), 99)
+  try { console.error(JSON.stringify(record)) } catch { /* Diagnostics must not change main-flow behavior. */ }
 }
 
 function stablePacks(packs) {
