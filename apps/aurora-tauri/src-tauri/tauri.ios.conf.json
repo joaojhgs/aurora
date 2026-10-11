@@ -33,7 +33,10 @@
           "conformsTo": ["public.json"]
         }
       }
-    ]
+    ],
+    "iOS": {
+      "frameworks": ["Accelerate"]
+    }
   },
   "app": {
     "security": {
