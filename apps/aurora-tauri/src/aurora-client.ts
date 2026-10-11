@@ -480,8 +480,8 @@ export type IosVoiceMainFlowControlResult = {
   nonce: string;
   status: "passed" | "failed";
   stage: string;
-  setupStep: "profile_read" | "profile_validation" | "preferences_read" | "model_status" | "speech_catalog" | "ownership_capture" | "device_option" | "onboarding_navigation" | "profile_creation" | "profile_readback" | "settings_navigation" | "speech_pack_selection" | "speech_profile_readback" | "speech_picker_selection" | "speech_readiness" | null;
-  failureCode: "profile_not_empty" | "model_not_owned" | "speech_catalog_unavailable" | "offline_profile_option_unavailable" | "setup_timeout" | "setup_failed" | "speech_settings_navigation_failed" | "speech_catalog_failed" | "speech_pack_unavailable" | "speech_pack_selection_failed" | "speech_pack_not_selectable" | "speech_profile_readback_failed" | "speech_picker_failed" | "speech_picker_timeout" | "speech_readiness_timeout" | "speech_readiness_failed" | "speech_setup_timeout" | "speech_setup_failed" | null;
+  setupStep: "profile_read" | "profile_validation" | "preferences_read" | "model_status" | "speech_catalog" | "ownership_capture" | "device_option" | "onboarding_navigation" | "profile_creation" | "profile_readback" | "settings_navigation" | "speech_pack_selection" | "speech_profile_readback" | "speech_picker_selection" | "speech_readiness" | "voice_credential_status" | "voice_credential_setup" | "voice_pack_setup" | "voice_readiness" | null;
+  failureCode: "profile_not_empty" | "model_not_owned" | "speech_catalog_unavailable" | "offline_profile_option_unavailable" | "setup_timeout" | "setup_failed" | "speech_settings_navigation_failed" | "speech_catalog_failed" | "speech_pack_unavailable" | "speech_pack_selection_failed" | "speech_pack_not_selectable" | "speech_profile_readback_failed" | "speech_picker_failed" | "speech_picker_timeout" | "speech_readiness_timeout" | "speech_readiness_failed" | "speech_setup_timeout" | "speech_setup_failed" | "voice_credential_already_configured" | "voice_credential_setup_failed" | "voice_pack_setup_failed" | "voice_readiness_failed" | null;
   chunks: number;
   samples: number;
   transcriptReceived: boolean;
@@ -503,6 +503,14 @@ export interface IosVoiceMainFlowAdapter {
   setPreference: (key: IosVoiceMainFlowPreference, value: string) => ReturnType<TauriLocalTransport["secureStorageSet"]>;
   deletePreference: (key: IosVoiceMainFlowPreference) => ReturnType<TauriLocalTransport["secureStorageDelete"]>;
   listIosVoicePacks: () => ReturnType<TauriLocalTransport["listIosVoicePacks"]>;
+  getIosVoiceCredentialStatus: () => ReturnType<TauriLocalTransport["getIosVoiceCredentialStatus"]>;
+  setIosVoiceCredential: (request: { gateway: string; bearer: string; remoteAudioConsent: boolean }) => ReturnType<TauriLocalTransport["setIosVoiceCredential"]>;
+  deleteIosVoiceCredential: () => ReturnType<TauriLocalTransport["deleteIosVoiceCredential"]>;
+  getIosVoiceStatus: () => ReturnType<TauriLocalTransport["getIosVoiceStatus"]>;
+  getIosVoicePackStatus: () => ReturnType<TauriLocalTransport["getIosVoicePackStatus"]>;
+  downloadIosVoicePack: (request: { task: NativeSpeechPackTask; packId: string; forceDownload: false; activate: false }) => ReturnType<TauriLocalTransport["downloadIosVoicePack"]>;
+  activateIosVoicePack: (request: { task: NativeSpeechPackTask; packId: string; slot: NativeSpeechPackTask }) => ReturnType<TauriLocalTransport["activateIosVoicePack"]>;
+  removeIosVoicePack: (request: { task: NativeSpeechPackTask; packId: string }) => ReturnType<TauriLocalTransport["removeIosVoicePack"]>;
   readonly inference: LocalInferenceClient;
   readonly speech: TauriNativeSpeechCatalogPort;
   pollRun: (origin: string) => Promise<{ kind: "idle" | "unavailable" | "run"; payload?: unknown }>;
@@ -536,6 +544,14 @@ export function createIosVoiceMainFlowAdapter(): IosVoiceMainFlowAdapter | null 
     setPreference: (key, value) => transport.secureStorageSet(preferenceKey(key), value),
     deletePreference: (key) => transport.secureStorageDelete(preferenceKey(key)),
     listIosVoicePacks: () => transport.listIosVoicePacks(),
+    getIosVoiceCredentialStatus: () => transport.getIosVoiceCredentialStatus(),
+    setIosVoiceCredential: (request) => transport.setIosVoiceCredential(request),
+    deleteIosVoiceCredential: () => transport.deleteIosVoiceCredential(),
+    getIosVoiceStatus: () => transport.getIosVoiceStatus(),
+    getIosVoicePackStatus: () => transport.getIosVoicePackStatus(),
+    downloadIosVoicePack: (request) => transport.downloadIosVoicePack(request),
+    activateIosVoicePack: (request) => transport.activateIosVoicePack(request),
+    removeIosVoicePack: (request) => transport.removeIosVoicePack(request),
     inference,
     speech,
     pollRun: async (origin) => {

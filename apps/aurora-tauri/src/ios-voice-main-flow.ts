@@ -11,7 +11,7 @@ import {
   serializeRuntimeProfileDocument,
 } from '@aurora/ui/runtime-profile'
 
-type LoopbackRun = { nonce: string; wavBase64: string; simulatorArchitecture: 'arm64' | 'x86_64' }
+type LoopbackRun = { nonce: string; wavBase64: string; simulatorArchitecture: 'arm64' | 'x86_64'; nativeGateway: { gateway: string; bearer: string } }
 type LoopbackResult = {
   nonce: string
   status: 'passed' | 'failed'
@@ -106,7 +106,7 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
     try {
       ownership = await prepareOfflineSetup(
         adapter,
-        run.simulatorArchitecture,
+        run,
         setupDeadline,
         (step) => { result.setupStep = step },
         (captured) => { ownership = captured },
@@ -133,6 +133,21 @@ async function executeRun(origin: string, run: LoopbackRun, adapter: IosVoiceMai
     await prepareModel(ownership, setupDeadline)
     result.modelReady = true
     result.stage = 'model_ready'
+    try {
+      await readOwnedProfile(ownership)
+      const credentialStatus = await adapter.getIosVoiceCredentialStatus()
+      const liveStatus = await adapter.getIosVoiceStatus()
+      const readiness = await ownership.speech.getReadiness()
+      if (!credentialStatus.configured || !credentialStatus.hasBearer || !credentialStatus.remoteAudioConsent
+        || liveStatus.details?.nativeTurnTransportAvailable !== true || liveStatus.capability !== 'ios.voiceForegroundCapture'
+        || !readiness.available || readiness.state !== 'ready'
+        || !(['vad', 'kws', 'stt', 'tts'] as const).every((task) => readiness.capabilities[task])) throw new Error()
+    } catch {
+      result.stage = 'speech_setup'
+      result.setupStep = 'voice_readiness'
+      result.failureCode = 'voice_readiness_failed'
+      throw new Error('voice_readiness_failed')
+    }
     const mainDeadline = Math.min(Date.now() + 180_000, overallDeadline - 300_000)
     await openAssistant(mainDeadline)
     thread = await waitForElement<HTMLElement>('[aria-label="Assistant conversation thread"]', remaining(mainDeadline, 30_000))
@@ -204,12 +219,19 @@ type OfflineSetupOwnership = {
   readonly modelId: string
   readonly simulatorArchitecture: 'arm64' | 'x86_64'
   readonly initialSpeechCache: ReadonlyMap<string, boolean>
+  readonly gateway: string
+  readonly bearer: string
+  readonly initialActiveSlots: Record<string, string>
+  readonly initiallyInstalledIosPacks: ReadonlySet<string>
   createdProfileId: string | null
   createdLocalNodeId: string | null
   selectedSttPackId: string | null
+  credentialCreated: boolean
+  createdIosPacks: Array<{ task: 'vad' | 'kws' | 'tts'; packId: string }>
 }
 
-async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorArchitecture: 'arm64' | 'x86_64', deadline: number, onStep: (step: IosVoiceSetupStep) => void, onOwnershipReady: (ownership: OfflineSetupOwnership) => void): Promise<OfflineSetupOwnership> {
+async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, run: LoopbackRun, deadline: number, onStep: (step: IosVoiceSetupStep) => void, onOwnershipReady: (ownership: OfflineSetupOwnership) => void): Promise<OfflineSetupOwnership> {
+  const simulatorArchitecture = run.simulatorArchitecture
   onStep('profile_read')
   const profileValue = await adapter.getProfile()
   onStep('profile_validation')
@@ -237,6 +259,19 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
   const model = await inference.modelStatus(modelId)
   if (model.state !== 'absent' && model.state !== 'ready') throw new Error('model_not_owned')
   const speech = adapter.speech
+  onStep('voice_credential_status')
+  const credentialStatus = await adapter.getIosVoiceCredentialStatus()
+  if (credentialStatus.configured || credentialStatus.hasBearer) throw new Error('voice_credential_already_configured')
+  const iosStatus = await adapter.getIosVoicePackStatus()
+  const iosStatusRecord = iosStatus && typeof iosStatus === 'object' ? iosStatus as Record<string, unknown> : {}
+  const installed = Array.isArray(iosStatusRecord.packs) ? iosStatusRecord.packs : []
+  const initiallyInstalledIosPacks = new Set(installed.flatMap((item) => item && typeof item === 'object'
+    && (item as Record<string, unknown>).installed === true
+    && typeof (item as Record<string, unknown>).task === 'string'
+    && typeof (item as Record<string, unknown>).packId === 'string'
+    ? [`${(item as Record<string, unknown>).task}:${(item as Record<string, unknown>).packId}`] : []))
+  const initialActiveSlots = iosStatusRecord.activeSlots && typeof iosStatusRecord.activeSlots === 'object'
+    ? { ...(iosStatusRecord.activeSlots as Record<string, string>) } : {}
   onStep('speech_catalog')
   const catalog = await speech.listCatalog()
   if (catalog.state !== 'ready' || !catalog.items.some((item) => item.task === 'stt')) {
@@ -253,9 +288,15 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     modelId,
     simulatorArchitecture,
     initialSpeechCache,
+    gateway: run.nativeGateway.gateway,
+    bearer: run.nativeGateway.bearer,
+    initialActiveSlots,
+    initiallyInstalledIosPacks,
     createdProfileId: null,
     createdLocalNodeId: null,
     selectedSttPackId: null,
+    credentialCreated: false,
+    createdIosPacks: [],
   }
   onStep('ownership_capture')
   onOwnershipReady(ownership)
@@ -302,6 +343,7 @@ function classifySetupFailure(error: unknown): IosVoiceSetupFailureCode {
   if (code === 'profile_not_empty') return 'profile_not_empty'
   if (code === 'model_not_owned') return 'model_not_owned'
   if (code === 'speech_catalog_unavailable') return 'speech_catalog_unavailable'
+  if (code === 'voice_credential_already_configured') return 'voice_credential_already_configured'
   if (code === 'offline_profile_option_unavailable') return 'offline_profile_option_unavailable'
   if (code === 'main_flow_timeout' || code === 'main flow timed out') return 'setup_timeout'
   return 'setup_failed'
@@ -325,6 +367,8 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
     const architectures = Array.isArray(entry.compatibleArchitectures) ? entry.compatibleArchitectures : []
     const family = typeof entry.modelFamily === 'string' ? entry.modelFamily.toLowerCase() : ''
     return entry.task === 'stt' && entry.acknowledged === true && entry.requiresReferenceAudio !== true && entry.requiresReferenceProfile !== true
+      && typeof entry.sha256 === 'string' && /^[a-f0-9]{64}$/iu.test(entry.sha256)
+      && typeof (entry.runtimeRevision ?? entry.engineRuntimeRevision) === 'string'
       && platforms.some((value) => typeof value === 'string' && ['ios', 'all'].includes(value.toLowerCase()))
       && architectures.some((value) => typeof value === 'string' && ['all', ownership.simulatorArchitecture].includes(value.toLowerCase()))
       && supportedFamilies.has(family)
@@ -332,7 +376,19 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
   const rawSelected = compatible.find((entry) => typeof entry.packId === 'string' && catalog.items.some((item) => item.packId === entry.packId && item.task === 'stt'))
   const selected = rawSelected ? catalog.items.find((item) => item.packId === rawSelected.packId && item.task === 'stt') : undefined
   if (!selected) throw new Error('speech_pack_unavailable')
+  if (ownership.initiallyInstalledIosPacks.has(`stt:${selected.packId}`)
+    && ownership.initialActiveSlots.stt !== selected.packId) throw new Error('speech_pack_unavailable')
   ownership.selectedSttPackId = selected.packId
+  onStep('voice_credential_setup')
+  await readOwnedProfile(ownership)
+  const credential = await ownership.adapter.setIosVoiceCredential({
+    gateway: ownership.gateway,
+    bearer: ownership.bearer,
+    remoteAudioConsent: true,
+  })
+  ownership.credentialCreated = true
+  if (!credential.configured || !credential.hasBearer || !credential.remoteAudioConsent) throw new Error('voice_credential_setup_failed')
+
   onStep('speech_profile_readback')
   const current = await readOwnedProfile(ownership)
   if (current.localNode.localSpeechSelection?.stt?.packId !== selected.packId) {
@@ -346,6 +402,58 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
     return document.localNode.localSpeechSelection?.stt?.packId === selected.packId
       && ready.available && ready.activeSlots.stt === selected.packId
   }, remaining(deadline, 650_000))
+
+  onStep('voice_pack_setup')
+  const requiredPacks: Partial<Record<'vad' | 'kws' | 'stt' | 'tts', { packId: string; sha256: string; revision: string }>> = {
+    stt: { packId: selected.packId, sha256: String(rawSelected?.sha256 ?? ''), revision: String(rawSelected?.runtimeRevision ?? rawSelected?.engineRuntimeRevision ?? '') },
+  }
+  for (const task of ['vad', 'kws', 'tts'] as const) {
+    const entry = rawEntries.find((value): value is Record<string, unknown> => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return false
+      const item = value as Record<string, unknown>
+      const platforms = Array.isArray(item.compatiblePlatforms) ? item.compatiblePlatforms : []
+      const architectures = Array.isArray(item.compatibleArchitectures) ? item.compatibleArchitectures : []
+      return item.task === task && item.acknowledged === true && item.requiresReferenceAudio !== true && item.requiresReferenceProfile !== true
+        && typeof item.packId === 'string' && /^[a-f0-9]{64}$/iu.test(String(item.sha256 ?? ''))
+        && typeof (item.runtimeRevision ?? item.engineRuntimeRevision) === 'string'
+        && platforms.some((p) => typeof p === 'string' && ['ios', 'all'].includes(p.toLowerCase()))
+        && architectures.some((a) => typeof a === 'string' && ['all', ownership.simulatorArchitecture].includes(a.toLowerCase()))
+    })
+    if (!entry || typeof entry.packId !== 'string') throw new Error('voice_pack_setup_failed')
+    requiredPacks[task] = { packId: entry.packId, sha256: String(entry.sha256), revision: String(entry.runtimeRevision ?? entry.engineRuntimeRevision) }
+    const status = await ownership.adapter.getIosVoicePackStatus()
+    const packs = status && typeof status === 'object' && Array.isArray((status as Record<string, unknown>).packs)
+      ? (status as Record<string, unknown>).packs as unknown[] : []
+    const installed = packs.some((pack) => pack && typeof pack === 'object' && (pack as Record<string, unknown>).task === task
+      && (pack as Record<string, unknown>).packId === entry.packId && (pack as Record<string, unknown>).installed === true)
+    if (installed && ownership.initialActiveSlots[task] !== entry.packId) throw new Error('voice_pack_setup_failed')
+    if (!installed) {
+      await ownership.adapter.downloadIosVoicePack({ task, packId: entry.packId, forceDownload: false, activate: false })
+      ownership.createdIosPacks.push({ task, packId: entry.packId })
+    }
+    await ownership.adapter.activateIosVoicePack({ task, packId: entry.packId, slot: task })
+  }
+  const status = await ownership.adapter.getIosVoicePackStatus()
+  const activeSlots = status && typeof status === 'object' ? (status as Record<string, unknown>).activeSlots as Record<string, string> | undefined : undefined
+  if (!activeSlots || !(['vad', 'kws', 'tts', 'stt'] as const).every((task) => {
+    const expected = requiredPacks[task as 'vad' | 'kws' | 'stt' | 'tts']
+    return expected && activeSlots[task] === expected.packId
+  })) throw new Error('voice_pack_setup_failed')
+  const statusPacks = status && typeof status === 'object' && Array.isArray((status as Record<string, unknown>).packs)
+    ? (status as Record<string, unknown>).packs as unknown[] : []
+  for (const [task, expected] of Object.entries(requiredPacks)) {
+    const installed = statusPacks.find((pack) => pack && typeof pack === 'object' && (pack as Record<string, unknown>).task === task
+      && (pack as Record<string, unknown>).packId === expected?.packId)
+    if (!installed || (installed as Record<string, unknown>).installed !== true
+      || (installed as Record<string, unknown>).sha256 !== expected?.sha256
+      || (installed as Record<string, unknown>).runtimeRevision !== expected?.revision) throw new Error('voice_pack_setup_failed')
+  }
+  onStep('voice_readiness')
+  const [liveStatus, readiness] = await Promise.all([ownership.adapter.getIosVoiceStatus(), ownership.speech.getReadiness()])
+  if (liveStatus.details?.nativeTurnTransportAvailable !== true || liveStatus.capability !== 'ios.voiceForegroundCapture' || !readiness.available || readiness.state !== 'ready'
+    || !(['vad', 'kws', 'stt', 'tts'] as const).every((task) => readiness.capabilities[task] && readiness.activeSlots[task] === activeSlots[task])) {
+    throw new Error('voice_readiness_failed')
+  }
 }
 
 
@@ -359,6 +467,9 @@ function arrayFromCatalogResponse(value: unknown): unknown[] {
 
 function classifySpeechSetupFailure(error: unknown, step: IosVoiceSetupStep | null): IosVoiceSetupFailureCode {
   const code = error instanceof Error ? error.message : ''
+  if (code === 'voice_credential_setup_failed') return 'voice_credential_setup_failed'
+  if (code === 'voice_pack_setup_failed') return 'voice_pack_setup_failed'
+  if (code === 'voice_readiness_failed') return 'voice_readiness_failed'
   if (code === 'speech_catalog_unavailable') return 'speech_catalog_unavailable'
   if (code === 'speech_pack_unavailable') return 'speech_pack_unavailable'
   if (code === 'speech_pack_not_selectable') return 'speech_pack_not_selectable'
@@ -457,6 +568,25 @@ async function restoreOfflineSetup(ownership: OfflineSetupOwnership, deadline: n
       await disposeRuntime()
       runtimeDisposed = true
       if (Date.now() >= deadline) throw new Error('cleanup_timeout')
+      if (ownership.credentialCreated) {
+        const beforeDelete = await ownership.adapter.getProfile()
+        const deleteDocument = parseRuntimeProfileDocument(typeof beforeDelete.value === 'string' ? beforeDelete.value : null)
+        if (deleteDocument?.activeProfileId !== ownership.createdProfileId || deleteDocument.profiles.length !== 1
+          || deleteDocument.profiles[0]?.localNode.stablePeerId !== ownership.createdLocalNodeId) throw new Error('owned_profile_changed')
+        await ownership.adapter.deleteIosVoiceCredential()
+        const deletedStatus = await ownership.adapter.getIosVoiceCredentialStatus()
+        if (deletedStatus.configured || deletedStatus.hasBearer) throw new Error('voice_credential_cleanup_failed')
+      }
+      for (const [task, packId] of Object.entries(ownership.initialActiveSlots)) {
+        if (['vad', 'kws', 'stt', 'tts'].includes(task) && packId) {
+          await ownership.adapter.activateIosVoicePack({ task: task as 'vad' | 'kws' | 'stt' | 'tts', packId, slot: task as 'vad' | 'kws' | 'stt' | 'tts' })
+        }
+      }
+      for (const pack of ownership.createdIosPacks) {
+        if (!ownership.initiallyInstalledIosPacks.has(`${pack.task}:${pack.packId}`)) {
+          await ownership.adapter.removeIosVoicePack(pack)
+        }
+      }
       const saved = await ownership.adapter.setProfile(ownership.originalProfileValue)
       if (saved.ok !== true) throw new Error('profile_restore_failed')
       const restored = await ownership.adapter.getProfile()
@@ -490,7 +620,13 @@ async function restoreOfflineSetup(ownership: OfflineSetupOwnership, deadline: n
       : false
     const speechRestored = !ownership.selectedSttPackId
       || (speechEntry !== undefined && speechEntry.cached === speechWasCached)
-    ownedAssetsRemoved = speechRestored && modelStatus.state === ownership.initialModelState
+    const iosStatus = await ownership.adapter.getIosVoicePackStatus()
+    const currentPacks = iosStatus && typeof iosStatus === 'object' && Array.isArray((iosStatus as Record<string, unknown>).packs)
+      ? (iosStatus as Record<string, unknown>).packs as unknown[] : []
+    const iosPacksRestored = ownership.createdIosPacks.every(({ task, packId }) => !currentPacks.some((pack) => pack && typeof pack === 'object'
+      && (pack as Record<string, unknown>).task === task && (pack as Record<string, unknown>).packId === packId
+      && (pack as Record<string, unknown>).installed === true))
+    ownedAssetsRemoved = speechRestored && iosPacksRestored && modelStatus.state === ownership.initialModelState
   } catch {
     return { ok: false, profileRestored, preferencesRestored, ownedAssetsRemoved }
   }
@@ -522,7 +658,15 @@ function validateRun(value: unknown): LoopbackRun {
   if (typeof run.nonce !== 'string' || !/^[a-f0-9]{32}$/u.test(run.nonce)) throw new Error('invalid nonce')
   if (typeof run.wavBase64 !== 'string' || run.wavBase64.length > 1_400_000) throw new Error('invalid wav')
   if (run.simulatorArchitecture !== 'arm64' && run.simulatorArchitecture !== 'x86_64') throw new Error('invalid simulator architecture')
-  return { nonce: run.nonce, wavBase64: run.wavBase64, simulatorArchitecture: run.simulatorArchitecture }
+  const rawGateway = run.nativeGateway
+  if (!rawGateway || typeof rawGateway !== 'object' || Array.isArray(rawGateway)) throw new Error('invalid gateway configuration')
+  const gateway = rawGateway as Record<string, unknown>
+  if (typeof gateway.gateway !== 'string' || typeof gateway.bearer !== 'string' || !gateway.bearer.trim()) throw new Error('invalid gateway configuration')
+  try {
+    const url = new URL(gateway.gateway)
+    if (!['https:', 'http:'].includes(url.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error()
+  } catch { throw new Error('invalid gateway configuration') }
+  return { nonce: run.nonce, wavBase64: run.wavBase64, simulatorArchitecture: run.simulatorArchitecture, nativeGateway: { gateway: gateway.gateway, bearer: gateway.bearer } }
 }
 
 function decodeSyntheticPcmWav(encoded: string): Float32Array {

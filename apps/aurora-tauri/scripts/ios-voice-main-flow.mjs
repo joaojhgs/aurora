@@ -9,10 +9,10 @@ import { createServer } from 'node:http'
 const MAX_SECONDS = 30
 const RUN_TIMEOUT_MS = 2_700_000
 const CONTROL_HEADER = 'x-aurora-ios-voice-test'
-const PROFILE_SETUP_STEPS = ['profile_read','profile_validation','preferences_read','model_status','speech_catalog','ownership_capture','device_option','onboarding_navigation','profile_creation','profile_readback']
-const SPEECH_SETUP_STEPS = ['speech_catalog','settings_navigation','speech_pack_selection','speech_profile_readback','speech_picker_selection','speech_readiness']
+const PROFILE_SETUP_STEPS = ['profile_read','profile_validation','preferences_read','model_status','speech_catalog','ownership_capture','device_option','onboarding_navigation','profile_creation','profile_readback','voice_credential_status']
+const SPEECH_SETUP_STEPS = ['speech_catalog','settings_navigation','speech_pack_selection','speech_profile_readback','speech_picker_selection','speech_readiness','voice_credential_setup','voice_pack_setup','voice_readiness']
 const SETUP_STEPS = [...PROFILE_SETUP_STEPS, ...SPEECH_SETUP_STEPS]
-const SETUP_FAILURE_CODES = ['profile_not_empty','model_not_owned','speech_catalog_unavailable','offline_profile_option_unavailable','setup_timeout','setup_failed','speech_settings_navigation_failed','speech_catalog_failed','speech_pack_unavailable','speech_pack_selection_failed','speech_pack_not_selectable','speech_profile_readback_failed','speech_picker_failed','speech_picker_timeout','speech_readiness_timeout','speech_readiness_failed','speech_setup_timeout','speech_setup_failed']
+const SETUP_FAILURE_CODES = ['profile_not_empty','model_not_owned','speech_catalog_unavailable','offline_profile_option_unavailable','setup_timeout','setup_failed','speech_settings_navigation_failed','speech_catalog_failed','speech_pack_unavailable','speech_pack_selection_failed','speech_pack_not_selectable','speech_profile_readback_failed','speech_picker_failed','speech_picker_timeout','speech_readiness_timeout','speech_readiness_failed','speech_setup_timeout','speech_setup_failed','voice_credential_already_configured','voice_credential_setup_failed','voice_pack_setup_failed','voice_readiness_failed']
 const controlOrigin = process.env.AURORA_IOS_VOICE_LIVE_TEST_CONTROL_ORIGIN ?? 'http://127.0.0.1:39461'
 const webviewOrigin = process.env.AURORA_IOS_VOICE_LIVE_TEST_WEBVIEW_ORIGIN ?? 'tauri://localhost'
 const args = parseArgs(process.argv.slice(2))
@@ -33,6 +33,7 @@ try {
   if (!statSync(appPath).isDirectory() || !appPath.endsWith('.app')) throw new Error('appPath must name an existing .app directory')
   if (!/^[A-Fa-f0-9-]{36}$/u.test(udid)) throw new Error('--udid must be an explicit simulator UDID')
   const origin = validateOrigin(controlOrigin)
+  const nativeGateway = readGatewayConfig(args.gatewayConfigFile)
   if (!['tauri://localhost', 'http://tauri.localhost'].includes(webviewOrigin)) throw new Error('webview origin is not an approved Tauri origin')
   if (origin.hostname !== '127.0.0.1' && origin.hostname !== 'localhost' && origin.hostname !== '[::1]') throw new Error('control origin must use loopback')
   const appInfo = join(appPath, 'Info.plist')
@@ -56,7 +57,8 @@ try {
   if (fixtureSamples > MAX_SECONDS * 16_000) throw new Error('fixture_generation')
 
   report = { ...report, stage: 'control_listener' }
-  server = createServer((request, response) => handleRequest(request, response, { nonce, wavBase64, simulatorArchitecture, resultPromise, webviewOrigin }))
+  const runState = { nonce, wavBase64, simulatorArchitecture, nativeGateway, resultPromise, webviewOrigin, delivered: false }
+  server = createServer((request, response) => handleRequest(request, response, runState))
   await listen(server, Number(origin.port))
   report = { ...report, stage: 'app_install' }
   execFileSync('xcrun', ['simctl', 'install', udid, appPath], { stdio: 'pipe', timeout: 30_000 })
@@ -123,7 +125,7 @@ function handleRequest(req, res, state) {
     if (state.delivered) return send(res, 204)
     state.delivered = true
     res.setHeader('Content-Type', 'application/json')
-    return res.end(JSON.stringify({ nonce: state.nonce, wavBase64: state.wavBase64, simulatorArchitecture: state.simulatorArchitecture }))
+    return res.end(JSON.stringify({ nonce: state.nonce, wavBase64: state.wavBase64, simulatorArchitecture: state.simulatorArchitecture, nativeGateway: state.nativeGateway }))
   }
   if (req.method === 'POST' && req.url === '/result') {
     let body = ''
@@ -144,14 +146,26 @@ function handleRequest(req, res, state) {
 }
 
 function parseArgs(argv) {
-  const out = { udid: '', appPath: '' }
+  const out = { udid: '', appPath: '', gatewayConfigFile: '' }
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--udid' && argv[index + 1]) out.udid = argv[++index]
     else if (argv[index] === '--app-path' && argv[index + 1]) out.appPath = argv[++index]
-    else throw new Error('usage: ios-voice-main-flow.mjs --udid <owned-booted-UDID> --app-path <dedicated-debug.app>')
+    else if (argv[index] === '--gateway-config-file' && argv[index + 1]) out.gatewayConfigFile = argv[++index]
+    else throw new Error('usage: ios-voice-main-flow.mjs --udid <owned-booted-UDID> --app-path <dedicated-debug.app> --gateway-config-file <private-json>')
   }
-  if (!out.udid || !out.appPath) throw new Error('explicit simulator UDID and app path are required')
+  if (!out.udid || !out.appPath || !out.gatewayConfigFile) throw new Error('explicit simulator UDID, app path, and gateway config file are required')
   return out
+}
+
+function readGatewayConfig(path) {
+  const info = statSync(path)
+  if (!info.isFile() || (info.mode & 0o777) !== 0o600) throw new Error('gateway config must be a mode-0600 file')
+  const value = JSON.parse(readFileSync(path, 'utf8'))
+  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).sort().join(',') !== 'bearer,gateway'
+    || typeof value.gateway !== 'string' || typeof value.bearer !== 'string' || !value.bearer.trim()) throw new Error('gateway config is invalid')
+  const url = new URL(value.gateway)
+  if (!['https:', 'http:'].includes(url.protocol) || !['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname) || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new Error('gateway must be loopback HTTP or HTTPS')
+  return { gateway: value.gateway, bearer: value.bearer }
 }
 
 function validateOrigin(value) {
