@@ -366,6 +366,11 @@ describeIfNode('Android client bundle artifact proof', () => {
     const jdkHome = join(stubDir, 'jdk', 'temurin-17.0.20+8')
     const jdkBin = join(jdkHome, 'bin')
     const callsPath = join(stubDir, 'calls.jsonl')
+    const needleCallsPath = join(stubDir, 'needle-calls.jsonl')
+    const needleOutputRoot = join(resolve(packageRoot, '..', '..'), '.artifacts/local-inference/runtime/android-arm64/needle2')
+    const needleHelper = join(packageRoot, '..', '..', 'tools/local-inference/fetch_needle_native.py')
+    const needlePreload = join(stubDir, 'intercept-needle-helper.cjs')
+    const nodeOptions = `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${needlePreload}`
     const pnpmStub = join(stubDir, 'pnpm')
     const javaStub = join(stubDir, 'java')
     const asdfStub = join(stubDir, 'asdf')
@@ -408,6 +413,7 @@ fs.appendFileSync(callsPath, JSON.stringify({
   x86_64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR,
   llamaArm64Runtime: process.env.AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR,
   llamaX86_64Runtime: process.env.AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR,
+  needleArm64LibDir: process.env.AURORA_NEEDLE2_ANDROID_ARM64_LIB_DIR,
 }) + '\\n')
 if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
   const configPath = argv[argv.indexOf('--config') + 1]
@@ -436,12 +442,38 @@ if (argv[0] === 'build:frontend:android-client') {
 }
 `)
     chmodSync(pnpmStub, 0o755)
+    writeFileSync(needlePreload, `const childProcess = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const { syncBuiltinESMExports } = require('node:module')
+const needleHelper = path.resolve(${JSON.stringify(needleHelper)})
+const expectedOutputRoot = path.resolve(${JSON.stringify(needleOutputRoot)})
+const callsPath = ${JSON.stringify(needleCallsPath)}
+const originalSpawnSync = childProcess.spawnSync
+childProcess.spawnSync = function (command, args, ...rest) {
+  const argv = Array.isArray(args) ? args : []
+  const helperIndex = argv.findIndex((arg) => typeof arg === 'string' && path.resolve(arg) === needleHelper)
+  if (helperIndex < 0) return originalSpawnSync.call(this, command, args, ...rest)
+  const helperArgs = argv.slice(helperIndex + 1)
+  const supportedInterpreter = command === 'uv'
+    || (typeof command === 'string' && command.endsWith('/.venv/bin/python'))
+  const valid = supportedInterpreter && helperArgs.length === 6
+    && helperArgs[0] === '--lock-variant' && helperArgs[1] === 'android-v2'
+    && helperArgs[2] === '--target' && helperArgs[3] === 'android-arm64'
+    && helperArgs[4] === '--output-root' && path.resolve(helperArgs[5]) === expectedOutputRoot
+  fs.appendFileSync(callsPath, JSON.stringify({ command, helperArgs, valid }) + '\\n')
+  return { status: valid ? 0 : 2, signal: null, error: undefined, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), output: [] }
+}
+syncBuiltinESMExports()
+`)
+    chmodSync(needlePreload, 0o600)
 
     const result = spawnSync(process.execPath, [buildClient, '--kind', 'aab'], {
       cwd: packageRoot,
       encoding: 'utf8',
       env: androidClientEnv(context, 'aab', {
         PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+        NODE_OPTIONS: nodeOptions,
         ASDF_JAVA_VERSION: undefined,
         JAVA_HOME: undefined,
         AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
@@ -454,6 +486,11 @@ if (argv[0] === 'build:frontend:android-client') {
 
     expect(result.status, result.stderr).toBe(0)
     const calls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    const needleCalls = readFileSync(needleCallsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    const expectedNeedleArgs = [
+      '--lock-variant', 'android-v2', '--target', 'android-arm64', '--output-root', needleOutputRoot,
+    ]
+    expect(needleCalls).toEqual([{ command: expect.any(String), helperArgs: expectedNeedleArgs, valid: true }])
     expect(calls.map((call) => call.argv.join(' '))).toEqual([
       'build:frontend:android-client',
       'tauri android init --ci --skip-targets-install',
@@ -469,6 +506,7 @@ if (argv[0] === 'build:frontend:android-client') {
       x86_64NativeLibDir,
       llamaArm64Runtime,
       llamaX86_64Runtime,
+      needleArm64LibDir: join(needleOutputRoot, 'android-arm64'),
     })
     expect(calls[2]).toMatchObject({
       androidNativeTargets: 'aarch64,x86_64',
@@ -516,6 +554,7 @@ if (argv[0] === 'build:frontend:android-client') {
         encoding: 'utf8',
         env: androidClientEnv(context, 'apk', {
           PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+          NODE_OPTIONS: nodeOptions,
           ASDF_JAVA_VERSION: undefined,
           JAVA_HOME: undefined,
           AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
@@ -530,6 +569,10 @@ if (argv[0] === 'build:frontend:android-client') {
     )
     expect(releaseCalls[3].argv).not.toContain('--debug')
     expect(releaseCalls[3].llamaArm64Runtime).toBe(llamaArm64Runtime)
+    expect(releaseCalls[3].needleArm64LibDir).toBe(join(needleOutputRoot, 'android-arm64'))
+    expect(readFileSync(needleCallsPath, 'utf8').trim().split('\n')).toHaveLength(2)
+    expect(readFileSync(needleCallsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line).helperArgs))
+      .toEqual([expectedNeedleArgs, expectedNeedleArgs])
     expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
       buildMode: 'release',
       kind: 'apk',
@@ -545,6 +588,7 @@ if (argv[0] === 'build:frontend:android-client') {
         encoding: 'utf8',
         env: androidClientEnv(context, 'apk', {
           PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+          NODE_OPTIONS: nodeOptions,
           JAVA_HOME: jdkHome,
           AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
           AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR: llamaX86_64Runtime,
@@ -558,6 +602,8 @@ if (argv[0] === 'build:frontend:android-client') {
       '--apk', '--target', 'x86_64', '--config', liveCalls[3].argv.at(-1),
     ])
     expect(liveCalls[3].llamaX86_64Runtime).toBe(llamaX86_64Runtime)
+    expect(liveCalls[3].needleArm64LibDir).toBeUndefined()
+    expect(readFileSync(needleCallsPath, 'utf8').trim().split('\n')).toHaveLength(2)
     expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
       bundleMode: 'android-client-voice-live-test',
       buildMode: 'debug',
