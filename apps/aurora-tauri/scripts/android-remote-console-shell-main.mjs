@@ -64,6 +64,8 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
   let credentialRemoved = false
   let result
   let primaryError
+  let mainStage = 'profile_setup'
+  let mainOperation = 'save_room_secret'
   const cleanupErrors = []
   const document = {
     ...originalDocument,
@@ -99,13 +101,16 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
   }
   const profileValue = JSON.stringify(document)
   try {
+    mainOperation = 'save_room_secret'
     secretMutationAttempted = true
     const secretSaved = await invoke('aurora_thin_room_secret_set', { request: { ref: roomSecretRef, value: roomSecret } })
     secretOwned = secretSaved?.ok === true
     if (!secretOwned) throw new Error('Android could not store the temporary connection secret.')
+    mainOperation = 'save_remote_console_profile'
     profileMutationAttempted = true
     const saved = await invoke('aurora_thin_profile_set', { value: profileValue })
     if (saved?.ok !== true) throw new Error('Android remote-console profile was not saved.')
+    mainOperation = 'verify_remote_console_profile'
     const readback = await invoke('aurora_thin_profile_get')
     if (readback?.value !== profileValue) throw new Error('Android remote-console profile save readback did not match.')
     const activeProfile = parseProfileDocument(readback.value).profiles.find((item) => item.id === profileId)
@@ -115,16 +120,22 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
       throw new Error('The saved Android profile did not resolve to the expected remote-console role.')
     }
 
+    mainStage = 'profile_restart'
+    mainOperation = 'restart_with_remote_console_profile'
     session = await restart()
+    mainOperation = 'verify_restarted_profile'
     const bootReadback = await session.invoke('aurora_thin_profile_get')
     const bootActive = parseProfileDocument(bootReadback?.value).profiles.find((item) => item.id === profileId)
     if (bootReadback?.value !== profileValue || bootActive?.nodeMode !== 'remote-console'
       || bootActive.runtimeTier !== 'none' || bootActive.localNode?.stablePeerId !== stablePeerId) {
       throw new Error('Fresh Android launch did not retain the owned remote-console profile.')
     }
+    mainStage = 'pairing'
+    mainOperation = 'open_connected_devices'
     await navigateMesh(session.client)
     let reviewVisible
     try {
+      mainOperation = 'wait_for_pairing_review'
       reviewVisible = await waitFor(async () => await androidEvaluate(session.client, `(() => [...document.querySelectorAll('button')]
         .some(button => button.textContent?.trim() === 'Review & approve' && button.getClientRects().length > 0))()`))
     } catch (error) {
@@ -146,10 +157,13 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
       throw error
     }
     if (!reviewVisible) throw new Error('The remote-console connection did not reach product approval.')
+    mainOperation = 'open_pairing_review'
     const clicked = await clickAndroidControl(session.client, 'Review & approve')
     if (clicked !== true) throw new Error('The remote-console approval control was not available.')
+    mainOperation = 'read_pairing_code'
     const code = await waitFor(async () => await androidEvaluate(session.client, `(() => document.querySelector('[role="dialog"] code[aria-label^="Verification code "]')?.getAttribute('aria-label')?.replace(/^Verification code\\s+/u, '') ?? '')()`))
     if (typeof code !== 'string' || !code.trim()) throw new Error('The remote-console approval code was not displayed.')
+    mainOperation = 'wait_for_pairing_request'
     const pending = await waitFor(async () => {
       const payload = await post(pairing, '/api/Auth/ListPendingPairings')
       const matches = (payload.pairings ?? []).filter((item) => item.status === 'pending'
@@ -159,9 +173,13 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
       return matches[0] ?? null
     })
     if (!pending?.code) throw new Error('The remote-console pairing request was not published by the owned Python host.')
+    mainOperation = 'approve_on_gateway'
     await approvePairing(pairing, pending)
+    mainOperation = 'confirm_pairing_in_app'
     const accepted = await clickAndroidControl(session.client, 'Approve & pair')
     if (accepted !== true) throw new Error('The Android remote-console approval was not confirmed.')
+    mainStage = 'peer_readiness'
+    mainOperation = 'verify_authenticated_peer'
     const diagnostics = await waitFor(async () => {
       const value = await post(pairing, '/api/Gateway/GetWebRTCDiagnostics')
       return (value.peers ?? []).find((peer) => peer.stable_peer_id === stablePeerId
@@ -170,21 +188,27 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
         && Number(peer.effective_permission_count) === pairing.permissions.length) ?? null
     })
     if (!diagnostics) throw new Error('The remote-console connection was not authenticated by the owned Python host.')
+    mainOperation = 'verify_saved_peer_credential'
     const credential = await session.invoke('aurora_thin_peer_credential_status', { request: { peerId: pairing.pythonPeerId } })
     if (credential?.found !== true || credential?.credential?.claimantPeerId !== stablePeerId) {
       throw new Error('The remote-console credential did not match the temporary profile identity.')
     }
 
+    mainStage = 'assistant_continuity'
+    mainOperation = 'open_assistant'
     await openAssistant(session.client)
+    mainOperation = 'read_initial_config'
     const before = await getConfig(pairing)
     if (typeof before !== 'boolean') throw new Error('The owned Python host returned no boolean setting to change.')
     configBefore = before
     const draft = 'draft survives the connected settings update'
+    mainOperation = 'verify_initial_shell_health'
     const healthyShellStatus = await androidEvaluate(session.client, `(() => {
       const status = document.querySelector('[aria-label="Aurora shell status"]');
       return Boolean(status && !/needs attention|refresh needed/i.test(status.textContent ?? ''));
     })()`);
     if (healthyShellStatus !== true) throw new Error('The Assistant shell was already reporting a health notice before the config update.')
+    mainOperation = 'stage_assistant_draft'
     const marker = await androidEvaluate(session.client, `(() => {
       const workspace = document.querySelector('[data-aurora-part="assistant-workspace"]');
       const prompt = document.querySelector('#assistant-prompt');
@@ -205,12 +229,15 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
     })()`)
     if (marker !== true) throw new Error('The Assistant draft was not available in the packaged remote-console shell.')
     const change = { key_path: 'ui.dark_mode', value: !before }
+    mainStage = 'config_update'
+    mainOperation = 'commit_config_change'
     const committed = await commitConfig(pairing, change)
     if (committed?.success !== true || !(committed.changed_paths ?? []).includes('ui.dark_mode')
       || !Number.isInteger(committed.revision)) {
       throw new Error('The owned Python config change was not committed with a revision.')
     }
     configCommittedRevision = committed.revision
+    mainOperation = 'verify_draft_after_config_change'
     const observed = await waitFor(async () => await androidEvaluate(session.client, `(() => {
       const state = window.__auroraPer278RemoteConsoleMain;
       const status = document.querySelector('[aria-label="Aurora shell status"]');
@@ -221,6 +248,7 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
         && /needs attention|refresh needed/i.test(status?.textContent ?? ''));
     })()`))
     if (observed !== true) throw new Error('The packaged Assistant shell did not retain its draft through the real config update.')
+    mainOperation = 'verify_config_readback'
     const configReadback = await getConfig(pairing)
     if (configReadback !== !before) throw new Error('The owned Python config readback did not match the committed value.')
     result = { configUpdated: true, configReadback: true, assistantDraftPreserved: true, assistantDomPreserved: true, remoteConsoleRole: true }
@@ -323,6 +351,11 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
       console.log('AURORA_ANDROID_REMOTE_CONSOLE_SHELL_MAIN ' + JSON.stringify({
         ok: false,
         mainFailure: true,
+        stage: mainStage,
+        operation: mainOperation,
+        code: 'phase_failed',
+        failureCategory: safeFailureCategory(primaryError),
+        errorCode: safeErrorCode(primaryError),
         cleanupVerified: true,
         profileRestored,
         credentialRemoved,
@@ -456,6 +489,19 @@ async function waitFor(read, timeoutMs = TIMEOUT_MS) {
     await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
   }
   throw new Error('Android remote-console main flow timed out.')
+}
+
+const SAFE_NATIVE_ERROR_CODES = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'EPIPE'])
+
+function safeErrorCode(error) {
+  return typeof error?.code === 'string' && SAFE_NATIVE_ERROR_CODES.has(error.code) ? error.code : null
+}
+
+function safeFailureCategory(error) {
+  if (error instanceof AggregateError) return 'aggregate_error'
+  if (error?.name === 'TimeoutError' || safeErrorCode(error) === 'ETIMEDOUT') return 'timeout'
+  if (error?.name === 'TypeError') return 'type_error'
+  return 'operation_failed'
 }
 
 function parseProfileDocument(value) {

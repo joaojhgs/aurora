@@ -40,19 +40,26 @@ export async function runAndroidLocalInferenceMainFlow({
   let result
   let primaryError
   let mainPhase = 'preflight'
+  let mainOperation = 'resolve_device'
 
   try {
+    mainOperation = 'resolve_device'
     serial = resolveAndroidDeviceSerial(run(adb, ['devices', '-l']), serial)
     context = { adb, serial, appId }
+    mainOperation = 'acquire_device_lock'
     releaseDeviceLock = await acquireAndroidSmokeLock({
       lockPath: resolveAndroidSmokeLockPath(serial),
       waitTimeoutMs: 90_000,
     })
+    mainOperation = 'wait_for_device'
     run(adb, ['-s', serial, 'wait-for-device'], { timeout: 60_000 })
+    mainOperation = 'wait_for_app'
     await waitForApp(context)
+    mainOperation = 'connect_webview'
     webview = await connectInstalledWebview(context)
 
     mainPhase = 'profile_setup'
+    mainOperation = 'read_original_profile'
     const stored = await invokeTauri(webview.client, 'aurora_thin_profile_get')
     originalProfileValue = typeof stored?.value === 'string' ? stored.value : null
     const originalProfile = parseRuntimeProfile(originalProfileValue)
@@ -62,7 +69,9 @@ export async function runAndroidLocalInferenceMainFlow({
     }
     // The preceding connected/voice main restores this profile through native IPC.
     // Recreate the app runtime so its onboarding route matches persisted state.
+    mainOperation = 'restart_for_onboarding'
     webview = await restartApp(context, webview)
+    mainOperation = 'verify_original_profile'
     const freshStored = await invokeTauri(webview.client, 'aurora_thin_profile_get')
     if (freshStored?.value !== originalProfileValue) {
       throw new Error('The canonical-empty profile changed while the Android app was restarting.')
@@ -76,10 +85,14 @@ export async function runAndroidLocalInferenceMainFlow({
     originalTier = originalActiveProfile?.runtimeTier ?? null
     originalNetwork = await readNetworkState(webview.client)
 
+    mainOperation = 'create_offline_profile'
     await createOfflineProfileThroughOnboarding(webview.client)
     profileCreated = true
+    mainOperation = 'verify_created_profile'
     profileCreateReadback = await waitForOfflineProfile(webview.client)
+    mainOperation = 'restart_with_offline_profile'
     webview = await restartApp(context, webview)
+    mainOperation = 'verify_restarted_profile'
     const restartedProfile = await waitForOfflineProfile(webview.client)
     if (restartedProfile.activeProfileId !== profileCreateReadback.activeProfileId
       || restartedProfile.activeLocalNodeId !== profileCreateReadback.activeLocalNodeId) {
@@ -87,28 +100,36 @@ export async function runAndroidLocalInferenceMainFlow({
     }
 
     mainPhase = 'model_preparation'
+    mainOperation = 'read_model_catalog'
     const catalog = await invokeTauri(webview.client, 'aurora_local_inference_catalog')
     const model = catalog?.data?.find((entry) => entry?.modelId === MODEL_ID)
     if (catalog?.ok !== true || model?.capabilities?.chat !== true) {
       throw new Error(`The production-selected Android model ${MODEL_ID} is not available in the native catalog.`)
     }
+    mainOperation = 'read_initial_model_status'
     const initialStatus = await invokeTauri(webview.client, 'aurora_local_inference_model_status', { modelId: MODEL_ID })
     const state = initialStatus?.data?.state
     if (initialStatus?.ok !== true || !['ready', 'absent'].includes(state)) {
       throw new Error(`The selected Android model is in an unsupported state (${state ?? 'unknown'}); preserving it.`)
     }
 
+    mainOperation = 'open_model_settings'
     await openSettings(webview.client)
     if (state === 'absent') {
+      mainOperation = 'wait_for_model_download_control'
       await waitForVisibleEnabledControl(webview.client, 'Download offline answers')
+      mainOperation = 'start_model_download'
       await clickExact(webview.client, 'button', 'Download offline answers')
+      mainOperation = 'wait_for_model_readiness'
       await waitForModelStatus(webview.client, 'ready', modelDownloadTimeoutMs, 2_000)
       modelDownloadedByRun = true
     }
+    mainOperation = 'verify_model_readiness'
     const ready = await invokeTauri(webview.client, 'aurora_local_inference_model_status', { modelId: MODEL_ID })
     if (ready?.ok !== true || ready?.data?.state !== 'ready') {
       throw new Error('The selected model did not pass native readiness status after Settings setup.')
     }
+    mainOperation = 'enable_offline_answers'
     await setOfflineAnswers(webview.client, true)
     const settingsProfile = await assertOfflineProfile(webview.client)
     if (settingsProfile.activeProfileId !== profileCreateReadback.activeProfileId
@@ -117,23 +138,33 @@ export async function runAndroidLocalInferenceMainFlow({
     }
 
     mainPhase = 'offline_answer'
+    mainOperation = 'disable_network'
     await setOfflineNetwork(webview.client, true)
     networkOffline = true
+    mainOperation = 'verify_network_offline'
     await waitFor(webview.client, async () => (await readNetworkState(webview.client)).online === false,
       10_000, 'scoped packaged WebView offline state')
+    mainOperation = 'open_assistant'
     await openAssistant(webview.client)
+    mainOperation = 'start_conversation'
     await startNewConversation(webview.client)
+    mainOperation = 'submit_offline_prompt'
     await submitPrompt(webview.client, PROMPT)
+    mainOperation = 'wait_for_offline_answer'
     const firstAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, assistantTurnTimeoutMs)
 
     mainPhase = 'saved_history'
+    mainOperation = 'open_saved_conversations'
     await waitForVisibleEnabledControl(webview.client, 'Open conversations')
+    mainOperation = 'verify_saved_conversation_list'
     await clickVisibleText(webview.client, 'Open conversations')
     await waitFor(webview.client, async () => evaluate(webview.client, `(() => {
       const list = document.querySelector('ul[aria-label="Assistant conversation list"]');
       return Boolean(list && list.querySelectorAll('button[aria-current="true"]').length === 1);
     })()`), 30_000, 'saved active conversation in history')
+    mainOperation = 'reopen_saved_conversation'
     await clickSelector(webview.client, 'ul[aria-label="Assistant conversation list"] button[aria-current="true"]')
+    mainOperation = 'verify_saved_answer'
     const savedAnswer = await waitForPureAssistantAnswer(webview.client, PROMPT, 30_000)
     if (savedAnswer !== firstAnswer) throw new Error('The reopened conversation did not preserve the same assistant answer.')
 
@@ -149,7 +180,7 @@ export async function runAndroidLocalInferenceMainFlow({
     }
   } catch (error) {
     primaryError = error
-    emitFailureRecord({ stage: mainPhase, code: 'phase_failed' })
+    emitFailureRecord({ stage: mainPhase, operation: mainOperation, code: 'phase_failed', failureCategory: safeFailureCategory(error), errorCode: safeErrorCode(error) })
     throw error
   } finally {
     const cleanupErrors = []
@@ -255,10 +286,23 @@ async function assertOfflineProfile(client) {
   return profile
 }
 
-function emitFailureRecord({ stage, code, count }) {
-  const record = { event: 'AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FAILURE', stage, code }
+function emitFailureRecord({ stage, operation, code, failureCategory, errorCode, count }) {
+  const record = { event: 'AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FAILURE', stage, operation, code, failureCategory, errorCode }
   if (Number.isInteger(count)) record.cleanupFailureCount = Math.min(Math.max(count, 0), 99)
   try { console.error(JSON.stringify(record)) } catch { /* Diagnostics must not change main-flow behavior. */ }
+}
+
+const SAFE_NATIVE_ERROR_CODES = new Set(['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ECONNABORTED', 'EPIPE'])
+
+function safeErrorCode(error) {
+  return typeof error?.code === 'string' && SAFE_NATIVE_ERROR_CODES.has(error.code) ? error.code : null
+}
+
+function safeFailureCategory(error) {
+  if (error instanceof AggregateError) return 'aggregate_error'
+  if (error?.name === 'TimeoutError' || safeErrorCode(error) === 'ETIMEDOUT') return 'timeout'
+  if (error?.name === 'TypeError') return 'type_error'
+  return 'operation_failed'
 }
 
 function stablePacks(packs) {
