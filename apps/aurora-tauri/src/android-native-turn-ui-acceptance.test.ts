@@ -53,7 +53,7 @@ describe('native turn UI acceptance source wiring', () => {
     expect(config.services.auth.enabled).toBe(true)
     expect(config.services.db.enabled).toBe(true)
     expect(config.services.orchestrator.enabled).toBe(true)
-    expect(config.services.tooling.enabled).toBe(false)
+    expect(config.services.tooling.enabled).toBe(true)
     expect(config.services.scheduler.enabled).toBe(false)
     expect(config.services.stt.coordinator.enabled).toBe(false)
     expect(config.services.stt.transcription.enabled).toBe(false)

@@ -56,8 +56,10 @@ class FakeSession {
   }
 }
 
+const scheduleFlush = globalThis.setImmediate
+
 async function flush(): Promise<void> {
-  await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+  await new Promise<void>((resolve) => scheduleFlush(resolve))
 }
 
 async function isSettled(promise: Promise<unknown>): Promise<boolean> {
