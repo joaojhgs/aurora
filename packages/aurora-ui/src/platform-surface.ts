@@ -11,6 +11,7 @@ export type AuroraSurfaceFeature =
   | 'desktopCommands'
   | 'desktopOverlay'
   | 'localVoice'
+  | 'localSpeechSetup'
   | 'localSettings'
   | 'localInference'
   | 'sidecar'
@@ -439,6 +440,12 @@ export function surfaceCanConfigureBackgroundWake(profile: AuroraSurfaceProfile)
   return owner === 'native-desktop' || owner === 'mobile-native' || owner === 'coordinator-daemon'
 }
 
+function surfaceCanUseLocalVoice(profile: AuroraSurfaceProfile): boolean {
+  if (profile.isAndroid && profile.supportsMobileNative) return true
+  return profile.voiceCapture.focusedPushToTalkOwner !== 'unavailable'
+    || profile.voiceCapture.wakewordOwner !== 'unavailable'
+}
+
 export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: AuroraSurfaceFeature): boolean {
   switch (feature) {
     case 'desktopCommands':
@@ -450,9 +457,10 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
     case 'localInference':
       return profile.canManageLocalAssistant
     case 'localVoice':
-      if (profile.isAndroid && profile.supportsMobileNative) return true
-      return profile.voiceCapture.focusedPushToTalkOwner !== 'unavailable'
-        || profile.voiceCapture.wakewordOwner !== 'unavailable'
+      return surfaceCanUseLocalVoice(profile)
+    case 'localSpeechSetup':
+      return surfaceCanUseLocalVoice(profile)
+        || (profile.supportsIosOnly && profile.canManageNativeSpeechPolicy)
     case 'sidecar':
     case 'localOnly':
       return profile.usesLocalSidecar

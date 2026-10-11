@@ -1079,6 +1079,53 @@ describe('VoiceSettingsView', () => {
     expect(markup).not.toContain('>Advanced<')
   })
 
+  it('shows the transcription picker in fresh iOS Settings while capture is unavailable', async () => {
+    const runtimeProfile = meshVoiceRuntimeProfile()
+    runtimeProfile.localNode.localSpeechPackState = 'unavailable'
+    const surfaceProfile = getAuroraSurfaceProfile({
+      runtimeMode: 'ios-thin',
+      transportKind: 'native-mobile',
+      nativePlatform: 'ios',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      nativeVoicePresent: true,
+      nativeVoiceAvailable: false,
+      localSpeechPackState: 'unavailable',
+    })
+    expect(surfaceProfile.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
+
+    const catalog = multilingualSpeechCatalog()
+    const saveSelection = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <SettingsView
+          client={voiceClient()}
+          snapshot={webSnapshot()}
+          runtimeProfile={runtimeProfile}
+          surfaceProfile={surfaceProfile}
+          localSpeechCatalog={catalog}
+          onLocalSpeechSelectionConfirmed={saveSelection}
+        />
+      )
+    })
+    await flushReactWork()
+
+    try {
+      await vi.waitFor(() => {
+        expect(container.querySelector('button[aria-label="Choose transcription"]')).not.toBeNull()
+      })
+      await chooseSearchableOption(container, 'Choose transcription', 'English transcription')
+      expect(catalog.select).toHaveBeenCalledTimes(1)
+      expect(saveSelection).toHaveBeenCalledTimes(1)
+    } finally {
+      await act(async () => root.unmount())
+      container.remove()
+    }
+  })
+
   it('hides server spoken-reply controls in This-device Settings and on-device sections in Operate', async () => {
     const client = voiceClient({
       profiles: [profile({ installed: false, ready: false })]

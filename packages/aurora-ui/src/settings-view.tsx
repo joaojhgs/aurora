@@ -63,7 +63,7 @@ export function SettingsView({
     localSpeechPackState: runtimeProfile?.localNode.localSpeechPackState ?? null
   }), [surfaceProfile, snapshot.nativePlatform, snapshot.transportKind, runtimeProfile])
 
-  const showLocalVoiceEditor = shouldShowForSurface(profile, 'localVoice')
+  const showLocalVoiceEditor = shouldShowForSurface(profile, 'localSpeechSetup')
 
   return (
     <section className="flex flex-col gap-4" aria-label="Settings">
