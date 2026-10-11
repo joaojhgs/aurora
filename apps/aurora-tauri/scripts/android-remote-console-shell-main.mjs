@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { androidEvaluate, clickAndroidControl, readAndroidPairReadiness } from './android-native-turn-pairing.mjs'
+import { androidEvaluate, clickAndroidControl } from './android-native-turn-pairing.mjs'
 
 const TIMEOUT_MS = 30_000
 const EMPTY_PROFILE = JSON.stringify({ version: 2, activeProfileId: null, profiles: [] })
@@ -111,7 +111,7 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
         .some(button => button.textContent?.trim() === 'Review & approve' && button.getClientRects().length > 0))()`))
     } catch (error) {
       let readiness
-      try { readiness = await readAndroidPairReadiness(session.client) }
+      try { readiness = await readRemoteConsolePairReadiness(session.client) }
       catch { readiness = { available: false, reason: 'diagnostic-unavailable' } }
       console.log('AURORA_ANDROID_REMOTE_CONSOLE_REVIEW_READINESS_FAILURE ' + JSON.stringify(readiness))
       throw error
@@ -364,6 +364,23 @@ async function post(pairing, path, body = {}, extraHeaders = {}) {
   })
   if (!response.ok()) throw new Error(`Owned Python request failed at ${path} (${response.status()}).`)
   return await response.json()
+}
+
+
+async function readRemoteConsolePairReadiness(client) {
+  return await androidEvaluate(client, `(() => {
+    const safeLabel = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,64}$/iu.test(value) ? value : null;
+    const root = document.querySelector('[aria-labelledby="mesh-peers-title"]');
+    if (!root) return { available: false, reason: 'mesh-page-absent' };
+    return {
+      available: true,
+      status: safeLabel(root.getAttribute('data-thin-peer-status')),
+      state: safeLabel(root.getAttribute('data-thin-peer-state')),
+      errorCode: safeLabel(root.getAttribute('data-thin-peer-error')),
+      reviewControlVisible: [...document.querySelectorAll('button')]
+        .some(button => button.textContent?.trim() === 'Review & approve' && button.getClientRects().length > 0),
+    };
+  })()`)
 }
 
 async function waitFor(read, timeoutMs = TIMEOUT_MS) {

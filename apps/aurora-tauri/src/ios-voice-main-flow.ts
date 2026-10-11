@@ -303,7 +303,7 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
   if (catalog.state !== 'ready') throw new Error('speech_catalog_unavailable')
   onStep('speech_pack_selection')
   const rawValue = await ownership.adapter.listIosVoicePacks()
-  const rawEntries = Array.isArray(rawValue) ? rawValue : []
+  const rawEntries = arrayFromCatalogResponse(rawValue)
   const supportedFamilies = new Set(['silero_vad', 'zipformer', 'whisper', 'vits_piper', 'pockettts'])
   const compatible = rawEntries.filter((value): value is Record<string, unknown> => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return false
@@ -333,6 +333,15 @@ async function prepareSpeech(ownership: OfflineSetupOwnership, setupDeadline: nu
     return document.localNode.localSpeechSelection?.stt?.packId === selected.packId
       && ready.available && ready.activeSlots.stt === selected.packId
   }, remaining(deadline, 650_000))
+}
+
+
+function arrayFromCatalogResponse(value: unknown): unknown[] {
+  if (Array.isArray(value)) return value
+  if (!value || typeof value !== 'object') return []
+  const record = value as Record<string, unknown>
+  const entries = record.packs ?? record.entries
+  return Array.isArray(entries) ? entries : []
 }
 
 function classifySpeechSetupFailure(error: unknown, step: IosVoiceSetupStep | null): IosVoiceSetupFailureCode {
@@ -380,7 +389,7 @@ async function openSettings(): Promise<void> {
 }
 
 async function openAssistant(deadline: number): Promise<void> {
-  const assistantLink = await waitForElement<HTMLAnchorElement>('a[href="/assistant"]', remaining(deadline, 30_000))
+  const assistantLink = await waitForElement<HTMLAnchorElement>('a[href="/"]', remaining(deadline, 30_000))
   assistantLink.click()
 }
 
