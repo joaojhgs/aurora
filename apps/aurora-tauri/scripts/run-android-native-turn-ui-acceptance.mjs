@@ -637,8 +637,17 @@ export async function readFixtureReady(fixture, timeoutMs = 15_000) {
   })
 }
 
+export function installWorkspacePlaywrightChromium() {
+  execFileSync('pnpm', ['exec', 'playwright', 'install', 'chromium'], {
+    cwd: WORKSPACE_ROOT,
+    stdio: 'inherit',
+    timeout: 180_000,
+  })
+}
+
 export async function runAcceptance() {
   const environment = acceptanceEnvironment()
+  installWorkspacePlaywrightChromium()
   const turnId = `native-turn-${randomUUID()}`
   const fixturePartialText = `Fixture partial response ${turnId}`
   const fixtureCompletedText = `Fixture completed response ${turnId}`
