@@ -787,14 +787,12 @@ enum AuroraIOSVoicePackManager {
   static func isRuntimeConnected() -> Bool {
     guard
       let configuration = try? AuroraIOSVoiceCredentialStore.load(),
-      let gateway = URL(string: configuration.gateway),
-      validateGatewayURL(gateway, allowHttp: false),
-      validateDownloadTarget(gateway),
-      let target = URL(string: configuration.gateway)
+      let gateway = URL(string: configuration.gateway)
     else {
       return false
     }
-    return (try? probeEngine(at: target)) ?? false
+    // Saved gateways follow credential-store loopback HTTP rules; asset downloads retain stricter public HTTPS validation.
+    return (try? probeEngine(at: gateway)) ?? false
   }
 
   static func status(forSlot slot: String) -> [String: Any] {
