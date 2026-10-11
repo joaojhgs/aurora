@@ -1343,7 +1343,11 @@ async fn begin_peer_stage(
     {
         return Err("Speech stream target is unavailable".to_owned());
     }
-    let _target_resource_id = start.target_resource_id.as_deref();
+    validate_peer_speech_resource_selector(
+        stage_name,
+        start.target_resource_id.as_deref(),
+        &owner.verifier_peer_id,
+    )?;
     let _consent_revision_is_not_authority = start.consent_revision.as_deref();
     if start.capability_revision != document.revision {
         return Err("Speech stream capability changed".to_owned());
@@ -2267,6 +2271,60 @@ fn profile_asset(value: Option<&Value>) -> Option<ProfileSpeechAsset> {
             .and_then(Value::as_str)
             .map(str::to_owned),
     })
+}
+
+fn validate_peer_speech_resource_selector(
+    stage_name: &str,
+    target_resource_id: Option<&str>,
+    verifier_peer_id: &str,
+) -> Result<(), String> {
+    let stage_resource = match stage_name {
+        "kws" => "WakeWord",
+        "vad" => "VAD",
+        _ => return Err("Speech stream target is unavailable".to_owned()),
+    };
+    let Some(target_resource_id) = target_resource_id else {
+        return Ok(());
+    };
+    let expected_resource_id = format!("remote:{verifier_peer_id}:{stage_resource}");
+    if target_resource_id != expected_resource_id.as_str() {
+        return Err("Speech stream target is unavailable".to_owned());
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod peer_speech_resource_selector_tests {
+    use super::validate_peer_speech_resource_selector;
+
+    #[test]
+    fn accepts_matching_kws_and_vad_resources_from_authenticated_verifier() {
+        assert!(validate_peer_speech_resource_selector(
+            "kws",
+            Some("remote:authenticated-host:WakeWord"),
+            "authenticated-host",
+        )
+        .is_ok());
+        assert!(validate_peer_speech_resource_selector(
+            "vad",
+            Some("remote:authenticated-host:VAD"),
+            "authenticated-host",
+        )
+        .is_ok());
+    }
+
+    #[test]
+    fn rejects_mismatched_resource_and_preserves_omitted_selector() {
+        assert_eq!(
+            validate_peer_speech_resource_selector(
+                "kws",
+                Some("remote:other-host:WakeWord"),
+                "authenticated-host",
+            ),
+            Err("Speech stream target is unavailable".to_owned()),
+        );
+        assert!(validate_peer_speech_resource_selector("kws", None, "authenticated-host",).is_ok());
+    }
 }
 
 fn validate_operation_id(value: &str) -> Result<(), String> {
