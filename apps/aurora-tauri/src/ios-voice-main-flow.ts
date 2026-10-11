@@ -192,8 +192,6 @@ type OfflineSetupOwnership = {
   readonly speech: IosVoiceMainFlowAdapter["speech"]
   readonly originalProfileValue: string
   readonly originalProfileWasNull: boolean
-  readonly originalMode: string | null
-  readonly originalTier: string | null
   readonly initialModelState: 'absent' | 'ready'
   readonly simulatorArchitecture: 'arm64' | 'x86_64'
   readonly initialSpeechCache: ReadonlyMap<string, boolean>
@@ -211,10 +209,10 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     ? serializeRuntimeProfileDocument(emptyRuntimeProfileDocument())
     : requireCanonicalEmptyProfile(profileValue.value)
   onStep('preferences_read')
-  const [mode, tier] = await Promise.all([
-    adapter.getPreference('onboarding-mode'),
-    adapter.getPreference('runtime-tier'),
-  ])
+  // On iOS, onboarding mode and runtime tier are read from the active runtime
+  // profile (runtimeBackedModePreferenceStore), not generic secure storage. The
+  // main flow accepts only an empty profile, so both original selections are
+  // absent and the profile readback below is their authoritative restoration.
   const inference = adapter.inference
   onStep('model_status')
   const model = await inference.modelStatus('chat-qwen3-0b8')
@@ -232,8 +230,6 @@ async function prepareOfflineSetup(adapter: IosVoiceMainFlowAdapter, simulatorAr
     speech,
     originalProfileValue,
     originalProfileWasNull,
-    originalMode: mode.value ?? null,
-    originalTier: tier.value ?? null,
     initialModelState: model.state,
     simulatorArchitecture,
     initialSpeechCache,
@@ -413,19 +409,10 @@ async function restoreOfflineSetup(ownership: OfflineSetupOwnership, deadline: n
         && (ownership.originalProfileWasNull || restored.value === ownership.originalProfileValue)
     }
     if (!profileRestored) throw new Error('profile_restore_failed')
-    const modeSaved = ownership.originalMode === null
-      ? await ownership.adapter.deletePreference('onboarding-mode')
-      : await ownership.adapter.setPreference('onboarding-mode', ownership.originalMode)
-    const tierSaved = ownership.originalTier === null
-      ? await ownership.adapter.deletePreference('runtime-tier')
-      : await ownership.adapter.setPreference('runtime-tier', ownership.originalTier)
-    if (!modeSaved.ok || !tierSaved.ok) throw new Error('preference_restore_failed')
-    const [mode, tier] = await Promise.all([
-      ownership.adapter.getPreference('onboarding-mode'),
-      ownership.adapter.getPreference('runtime-tier'),
-    ])
-    preferencesRestored = (mode.value ?? null) === ownership.originalMode && (tier.value ?? null) === ownership.originalTier
-    if (!preferencesRestored) throw new Error('preference_restore_failed')
+    // iOS selection state is profile-backed, and its original canonical-empty
+    // profile was just read back above. Do not invoke desktop/Android generic
+    // secure-storage commands, which are intentionally unsupported on iOS.
+    preferencesRestored = profileRestored
     if (ownership.createdProfileId && !runtimeDisposed) throw new Error('assistant_runtime_disposal_unavailable')
     if (runtimeDisposed) {
       if (ownership.selectedSttPackId && ownership.initialSpeechCache.get(`stt:${ownership.selectedSttPackId}`) !== true) {

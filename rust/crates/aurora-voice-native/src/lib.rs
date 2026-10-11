@@ -13,7 +13,7 @@ mod android_session;
 mod audio;
 #[cfg(any(target_os = "linux", windows, target_os = "macos"))]
 mod desktop_capture;
-#[cfg(feature = "native-sherpa")]
+#[cfg(any(feature = "native-sherpa", feature = "ios-sherpa"))]
 mod desktop_engine;
 mod downloader;
 mod gateway_capture_handoff;
@@ -60,14 +60,14 @@ pub use desktop_capture::{
     CpalAudioInput, NativeCaptureConfig, NativeCaptureControl, NativeCaptureStatus,
     NativeInputDevice, NativeInputDeviceId,
 };
-#[cfg(feature = "native-sherpa")]
+#[cfg(any(feature = "native-sherpa", feature = "ios-sherpa"))]
 pub use desktop_engine::{
     build_active_kws_provider, build_active_stt_provider, build_active_vad_provider,
     build_installed_kws_provider, build_installed_kws_provider_from_phrases,
     build_installed_stt_provider, build_installed_vad_provider, warm_active_kws,
     warm_installed_kws,
 };
-#[cfg(feature = "native-sherpa-tts")]
+#[cfg(any(feature = "native-sherpa-tts", feature = "ios-sherpa"))]
 pub use desktop_engine::{
     build_installed_tts_provider, build_installed_tts_provider_with_reference,
 };

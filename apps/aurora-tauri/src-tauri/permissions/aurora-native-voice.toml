@@ -10,9 +10,21 @@ commands.allow = [
   "aurora_peer_host_local_speech_transcribe",
   "aurora_peer_host_local_speech_synthesize",
   "aurora_peer_host_local_speech_cancel",
+  "aurora_peer_host_local_speech_stage",
   "aurora_native_speech_pack_catalog",
   "aurora_native_speech_pack_status",
   "aurora_native_speech_pack_install",
   "aurora_native_speech_pack_activate",
   "aurora_native_speech_pack_remove",
+]
+
+[[permission]]
+identifier = "aurora-native-speech-host"
+description = "Allow foreground locally admitted peer speech without granting microphone capture or playback controls."
+commands.allow = [
+  "aurora_native_speech_host_snapshot",
+  "aurora_peer_host_local_speech_transcribe",
+  "aurora_peer_host_local_speech_synthesize",
+  "aurora_peer_host_local_speech_cancel",
+  "aurora_peer_host_local_speech_stage",
 ]

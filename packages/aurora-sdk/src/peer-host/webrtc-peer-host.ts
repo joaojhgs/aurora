@@ -107,6 +107,7 @@ export class WebRtcPeerHost {
    * never a grant: every authorization question still goes to the authority.
    */
   private readonly recipients = new Map<string, PeerHostRecipient>()
+  private readonly disconnectCleanups = new Map<string, { readonly remotePeerId: string; readonly promise: Promise<void> }>()
   private timeoutSendFailureCount = 0
   private lastTimeoutFailureReason: 'timeout_send_failed' | null = null
 
@@ -148,8 +149,10 @@ export class WebRtcPeerHost {
   detach(remotePeerId: string): boolean {
     const state = this.recipients.get(remotePeerId)
     if (!state) return false
+    state.acceptingInbound = false
     this.cancelAll('detached', remotePeerId)
     this.unbindRevocation(state)
+    this.requestRemotePeerCleanup(remotePeerId, state.connectionEpoch, 'detached')
     return this.recipients.delete(remotePeerId)
   }
 
@@ -227,6 +230,21 @@ export class WebRtcPeerHost {
   }
 
   async startEpoch(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
+    const previousPeerId = remotePeerId ?? this.soleRecipientPeerId()
+    const previousState = previousPeerId === undefined
+      ? this.fallbackRecipient
+      : this.recipients.get(previousPeerId)
+    if (previousPeerId !== undefined) {
+      if (previousState) {
+        previousState.acceptingInbound = false
+        previousState.admittedServices = new Set<string>()
+        this.requestRemotePeerCleanup(previousPeerId, previousState.connectionEpoch, 'epoch_replaced')
+      }
+      await this.awaitPeerCleanup(previousPeerId)
+      for (const [key, cleanup] of this.disconnectCleanups) {
+        if (cleanup.remotePeerId === previousPeerId) this.disconnectCleanups.delete(key)
+      }
+    }
     const state = this.stateFor(remotePeerId)
     state.acceptingInbound = false
     state.admittedServices = new Set<string>()
@@ -845,10 +863,13 @@ export class WebRtcPeerHost {
 
   handleDisconnect(reason = 'disconnect', remotePeerId?: string): void {
     if (remotePeerId === undefined) {
-      for (const [, state] of this.recipientStates()) {
+      for (const [peerId, state] of this.recipientStates()) {
         state.acceptingInbound = false
         state.admittedServices = new Set<string>()
         this.unbindRevocation(state)
+        if (peerId !== undefined) {
+          this.requestRemotePeerCleanup(peerId, state.connectionEpoch, reason)
+        }
       }
       this.cancelAll(reason)
       return
@@ -858,6 +879,7 @@ export class WebRtcPeerHost {
     state.admittedServices = new Set<string>()
     this.cancelAll(reason, remotePeerId)
     this.unbindRevocation(state)
+    this.requestRemotePeerCleanup(remotePeerId, state.connectionEpoch, reason)
   }
 
   getActiveWorkCount(): number {
@@ -1040,6 +1062,27 @@ export class WebRtcPeerHost {
     return context
   }
 
+  private requestRemotePeerCleanup(remotePeerId: string, connectionEpoch: string, reason: string): Promise<void> {
+    const key = `${remotePeerId}\u0000${connectionEpoch}`
+    const existing = this.disconnectCleanups.get(key)
+    if (existing) return existing.promise
+    const promise = Promise.resolve().then(() =>
+      this.options.onRemotePeerDisconnected?.(remotePeerId, connectionEpoch, reason)
+    ).then(() => undefined)
+    this.disconnectCleanups.set(key, { remotePeerId, promise })
+    // The rejected promise stays recorded so a later epoch cannot replace an owner
+    // whose cleanup failed; attaching a handler prevents a sync callback from
+    // creating an unhandled rejection before the next async lifecycle boundary.
+    void promise.catch(() => undefined)
+    return promise
+  }
+
+  private async awaitPeerCleanup(remotePeerId: string): Promise<void> {
+    await Promise.all([...this.disconnectCleanups.values()]
+      .filter((cleanup) => cleanup.remotePeerId === remotePeerId)
+      .map((cleanup) => cleanup.promise))
+  }
+
   private cancelAll(reason: string, remotePeerId?: string): void {
     for (const [id, active] of this.active) {
       if (remotePeerId !== undefined && active.remotePeerId !== remotePeerId) continue
@@ -1055,6 +1098,9 @@ export class WebRtcPeerHost {
       state.authorityRevoked = true
       state.acceptingInbound = false
       state.admittedServices = new Set<string>()
+      if (remotePeerId !== undefined) {
+        this.requestRemotePeerCleanup(remotePeerId, state.connectionEpoch, 'peer_authority_revoked')
+      }
       for (const active of [...this.active.values()]) {
         if (active.remotePeerId !== remotePeerId) continue
         active.abort.abort('peer_authority_revoked')

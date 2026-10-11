@@ -360,7 +360,7 @@ export function wakePhraseRevision({ phrase, language, packId, packRevision }) {
   return `wakephrase-v1-${hash.toString(36).padStart(7, '0')}`
 }
 
-export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null } = {}) {
+export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null, hostedSpeechConsumer = null } = {}) {
   const inheritedEnvironment = process.env
   const environmentOverlay = environment === inheritedEnvironment ? null : Object.fromEntries(
     Object.entries(environment).map(([key, value]) => [key, inheritedEnvironment[key]]),
@@ -532,6 +532,23 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       delete notificationStop.remainedStoppedUntilReopen
       delete notificationStop.restartedOnReopen
       notificationStop.postStopReopenMeasured = false
+      if (!hostedSpeechConsumer || typeof hostedSpeechConsumer.run !== 'function') {
+        throw new Error('The connected Android main flow requires its authenticated hosted speech consumer.')
+      }
+      const stoppedStatus = await invoke('aurora_android_voice_foreground_service_status')
+      if (stoppedStatus?.captureActive === true || stoppedStatus?.backgroundSessionActive === true
+        || notificationStop.stopped !== true || notificationStop.serviceStopped !== true
+        || notificationStop.notificationDismissed !== true) {
+        throw new Error('Android capture must be stopped before foreground native speech hosting.')
+      }
+      await navigateAndroidToMesh(webview.client)
+      const hostedSpeech = await hostedSpeechConsumer.run({
+        androidClient: webview.client,
+        invoke,
+        activeProfile,
+        foregroundAudioBase64: fixtures.foregroundPcm.toString('base64'),
+        wakeAudioBase64: fixtures.backgroundPcm.toString('base64'),
+      })
       const result = {
         ok: true,
         device: deviceMetadata(context, devicesOutput),
@@ -549,6 +566,7 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
         },
         successfulNativeTurnEvidence: background.acceptanceEvidence,
         notificationStop,
+        hostedSpeech,
         captureAndServiceReleased: notificationStop.stopped === true
           && notificationStop.serviceStopped === true
           && notificationStop.notificationDismissed === true,
@@ -723,6 +741,11 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     const recordCleanupFailure = (stage, error) => {
       cleanupErrors.push(error)
       cleanupFailures.push({ stage, code: fixedFailureCode(error) })
+    }
+    try {
+      await hostedSpeechConsumer?.close()
+    } catch (error) {
+      recordCleanupFailure('hosted_speech_cleanup', error)
     }
     try {
       if (pairingCleanup) {
@@ -1287,7 +1310,7 @@ async function waitForRenderedNativeTurn(client, { partialText, completedText, p
   throw new Error(`Rendered native turn did not reach the expected ${pending ? 'partial pending' : 'completed'} state.`)
 }
 
-async function navigateAndroidToMesh(client) {
+export async function navigateAndroidToMesh(client) {
   // Profile writes do not rebuild the live Tauri runtime. The caller opens a
   // fresh app process so the normal startup path hydrates the persisted role.
   await waitForTauriInvoke(client, Date.now() + DEFAULT_WEBVIEW_TIMEOUT_MS)

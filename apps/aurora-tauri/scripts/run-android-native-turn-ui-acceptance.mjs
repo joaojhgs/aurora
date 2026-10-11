@@ -5,13 +5,22 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { resolve, join } from 'node:path'
 import os from 'node:os'
 import { fileURLToPath } from 'node:url'
-import { resolveAndroidDeviceSerial, runAndroidVoiceLiveSmoke } from './android-voice-live-smoke.mjs'
+import { chromium } from '@playwright/test'
+import { startHostedUi } from './run-android-three-node-live.mjs'
+import { activeAndroidProfileDocument, androidEvaluate, clickAndroidControl, createPairingCleanup } from './android-native-turn-pairing.mjs'
+import { navigateAndroidToMesh, resolveAndroidDeviceSerial, runAndroidVoiceLiveSmoke } from './android-voice-live-smoke.mjs'
 
 const APP_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)))
 const WORKSPACE_ROOT = resolve(APP_ROOT, '../..')
 const FIXTURE = resolve(APP_ROOT, 'scripts/fixture-openai-stream.mjs')
 const DEFAULTS = resolve(WORKSPACE_ROOT, 'app/services/config/config_defaults.json')
 export const AUTHORIZED_NATIVE_ASSISTANT_METHOD = 'Orchestrator.ExternalUserInput'
+const HOSTED_PEER_PYTHON_PERMISSIONS = Object.freeze([
+  'Gateway.use', 'Gateway.GetRegistry', 'Gateway.GetCapabilityCatalog', 'Gateway.GetCapabilityGraph',
+  'Gateway.GetMeshStatus', 'Gateway.GetWebRTCDiagnostics', 'Auth.WhoAmI', 'Auth.MeshListPeers',
+  'Auth.MeshGetPeer', 'Config.use', 'Orchestrator.use', 'TTS.use', 'DB.use', 'Tooling.use',
+  'Scheduler.use', 'Backup.use',
+])
 
 export function acceptanceEnvironment(environment = process.env) {
   const mainFlowOnly = environment.AURORA_ANDROID_MAIN_FLOW_ONLY === '1'
@@ -52,7 +61,7 @@ export function buildIsolatedAssistantConfig({ gatewayPort, brokerUrl, appId, ro
   config.services.auth.webrtc_pairing_timeout_seconds = 120
   config.services.db.enabled = true
   config.services.db.embeddings.use_local = false
-  config.services.tooling.enabled = false
+  config.services.tooling.enabled = true
   config.services.scheduler.enabled = false
   config.services.stt.coordinator.enabled = false
   config.services.stt.transcription.enabled = false
@@ -136,8 +145,13 @@ function childExited(child) {
   return child.exitCode != null || child.signalCode != null
 }
 
-export async function cleanupAcceptanceResources({ python, fixture, configDir, stop = stopChild, remove = (directory) => rmSync(directory, { recursive: true, force: true }) }) {
+export async function cleanupAcceptanceResources({ python, fixture, configDir, hostedSpeechConsumer, stop = stopChild, remove = (directory) => rmSync(directory, { recursive: true, force: true }) }) {
   const errors = []
+  try {
+    await hostedSpeechConsumer?.close()
+  } catch (error) {
+    errors.push(error)
+  }
   try {
     await stop(python)
     if (configDir) remove(configDir)
@@ -156,6 +170,408 @@ export function throwAcceptanceErrors(primaryError, cleanupErrors) {
   const errors = primaryError ? [primaryError, ...cleanupErrors] : cleanupErrors
   if (errors.length === 1) throw errors[0]
   if (errors.length > 1) throw new AggregateError(errors, 'Native turn acceptance and cleanup failures occurred.')
+}
+
+async function createHostedPeerSpeechConsumer({ environment, gatewayUrl, gatewayApiKey, inviteText }) {
+  let hostedUi
+  let browser
+  let browserContext
+  let page
+  let browserPeerId
+  let androidPairingCleanup
+  let speechPolicyRestore
+  let closed = false
+  let closePromise
+  const probe = () => page?.evaluate(() => window.__auroraHostedPeerSpeech?.close())
+  const close = async () => {
+    if (closePromise) return await closePromise
+    closed = true
+    closePromise = (async () => {
+      const errors = []
+      try { await probe() } catch (error) { errors.push(error) }
+      try { await speechPolicyRestore?.() } catch (error) { errors.push(error) }
+      try { await androidPairingCleanup?.() } catch (error) { errors.push(error) }
+      try { await browserContext?.close() } catch (error) { errors.push(error) }
+      try { await browser?.close() } catch (error) { errors.push(error) }
+      try { await hostedUi?.close() } catch (error) { errors.push(error) }
+      if (errors.length === 1) throw errors[0]
+      if (errors.length > 1) throw new AggregateError(errors, 'Hosted speech consumer cleanup failed.')
+    })()
+    return await closePromise
+  }
+  try {
+    hostedUi = await startHostedUi({
+      configuration: { baseUrl: '' },
+      environment: { ...environment, NEXT_PUBLIC_AURORA_HOSTED_PEER_TEST: '1' },
+    })
+    browser = await chromium.launch({ headless: true })
+    browserContext = await browser.newContext()
+    page = await browserContext.newPage()
+    browserPeerId = await joinOwnedPythonMesh(page, hostedUi.baseUrl, gatewayUrl, gatewayApiKey, inviteText)
+    await page.waitForFunction(() => typeof window.__auroraHostedPeerSpeech?.run === 'function', null, { timeout: 30_000 })
+    const connected = await waitForHosted(async () => {
+      const response = await hostedGatewayPost(gatewayUrl, gatewayApiKey, '/api/Gateway/GetWebRTCDiagnostics')
+      return (response.peers ?? []).some((peer) => peer.stable_peer_id === browserPeerId
+        && peer.connection_state === 'connected' && peer.data_channel_state === 'open'
+        && peer.auth_state === 'authenticated'
+        && Number(peer.effective_permission_count) === HOSTED_PEER_PYTHON_PERMISSIONS.length)
+    }, 'the authenticated browser connection to the owned Python host')
+    if (!connected) throw new Error('Hosted browser did not authenticate with the owned Python host.')
+  } catch (error) {
+    try { await close() } catch (cleanupError) {
+      throw new AggregateError([error, cleanupError], 'Hosted browser setup and cleanup failed.')
+    }
+    throw error
+  }
+
+  return {
+    async run({ androidClient, invoke, activeProfile, foregroundAudioBase64, wakeAudioBase64 }) {
+      if (closed || !page || !browserPeerId) throw new Error('Hosted speech consumer is unavailable.')
+      const stored = await invoke('aurora_thin_profile_get')
+      const originalProfileValue = stored?.value
+      const { active } = activeAndroidProfileDocument(originalProfileValue)
+      const androidPeerId = active.localNode.stablePeerId
+      const androidNodeName = active.localNode.nodeName
+      if (androidPeerId !== activeProfile?.localNode?.stablePeerId || !androidNodeName) {
+        throw new Error('Android speech consumer identity changed before hosted pairing.')
+      }
+      if (active.nodeMode !== 'mesh-node' || active.runtimeTier !== 'lightweight-ts') {
+        throw new Error('Android must be using its existing local speech-device role for this flow.')
+      }
+      const previousCredential = await invoke('aurora_thin_peer_credential_status', { request: { peerId: browserPeerId } })
+      if (previousCredential?.found !== false) throw new Error('Android already has a browser credential; refusing profile mutation.')
+      androidPairingCleanup = createPairingCleanup({ invoke, originalProfileValue, pythonPeerId: browserPeerId, previousCredential })
+      try {
+        speechPolicyRestore = await enableHostedSpeechSharing(androidClient, invoke, {
+          profileId: active.id,
+          stablePeerId: androidPeerId,
+        })
+        await navigateAndroidToMesh(androidClient)
+        await pairHostedBrowserWithAndroid({ page, androidClient, androidPeerId, androidNodeName, browserPeerId })
+        const credential = await invoke('aurora_thin_peer_credential_status', { request: { peerId: browserPeerId } })
+        if (credential?.found !== true || credential?.hasBearerToken !== true
+          || credential?.credential?.claimantPeerId !== androidPeerId) {
+          throw new Error('Android did not retain the authenticated browser credential.')
+        }
+        const nativeSession = await invoke('aurora_mesh_session_snapshot')
+        if (!nativeSession?.peers?.some((peer) => peer.peerId === browserPeerId && Number.isInteger(peer.connectionId))) {
+          throw new Error('Android did not bind the authenticated browser session.')
+        }
+        const summary = await page.evaluate(async ({ peerId, foregroundAudioBase64, wakeAudioBase64 }) => {
+          const probe = window.__auroraHostedPeerSpeech
+          if (!probe) throw new Error('hosted_speech_probe_unavailable')
+          return await probe.run({ peerId, foregroundAudioBase64, wakeAudioBase64 })
+        }, { peerId: androidPeerId, foregroundAudioBase64, wakeAudioBase64 })
+        return validateHostedSpeechSummary(summary)
+      } catch {
+        throw new Error('The authenticated hosted speech main flow did not complete.')
+      }
+    },
+    close,
+  }
+}
+
+const HOSTED_SPEECH_POLICY_SWITCHES = Object.freeze({
+  stt: 'Share speech recognition',
+  tts: 'Share spoken answers',
+  kws: 'Share wake-word detection',
+  vad: 'Share speech detection',
+  kwsRemote: 'Allow connected wake-word requests',
+  vadRemote: 'Allow connected speech-detection requests',
+})
+
+async function enableHostedSpeechSharing(androidClient, invoke, owner) {
+  if (typeof owner.profileId !== 'string' || owner.profileId.trim() === ''
+    || typeof owner.stablePeerId !== 'string' || owner.stablePeerId.trim() === '') {
+    throw new Error('Android speech settings require an identified active profile owner.')
+  }
+  let originalValues = null
+  let changed = false
+  let restored = false
+
+  const assertSameOwner = async () => {
+    const current = await invoke('aurora_thin_profile_get')
+    const { active } = activeAndroidProfileDocument(current?.value)
+    if (active.id !== owner.profileId || active.localNode.stablePeerId !== owner.stablePeerId
+      || active.nodeMode !== 'mesh-node' || active.runtimeTier !== 'lightweight-ts') {
+      throw new Error('The active Android speech settings owner changed during the connected flow.')
+    }
+  }
+
+  const openSettings = async () => {
+    const opened = await androidEvaluate(androidClient, `(() => {
+      const link = [...document.querySelectorAll('a[href="/settings"]')]
+        .find((candidate) => candidate.getClientRects().length > 0);
+      if (!link) return false;
+      link.click();
+      return true;
+    })()`)
+    if (opened !== true) throw new Error('Android Settings is not available through the current profile UI.')
+    await waitForHosted(async () => await androidEvaluate(androidClient, `(() =>
+      window.location.pathname === '/settings'
+      && document.body?.innerText?.includes('Listening and speaking') === true
+    )()`), 'Android owner-bound speech settings', 30_000)
+    await waitForHosted(async () => {
+      const values = await readHostSpeechSwitches(androidClient)
+      return values ? values : null
+    }, 'the saved Android speech sharing choices', 30_000)
+  }
+
+  const applyValues = async (values) => {
+    let didChange = false
+    const order = [
+      'stt',
+      'tts',
+      ...(values.kws ? ['kws', 'kwsRemote'] : ['kwsRemote', 'kws']),
+      ...(values.vad ? ['vad', 'vadRemote'] : ['vadRemote', 'vad']),
+    ]
+    for (const key of order) {
+      const label = HOSTED_SPEECH_POLICY_SWITCHES[key]
+      const desired = values[key]
+      const current = await readHostSpeechSwitch(androidClient, label)
+      if (current === desired) continue
+      changed = true
+      didChange = true
+      const clicked = await androidEvaluate(androidClient, `(() => {
+        const control = [...document.querySelectorAll('[role="switch"]')]
+          .find((candidate) => candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+            && candidate.getClientRects().length > 0);
+        if (!control || control.getAttribute('aria-disabled') === 'true' || control.disabled) return false;
+        control.click();
+        return true;
+      })()`)
+      if (clicked !== true) throw new Error(`Android could not update the saved ${key} sharing choice.`)
+      const toggled = await waitForHosted(async () => (await readHostSpeechSwitch(androidClient, label)) === desired,
+        `the ${key} speech sharing choice`, 10_000)
+      if (toggled !== true) throw new Error(`Android did not update the saved ${key} sharing choice.`)
+    }
+    return didChange
+  }
+
+  const saveAndVerify = async (values) => {
+    await assertSameOwner()
+    const changedValues = await readHostSpeechSwitches(androidClient)
+    if (!changedValues || !Object.keys(values).every((key) => changedValues[key] === values[key])) {
+      throw new Error('Android speech sharing draft did not match the requested owner choices.')
+    }
+    const saved = await androidEvaluate(androidClient, `(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find((candidate) => candidate.textContent?.trim() === 'Save choices'
+          && !candidate.disabled && candidate.getClientRects().length > 0);
+      if (!button) return false;
+      button.click();
+      return true;
+    })()`)
+    if (saved !== true) throw new Error('Android speech sharing choices could not be saved.')
+    const readBack = await waitForHosted(async () => {
+      const current = await readHostSpeechSwitches(androidClient)
+      const body = await androidEvaluate(androidClient, 'document.body?.innerText ?? ""')
+      const matches = current && Object.keys(values).every((key) => current[key] === values[key])
+      const acknowledged = typeof body === 'string'
+        && (body.includes('Saved for your next conversation.')
+          || body.includes('Saved, but current transcription status could not be confirmed.'))
+      return matches && acknowledged ? current : null
+    }, 'the acknowledged Android speech sharing policy', 30_000)
+    if (!readBack) throw new Error('Android speech sharing policy was not confirmed after saving.')
+    await assertSameOwner()
+  }
+
+  const restore = async () => {
+    if (!changed || restored || !originalValues) return
+    await assertSameOwner()
+    await openSettings()
+    const needsSave = await applyValues(originalValues)
+    if (needsSave) await saveAndVerify(originalValues)
+    await assertSameOwner()
+    restored = true
+  }
+
+  try {
+    await assertSameOwner()
+    await openSettings()
+    originalValues = await readHostSpeechSwitches(androidClient)
+    if (!originalValues) throw new Error('Android owner-bound speech sharing choices are unavailable.')
+    const enabledValues = Object.fromEntries(Object.keys(HOSTED_SPEECH_POLICY_SWITCHES).map((key) => [key, true]))
+    const needsSave = await applyValues(enabledValues)
+    if (needsSave) await saveAndVerify(enabledValues)
+    await assertSameOwner()
+    return async () => {
+      await restore()
+      await navigateAndroidToMesh(androidClient)
+    }
+  } catch (error) {
+    if (changed && originalValues) {
+      try { await restore() } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'Android speech policy setup and restoration failed.')
+      }
+    }
+    throw error
+  }
+}
+
+async function readHostSpeechSwitches(androidClient) {
+  const values = {}
+  for (const [key, label] of Object.entries(HOSTED_SPEECH_POLICY_SWITCHES)) {
+    values[key] = await readHostSpeechSwitch(androidClient, label)
+    if (typeof values[key] !== 'boolean') return null
+  }
+  return values
+}
+
+async function readHostSpeechSwitch(androidClient, label) {
+  return await androidEvaluate(androidClient, `(() => {
+    const control = [...document.querySelectorAll('[role="switch"]')]
+      .find((candidate) => candidate.getAttribute('aria-label') === ${JSON.stringify(label)}
+        && candidate.getClientRects().length > 0);
+    if (!control) return null;
+    const value = control.getAttribute('aria-checked');
+    return value === 'true' ? true : value === 'false' ? false : null;
+  })()`)
+}
+
+async function joinOwnedPythonMesh(page, baseUrl, gatewayUrl, gatewayApiKey, inviteText) {
+  const browserName = `Aurora hosted speech ${randomUUID().slice(0, 8)}`
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+  await page.getByRole('radio', { name: /Make this device available/u }).click()
+  await page.getByRole('button', { name: 'Continue' }).click()
+  await page.getByRole('textbox', { name: 'This device name', exact: true }).fill(browserName)
+  await page.getByLabel('Paste invite').fill(inviteText)
+  await page.getByRole('button', { name: 'Save invite and continue' }).click()
+  await page.waitForURL(/\/mesh/u, { timeout: 30_000 })
+  const review = page.getByRole('button', { name: 'Review & approve' })
+  await review.waitFor({ state: 'visible', timeout: 90_000 })
+  await review.click()
+  const dialog = page.getByRole('dialog')
+  const code = normalizeHostedCode(await dialog.locator('code[aria-label^="Verification code "]').getAttribute('aria-label'))
+  if (!code) throw new Error('Hosted browser pairing code is missing.')
+  const pending = await waitForHosted(async () => {
+    const response = await hostedGatewayPost(gatewayUrl, gatewayApiKey, '/api/Auth/ListPendingPairings')
+    const matches = (response.pairings ?? []).filter((pairing) => pairing.status === 'pending'
+      && normalizeHostedCode(pairing.verification_code) === code)
+    if (matches.length > 1) throw new Error('Hosted browser pairing is ambiguous.')
+    return matches[0] ?? null
+  }, 'the exact browser pairing request')
+  if (!pending?.code || !pending.remote_peer_id) throw new Error('Hosted browser pairing identity is unavailable.')
+  await approveHostedBrowserPairing(gatewayUrl, gatewayApiKey, pending)
+  await dialog.getByRole('button', { name: 'Approve & pair' }).click()
+  const roster = await waitForHosted(async () => {
+    const response = await hostedGatewayPost(gatewayUrl, gatewayApiKey, '/api/Auth/MeshListPeers')
+    return (response.peers ?? []).some((peer) => peer.peer_id === pending.remote_peer_id
+      && peer.outbound_status === 'approved' && peer.inbound_status === 'approved'
+      && peer.connection_status === 'connected')
+  }, 'the bilaterally approved browser connection')
+  if (!roster) throw new Error('Hosted browser was not connected to the owned Python host.')
+  return pending.remote_peer_id
+}
+
+async function approveHostedBrowserPairing(gatewayUrl, apiKey, pending) {
+  const payload = { code: pending.code, permissions: HOSTED_PEER_PYTHON_PERMISSIONS, is_admin: false }
+  const draft = await hostedGatewayPost(gatewayUrl, apiKey, '/api/Gateway/AdminActionDraft', {
+    method_id: 'Auth.PairingApprove', payload,
+  })
+  const confirmation = await hostedGatewayPost(gatewayUrl, apiKey, '/api/Gateway/AdminActionConfirm', {
+    action_id: draft.action_id,
+    nonce: draft.nonce,
+    digest: draft.digest,
+    reason: 'Verify the owned hosted speech consumer connection.',
+    reauth_confirmed: true,
+    phrase: draft.required_phrase,
+  })
+  const response = await fetch(`${gatewayUrl}/api/Auth/PairingApprove`, {
+    method: 'POST',
+    headers: {
+      'X-API-Key': apiKey,
+      'X-Aurora-AdminAction-Id': confirmation.action_id,
+      'X-Aurora-AdminAction-Token': confirmation.confirmation_token,
+      'X-Aurora-AdminAction-Digest': confirmation.digest,
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!response.ok) throw new Error('Owned browser pairing approval was rejected.')
+}
+
+async function pairHostedBrowserWithAndroid({ page, androidClient, androidPeerId, androidNodeName, browserPeerId }) {
+  await page.goto(new URL('/mesh', page.url()).toString(), { waitUntil: 'domcontentloaded' })
+  const refreshBrowser = page.getByRole('button', { name: 'Refresh' }).first()
+  await refreshBrowser.click()
+  await clickAndroidControl(androidClient, 'Refresh')
+  const deviceName = page.getByLabel('Devices in this Aurora').getByText(androidNodeName, { exact: true })
+  await deviceName.waitFor({ state: 'visible', timeout: 90_000 })
+  await deviceName.locator('..').locator('..').getByRole('button', { name: 'Set up' }).click()
+  const browserReview = page.getByRole('button', { name: 'Review & approve' })
+  await browserReview.waitFor({ state: 'visible', timeout: 90_000 })
+  await browserReview.click()
+  const browserDialog = page.getByRole('dialog')
+  const browserCode = normalizeHostedCode(await browserDialog.locator('code[aria-label^="Verification code "]').getAttribute('aria-label'))
+  if (!browserCode) throw new Error('Android pairing code was not displayed to the hosted browser.')
+  const androidCode = await waitForHosted(async () => {
+    const code = await androidEvaluate(androidClient, `(() => document.querySelector('[role="dialog"] code[aria-label^="Verification code "]')?.getAttribute('aria-label')?.replace(/^Verification code\\s+/u, '') ?? '')()`)
+    if (normalizeHostedCode(code)) return normalizeHostedCode(code)
+    await clickAndroidControl(androidClient, 'Refresh')
+    await clickAndroidControl(androidClient, 'Review & approve')
+    return ''
+  }, 'Android direct-pairing review')
+  if (androidCode !== browserCode) throw new Error('The browser and Android pairing codes did not match.')
+  const androidApprove = waitForHosted(async () => await clickAndroidControl(androidClient, 'Approve & pair'), 'Android direct-pairing approval')
+  await Promise.all([browserDialog.getByRole('button', { name: 'Approve & pair' }).click(), androidApprove])
+  const admitted = await waitForHosted(async () => {
+    const session = await androidEvaluate(androidClient, `window.__TAURI_INTERNALS__?.invoke('aurora_mesh_session_snapshot')`)
+    const snapshot = typeof session === 'string' ? safeJson(session) : session
+    return snapshot?.peers?.some((peer) => peer.peerId === browserPeerId) === true
+  }, 'Android native session after browser pairing')
+  if (!admitted) throw new Error('Android did not establish the approved browser session.')
+}
+
+async function hostedGatewayPost(gatewayUrl, apiKey, path, body = {}) {
+  const response = await fetch(`${gatewayUrl}${path}`, {
+    method: 'POST',
+    headers: { 'X-API-Key': apiKey, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!response.ok) throw new Error('Owned Aurora host request failed.')
+  return await response.json()
+}
+
+async function waitForHosted(read, label, timeoutMs = 120_000) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const value = await read()
+    if (value) return value
+    await new Promise((resolvePromise) => setTimeout(resolvePromise, 250))
+  }
+  throw new Error(`Timed out waiting for ${label}.`)
+}
+
+function normalizeHostedCode(value) {
+  return String(value ?? '').replace(/Verification code /u, '').replace(/\s+/gu, '')
+}
+
+function safeJson(value) {
+  try { return JSON.parse(value) } catch { return null }
+}
+
+function validateHostedSpeechSummary(value) {
+  if (!value || !Number.isSafeInteger(value.sttCharacters) || value.sttCharacters <= 0
+    || !Number.isFinite(value.sttDurationMs) || value.sttDurationMs <= 0
+    || !Number.isSafeInteger(value.ttsBytes) || value.ttsBytes <= 44
+    || !Number.isFinite(value.ttsDurationMs) || value.ttsDurationMs <= 0) {
+    throw new Error('Native finite speech results were incomplete.')
+  }
+  for (const stage of [value.kws, value.vad]) {
+    if (stage?.state !== 'completed' || !Number.isSafeInteger(stage.inputCount) || stage.inputCount <= 0
+      || !Number.isSafeInteger(stage.outputCount) || stage.outputCount <= 0) {
+      throw new Error('Native foreground speech session results were incomplete.')
+    }
+  }
+  return {
+    stt: { characters: value.sttCharacters, durationMs: value.sttDurationMs },
+    tts: { bytes: value.ttsBytes, durationMs: value.ttsDurationMs },
+    kws: value.kws,
+    vad: value.vad,
+  }
 }
 
 export async function armFixtureTurn(fixtureUrl, turnId) {
@@ -235,6 +651,7 @@ export async function runAcceptance() {
   let python
   let configDir
   let brokerReverse
+  let hostedSpeechConsumer
   let primaryError
   const fixture = spawn('node', [FIXTURE], { cwd: WORKSPACE_ROOT, env: fixtureEnvironment, stdio: ['ignore', 'pipe', 'inherit'], detached: true })
   try {
@@ -291,6 +708,14 @@ export async function runAcceptance() {
       partialText: fixturePartialText,
       completedText: fixtureCompletedText,
     })
+    if (environment.AURORA_ANDROID_MAIN_FLOW_ONLY === '1') {
+      hostedSpeechConsumer = await createHostedPeerSpeechConsumer({
+        environment,
+        gatewayUrl: runEnvironment.AURORA_THREE_NODE_GATEWAY_URL,
+        gatewayApiKey: runEnvironment.AURORA_THREE_NODE_GATEWAY_API_KEY,
+        inviteText,
+      })
+    }
     const request = {
       post: async (url, options = {}) => {
         const response = await fetch(url, {
@@ -315,12 +740,13 @@ export async function runAcceptance() {
         pythonPeerId: ownedStack.mesh.local?.peer_id,
       },
       modelFixture: fixtureTurn,
+      hostedSpeechConsumer,
     })
     if (childExited(python)) throw new Error(`Aurora main.py exited with status ${python.exitCode ?? python.signalCode ?? 'unknown'}.`)
   } catch (error) {
     primaryError = error
   } finally {
-    const cleanupErrors = await cleanupAcceptanceResources({ python, fixture, configDir })
+    const cleanupErrors = await cleanupAcceptanceResources({ python, fixture, configDir, hostedSpeechConsumer })
     if (brokerReverse) {
       try {
         await cleanupLoopbackBrokerReverse(brokerReverse)

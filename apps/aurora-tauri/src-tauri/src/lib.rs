@@ -71,7 +71,7 @@ mod native_event_hub;
 mod native_local_inference;
 mod native_mesh_assistant;
 mod native_node_config;
-#[cfg(desktop)]
+#[cfg(any(desktop, target_os = "android", target_os = "ios"))]
 mod native_speech_host;
 mod native_voice;
 mod native_voice_events;
@@ -100,11 +100,11 @@ use native_node_config::{
     aurora_node_config_policy_compare_and_swap, aurora_node_config_policy_read,
     NativeNodeConfigRuntime,
 };
-#[cfg(desktop)]
+#[cfg(any(desktop, target_os = "android", target_os = "ios"))]
 use native_speech_host::{
     aurora_native_speech_host_snapshot, aurora_peer_host_local_speech_cancel,
-    aurora_peer_host_local_speech_synthesize, aurora_peer_host_local_speech_transcribe,
-    NativeSpeechHostState,
+    aurora_peer_host_local_speech_stage, aurora_peer_host_local_speech_synthesize,
+    aurora_peer_host_local_speech_transcribe, NativeSpeechHostState,
 };
 use native_voice::{
     aurora_native_voice_cancel, aurora_native_voice_finish, aurora_native_voice_start,
@@ -9738,7 +9738,7 @@ pub fn run() {
                     app.handle().clone(),
                 ).map_err(|_| std::io::Error::other("Offline answers are unavailable"))?,
             );
-            #[cfg(desktop)]
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
             app.manage(NativeSpeechHostState::default());
             #[cfg(desktop)]
             if tauri::async_runtime::block_on(node_config_runtime.refresh_profile()).is_err() {
@@ -9883,14 +9883,16 @@ pub fn run() {
             aurora_native_voice_finish,
             aurora_native_voice_cancel,
             aurora_native_voice_tray_toggle_e2e,
-            #[cfg(desktop)]
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
             aurora_native_speech_host_snapshot,
-            #[cfg(desktop)]
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
             aurora_peer_host_local_speech_transcribe,
-            #[cfg(desktop)]
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
             aurora_peer_host_local_speech_synthesize,
-            #[cfg(desktop)]
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
             aurora_peer_host_local_speech_cancel,
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            aurora_peer_host_local_speech_stage,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
             aurora_android_lifecycle_status,

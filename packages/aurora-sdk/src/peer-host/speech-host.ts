@@ -1,12 +1,17 @@
 import type { MeshSpeechStageCapabilityExportV1, MeshSpeechStageCapabilityV1 } from '../mesh.js'
-import type { GeneratedBackendMethodParsedInput } from '../generated-contracts.js'
+import type {
+  GeneratedBackendMethodOutput,
+  GeneratedBackendMethodParsedInput
+} from '../generated-contracts.js'
 import { generatedPeerHostMethodDescriptor, PeerHostContractRegistry } from './contract-registry.js'
+import type { PeerHostCallContext } from './types.js'
 
 const MAX_STT_BYTES = 4 * 1024 * 1024
 const MAX_STT_SAMPLES = 16_000 * 60
 const MAX_TTS_SAMPLES_PER_SECOND = 192_000
 const MAX_TTS_SECONDS = 60
 const MIN_TTS_SAMPLE_RATE_HZ = 8_000
+const MAX_RETAINED_TERMINAL_SPEECH_SESSIONS = 32
 
 export interface PeerHostLocalSpeechStage {
   readonly enabled: boolean
@@ -16,11 +21,63 @@ export interface PeerHostLocalSpeechStage {
   readonly implementation?: MeshSpeechStageCapabilityV1['implementation']
 }
 
+export interface PeerHostLocalSpeechSessionStage {
+  readonly enabled: boolean
+  readonly modelId: string | null
+  readonly language: string | null
+  readonly capabilityRevision: number
+  readonly supportedFormats: readonly string[]
+  readonly sampleRates: readonly number[]
+  readonly channels: readonly number[]
+  readonly maxInputBytes: number
+  readonly maxChunkBytes: number
+  readonly maxConcurrent: number
+  readonly maxQueue: number
+  readonly idleLeaseMs: number
+}
+
+type SpeechSessionMethodId =
+  | 'WakeWord.StreamStart' | 'WakeWord.StreamChunk' | 'WakeWord.StreamEnd'
+  | 'WakeWord.StreamCancel' | 'WakeWord.StreamStatus' | 'WakeWord.StreamResult'
+  | 'VAD.StreamStart' | 'VAD.StreamChunk' | 'VAD.StreamEnd'
+  | 'VAD.StreamCancel' | 'VAD.StreamStatus' | 'VAD.StreamResult'
+type SpeechSessionOperation = 'begin' | 'frame' | 'end' | 'cancel' | 'status' | 'result'
+type SpeechSessionStage = 'kws' | 'vad'
+export type PeerHostLocalSpeechSessionMethodId = SpeechSessionMethodId
+export type PeerHostLocalSpeechSessionOperation = SpeechSessionOperation
+export type PeerHostLocalSpeechSessionStageName = SpeechSessionStage
+export type PeerHostLocalSpeechSessionRequest<TMethodId extends SpeechSessionMethodId = SpeechSessionMethodId> = {
+  readonly operation: SpeechSessionOperation
+  readonly stage: SpeechSessionStage
+  readonly methodId: TMethodId
+  readonly payload: GeneratedBackendMethodParsedInput<TMethodId>
+  readonly callContext: PeerHostCallContext
+}
+
+interface ActiveSpeechOperation {
+  readonly token: object
+  readonly remotePeerId: string
+  readonly connectionEpoch: string | null
+  readonly settled: Promise<void>
+  finish(): void
+}
+
+interface ActiveSpeechSession {
+  readonly sessionId: string
+  readonly stage: SpeechSessionStage
+  readonly remotePeerId: string
+  readonly connectionEpoch: string
+  readonly context: PeerHostCallContext
+  terminal: boolean
+}
+
 export interface PeerHostLocalSpeechOptions {
   readonly peerId: string
   readonly runtime: PeerHostLocalSpeechRuntimePort
   readonly stt?: PeerHostLocalSpeechStage
   readonly tts?: PeerHostLocalSpeechStage
+  readonly kws?: PeerHostLocalSpeechSessionStage
+  readonly vad?: PeerHostLocalSpeechSessionStage
   readonly revision: number
 }
 
@@ -32,6 +89,9 @@ export interface PeerHostLocalSpeechRuntimePort {
     readonly durationMs: number
   }>
   cancel(reason?: string): Promise<void>
+  speechSession?<TMethodId extends SpeechSessionMethodId>(request: PeerHostLocalSpeechSessionRequest<TMethodId>): Promise<GeneratedBackendMethodOutput<TMethodId>>
+  cancelSpeechSessions?(remotePeerId: string, connectionEpoch: string, reason: string): Promise<void>
+  closeSpeechSessions?(reason: string): Promise<void>
 }
 
 export interface PeerHostLocalSpeechSource {
@@ -39,6 +99,7 @@ export interface PeerHostLocalSpeechSource {
   capabilities(): readonly MeshSpeechStageCapabilityExportV1[]
   setReady(readiness: { readonly stt: boolean; readonly tts: boolean }): void
   setVisible(visible: boolean): void
+  disconnectPeer(remotePeerId: string, connectionEpoch: string, reason: string): Promise<void>
   close(): Promise<void>
 }
 
@@ -47,8 +108,17 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
   let visible = true
   let closed = false
   let registeredRegistry: PeerHostContractRegistry | null = null
-  let activeOperation: object | null = null
+  let activeOperation: ActiveSpeechOperation | null = null
   const ownedMethods = new Map<string, object>()
+  const activeSpeechSessions = new Map<string, ActiveSpeechSession>()
+  const pendingDisconnects = new Map<string, Promise<void>>()
+  const pendingRuntimeCancellations = new Set<Promise<void>>()
+  let lifecycleFailure: unknown
+  const pendingSessionCalls = new Set<{
+    readonly remotePeerId: string
+    readonly connectionEpoch: string
+    readonly settled: Promise<void>
+  }>()
   const ready = {
     stt: options.stt?.enabled === true && nonEmpty(options.stt.modelId),
     tts: options.tts?.enabled === true && nonEmpty(options.tts.voiceId),
@@ -57,24 +127,111 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
     stt: options.stt?.enabled && nonEmpty(options.stt.modelId) ? options.stt : undefined,
     tts: options.tts?.enabled && nonEmpty(options.tts.voiceId) ? options.tts : undefined,
   }
+  const sessionStages = {
+    kws: options.kws?.enabled ? options.kws : undefined,
+    vad: options.vad?.enabled ? options.vad : undefined,
+  }
   const checkLive = (signal: AbortSignal, stage: 'stt' | 'tts') => {
     if (closed || !visible || !ready[stage] || signal.aborted) throw new Error('Local speech provider is unavailable')
   }
-  const acquireOperation = () => {
+  const acquireOperation = (context: PeerHostCallContext): ActiveSpeechOperation => {
     if (activeOperation !== null) throw new Error('Local speech engine is busy')
-    const operation = {}
-    activeOperation = operation
-    const release = () => {
-      if (activeOperation === operation) activeOperation = null
+    const token = {}
+    let resolveSettled!: () => void
+    const settled = new Promise<void>((resolve) => { resolveSettled = resolve })
+    let finished = false
+    const operation: ActiveSpeechOperation = {
+      token,
+      remotePeerId: context.remotePeerId,
+      connectionEpoch: context.authenticatedPeerContext?.connectionEpoch ?? null,
+      settled,
+      finish() {
+        if (finished) return
+        finished = true
+        if (activeOperation === operation) activeOperation = null
+        resolveSettled()
+      },
     }
-    return { operation, release }
+    activeOperation = operation
+    return operation
   }
-  const bindAbort = (signal: AbortSignal, operation: object) => {
+  const bindAbort = (signal: AbortSignal, operation: ActiveSpeechOperation) => {
     const cancel = () => {
-      if (activeOperation === operation) void options.runtime.cancel('peer_request_aborted').catch(() => undefined)
+      if (activeOperation === operation) void cancelRuntime('peer_request_aborted').catch(() => undefined)
     }
     signal.addEventListener('abort', cancel, { once: true })
     return () => signal.removeEventListener('abort', cancel)
+  }
+  const cancelRuntime = (reason: string): Promise<void> => {
+    const cancellation = options.runtime.cancel(reason).catch((error) => {
+      lifecycleFailure ??= error
+      throw error
+    }).finally(() => pendingRuntimeCancellations.delete(cancellation))
+    pendingRuntimeCancellations.add(cancellation)
+    void cancellation.catch(() => undefined)
+    return cancellation
+  }
+  const ensureLifecycleReady = async () => {
+    await Promise.all([...pendingDisconnects.values(), ...pendingRuntimeCancellations])
+    if (lifecycleFailure !== undefined) throw lifecycleFailure
+  }
+  const rememberTerminalSession = (session: ActiveSpeechSession) => {
+    session.terminal = true
+    const terminalEntries = [...activeSpeechSessions.entries()].filter(([, value]) => value.terminal)
+    while (terminalEntries.length > MAX_RETAINED_TERMINAL_SPEECH_SESSIONS) {
+      const [oldestKey] = terminalEntries.shift()!
+      activeSpeechSessions.delete(oldestKey)
+    }
+  }
+  const disconnectPeer = (remotePeerId: string, connectionEpoch: string, reason: string): Promise<void> => {
+    const key = `${remotePeerId}\u0000${connectionEpoch}`
+    const existing = pendingDisconnects.get(key)
+    if (existing) return existing
+    const cleanup = (async () => {
+      await Promise.all([...pendingSessionCalls]
+        .filter((call) => call.remotePeerId === remotePeerId && call.connectionEpoch === connectionEpoch)
+        .map((call) => call.settled))
+      const pendingCancellationResults = await Promise.allSettled([...pendingRuntimeCancellations])
+      let failure = pendingCancellationResults.find(
+        (result): result is PromiseRejectedResult => result.status === 'rejected',
+      )?.reason
+      if (activeOperation?.remotePeerId === remotePeerId && activeOperation.connectionEpoch === connectionEpoch) {
+        await activeOperation.settled
+      }
+      const sessions = [...activeSpeechSessions.entries()].filter(([, session]) =>
+        session.remotePeerId === remotePeerId && session.connectionEpoch === connectionEpoch && !session.terminal)
+      const cancelReason = reason === 'peer_authority_revoked' ? 'revoked' : 'interrupted'
+      const results = await Promise.allSettled(sessions.map(async ([key, session]) => {
+        const methodId = speechSessionMethodId(session.stage, 'cancel')
+        const payload = { reason: cancelReason, session_id: session.sessionId } as GeneratedBackendMethodParsedInput<typeof methodId>
+        await options.runtime.speechSession?.({
+          operation: 'cancel', stage: session.stage, methodId, payload, callContext: session.context,
+        })
+        activeSpeechSessions.delete(key)
+      }))
+      const failed = results.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+      failure ??= failed?.reason
+      for (const [key, session] of activeSpeechSessions) {
+        if (session.remotePeerId === remotePeerId && session.connectionEpoch === connectionEpoch && session.terminal) {
+          activeSpeechSessions.delete(key)
+        }
+      }
+      let runtimeFailure: unknown
+      try {
+        await options.runtime.cancelSpeechSessions?.(remotePeerId, connectionEpoch, reason)
+      } catch (error) {
+        runtimeFailure = error
+      }
+      failure ??= runtimeFailure
+      if (failure !== undefined) throw failure
+    })()
+    pendingDisconnects.set(key, cleanup)
+    void cleanup.then(
+      () => pendingDisconnects.delete(key),
+      (error) => { lifecycleFailure ??= error },
+    )
+    void cleanup.catch(() => undefined)
+    return cleanup
   }
   const source: PeerHostLocalSpeechSource = {
     register(registry) {
@@ -82,14 +239,15 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
       registeredRegistry = registry
       if (stages.stt) {
         const descriptor = generatedPeerHostMethodDescriptor('Transcription.Transcribe', async (input, context) => {
+        await ensureLifecycleReady()
         checkLive(context.signal, 'stt')
         validateSttSelector(input, stages.stt!, options.peerId)
         const pcm = decodeRawPcm(input.audio_data)
         if (pcm.length === 0 || pcm.length > MAX_STT_SAMPLES || pcm.byteLength > MAX_STT_BYTES) {
           throw new Error('Audio is outside the supported local transcription limit')
         }
-        const operation = acquireOperation()
-        const cleanup = bindAbort(context.signal, operation.operation)
+        const operation = acquireOperation(context)
+        const cleanup = bindAbort(context.signal, operation)
         try {
           const result = await options.runtime.transcribeSpeech({
             pcm,
@@ -105,7 +263,7 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
           }
         } finally {
           cleanup()
-          operation.release()
+          operation.finish()
         }
         }, { maxRequestBytes: Math.ceil(MAX_STT_BYTES * 4 / 3) + 16_384, maxConcurrent: 1, timeoutMs: 60_000 })
         registry.replace(descriptor)
@@ -114,10 +272,11 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
 
       if (stages.tts) {
         const descriptor = generatedPeerHostMethodDescriptor('TTS.Synthesize', async (input, context) => {
+        await ensureLifecycleReady()
         checkLive(context.signal, 'tts')
         validateTtsSelector(input, stages.tts!, options.peerId)
-        const operation = acquireOperation()
-        const cleanup = bindAbort(context.signal, operation.operation)
+        const operation = acquireOperation(context)
+        const cleanup = bindAbort(context.signal, operation)
         try {
           const audio = await options.runtime.synthesizeSpeech({
             text: input.text,
@@ -146,16 +305,100 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
           }
         } finally {
           cleanup()
-          operation.release()
+          operation.finish()
         }
         }, { maxRequestBytes: 16_384, maxConcurrent: 1, timeoutMs: 120_000 })
         registry.replace(descriptor)
         ownedMethods.set(descriptor.methodId, descriptor)
       }
+
+      if (sessionStages.kws) registerSessionMethods(registry, 'kws', sessionStages.kws)
+      if (sessionStages.vad) registerSessionMethods(registry, 'vad', sessionStages.vad)
+
+      function registerSessionMethods(
+        targetRegistry: PeerHostContractRegistry,
+        stage: SpeechSessionStage,
+        stageConfig: PeerHostLocalSpeechSessionStage,
+      ): void {
+        for (const operation of ['begin', 'frame', 'end', 'cancel', 'status', 'result'] as const) {
+          const methodId = speechSessionMethodId(stage, operation)
+          const descriptor = generatedPeerHostMethodDescriptor(methodId, async (input, context) => {
+            await ensureLifecycleReady()
+            if (closed || !visible || context.signal.aborted || !options.runtime.speechSession) {
+              throw new Error('Local speech session is unavailable')
+            }
+            const authenticated = context.authenticatedPeerContext
+            const connectionEpoch = authenticated?.connectionEpoch
+            if (!authenticated ||
+              typeof connectionEpoch !== 'string' || connectionEpoch.length === 0 ||
+              context.identity.callerPeerId !== context.remotePeerId) {
+              throw new Error('Local speech session is unavailable')
+            }
+            const stageSessionCount = [...activeSpeechSessions.values()].filter((session) => session.stage === stage && !session.terminal).length
+            if (operation === 'begin' && stageSessionCount >= stageConfig.maxConcurrent) {
+              throw new Error('Local speech session is busy')
+            }
+            const sessionId = 'session_id' in input ? input.session_id : null
+            if (operation !== 'begin') {
+              if (typeof sessionId !== 'string') throw new Error('Local speech session is unavailable')
+              const owner = activeSpeechSessions.get(sessionKey(stage, sessionId))
+              if (!owner || owner.stage !== stage || owner.remotePeerId !== context.remotePeerId ||
+                owner.connectionEpoch !== connectionEpoch) {
+                throw new Error('Local speech session is unavailable')
+              }
+            }
+            let settlePending!: () => void
+            const settled = new Promise<void>((resolve) => { settlePending = resolve })
+            const pending = { remotePeerId: context.remotePeerId, connectionEpoch, settled }
+            pendingSessionCalls.add(pending)
+            let output: GeneratedBackendMethodOutput<typeof methodId>
+            try {
+              output = await options.runtime.speechSession({
+                operation,
+                stage,
+                methodId,
+                payload: input,
+                callContext: context,
+              })
+            } finally {
+              pendingSessionCalls.delete(pending)
+              settlePending()
+            }
+            if (operation === 'begin' && 'status' in output && output.status === 'admitted' &&
+              typeof output.session_id === 'string') {
+              if (context.signal.aborted || closed || !visible) {
+                const cancelMethod = speechSessionMethodId(stage, 'cancel')
+                await options.runtime.speechSession({
+                  operation: 'cancel', stage, methodId: cancelMethod,
+                  payload: { reason: 'interrupted', session_id: output.session_id } as GeneratedBackendMethodParsedInput<typeof cancelMethod>,
+                  callContext: context,
+                })
+                throw new Error('Local speech session is unavailable')
+              }
+              activeSpeechSessions.set(sessionKey(stage, output.session_id), {
+                sessionId: output.session_id, stage, remotePeerId: context.remotePeerId, connectionEpoch, context, terminal: false,
+              })
+            } else if ('session_id' in output && typeof output.session_id === 'string' &&
+              isTerminalSpeechSessionOutput(output)) {
+              const key = sessionKey(stage, output.session_id)
+              const owner = activeSpeechSessions.get(key)
+              if (owner) {
+                if (operation === 'result') activeSpeechSessions.delete(key)
+                else rememberTerminalSession(owner)
+              }
+            }
+            return output
+          }, { maxRequestBytes: stageConfig.maxChunkBytes + 16_384, maxConcurrent: stageConfig.maxConcurrent, timeoutMs: 300_000 })
+          targetRegistry.replace(descriptor)
+          ownedMethods.set(descriptor.methodId, descriptor)
+        }
+      }
     },
     capabilities() {
       if (closed || !visible) return []
       return [
+        ...(sessionStages.kws && options.runtime.speechSession ? [sessionSpeechCapability('kws', options.peerId, sessionStages.kws)] : []),
+        ...(sessionStages.vad && options.runtime.speechSession ? [sessionSpeechCapability('vad', options.peerId, sessionStages.vad)] : []),
         ...(stages.stt && ready.stt ? [speechCapability('stt', options.peerId, options.revision, stages.stt.modelId!, stages.stt.language, 'Transcription.Transcribe', undefined, stages.stt.implementation)] : []),
         ...(stages.tts && ready.tts ? [speechCapability('tts', options.peerId, options.revision, stages.tts.modelId, stages.tts.language, 'TTS.Synthesize', stages.tts.voiceId!, stages.tts.implementation)] : []),
       ]
@@ -166,17 +409,111 @@ export function createPeerHostLocalSpeechSource(options: PeerHostLocalSpeechOpti
     },
     setVisible(value) {
       visible = value
-      if (!value) void options.runtime.cancel('page_hidden').catch(() => undefined)
+      if (!value) {
+        void cancelRuntime('page_hidden').catch(() => undefined)
+        const owners = new Map<string, string>()
+        for (const session of activeSpeechSessions.values()) owners.set(session.remotePeerId, session.connectionEpoch)
+        for (const [remotePeerId, connectionEpoch] of owners) {
+          void disconnectPeer(remotePeerId, connectionEpoch, 'page_hidden').catch(() => undefined)
+        }
+      }
+    },
+    async disconnectPeer(remotePeerId, connectionEpoch, reason) {
+      await disconnectPeer(remotePeerId, connectionEpoch, reason)
     },
     async close() {
       closed = true
       visible = false
       for (const [methodId, descriptor] of ownedMethods) registeredRegistry?.unregister(methodId, descriptor)
       ownedMethods.clear()
-      await options.runtime.cancel('provider_closed').catch(() => undefined)
+      const settledCalls = await Promise.allSettled([...pendingSessionCalls].map((call) => call.settled))
+      const owners = new Map<string, string>()
+      for (const session of activeSpeechSessions.values()) owners.set(session.remotePeerId, session.connectionEpoch)
+      let failure = lifecycleFailure
+        ?? settledCalls.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
+      for (const [remotePeerId, connectionEpoch] of owners) {
+        try {
+          await disconnectPeer(remotePeerId, connectionEpoch, 'provider_closed')
+        } catch (error) {
+          failure ??= error
+        }
+      }
+      try {
+        await options.runtime.closeSpeechSessions?.('provider_closed')
+      } catch (error) {
+        failure ??= error
+      }
+      try {
+        await cancelRuntime('provider_closed')
+      } catch (error) {
+        failure ??= error
+      }
+      const cancellations = await Promise.allSettled([...pendingRuntimeCancellations])
+      failure ??= cancellations.find((result): result is PromiseRejectedResult => result.status === 'rejected')?.reason
+      await activeOperation?.settled
+      if (failure !== undefined) throw failure
     },
   }
   return source
+}
+
+function speechSessionMethodId(stage: SpeechSessionStage, operation: SpeechSessionOperation): SpeechSessionMethodId {
+  const module = stage === 'kws' ? 'WakeWord' : 'VAD'
+  const suffix = operation === 'begin' ? 'Start'
+    : operation === 'frame' ? 'Chunk'
+      : operation === 'end' ? 'End'
+        : operation === 'cancel' ? 'Cancel'
+          : operation === 'status' ? 'Status' : 'Result'
+  return `${module}.Stream${suffix}` as SpeechSessionMethodId
+}
+
+function sessionKey(stage: SpeechSessionStage, sessionId: string): string {
+  return `${stage}:${sessionId}`
+}
+
+function isTerminalSpeechSessionOutput(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || !('state' in value)) return false
+  return ['canceled', 'completed', 'failed', 'interrupted', 'revoked', 'timed_out']
+    .includes(String(value.state))
+}
+
+function sessionSpeechCapability(
+  stage: SpeechSessionStage,
+  peerId: string,
+  config: PeerHostLocalSpeechSessionStage,
+): MeshSpeechStageCapabilityExportV1 {
+  const methodIds = (['begin', 'frame', 'end', 'cancel', 'status', 'result'] as const)
+    .map((operation) => speechSessionMethodId(stage, operation))
+  return {
+    capability: {
+      schema: 'speech-stage-capability.v1',
+      stage,
+      method_ids: methodIds,
+      modes: ['streaming'],
+      implementation: 'native',
+      peer_id: peerId,
+      resource_id: `remote:${peerId}:${stage === 'kws' ? 'WakeWord' : 'VAD'}`,
+      capability_revision: config.capabilityRevision,
+      supported_formats: [...config.supportedFormats],
+      sample_rates: [...config.sampleRates],
+      channels: [...config.channels],
+      supported_languages: config.language ? [config.language] : [],
+      model_ids: config.modelId ? [config.modelId] : [],
+      lifecycle: ['foreground'],
+      max_input_bytes: config.maxInputBytes,
+      max_chunk_bytes: config.maxChunkBytes,
+      max_concurrent: config.maxConcurrent,
+      max_queue: config.maxQueue,
+      lease_ms: config.idleLeaseMs,
+      readiness: 'ready',
+      required_permissions: methodIds,
+      audio_consent_required: true,
+      experimental: true,
+      exported: true,
+    },
+    voice_ids: [],
+    requires_remote_audio_egress: false,
+  }
 }
 
 type SttInput = GeneratedBackendMethodParsedInput<'Transcription.Transcribe'>

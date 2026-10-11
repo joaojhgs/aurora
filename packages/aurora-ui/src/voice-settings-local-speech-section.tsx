@@ -1,7 +1,8 @@
 import type { ReactNode, RefObject } from 'react'
 import { Button, Card, Switch } from './primitives'
-import { Field, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '#components/ui/field'
+import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldLegend, FieldSet } from '#components/ui/field'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
+import { Separator } from '#components/ui/separator'
 import type { AuroraLocalSpeechCatalogPort } from './browser-speech-pack'
 import { RouteStateNotice } from './state-surface'
 import type { LocalSpeechAssetRow } from './voice-settings-local-speech-model'
@@ -61,6 +62,10 @@ export interface LocalSpeechSettingsSectionProps {
   nativeTtsRoutingChoice?: SpeechRoutingChoice | undefined
   onNativeSpeechRoutingChange?: ((stage: 'stt' | 'tts', choice: SpeechRoutingChoice) => void) | undefined
   onSaveNativeSpeechRouting?: (() => void) | undefined
+  speechSharing?: Readonly<Record<'stt' | 'tts' | 'kws' | 'vad', boolean>> | undefined
+  remoteContinuousSpeech?: Readonly<{ kws: boolean; vad: boolean }> | undefined
+  onSpeechSharingChange?: ((stage: 'stt' | 'tts' | 'kws' | 'vad', enabled: boolean) => void) | undefined
+  onRemoteContinuousSpeechChange?: ((stage: 'kws' | 'vad', enabled: boolean) => void) | undefined
   backgroundTranscription: AuroraBackgroundTranscriptionPolicy
   backgroundTranscriptionStatus: NativeBackgroundTranscriptionStatus
   onBackgroundTranscriptionChange?: ((update: Partial<Pick<AuroraBackgroundTranscriptionPolicy, 'ambient' | 'notification' | 'retentionDays'>>) => void) | undefined
@@ -124,6 +129,10 @@ export function LocalSpeechSettingsSection({
   nativeTtsRoutingChoice = 'local_first',
   onNativeSpeechRoutingChange,
   onSaveNativeSpeechRouting,
+  speechSharing = { stt: false, tts: false, kws: false, vad: false },
+  remoteContinuousSpeech = { kws: false, vad: false },
+  onSpeechSharingChange,
+  onRemoteContinuousSpeechChange,
   backgroundTranscription,
   backgroundTranscriptionStatus,
   onBackgroundTranscriptionChange,
@@ -186,6 +195,61 @@ export function LocalSpeechSettingsSection({
                   </select>
                   <FieldDescription>Choose where Aurora creates its speaking voice.</FieldDescription>
                 </Field>
+              </>
+            ) : null}
+            {nativeSpeechPolicyState === 'ready' || nativeSpeechPolicyState === 'saving' ? (
+              <>
+                <FieldSet className="gap-3">
+                  <FieldLegend variant="label">Speech sharing</FieldLegend>
+                  <FieldDescription>Choose which speech services connected devices may use on this device.</FieldDescription>
+                  <FieldGroup className="gap-3">
+                    {([
+                      { stage: 'stt', label: 'Share speech recognition', detail: 'Let connected devices send speech here for recognition.' },
+                      { stage: 'tts', label: 'Share spoken answers', detail: 'Let connected devices request spoken answers from this device.' },
+                      { stage: 'kws', label: 'Share wake-word detection', detail: 'Let connected devices request wake-word detection on this device.' },
+                      { stage: 'vad', label: 'Share speech detection', detail: 'Let connected devices request speech detection on this device.' },
+                    ] as const).map(({ stage, label, detail }) => (
+                      <Field key={stage} orientation="horizontal" data-disabled={nativeSpeechPolicyState === 'saving'}>
+                        <FieldContent>
+                          <FieldLabel htmlFor={`speech-sharing-${stage}`}>{label}</FieldLabel>
+                          <FieldDescription>{detail}</FieldDescription>
+                        </FieldContent>
+                        <Switch
+                          id={`speech-sharing-${stage}`}
+                          label={label}
+                          checked={speechSharing[stage]}
+                          disabled={nativeSpeechPolicyState === 'saving'}
+                          onChange={(enabled) => onSpeechSharingChange?.(stage, enabled)}
+                        />
+                      </Field>
+                    ))}
+                  </FieldGroup>
+                </FieldSet>
+                <Separator />
+                <FieldSet className="gap-3">
+                  <FieldLegend variant="label">Continuous detection</FieldLegend>
+                  <FieldDescription>These separate choices allow connected devices to request continuous detection. They take effect only when the matching sharing choice above is also on.</FieldDescription>
+                  <FieldGroup className="gap-3">
+                    {([
+                      { stage: 'kws', label: 'Allow connected wake-word requests', detail: 'Connected devices may send audio for wake-word detection on this device.' },
+                      { stage: 'vad', label: 'Allow connected speech-detection requests', detail: 'Connected devices may send audio for speech detection on this device.' },
+                    ] as const).map(({ stage, label, detail }) => (
+                      <Field key={stage} orientation="horizontal" data-disabled={nativeSpeechPolicyState === 'saving'}>
+                        <FieldContent>
+                          <FieldLabel htmlFor={`speech-remote-${stage}`}>{label}</FieldLabel>
+                          <FieldDescription>{detail}</FieldDescription>
+                        </FieldContent>
+                        <Switch
+                          id={`speech-remote-${stage}`}
+                          label={label}
+                          checked={remoteContinuousSpeech[stage]}
+                          disabled={nativeSpeechPolicyState === 'saving'}
+                          onChange={(enabled) => onRemoteContinuousSpeechChange?.(stage, enabled)}
+                        />
+                      </Field>
+                    ))}
+                  </FieldGroup>
+                </FieldSet>
               </>
             ) : null}
             {nativeSpeechPolicyState === 'ready' || nativeSpeechPolicyState === 'saving' ? (

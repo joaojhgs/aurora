@@ -589,6 +589,10 @@ function VoiceSettingsViewInner({
           nativeTtsRoutingChoice={nativeSpeechPolicy.ttsChoice}
           onNativeSpeechRoutingChange={nativeSpeechPolicy.changeChoice}
           onSaveNativeSpeechRouting={nativeSpeechPolicy.save}
+          speechSharing={nativeSpeechPolicy.speechSharing}
+          remoteContinuousSpeech={nativeSpeechPolicy.remoteContinuousSpeech}
+          onSpeechSharingChange={nativeSpeechPolicy.changeSpeechSharing}
+          onRemoteContinuousSpeechChange={nativeSpeechPolicy.changeRemoteContinuousSpeech}
           backgroundTranscription={nativeSpeechPolicy.backgroundTranscription}
           backgroundTranscriptionStatus={nativeSpeechPolicy.backgroundTranscriptionStatus}
           onBackgroundTranscriptionChange={nativeSpeechPolicy.changeBackgroundTranscription}

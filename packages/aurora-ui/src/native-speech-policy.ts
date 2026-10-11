@@ -74,12 +74,24 @@ export interface NativeSpeechPolicyController {
   ttsChoice: SpeechRoutingChoice
   backgroundTranscription: AuroraBackgroundTranscriptionPolicy
   backgroundTranscriptionStatus: NativeBackgroundTranscriptionStatus
+  speechSharing: Record<AuroraSpeechStage, boolean>
+  remoteContinuousSpeech: { kws: boolean; vad: boolean }
   changeChoice: (stage: 'stt' | 'tts', choice: SpeechRoutingChoice) => void
+  changeSpeechSharing: (stage: AuroraSpeechStage, enabled: boolean) => void
+  changeRemoteContinuousSpeech: (stage: 'kws' | 'vad', enabled: boolean) => void
   changeBackgroundTranscription: (update: Partial<Pick<AuroraBackgroundTranscriptionPolicy, 'ambient' | 'notification' | 'retentionDays'>>) => void
   requestMicrophonePermission: () => Promise<void>
   save: () => Promise<void>
   routePolicy: (stage: 'stt' | 'tts', route: RouteAvailability) => AssistantRoutePolicy
 }
+
+const DEFAULT_SPEECH_SHARING: Record<AuroraSpeechStage, boolean> = {
+  stt: false,
+  tts: false,
+  kws: false,
+  vad: false,
+}
+const DEFAULT_REMOTE_CONTINUOUS_SPEECH = { kws: false, vad: false }
 
 const ROUTING_CHOICES: ReadonlyArray<{ value: SpeechRoutingChoice; label: string }> = [
   { value: 'local_first', label: 'This device first, then a connected device' },
@@ -235,6 +247,8 @@ export function useNativeSpeechPolicy(
   const [sttChoice, setSttChoice] = useState<SpeechRoutingChoice>('local_first')
   const [ttsChoice, setTtsChoice] = useState<SpeechRoutingChoice>('local_first')
   const [backgroundTranscription, setBackgroundTranscription] = useState<AuroraBackgroundTranscriptionPolicy>(defaultBackgroundTranscriptionPolicy)
+  const [speechSharing, setSpeechSharing] = useState<Record<AuroraSpeechStage, boolean>>({ ...DEFAULT_SPEECH_SHARING })
+  const [remoteContinuousSpeech, setRemoteContinuousSpeech] = useState({ ...DEFAULT_REMOTE_CONTINUOUS_SPEECH })
   const [backgroundTranscriptionStatusEntry, setBackgroundTranscriptionStatusEntry] = useState<{
     scopeKey: string
     generation: number
@@ -297,6 +311,12 @@ export function useNativeSpeechPolicy(
   const visibleBackgroundTranscription = choiceScopeKey === scopeKey
     ? backgroundTranscription
     : defaultBackgroundTranscriptionPolicy()
+  const visibleSpeechSharing = choiceScopeKey === scopeKey
+    ? speechSharing
+    : DEFAULT_SPEECH_SHARING
+  const visibleRemoteContinuousSpeech = choiceScopeKey === scopeKey
+    ? remoteContinuousSpeech
+    : DEFAULT_REMOTE_CONTINUOUS_SPEECH
   const backgroundTranscriptionStatus = backgroundTranscriptionStatusEntry.scopeKey === scopeKey
     && backgroundTranscriptionStatusEntry.generation === scopeGenerationRef.current.generation
     ? backgroundTranscriptionStatusEntry.status
@@ -329,6 +349,8 @@ export function useNativeSpeechPolicy(
       setViewScopeKey(scopeKey)
       setChoiceScopeKey(null)
       setBackgroundTranscription(defaultBackgroundTranscriptionPolicy())
+      setSpeechSharing({ ...DEFAULT_SPEECH_SHARING })
+      setRemoteContinuousSpeech({ ...DEFAULT_REMOTE_CONTINUOUS_SPEECH })
       setBackgroundTranscriptionStatus(initialBackgroundTranscriptionStatus(surface))
       setState('hidden')
       setMessage(null)
@@ -461,6 +483,11 @@ export function useNativeSpeechPolicy(
           setSttChoice(speechRoutingChoice(receipt.document.speech.stages.stt))
           setTtsChoice(speechRoutingChoice(receipt.document.speech.stages.tts))
           setBackgroundTranscription(receipt.document.backgroundTranscription)
+          setSpeechSharing({ ...receipt.document.speech.sharing })
+          setRemoteContinuousSpeech({
+            kws: receipt.document.speech.stages.kws.experimentalRemote === true,
+            vad: receipt.document.speech.stages.vad.experimentalRemote === true,
+          })
           setChoiceScopeKey(scopeKey)
           setState('ready')
           setMessage(null)
@@ -508,6 +535,16 @@ export function useNativeSpeechPolicy(
   const changeChoice = useCallback((stage: 'stt' | 'tts', choice: SpeechRoutingChoice) => {
     if (stage === 'stt') setSttChoice(choice)
     else setTtsChoice(choice)
+    setMessage(null)
+  }, [])
+
+  const changeSpeechSharing = useCallback((stage: AuroraSpeechStage, enabled: boolean) => {
+    setSpeechSharing((current) => ({ ...current, [stage]: enabled }))
+    setMessage(null)
+  }, [])
+
+  const changeRemoteContinuousSpeech = useCallback((stage: 'kws' | 'vad', enabled: boolean) => {
+    setRemoteContinuousSpeech((current) => ({ ...current, [stage]: enabled }))
     setMessage(null)
   }, [])
 
@@ -611,10 +648,13 @@ export function useNativeSpeechPolicy(
         updatedAtMs: Date.now(),
         speech: {
           ...current.speech,
+          sharing: { ...visibleSpeechSharing },
           stages: {
             ...current.speech.stages,
             stt: { ...current.speech.stages.stt, routing: routingForSpeechChoice(sttChoice) },
             tts: { ...current.speech.stages.tts, routing: routingForSpeechChoice(ttsChoice) },
+            kws: { ...current.speech.stages.kws, experimentalRemote: visibleRemoteContinuousSpeech.kws },
+            vad: { ...current.speech.stages.vad, experimentalRemote: visibleRemoteContinuousSpeech.vad },
           },
         },
         backgroundTranscription: visibleBackgroundTranscription,
@@ -677,7 +717,7 @@ export function useNativeSpeechPolicy(
         setMessage('Speech settings could not be refreshed on this device.')
       }
     }
-  }, [enabled, isAndroid, scopeKey, sttChoice, ttsChoice, visibleBackgroundTranscription, visibleState])
+  }, [enabled, isAndroid, scopeKey, sttChoice, ttsChoice, visibleBackgroundTranscription, visibleSpeechSharing, visibleRemoteContinuousSpeech, visibleState])
 
   const routePolicy = useCallback((stage: 'stt' | 'tts', route: RouteAvailability): AssistantRoutePolicy => {
     if (!enabled) return routePolicyFromRoute(route)
@@ -696,7 +736,11 @@ export function useNativeSpeechPolicy(
     ttsChoice: visibleTtsChoice,
     backgroundTranscription: visibleBackgroundTranscription,
     backgroundTranscriptionStatus,
+    speechSharing: visibleSpeechSharing,
+    remoteContinuousSpeech: visibleRemoteContinuousSpeech,
     changeChoice,
+    changeSpeechSharing,
+    changeRemoteContinuousSpeech,
     changeBackgroundTranscription,
     requestMicrophonePermission,
     save,

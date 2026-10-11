@@ -44,6 +44,7 @@ fn main() {
         "aurora_peer_host_local_speech_transcribe",
         "aurora_peer_host_local_speech_synthesize",
         "aurora_peer_host_local_speech_cancel",
+        "aurora_peer_host_local_speech_stage",
         "aurora_native_capability_manifest",
         "native_capabilities",
         "aurora_android_baseline_status",

@@ -313,6 +313,9 @@ export async function createBrowserMeshNodeServices(
       capabilities() { return currentSpeechSource?.capabilities() ?? [] },
       setReady(readiness) { currentSpeechSource?.setReady(readiness) },
       setVisible(visible) { currentSpeechSource?.setVisible(visible) },
+      async disconnectPeer(remotePeerId, connectionEpoch, reason) {
+        await currentSpeechSource?.disconnectPeer(remotePeerId, connectionEpoch, reason)
+      },
       async close() {
         const source = currentSpeechSource
         currentSpeechSource = null

@@ -1,6 +1,6 @@
 //! Desktop native speech-engine construction from active model-pack state.
 
-#[cfg(feature = "native-sherpa-tts")]
+#[cfg(any(feature = "native-sherpa-tts", feature = "ios-sherpa"))]
 use aurora_voice_engine::TtsVoiceCatalog;
 use aurora_voice_engine::{
     EngineError, EngineFaultCode, KwsConfig, LanguageSupport, ModelPackFile, ModelPackManifest,
@@ -13,7 +13,7 @@ use aurora_voice_sherpa::{
     NativeSttModelFiles, NativeVadBackend, SherpaFiniteSttEngine, SherpaKwsPhraseCompileError,
     SherpaKwsPhraseInput, SherpaKwsPhraseSet, SherpaKwsProvider, SherpaVadProvider,
 };
-#[cfg(feature = "native-sherpa-tts")]
+#[cfg(any(feature = "native-sherpa-tts", feature = "ios-sherpa"))]
 use aurora_voice_sherpa::{
     NativeTtsBackend, NativeTtsPocketModelFiles, NativeTtsReferenceAudio,
     NativeTtsVitsPiperModelFiles, SherpaTtsProvider,
@@ -178,7 +178,7 @@ pub fn build_installed_stt_provider(
 }
 
 /// Native desktop TTS provider bound to an installed TTS catalog voice.
-#[cfg(feature = "native-sherpa-tts")]
+#[cfg(any(feature = "native-sherpa-tts", feature = "ios-sherpa"))]
 pub fn build_installed_tts_provider(
     manager: &SpeechPackManager,
     voice_id: &str,
@@ -188,7 +188,7 @@ pub fn build_installed_tts_provider(
 
 /// Native desktop TTS provider bound to an installed TTS catalog voice and
 /// caller-selected reference audio for PocketTTS voices.
-#[cfg(feature = "native-sherpa-tts")]
+#[cfg(any(feature = "native-sherpa-tts", feature = "ios-sherpa"))]
 pub fn build_installed_tts_provider_with_reference(
     manager: &SpeechPackManager,
     voice_id: &str,

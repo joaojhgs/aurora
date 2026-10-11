@@ -245,4 +245,14 @@ export interface PeerHostOptions {
   readonly maxRequestBytes?: number
   readonly defaultTimeoutMs?: number
   readonly speechStageCapabilities?: () => readonly MeshSpeechStageCapabilityExportV1[]
+  /**
+   * Drain owner-bound native speech sessions when one peer connection ends.
+   * The callback receives routing context, not authority; implementations must
+   * revalidate it at their native boundary.
+   */
+  readonly onRemotePeerDisconnected?: (
+    remotePeerId: string,
+    connectionEpoch: string,
+    reason: string
+  ) => void | Promise<void>
 }

@@ -12,6 +12,11 @@ export type {
   WebRtcPeerConnectionProfile
 } from './types.js'
 
+export type {
+  MeshSpeechStageCapabilityV1,
+  MeshSpeechStageCapabilityExportV1
+} from '../mesh.js'
+
 export {
   AURORA_RPC_DATA_CHANNEL_LABEL,
   WebRtcPeerSession,

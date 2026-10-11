@@ -2362,6 +2362,13 @@ pub async fn route_native_data_channel_closed(app: &AppHandle, data_channel_id: 
 }
 
 impl MeshSessionState {
+    /// Allow native peer work only after the native and session resume gates.
+    pub(crate) async fn is_foreground_for_native_work(&self) -> bool {
+        let inner = self.inner.lock().await;
+        !inner.surface_is_backgrounded()
+            && inner.registry.lifecycle() == SurfaceLifecycle::Foreground
+    }
+
     /// Resolve the unique ready finite STT model advertised by the currently
     /// bound peer for the exact configured resource. Capability data is bound
     /// atomically with its peer/data-channel epoch and is never used as grant

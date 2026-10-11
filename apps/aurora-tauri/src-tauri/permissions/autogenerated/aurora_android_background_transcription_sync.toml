@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-android-background-transcription-sync"
+description = "Enables the aurora_android_background_transcription_sync command without any pre-configured scope."
+commands.allow = ["aurora_android_background_transcription_sync"]
+
+[[permission]]
+identifier = "deny-aurora-android-background-transcription-sync"
+description = "Denies the aurora_android_background_transcription_sync command without any pre-configured scope."
+commands.deny = ["aurora_android_background_transcription_sync"]

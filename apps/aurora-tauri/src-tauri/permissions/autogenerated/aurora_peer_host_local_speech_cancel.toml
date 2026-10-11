@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-peer-host-local-speech-cancel"
+description = "Enables the aurora_peer_host_local_speech_cancel command without any pre-configured scope."
+commands.allow = ["aurora_peer_host_local_speech_cancel"]
+
+[[permission]]
+identifier = "deny-aurora-peer-host-local-speech-cancel"
+description = "Denies the aurora_peer_host_local_speech_cancel command without any pre-configured scope."
+commands.deny = ["aurora_peer_host_local_speech_cancel"]

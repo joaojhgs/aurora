@@ -146,6 +146,10 @@ export function createMeshNodeLocalToolProvider(
       ? withGrantedToolPermissions(options.authorizationStore, options.registry)
       : new DenyAllPeerHostAuthorizationStore(),
     ...(options.speechHost ? { speechStageCapabilities: () => options.speechHost!.capabilities() } : {}),
+    ...(options.speechHost ? {
+      onRemotePeerDisconnected: (remotePeerId: string, connectionEpoch: string, reason: string) =>
+        options.speechHost!.disconnectPeer(remotePeerId, connectionEpoch, reason),
+    } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.randomId ? { randomId: options.randomId } : {}),
     ...(options.maxRequestBytes !== undefined ? { maxRequestBytes: options.maxRequestBytes } : {}),
