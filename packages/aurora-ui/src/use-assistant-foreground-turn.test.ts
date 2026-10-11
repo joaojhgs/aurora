@@ -1,4 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
+import { AuroraError } from '@aurora/client'
+import { productAssistantErrorCopy } from './assistant-view-copy'
+import {
+  createAssistantTurnStreamController,
+  type CreateAssistantTurnStreamControllerParams,
+} from './use-assistant-turn-stream'
 import type {
   AssistantRoutePolicy,
   AssistantStreamMessageRequest,
@@ -114,6 +120,25 @@ describe('assistant foreground optional TTS stream subscription', () => {
     expect(result.completed).toBe(true)
     expect(result.request.clientTtsPlayback).toBe(false)
   })
+
+  it('keeps a canonical local failure code while rendering only safe error copy', async () => {
+    const rawBackendDetail = 'private backend detail sentinel'
+    const failure = new AuroraError({ code: 'timeout', message: rawBackendDetail })
+    const result = await runForegroundTurn({ localFailure: failure })
+
+    expect(result.completed).toBe(false)
+    expect(result.markAssistantTurnFailed).toHaveBeenCalledWith(
+      expect.any(String),
+      'Aurora timed out before returning a final assistant response.',
+      'timeout',
+    )
+    expect(result.failedMessage).toMatchObject({
+      status: 'failed',
+      errorCode: 'timeout',
+      error: 'Aurora timed out before returning a final assistant response.',
+    })
+    expect(JSON.stringify(result.failedMessage)).not.toContain(rawBackendDetail)
+  })
 })
 
 interface ForegroundTurnOptions {
@@ -123,6 +148,7 @@ interface ForegroundTurnOptions {
   routePolicyPeerId?: string | null
   routePolicyProviderId?: string
   transportHost?: boolean
+  localFailure?: AuroraError
 }
 
 async function runForegroundTurn(options: ForegroundTurnOptions) {
@@ -136,12 +162,28 @@ async function runForegroundTurn(options: ForegroundTurnOptions) {
     },
   } as unknown as AuroraClient
   const route = assistantRoute()
+  let sessionState: AssistantSessionSnapshot = { sessionId: null, messages: [] }
+  const setSession = vi.fn((update: (current: AssistantSessionSnapshot) => AssistantSessionSnapshot) => {
+    sessionState = update(sessionState)
+  })
+  const assistantStreamScope = { scopeId: 'foreground-tts-readiness-test' }
+  const failureStreamController = options.localFailure
+    ? createAssistantTurnStreamController({
+        setSession,
+        setLastError: vi.fn(),
+        setStreamState: vi.fn(),
+        lastStreamEventIdRef: { current: null },
+        assistantStreamScope,
+        assistantStreamScopeId: assistantStreamScope.scopeId,
+      } as unknown as CreateAssistantTurnStreamControllerParams)
+    : null
+  const markAssistantTurnFailed = vi.fn(failureStreamController?.markAssistantTurnFailed ?? vi.fn())
   const params = {
     client,
     route,
     surfaceProfile: options.surfaceProfile ?? getAuroraSurfaceProfile({ transportKind: 'http' }),
-    session: { sessionId: null, messages: [] } satisfies AssistantSessionSnapshot,
-    setSession: vi.fn(),
+    session: sessionState,
+    setSession,
     abortRef: { current: null },
     setText: vi.fn(),
     setLastPrompt: vi.fn(),
@@ -152,10 +194,10 @@ async function runForegroundTurn(options: ForegroundTurnOptions) {
     setStreamState: vi.fn(),
     setSessionIndexError: vi.fn(),
     selectedExecution: {
-      mode: 'dispatch' as const,
-      runner: 'aurora-route' as const,
-      label: 'Connected Aurora device',
-      executionPeerId: options.executionPeerId === undefined ? 'assistant-peer' : options.executionPeerId,
+      mode: options.localFailure ? 'local' as const : 'dispatch' as const,
+      runner: options.localFailure ? 'lightweight-local' as const : 'aurora-route' as const,
+      label: options.localFailure ? 'This device' : 'Connected Aurora device',
+      executionPeerId: options.localFailure ? null : options.executionPeerId === undefined ? 'assistant-peer' : options.executionPeerId,
       transportHost: options.transportHost === true,
     },
     selectedModelChoice: modelChoice(),
@@ -165,7 +207,9 @@ async function runForegroundTurn(options: ForegroundTurnOptions) {
     ),
     inferencePolicy: null,
     localExecutionMessageLabel: 'This device',
-    localOrchestrator: null,
+    localOrchestrator: options.localFailure
+      ? { runTurn: vi.fn().mockRejectedValue(options.localFailure) }
+      : null,
     localConfirmationOrchestratorsRef: { current: new Map() },
     localHistory: null,
     supportsPersistedSessions: false,
@@ -173,22 +217,23 @@ async function runForegroundTurn(options: ForegroundTurnOptions) {
     createPersistedChatSession: vi.fn(async () => null),
     refreshPersistedSessionIndex: vi.fn(async () => undefined),
     refreshLocalSessionIndex: vi.fn(async () => undefined),
-    productAssistantErrorCopy: (error: Error) => error.message,
-    assistantStreamScope: { scopeId: 'foreground-tts-readiness-test' },
+    productAssistantErrorCopy: options.localFailure ? productAssistantErrorCopy : (error: Error) => error.message,
+    assistantStreamScope,
     activePendingIdRef: { current: null },
     lastStreamEventIdRef: { current: null },
     cancelledPendingIdsRef: { current: new Set<string>() },
     setActiveAssistantPendingId: vi.fn(),
     applyAssistantStreamUpdate: vi.fn(),
-    markAssistantTurnFailed: vi.fn(),
+    markAssistantTurnFailed,
     ...(options.ttsStreamRoute ? { ttsStreamRoute: options.ttsStreamRoute } : {}),
   } as unknown as CreateAssistantForegroundTurnControllerParams
 
   const controller = createAssistantForegroundTurnController(params)
   const completed = await controller.startAssistantTurn('Say hello')
   const request = requests[0]
-  if (!request) throw new Error('foreground turn did not open its assistant stream')
-  return { completed, request }
+  if (!request && !options.localFailure) throw new Error('foreground turn did not open its assistant stream')
+  const failedMessage = sessionState.messages.find((message) => message.status === 'failed')
+  return { completed, request: request!, failedMessage, markAssistantTurnFailed }
 }
 
 function streamRoute(state: RouteAvailability['state'], candidates: RouteProviderCandidate[]): RouteAvailability {

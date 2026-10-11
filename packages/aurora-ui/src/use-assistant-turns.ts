@@ -5,6 +5,7 @@ import type {
   AssistantStreamUpdate,
   AssistantMessage as SdkAssistantMessage,
   AuroraClient,
+  AuroraErrorCode,
   AuroraEvent,
 } from '@aurora/client'
 import type { LightweightOrchestrator } from '@aurora/client/lightweight-orchestrator'
@@ -101,7 +102,7 @@ export interface AssistantTurnsController {
   readonly startAssistantTurn: (prompt: string, replayFrom?: string | null) => Promise<boolean>
   readonly handleNativeAssistantSnapshot: (snapshot: { subjects?: unknown[] | undefined }) => Promise<ReturnType<typeof nativeAssistantSnapshotRecoveryDecision>>
   readonly handleNativeAssistantEvent: (event: AuroraEvent<unknown>) => Promise<boolean>
-  readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string) => void
+  readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string, errorCode?: AuroraErrorCode | undefined) => void
   readonly applyAssistantStreamUpdate: (update: AssistantStreamUpdate, pendingId: string) => void
   readonly settleSubstantiveStreamingAssistantMessages: (reason: 'tts_started' | 'response_text_observed') => void
   readonly settleVoicePendingFromObservedText: (observedText: string | null, reason: 'tts_started' | 'assistant_response') => void

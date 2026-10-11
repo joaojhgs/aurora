@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { AssistantMessage as SdkAssistantMessage, AssistantStreamUpdate, AuroraError } from '@aurora/client'
+import type { AssistantMessage as SdkAssistantMessage, AssistantStreamUpdate, AuroraError, AuroraErrorCode } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import type {
   AssistantRuntimeHealth,
@@ -23,7 +23,7 @@ import type { VoiceCaptureStatus } from './assistant-voice-model'
 import { isAuroraErrorCode } from './assistant-session-model'
 
 export interface AssistantTurnStreamController {
-  readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string) => void
+  readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string, errorCode?: AuroraErrorCode | undefined) => void
   readonly applyAssistantStreamUpdate: (update: AssistantStreamUpdate, pendingId: string) => void
   readonly settleSubstantiveStreamingAssistantMessages: (reason: 'tts_started' | 'response_text_observed') => void
   readonly settleVoicePendingFromObservedText: (observedText: string | null, reason: 'tts_started' | 'assistant_response') => void
@@ -94,7 +94,7 @@ export function createAssistantTurnStreamController(params: CreateAssistantTurnS
     setActiveAssistantPendingId,
   } = params
 
-function markAssistantTurnFailed(pendingId: string, failureCopy: string) {
+function markAssistantTurnFailed(pendingId: string, failureCopy: string, errorCode?: AuroraErrorCode) {
   const streamedText = selectAssistantStreamingText(pendingId, assistantStreamScopeId)(useAssistantStreamStore.getState())
   setLastError(failureCopy)
   useAssistantStreamStore.getState().fail(failureCopy, assistantStreamScope)
@@ -116,7 +116,8 @@ function markAssistantTurnFailed(pendingId: string, failureCopy: string) {
                 : failureCopy
             })(),
             status: 'failed',
-            error: failureCopy
+            error: failureCopy,
+            errorCode
           }
         : message
     )

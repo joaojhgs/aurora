@@ -1,5 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { AssistantInferencePolicy, AssistantMessage as SdkAssistantMessage, AssistantRoutePolicy, AssistantStreamMessageRequest, AssistantStreamUpdate, AuroraClient, AuroraError } from '@aurora/client'
+import type { AssistantInferencePolicy, AssistantMessage as SdkAssistantMessage, AssistantRoutePolicy, AssistantStreamMessageRequest, AssistantStreamUpdate, AuroraClient, AuroraError, AuroraErrorCode } from '@aurora/client'
 import type { LightweightOrchestrator } from '@aurora/client/lightweight-orchestrator'
 import type { RouteAvailability } from './shell-data'
 import type { AssistantModelChoice, AssistantSessionSnapshot, AssistantStreamState, AssistantUiMessage } from './assistant-view'
@@ -21,6 +21,7 @@ import {
   metadataStringValue,
 } from './assistant-session-persistence'
 import { useAssistantStreamStore } from './state/assistant-stream-store'
+import { isAuroraErrorCode } from './assistant-session-model'
 import type { AssistantTurnExecutionSelection } from './use-assistant-turns'
 import { peerIdFromProviderIdentity } from './assistant-execution-routing'
 
@@ -64,7 +65,7 @@ export interface CreateAssistantForegroundTurnControllerParams {
   readonly cancelledPendingIdsRef: MutableRefObject<Set<string>>
   readonly setActiveAssistantPendingId: Dispatch<SetStateAction<string | null>>
   readonly applyAssistantStreamUpdate: (update: AssistantStreamUpdate, pendingId: string) => void
-  readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string) => void
+  readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string, errorCode?: AuroraErrorCode | undefined) => void
 }
 
 export function createAssistantForegroundTurnController(params: CreateAssistantForegroundTurnControllerParams): AssistantForegroundTurnController {
@@ -256,7 +257,14 @@ async function startAssistantTurn(prompt: string, replayFrom: string | null = nu
     }
   } catch (error) {
     if (!abort.signal.aborted && !cancelledPendingIdsRef.current.has(pendingMessage.id)) {
-      markAssistantTurnFailed(pendingMessage.id, productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))))
+      const errorCode = typeof error === 'object' && error !== null && 'code' in error && isAuroraErrorCode(error.code)
+        ? error.code
+        : undefined
+      markAssistantTurnFailed(
+        pendingMessage.id,
+        productAssistantErrorCopy(error instanceof Error ? error : new Error(String(error))),
+        errorCode,
+      )
     }
   } finally {
     useAssistantStreamStore.getState().clear(pendingMessage.id, assistantStreamScope)
