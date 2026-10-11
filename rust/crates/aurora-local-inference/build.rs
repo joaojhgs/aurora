@@ -226,6 +226,7 @@ fn link_cactus_ios(target: &str, llama_root: &Path) {
         "Cactus target mismatch"
     );
     assert_eq!(metadata["deployment_target"], "13.0");
+    assert_eq!(metadata["accelerate_abi"], "legacy");
     let libraries = metadata["static_libraries"]
         .as_array()
         .expect("Cactus static archive list is required");

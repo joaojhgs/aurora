@@ -22,6 +22,7 @@ SOURCE_SHA256 = "978ad5302bf3e6abedf73286efd498e475cbe977f6a021c8293ffb9f61867eb
 TELEMETRY_PATCH_SHA256 = "3fcb6c58269e6523d1dc042d6db3c82ab3a3860d56849bde2689bde161fe3963"
 TELEMETRY_SOURCE_SHA256 = "1aa48d0f432d64bf014a3b58c6b5247e3a3fe2ac76836898e1a9fc34e78cb31a"
 EXPECTED_CMAKE_BLOCK = "target_compile_definitions(cactus PRIVATE\n    PLATFORM_CPU_ONLY=1\n)"
+EXPECTED_NEW_LAPACK_DEFINITION = "    ACCELERATE_NEW_LAPACK\n"
 ARTIFACT_ROOT = Path(__file__).resolve().parents[2] / ".artifacts/local-inference/cactus/v1.14"
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -86,6 +87,7 @@ def verify_runtime(path: Path, target: str) -> bool:
             or metadata.get("telemetry_disabled") is not True
             or metadata.get("telemetry_patch_sha256") != TELEMETRY_PATCH_SHA256
             or metadata.get("deployment_target") != "13.0"
+            or metadata.get("accelerate_abi") != "legacy"
             or metadata.get("static_libraries") != ["libcactus.a", "libcurl.a"]
         ):
             return False
@@ -175,11 +177,14 @@ def prepare_source(archive: Path, work_root: Path, patch_path: Path) -> Path:
     text = cmake.read_text(encoding="utf-8")
     if text.count(EXPECTED_CMAKE_BLOCK) != 1:
         raise BuildError("Pinned Cactus iOS target definition changed")
+    text = text.replace(
+        EXPECTED_CMAKE_BLOCK,
+        "target_compile_definitions(cactus PRIVATE\n    PLATFORM_CPU_ONLY=1\n    AURORA_CACTUS_DISABLE_TELEMETRY=1\n)",
+    )
+    if text.count(EXPECTED_NEW_LAPACK_DEFINITION) != 1:
+        raise BuildError("Pinned Cactus Accelerate ABI definition changed")
     cmake.write_text(
-        text.replace(
-            EXPECTED_CMAKE_BLOCK,
-            "target_compile_definitions(cactus PRIVATE\n    PLATFORM_CPU_ONLY=1\n    AURORA_CACTUS_DISABLE_TELEMETRY=1\n)",
-        ),
+        text.replace(EXPECTED_NEW_LAPACK_DEFINITION, ""),
         encoding="utf-8",
     )
     return source
@@ -217,6 +222,7 @@ def stage_runtime(source: Path, output_root: Path, target: str) -> Path:
         "telemetry_disabled": True,
         "telemetry_patch_sha256": TELEMETRY_PATCH_SHA256,
         "deployment_target": "13.0",
+        "accelerate_abi": "legacy",
         "static_libraries": ["libcactus.a", "libcurl.a"],
         "file_sha256": hashes,
     }
