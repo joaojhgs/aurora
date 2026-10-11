@@ -9727,6 +9727,18 @@ pub fn run() {
                 max_output_tokens: 512,
                 capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: false },
             });
+            #[cfg(target_os = "ios")]
+            local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
+                model_id: "chat-qwen3-06b-cactus".into(),
+                display_label: "Offline answers".into(),
+                file_name: "qwen3-0.6b-int4.zip".into(),
+                byte_size: 376_414_357,
+                sha256: "2f4f5e3b91fc62168e66a592d09cfd1792a0b96e1994d46b5de77ddebbf94427".into(),
+                source_url: "https://huggingface.co/Cactus-Compute/Qwen3-0.6B/resolve/595bcb02f28687ef00c9b5c1e04c5399e5af6bef/weights/qwen3-0.6b-int4.zip".into(),
+                context_tokens: 4096,
+                max_output_tokens: 512,
+                capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: true },
+            });
             #[cfg(all(target_os = "android", target_arch = "aarch64", feature = "android-arm64-needle2"))]
             local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
                 model_id: "actions-needle2".into(),

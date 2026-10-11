@@ -75,6 +75,7 @@ tauri-plugin-barcode-scanner = { path = "vendor/tauri-plugin-barcode-scanner" }
 aurora-local-inference = { path = "../../../rust/crates/aurora-local-inference", features = ["native-llamacpp"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
+aurora-local-inference = { path = "../../../rust/crates/aurora-local-inference", features = ["native-llamacpp", "native-cactus"] }
 aurora-voice-engine = { path = "../../../rust/crates/aurora-voice-engine" }
 aurora-voice-sherpa = { path = "../../../rust/crates/aurora-voice-sherpa" }
 aurora-voice-ios-bridge = { path = "../../../rust/crates/aurora-voice-ios-bridge" }

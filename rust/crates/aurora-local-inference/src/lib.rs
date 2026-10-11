@@ -20,12 +20,16 @@ use std::sync::Arc;
 use std::sync::{mpsc, Mutex, RwLock};
 use thiserror::Error;
 
+#[cfg(all(feature = "native-cactus", target_os = "ios", target_arch = "aarch64"))]
+mod cactus;
 #[cfg(all(
     feature = "native-needle2",
     target_os = "android",
     target_arch = "aarch64"
 ))]
 mod needle;
+#[cfg(all(feature = "native-cactus", target_os = "ios", target_arch = "aarch64"))]
+pub use cactus::CactusBackend;
 #[cfg(all(
     feature = "native-needle2",
     target_os = "android",
@@ -387,13 +391,29 @@ impl LocalInferenceState {
 
     /// Advertise only the engine compiled into this native target.
     pub fn engines(&self) -> Vec<EngineInfo> {
-        vec![EngineInfo {
+        let engines = vec![EngineInfo {
             engine: "llamacpp".to_owned(),
             surface: native_surface().to_owned(),
             version: "0.4.1".to_owned(),
             accelerators: vec!["cpu".to_owned()],
             max_concurrent_models: 1,
-        }]
+        }];
+        #[cfg(all(feature = "native-cactus", target_os = "ios", target_arch = "aarch64"))]
+        {
+            let mut engines = engines;
+            engines.push(EngineInfo {
+                engine: "cactus".to_owned(),
+                surface: "ios".to_owned(),
+                version: "1.14.0".to_owned(),
+                accelerators: vec!["cpu".to_owned()],
+                max_concurrent_models: 1,
+            });
+            engines
+        }
+        #[cfg(not(all(feature = "native-cactus", target_os = "ios", target_arch = "aarch64")))]
+        {
+            engines
+        }
     }
 
     /// Return one catalog entry to trusted native download code.
@@ -476,7 +496,9 @@ impl LocalInferenceState {
             });
         }
         let (reply, result) = oneshot::channel();
-        let use_native_backend = model.file_name.ends_with(".litertlm") || is_needle_model(&model);
+        let use_native_backend = model.file_name.ends_with(".litertlm")
+            || is_needle_model(&model)
+            || is_cactus_model(&model);
         let cache_path = self
             .inner
             .config
@@ -646,7 +668,9 @@ impl LocalInferenceState {
                         .ok()
                         .cloned()
                 })
-                .is_some_and(|model| model.file_name.ends_with(".litertlm"))
+                .is_some_and(|model| {
+                    model.file_name.ends_with(".litertlm") || is_cactus_model(&model)
+                })
             {
                 if let Ok(Some(backend)) = self.native_backend() {
                     return CancelResult {
@@ -902,6 +926,16 @@ fn validate_identifier(value: &str) -> Result<(), LocalInferenceError> {
 }
 
 #[cfg(feature = "native-llamacpp")]
+fn is_cactus_model(model: &TrustedModelDescriptor) -> bool {
+    cfg!(all(
+        feature = "native-cactus",
+        target_os = "ios",
+        target_arch = "aarch64"
+    )) && model.model_id == "chat-qwen3-06b-cactus"
+        && model.file_name == "qwen3-0.6b-int4.zip"
+}
+
+#[cfg(feature = "native-llamacpp")]
 fn is_needle_model(model: &TrustedModelDescriptor) -> bool {
     cfg!(all(
         feature = "native-needle2",
@@ -937,7 +971,12 @@ fn verify_model_file(
     let mut magic = [0u8; 4];
     file.read_exact(&mut magic)
         .map_err(|_| LocalInferenceError::ModelUnverified)?;
-    if !model.file_name.ends_with(".litertlm") && !is_needle_model(model) && &magic != b"GGUF" {
+    let valid_magic = if is_cactus_model(model) {
+        &magic == b"PK\x03\x04"
+    } else {
+        model.file_name.ends_with(".litertlm") || is_needle_model(model) || &magic == b"GGUF"
+    };
+    if !valid_magic {
         return Err(LocalInferenceError::ModelUnverified);
     }
     file.rewind()

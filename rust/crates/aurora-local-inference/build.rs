@@ -1,7 +1,8 @@
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs,
-    io::Read,
+    env,
+    fs::{self, File},
+    io::{Read, Seek},
     path::{Component, Path, PathBuf},
 };
 
@@ -167,6 +168,128 @@ fn main() {
     if os == "linux" || os == "android" {
         println!("cargo:rustc-link-lib=m");
     }
+    if env::var_os("CARGO_FEATURE_NATIVE_CACTUS").is_some() && os == "ios" {
+        link_cactus_ios(&target, &root);
+    }
+}
+
+const CACTUS_SOURCE_COMMIT: &str = "40a7123b0788f5b38c5fe0daa0d909b4286fe773";
+const CACTUS_SOURCE_SHA: &str = "978ad5302bf3e6abedf73286efd498e475cbe977f6a021c8293ffb9f61867eb1";
+const CACTUS_TELEMETRY_PATCH_SHA: &str =
+    "3fcb6c58269e6523d1dc042d6db3c82ab3a3860d56849bde2689bde161fe3963";
+
+fn link_cactus_ios(target: &str, llama_root: &Path) {
+    let key = if target.ends_with("-sim") {
+        "AURORA_CACTUS_IOS_SIMULATOR_ARM64_LIB_DIR"
+    } else {
+        "AURORA_CACTUS_IOS_ARM64_LIB_DIR"
+    };
+    println!("cargo:rerun-if-env-changed={key}");
+    println!("cargo:rerun-if-env-changed=CARGO_{key}");
+    let expected_target = if target.ends_with("-sim") {
+        "ios-simulator-arm64"
+    } else {
+        "ios-arm64"
+    };
+    let explicit_root = env::var_os(key).or_else(|| env::var_os(format!("CARGO_{key}")));
+    let root = explicit_root
+        .map(PathBuf::from)
+        .unwrap_or_else(|| llama_root.join("cactus").join(expected_target));
+    let metadata_path = root.join("aurora-cactus-runtime.json");
+    println!("cargo:rerun-if-changed={}", metadata_path.display());
+    let metadata_file =
+        fs::symlink_metadata(&metadata_path).expect("Pinned Cactus runtime metadata is required");
+    assert!(
+        metadata_file.file_type().is_file(),
+        "Cactus metadata must be a regular file"
+    );
+    let metadata: serde_json::Value = serde_json::from_slice(
+        &fs::read(&metadata_path).expect("Pinned Cactus runtime metadata is required"),
+    )
+    .expect("Invalid Cactus runtime metadata");
+    assert_eq!(metadata["format"], 1);
+    assert_eq!(metadata["link_kind"], "static");
+    assert_eq!(metadata["source"]["commit"], CACTUS_SOURCE_COMMIT);
+    assert_eq!(metadata["source"]["version"], "1.14.0");
+    assert_eq!(metadata["source"]["archive_sha256"], CACTUS_SOURCE_SHA);
+    assert_eq!(metadata["source"]["archive_bytes"], 14_761_497_u64);
+    assert_eq!(
+        metadata["telemetry_disabled"], true,
+        "Cactus telemetry must be compiled out"
+    );
+    assert_eq!(
+        metadata["telemetry_patch_sha256"],
+        CACTUS_TELEMETRY_PATCH_SHA
+    );
+    assert_eq!(
+        metadata["target"], expected_target,
+        "Cactus target mismatch"
+    );
+    assert_eq!(metadata["deployment_target"], "13.0");
+    let libraries = metadata["static_libraries"]
+        .as_array()
+        .expect("Cactus static archive list is required");
+    let hashes = metadata["file_sha256"]
+        .as_object()
+        .expect("Cactus archive hashes are required");
+    for name in ["libcactus.a", "libcurl.a"] {
+        assert!(
+            libraries.iter().any(|entry| entry.as_str() == Some(name)),
+            "Cactus static archive list is incomplete"
+        );
+        let expected = hashes
+            .get(name)
+            .and_then(serde_json::Value::as_str)
+            .expect("Required Cactus link archive hash is missing");
+        let path = root.join(name);
+        println!("cargo:rerun-if-changed={}", path.display());
+        let metadata =
+            fs::symlink_metadata(&path).expect("Required Cactus link archive is missing");
+        assert!(
+            metadata.file_type().is_file(),
+            "Cactus archives must be regular files"
+        );
+        let mut file = File::open(&path).expect("Cactus archive is unreadable");
+        let mut magic = [0_u8; 8];
+        file.read_exact(&mut magic).expect("Invalid Cactus archive");
+        assert_eq!(
+            &magic, b"!<arch>\n",
+            "Cactus runtime must contain static archives"
+        );
+        file.rewind().expect("Cactus archive is unreadable");
+        let mut digest = Sha256::new();
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+            let count = file
+                .read(&mut buffer)
+                .expect("Cactus archive is unreadable");
+            if count == 0 {
+                break;
+            }
+            digest.update(&buffer[..count]);
+        }
+        assert_eq!(
+            format!("{:x}", digest.finalize()),
+            expected,
+            "Cactus archive checksum mismatch"
+        );
+    }
+    println!("cargo:rustc-link-search=native={}", root.display());
+    println!("cargo:rustc-link-lib=static=cactus");
+    println!("cargo:rustc-link-lib=static=curl");
+    for framework in [
+        "CoreML",
+        "Foundation",
+        "Accelerate",
+        "Security",
+        "SystemConfiguration",
+        "CFNetwork",
+    ] {
+        println!("cargo:rustc-link-lib=framework={framework}");
+    }
+    println!("cargo:rustc-link-lib=c++");
+    println!("cargo:rustc-link-lib=pthread");
+    println!("cargo:rustc-link-lib=z");
 }
 
 const NEEDLE2_REVISION: &str = "32e9e3a93b205f786929697446ae669cf0a84579";

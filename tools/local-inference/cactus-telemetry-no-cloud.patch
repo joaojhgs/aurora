@@ -1,0 +1,59 @@
+--- a/cactus/telemetry/telemetry.cpp
++++ b/cactus/telemetry/telemetry.cpp
+@@ -97,6 +97,9 @@
+ static TelemetryLifecycleState lifecycle_state = TelemetryLifecycleState::Stopped;
+ 
+ static bool can_record_event_locked() {
++#ifdef AURORA_CACTUS_DISABLE_TELEMETRY
++    return false;
++#endif
+     return enabled && ids_ready && lifecycle_state == TelemetryLifecycleState::Running;
+ }
+ 
+@@ -1255,6 +1258,9 @@
+ }
+ 
+ static void process_events(const std::vector<Event>& fresh_events) {
++#ifdef AURORA_CACTUS_DISABLE_TELEMETRY
++    return;
++#endif
+     std::vector<Event> events;
+     CloudConfigurationStateSnapshot snapshot;
+     std::string telemetry_dir;
+@@ -1296,6 +1302,9 @@
+ }
+ 
+ void init(const char* project_id_param, const char* project_scope_param, const char* cloud_key_param) {
++#ifdef AURORA_CACTUS_DISABLE_TELEMETRY
++    return;
++#endif
+     std::unique_lock<std::mutex> lifecycle_guard(telemetry_mutex);
+     telemetry_lifecycle_cv.wait(lifecycle_guard, [] {
+         return lifecycle_state != TelemetryLifecycleState::ShuttingDown;
+@@ -1379,6 +1388,9 @@
+ }
+ 
+ void setEnabled(bool en) {
++#ifdef AURORA_CACTUS_DISABLE_TELEMETRY
++    return;
++#endif
+     std::lock_guard<std::mutex> guard(telemetry_mutex);
+     enabled = en;
+ }
+@@ -1507,10 +1519,16 @@
+ }
+ 
+ void flush() {
++#ifdef AURORA_CACTUS_DISABLE_TELEMETRY
++    return;
++#endif
+     TelemetryDispatcher::instance().flush();
+ }
+ 
+ void shutdown() {
++#ifdef AURORA_CACTUS_DISABLE_TELEMETRY
++    return;
++#endif
+     {
+         std::lock_guard<std::mutex> lifecycle_guard(telemetry_mutex);
+         if (shutdown_called) {

@@ -10,6 +10,7 @@ description = "Profile-scoped offline chat over Aurora's pinned llama.cpp runtim
 default = []
 native-llamacpp = []
 native-needle2 = ["native-llamacpp"]
+native-cactus = ["native-llamacpp", "dep:zip", "dep:flate2"]
 
 [dependencies]
 serde.workspace = true
@@ -17,6 +18,8 @@ serde_json.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
+zip = { version = "=4.6.1", default-features = false, features = ["deflate-flate2"], optional = true }
+flate2 = { version = "=1.1.9", default-features = false, features = ["rust_backend"], optional = true }
 
 [build-dependencies]
 cc = "1"

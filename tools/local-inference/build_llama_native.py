@@ -739,6 +739,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.android_api < 21:
             raise NativeBuildError("--android-api must be at least 21")
         output = stage_existing_build(args) if args.stage_only else build(args)
+        if args.target in ("ios-arm64", "ios-simulator-arm64"):
+            subprocess.run(
+                [
+                    sys.executable,
+                    str(REPO_ROOT / "tools/local-inference/build_cactus_native.py"),
+                    "--artifact-root",
+                    str(args.artifact_root.resolve() / "cactus" / "v1.14"),
+                    "--llama-runtime-root",
+                    str(output),
+                    "--jobs",
+                    str(args.jobs),
+                ],
+                cwd=REPO_ROOT,
+                check=True,
+            )
     except (NativeBuildError, OSError, subprocess.CalledProcessError, tarfile.TarError) as exc:
         print(f"Pinned llama.cpp build failed: {exc}", file=sys.stderr)
         return 1

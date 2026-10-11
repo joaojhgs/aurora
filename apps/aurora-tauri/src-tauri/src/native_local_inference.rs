@@ -13,7 +13,7 @@ use aurora_voice_native::{AssetIntegrity, DownloadPolicy, NativeDownloader};
 use serde::Serialize;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-#[cfg(target_os = "android")]
+#[cfg(any(target_os = "android", target_os = "ios"))]
 use std::sync::Arc;
 #[cfg(target_os = "android")]
 use tauri::Manager;
@@ -36,9 +36,15 @@ impl NativeLocalInferenceState {
         node_config: NativeNodeConfigRuntime,
         app: AppHandle<tauri::Wry>,
     ) -> Result<Self, LocalInferenceError> {
+        #[cfg(all(target_os = "ios", target_arch = "aarch64"))]
+        let private_root = config.app_private_root.clone();
         let engine = LocalInferenceState::new(config)?;
         #[cfg(target_os = "android")]
         engine.install_native_backend(Arc::new(AndroidNativeInferenceBackend::new(app)))?;
+        #[cfg(all(target_os = "ios", target_arch = "aarch64"))]
+        engine.install_native_backend(Arc::new(aurora_local_inference::CactusBackend::new(
+            private_root,
+        )))?;
         #[cfg(not(target_os = "android"))]
         let _ = app;
         Ok(Self {
@@ -158,7 +164,10 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
             #[cfg(all(target_arch = "aarch64", feature = "android-arm64-needle2"))]
             AndroidInferenceRoute::Needle2 => self.needle.load(model_id, model_path, cache_path)?,
         }
-        *self.active.lock().map_err(|_| LocalInferenceError::WorkerUnavailable)? = Some(route);
+        *self
+            .active
+            .lock()
+            .map_err(|_| LocalInferenceError::WorkerUnavailable)? = Some(route);
         Ok(())
     }
 
@@ -199,7 +208,10 @@ impl NativeInferenceBackend for AndroidNativeInferenceBackend {
             AndroidInferenceRoute::Needle2 => self.needle.destroy(),
         };
         if result.is_ok() {
-            *self.active.lock().map_err(|_| LocalInferenceError::WorkerUnavailable)? = None;
+            *self
+                .active
+                .lock()
+                .map_err(|_| LocalInferenceError::WorkerUnavailable)? = None;
         }
         result
     }
@@ -577,7 +589,14 @@ async fn verify_staged_file(
     file.read_exact(&mut magic)
         .await
         .map_err(|_| LocalInferenceError::ModelUnverified)?;
-    if !descriptor.file_name.ends_with(".litertlm") && &magic != b"GGUF" {
+    let valid_magic = if descriptor.model_id == "chat-qwen3-06b-cactus"
+        && descriptor.file_name == "qwen3-0.6b-int4.zip"
+    {
+        &magic == b"PK\x03\x04"
+    } else {
+        descriptor.file_name.ends_with(".litertlm") || &magic == b"GGUF"
+    };
+    if !valid_magic {
         return Err(LocalInferenceError::ModelUnverified);
     }
     Ok(())
