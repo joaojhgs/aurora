@@ -238,13 +238,57 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
     }
     configCommittedRevision = committed.revision
     mainOperation = 'verify_draft_after_config_change'
-    const observed = await waitFor(async () => await androidEvaluate(session.client, `(() => {
-      const state = window.__auroraPer278RemoteConsoleMain;
-      return Boolean(state?.statusChanged && state.workspace?.isConnected && state.prompt?.isConnected
-        && state.workspace === document.querySelector('[data-aurora-part="assistant-workspace"]')
-        && state.prompt === document.querySelector('#assistant-prompt')
-        && state.prompt.value === ${JSON.stringify(draft)});
-    })()`))
+    let observed
+    try {
+      observed = await waitFor(async () => await androidEvaluate(session.client, `(() => {
+        const state = window.__auroraPer278RemoteConsoleMain;
+        return Boolean(state?.statusChanged && state.workspace?.isConnected && state.prompt?.isConnected
+          && state.workspace === document.querySelector('[data-aurora-part="assistant-workspace"]')
+          && state.prompt === document.querySelector('#assistant-prompt')
+          && state.prompt.value === ${JSON.stringify(draft)});
+      })()`))
+    } catch (error) {
+      let failureSnapshot = {
+        snapshotAvailable: false,
+        statePresent: false,
+        statusChanged: false,
+        workspaceConnected: false,
+        promptConnected: false,
+        workspaceMatches: false,
+        promptMatches: false,
+        draftPreserved: false,
+      }
+      try {
+        const snapshotResponse = await session.client.send('Runtime.evaluate', {
+          expression: `(() => {
+          const state = window.__auroraPer278RemoteConsoleMain;
+          const workspace = document.querySelector('[data-aurora-part="assistant-workspace"]');
+          const prompt = document.querySelector('#assistant-prompt');
+          return {
+            snapshotAvailable: true,
+            statePresent: Boolean(state),
+            statusChanged: state?.statusChanged === true,
+            workspaceConnected: state?.workspace?.isConnected === true,
+            promptConnected: state?.prompt?.isConnected === true,
+            workspaceMatches: Boolean(state?.workspace && state.workspace === workspace),
+            promptMatches: Boolean(state?.prompt && state.prompt === prompt),
+            draftPreserved: Boolean(state?.prompt && state.prompt.value === ${JSON.stringify(draft)}),
+          };
+          })()`,
+          returnByValue: true,
+          awaitPromise: true,
+        }, 2_000)
+        const snapshot = snapshotResponse?.result?.result?.value
+        const booleanFields = Object.keys(failureSnapshot)
+        if (snapshot && booleanFields.every((field) => typeof snapshot[field] === 'boolean')) {
+          failureSnapshot = Object.fromEntries(booleanFields.map((field) => [field, snapshot[field]]))
+        }
+      } catch {
+        // Keep the original main failure if the one bounded redacted snapshot is unavailable.
+      }
+      console.log('AURORA_ANDROID_REMOTE_CONSOLE_CONFIG_UPDATE_FAILURE ' + JSON.stringify(failureSnapshot))
+      throw error
+    }
     if (observed !== true) throw new Error('The packaged Assistant shell did not retain its draft through the real config update.')
     mainOperation = 'verify_config_readback'
     const configReadback = await getConfig(pairing)
