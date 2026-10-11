@@ -456,12 +456,22 @@ describe('Tauri CI native evidence contract', () => {
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk"',
     )
     expect(androidWorkflow).toContain(
-      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 pnpm --filter @aurora/tauri-ui android:voice:live',
+      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 AURORA_ANDROID_MAIN_FLOW_ONLY=1 AURORA_THREE_NODE_BROKER_URL=ws://127.0.0.1:9001/mqtt node apps/aurora-tauri/scripts/run-android-native-turn-ui-acceptance.mjs',
     )
     expect(androidWorkflow).not.toContain(
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" \\\n',
     )
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:voice:live')
+    expect(androidWorkflow).not.toContain('pnpm --filter @aurora/tauri-ui android:voice:live')
+    const voiceLiveBuildStart = androidWorkflow.indexOf(
+      '      - name: Build Android local native voice x86_64 live APK',
+    )
+    const voiceLiveBuildEnd = androidWorkflow.indexOf('\n      - name:', voiceLiveBuildStart + 1)
+    expect(voiceLiveBuildStart).toBeGreaterThanOrEqual(0)
+    expect(voiceLiveBuildEnd).toBeGreaterThan(voiceLiveBuildStart)
+    const voiceLiveBuildStep = androidWorkflow.slice(voiceLiveBuildStart, voiceLiveBuildEnd)
+    const loopbackOptIn = 'VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "1"'
+    expect(voiceLiveBuildStep).toContain(loopbackOptIn)
+    expect(androidWorkflow.match(/VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK:/gu)).toHaveLength(1)
     expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(androidWorkflow).not.toContain('https://gateway.example.invalid')

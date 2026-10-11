@@ -675,19 +675,25 @@ describe('Android packaged voice live smoke harness', () => {
     })).rejects.toThrow(/dumpsys unavailable/u)
   })
 
-  it('does not create or reverse a network service for local native voice acceptance', () => {
+  it('keeps local voice smoke separate from the owned connected-main service and broker setup', () => {
     const source = readFileSync(scriptPath, 'utf8')
+    const connectedMainSource = readFileSync(
+      resolve(appRoot, 'scripts/run-android-native-turn-ui-acceptance.mjs'),
+      'utf8',
+    )
 
     for (const forbidden of [
       "from 'node:http'",
       'createGatewayFixture',
       'assistantGatewayRequestCount',
       "['reverse'",
-      'http-only',
       '/api/Orchestrator/ExternalUserInput',
     ]) {
       expect(source).not.toContain(forbidden)
     }
+    expect(connectedMainSource).toContain("spawn('uv', ['run', 'python', 'main.py']")
+    expect(connectedMainSource).toContain('reverseLoopbackBroker(environment, environment.AURORA_THREE_NODE_BROKER_URL)')
+    expect(connectedMainSource).toContain("'reverse', '--no-rebind'")
     expect(source).toContain("assistantRoute: successfulNativeTurnAcceptance ? background.acceptanceEvidence?.route ?? null : 'local-only'")
     expect(source).toContain("acceptanceMode: successfulNativeTurnAcceptance ? 'successful-authorized-remote' : 'failure-recovery-local'")
     expect(source).toContain('remoteAudioConsent: false')
