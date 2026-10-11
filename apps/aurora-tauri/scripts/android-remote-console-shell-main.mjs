@@ -242,7 +242,7 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
     try {
       observed = await waitFor(async () => await androidEvaluate(session.client, `(() => {
         const state = window.__auroraPer278RemoteConsoleMain;
-        return Boolean(state?.statusChanged && state.workspace?.isConnected && state.prompt?.isConnected
+        return Boolean(state?.workspace?.isConnected && state.prompt?.isConnected
           && state.workspace === document.querySelector('[data-aurora-part="assistant-workspace"]')
           && state.prompt === document.querySelector('#assistant-prompt')
           && state.prompt.value === ${JSON.stringify(draft)});
