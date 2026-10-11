@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs'
 import os from 'node:os'
@@ -180,6 +180,7 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
   profileId = 'aurora-waydroid-voice-live',
   wakePhrase = undefined,
   homeGatewayUrl = undefined,
+  meshMembership = undefined,
 } = {}) {
   for (const task of TASKS) {
     if (!packs?.[task]?.packId || !packs[task].engineRuntimeRevision) {
@@ -213,7 +214,7 @@ export function buildAndroidVoiceRuntimeProfile(packs, {
         nodeName: 'Android voice device',
         stablePeerId: profileId,
         enabledCapabilityPacks: [],
-        meshMembership: androidVoiceLiveTestMeshMembership(),
+        meshMembership: meshMembership ?? androidVoiceLiveTestMeshMembership(),
         localSpeechPackState: 'ready',
         localSpeechSelection: {
           stt: speechSelection(packs.stt),
@@ -265,6 +266,44 @@ function androidVoiceLiveTestMeshMembership() {
       room: 'family-room',
       roomSecretRef: 'ref:memory:family-room',
       signalingBrokers: ['wss://signal.example.test'],
+    },
+  }
+}
+
+export function androidVoiceMeshMembershipFromOwnedInvite(pairing) {
+  let invite
+  try { invite = JSON.parse(pairing?.inviteText) } catch {
+    throw new Error('The owned Android voice invite is invalid.')
+  }
+  const signaling = invite?.signaling
+  const broker = signaling?.mqtt_brokers?.[0]
+  if (!pairing?.pythonPeerId || invite?.node?.peer_id !== pairing.pythonPeerId
+    || typeof signaling?.app_id !== 'string' || !signaling.app_id.trim()
+    || typeof signaling?.room !== 'string' || !signaling.room.trim()
+    || typeof signaling?.room_password !== 'string' || !signaling.room_password
+    || typeof broker !== 'string') {
+    throw new Error('The owned Android voice invite does not provide a complete connection.')
+  }
+  let endpoint
+  try { endpoint = new URL(broker) } catch {
+    throw new Error('The owned Android voice broker is invalid.')
+  }
+  const loopbackBroker = endpoint.protocol === 'ws:'
+    && ['localhost', '127.0.0.1', '[::1]'].includes(endpoint.hostname.toLowerCase())
+  if (!['ws:', 'wss:'].includes(endpoint.protocol) || (endpoint.protocol === 'ws:' && !loopbackBroker)) {
+    throw new Error('The owned Android voice broker requires a secure connection or explicit loopback development.')
+  }
+  return {
+    signalingUrl: broker,
+    webrtcProfile: {
+      mode: 'webrtc-only',
+      appId: signaling.app_id,
+      room: signaling.room,
+      // Public Apply-invite saves the secret through the existing protected
+      // store. This temporary reference holds no secret before that action.
+      roomSecretRef: `aurora-android-voice-seed:${randomUUID()}`,
+      signalingBrokers: [broker],
+      ...(loopbackBroker ? { production: false, allowInsecureLoopbackSignaling: true } : {}),
     },
   }
 }
@@ -452,6 +491,7 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       language: process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en',
       wakePhrase: wakePhraseSelectionFromEnvironment(process.env.AURORA_ANDROID_VOICE_LANGUAGE ?? 'en'),
       ...(!existingActiveProfile && ownedGatewayUrl ? { homeGatewayUrl: ownedGatewayUrl } : {}),
+      ...(!existingActiveProfile && pairing ? { meshMembership: androidVoiceMeshMembershipFromOwnedInvite(pairing) } : {}),
     })
     let activeProfile = profile.profiles.find((candidate) => candidate.id === profile.activeProfileId)
     if (!hasAndroidVoiceHomeConnection(activeProfile)) {

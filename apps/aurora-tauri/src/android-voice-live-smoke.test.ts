@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
+import { sanitizeRuntimeProfileDocument } from '../../../packages/aurora-ui/src/runtime-profile'
+import { MqttWebSocketSignalingClient } from '../../../packages/aurora-sdk/src/webrtc/signaling-mqtt'
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const scriptPath = resolve(appRoot, 'scripts/android-voice-live-smoke.mjs')
@@ -17,8 +19,13 @@ async function liveSmokeModule() {
         language?: string
         wakePhrase?: { phraseId: string; phrase: string; language: string }
         homeGatewayUrl?: string
+        meshMembership?: Record<string, unknown>
       },
     ): RuntimeDocument
+    androidVoiceMeshMembershipFromOwnedInvite(pairing: {
+      pythonPeerId: string
+      inviteText: string
+    }): Record<string, unknown>
     mergeAndroidVoiceRuntimeProfile(
       existingDocument: RuntimeDocument | null,
       packs: Record<string, CatalogEntry>,
@@ -1879,6 +1886,47 @@ describe('Android packaged voice live smoke harness', () => {
       packId: packs.kws.packId,
       packRevision: packs.kws.engineRuntimeRevision,
     }))
+  })
+
+  it('keeps the owned invite broker through profile sanitization and signaling validation', async () => {
+    const module = await liveSmokeModule()
+    const broker = 'ws://127.0.0.1:18880/mqtt'
+    const password = 'owned-invite-test-secret'
+    const membership = module.androidVoiceMeshMembershipFromOwnedInvite({
+      pythonPeerId: 'owned-python-peer',
+      inviteText: JSON.stringify({
+        node: { peer_id: 'owned-python-peer' },
+        signaling: {
+          app_id: 'owned-voice-app', room: 'owned-voice-room',
+          room_password: password, mqtt_brokers: [broker],
+        },
+      }),
+    })
+    const document = module.buildAndroidVoiceRuntimeProfile({
+      stt: entry('stt', 'stt:whisper:tiny', 'multi', 116_204_861),
+      tts: entry('tts', 'standard:piper:en_gb-cori-medium-int8', 'en-gb', 20_768_736),
+      vad: entry('vad', 'vad:silero:current-int8', 'und', 212_860),
+      kws: entry('kws', 'kws:zipformer:gigaspeech', 'en', 17_626_723),
+    }, { homeGatewayUrl: 'http://127.0.0.1:18000', meshMembership: membership })
+    const sanitized = sanitizeRuntimeProfileDocument(
+      document as unknown as Parameters<typeof sanitizeRuntimeProfileDocument>[0],
+    )
+    const saved = sanitized.profiles[0].localNode.meshMembership!
+    expect(saved.signalingUrl).toBe(broker)
+    expect(JSON.stringify(sanitized)).not.toContain(password)
+    expect(JSON.stringify(sanitized)).not.toContain('signal.example.test')
+    const factory = vi.fn(async (_broker: string) => { throw new Error('Owned broker boundary reached') })
+    const client = new MqttWebSocketSignalingClient({
+      brokers: saved.webrtcProfile.signalingBrokers!,
+      production: saved.webrtcProfile.production,
+      allowInsecureLoopback: saved.webrtcProfile.allowInsecureLoopbackSignaling,
+      crypto: { seal: () => new Uint8Array(), open: () => ({ type: 'presence' }) },
+      mqttFactory: factory,
+    })
+    await expect(client.connect({ appId: 'owned-voice-app', room: 'owned-voice-room' }))
+      .rejects.toThrow('Owned broker boundary reached')
+    expect(factory).toHaveBeenCalledOnce()
+    expect(factory.mock.calls[0][0]).toBe(broker)
   })
 
   it('preserves provisioned identity, pairing, and mesh state while refreshing voice packs', async () => {
