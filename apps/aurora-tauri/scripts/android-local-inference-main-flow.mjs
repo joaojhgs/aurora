@@ -60,6 +60,13 @@ export async function runAndroidLocalInferenceMainFlow({
       && (!originalProfile || originalProfile.version !== 2 || originalProfile.profiles.length !== 0 || originalProfile.activeProfileId !== null)) {
       throw new Error('Refusing onboarding because the current Android profile is not canonical empty.')
     }
+    // The preceding connected/voice main restores this profile through native IPC.
+    // Recreate the app runtime so its onboarding route matches persisted state.
+    webview = await restartApp(context, webview)
+    const freshStored = await invokeTauri(webview.client, 'aurora_thin_profile_get')
+    if (freshStored?.value !== originalProfileValue) {
+      throw new Error('The canonical-empty profile changed while the Android app was restarting.')
+    }
     // Android persists this selection in the active runtime profile; it has no
     // separate secure-storage preference surface in the packaged capability set.
     const originalActiveProfile = originalProfile?.profiles?.find(
