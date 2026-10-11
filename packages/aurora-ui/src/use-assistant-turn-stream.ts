@@ -20,6 +20,7 @@ import {
 } from './assistant-session-persistence'
 import { selectAssistantStreamingText, useAssistantStreamStore } from './state/assistant-stream-store'
 import type { VoiceCaptureStatus } from './assistant-voice-model'
+import { isAuroraErrorCode } from './assistant-session-model'
 
 export interface AssistantTurnStreamController {
   readonly markAssistantTurnFailed: (pendingId: string, failureCopy: string) => void
@@ -173,7 +174,8 @@ function applyAssistantStreamUpdate(update: AssistantStreamUpdate, pendingId: st
                 ...effectiveMessage,
                 text: effectiveMessage.text.trim() ? effectiveMessage.text : failureCopy,
                 status: 'failed' as const,
-                error: failureCopy
+                error: failureCopy,
+                errorCode: isAuroraErrorCode(update.error?.code) ? update.error.code : undefined
               }
             })()
           : message
@@ -234,7 +236,8 @@ function applyAssistantStreamUpdate(update: AssistantStreamUpdate, pendingId: st
                 ...effectiveMessage,
                 text: effectiveMessage.text.trim() ? effectiveMessage.text : failureCopy,
                 status: 'failed' as const,
-                error: failureCopy
+                error: failureCopy,
+                errorCode: isAuroraErrorCode(update.error?.code) ? update.error.code : undefined
               }
             })()
           : message

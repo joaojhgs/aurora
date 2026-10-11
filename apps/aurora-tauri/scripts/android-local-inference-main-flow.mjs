@@ -342,6 +342,11 @@ async function emitOfflineAnswerWaitObservation(client, prompt) {
   const event = 'AURORA_ANDROID_LOCAL_INFERENCE_ANSWER_WAIT_OBSERVATION'
   try {
     const observation = await evaluate(client, `(() => {
+      const allowedAuroraErrorCodes = new Set([
+        'auth', 'permission', 'validation', 'timeout', 'unavailable_service',
+        'unsupported_feature', 'privacy_blocked', 'native_permission_missing',
+        'transport_loss', 'unknown',
+      ]);
       const items = [...document.querySelectorAll('[data-slot="message-scroller-item"]')];
       const entries = items.map((item) => {
         const status = [...item.querySelectorAll('span.sr-only')]
@@ -356,10 +361,14 @@ async function emitOfflineAnswerWaitObservation(client, prompt) {
       const assistantStatus = rawStatus === 'failed' ? 'error'
         : allowedStatuses.has(rawStatus) ? rawStatus : 'absent';
       const answerText = answerItem?.querySelector('p')?.textContent?.trim() ?? '';
+      const rawErrorCode = answerItem?.querySelector('[data-aurora-assistant-error-code]')
+        ?.getAttribute('data-aurora-assistant-error-code') ?? null;
+      const assistantErrorCode = allowedAuroraErrorCodes.has(rawErrorCode) ? rawErrorCode : null;
       const answerLength = Array.from(answerText).length;
       const allText = items.map((item) => item.innerText ?? '').join(' ');
       return {
         assistantStatus,
+        assistantErrorCode,
         promptHistoryPresent: allText.includes(${JSON.stringify(prompt)}),
         busy: Boolean(answerItem?.querySelector('[role="status"][aria-busy="true"]')),
         paragraphPresent: Boolean(answerItem?.querySelector('p')),

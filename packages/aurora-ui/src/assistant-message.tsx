@@ -8,7 +8,7 @@ import { Bubble, BubbleContent } from '#components/ui/bubble'
 import { Button } from '#components/ui/button'
 import { Message, MessageContent, MessageFooter, MessageHeader } from '#components/ui/message'
 import { Spinner } from '#components/ui/spinner'
-import { ASSISTANT_RESPONDING_TEXT, isAssistantPendingText, isAssistantPendingWork } from './assistant-session-model'
+import { ASSISTANT_RESPONDING_TEXT, isAssistantPendingText, isAssistantPendingWork, isAuroraErrorCode } from './assistant-session-model'
 import { cn } from '#lib/utils'
 import { selectAssistantStreamingText, useAssistantStreamStore } from './state/assistant-stream-store'
 import type { AssistantApprovalGrantScope, AssistantToolCallCard, AssistantUiMessage } from './assistant-view'
@@ -85,6 +85,9 @@ export const ChatBubble = memo(function ChatBubble({
     <Profiler id="assistant.message" onRender={assistantMessageProfilerOnRender}>
       <Message
         align={align}
+        data-aurora-assistant-error-code={assistant && renderedMessage.status === 'failed' && isAuroraErrorCode(renderedMessage.errorCode)
+          ? renderedMessage.errorCode
+          : undefined}
         className={cn(
           'w-full max-w-none bg-transparent',
           renderedMessage.role === 'user'

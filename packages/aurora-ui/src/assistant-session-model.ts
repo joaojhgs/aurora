@@ -1,4 +1,4 @@
-import type { AssistantStreamUpdate } from '@aurora/client'
+import type { AssistantStreamUpdate, AuroraErrorCode } from '@aurora/client'
 import type { LightweightConfirmationEvent } from '@aurora/client/lightweight-orchestrator'
 import { selectAssistantStreamingText, useAssistantStreamStore } from './state/assistant-stream-store'
 
@@ -10,6 +10,16 @@ export function isAssistantPendingText(value: string): boolean {
 }
 
 export type AssistantUiMessageStatus = 'sent' | 'sending' | 'streaming' | 'failed' | 'cancelled'
+
+const AURORA_ERROR_CODES: ReadonlySet<string> = new Set([
+  'auth', 'permission', 'validation', 'timeout', 'unavailable_service',
+  'unsupported_feature', 'privacy_blocked', 'native_permission_missing',
+  'transport_loss', 'unknown',
+])
+
+export function isAuroraErrorCode(value: unknown): value is AuroraErrorCode {
+  return typeof value === 'string' && AURORA_ERROR_CODES.has(value)
+}
 
 export interface AssistantToolCallCard {
   id: string
@@ -40,6 +50,7 @@ export interface AssistantUiMessage {
   createdAt: string
   status: AssistantUiMessageStatus
   error?: string | undefined
+  errorCode?: AuroraErrorCode | undefined
   toolCalls?: AssistantToolCallCard[] | undefined
   sources?: string[] | undefined
   modelLabel?: string | null | undefined
