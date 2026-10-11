@@ -1,6 +1,7 @@
 import {
   buildLocalDataExportV1,
   LocalDataError,
+  localDataIdSchema,
   parseConversationMessageRecord,
   parseConversationRecord,
   parseLightweightMemoryRecord,
@@ -8,6 +9,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSessionRecord,
+  parseTranscriptSegmentRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
   type DeleteConversationResult,
@@ -23,7 +26,21 @@ import {
   type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionListQuery,
+  type TranscriptSegmentListQuery,
+  type FinalizeTranscriptSessionInput,
+  type AppendTranscriptSegmentResult,
+  type RecoverTranscriptSessionsResult,
+  type DeleteTranscriptSessionResult,
+  type DeleteExpiredTranscriptSessionsResult,
+  LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT,
+  type ConversationListQuery,
+  type MessageListQuery
 } from '@aurora/client/local-data'
 
 import {
@@ -118,9 +135,11 @@ export class BrowserSqliteLocalDataBackend implements LocalDataBackend {
     try {
       const status = await client.open(profileId, localNodeId, probe.identity, browserSqliteMigrationSql, this.wasmAssetUrl)
       this.statusValue = status
+      const session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
+      await session.transcripts.recoverActiveSessions(Date.now())
       this.client = client
-      this.session = new BrowserSqliteLocalDataSession(profileId, localNodeId, status.schemaVersion ?? 0, client)
-      return this.session
+      this.session = session
+      return session
     } catch (error) {
       await client.close().catch(() => undefined)
       this.statusValue = {
@@ -164,6 +183,9 @@ export class BrowserSqliteWorkerClient {
   private readonly pending = new Map<string, PendingRequest>()
   private sequence = 0
   private closed = false
+  private closing = false
+  private activeTransactionId: string | null = null
+  private rootQueue: Promise<void> = Promise.resolve()
 
   constructor(worker: BrowserSqliteProtocolWorker, options: { timeoutMs: number; ownership: BrowserSqliteOwnership }) {
     this.worker = worker
@@ -188,27 +210,51 @@ export class BrowserSqliteWorkerClient {
   }
 
   async close(): Promise<void> {
-    if (this.closed) return
-    this.closed = true
-    await this.request<{ closed: true }>({ command: 'close' }).catch(() => undefined)
-    this.rejectAll(new LocalDataError('session_closed', 'Browser local data worker is closed'))
-    this.worker.terminate()
-    await this.ownership.release()
+    if (this.closed || this.closing) return
+    this.closing = true
+    await this.enqueue(async () => {
+      await this.requestDirect<{ closed: true }>({ command: 'close' }).catch(() => undefined)
+      this.closed = true
+      this.rejectAll(new LocalDataError('session_closed', 'Browser local data worker is closed'))
+      this.worker.terminate()
+      await this.ownership.release()
+    })
   }
 
   async beginTransaction(txId: string): Promise<void> {
-    await this.request({ command: 'beginTransaction', txId })
+    if (this.activeTransactionId !== null) throw transactionBoundaryError('nested_transaction')
+    await this.requestDirect({ command: 'beginTransaction', txId })
+    this.activeTransactionId = txId
   }
 
   async commitTransaction(txId: string): Promise<void> {
-    await this.request({ command: 'commitTransaction', txId })
+    this.assertActiveTransaction(txId)
+    await this.requestDirect({ command: 'commitTransaction', txId })
+    this.activeTransactionId = null
   }
 
   async rollbackTransaction(txId: string): Promise<void> {
-    await this.request({ command: 'rollbackTransaction', txId })
+    this.assertActiveTransaction(txId)
+    try { await this.requestDirect({ command: 'rollbackTransaction', txId }) } finally { this.activeTransactionId = null }
+  }
+
+  async runTransaction<T>(txId: string, work: () => Promise<T>): Promise<T> {
+    if (this.activeTransactionId !== null) throw transactionBoundaryError('nested_transaction')
+    return await this.enqueue(async () => {
+      await this.beginTransaction(txId)
+      try {
+        const result = await work()
+        await this.commitTransaction(txId)
+        return result
+      } catch (error) {
+        await this.rollbackTransaction(txId).catch(() => undefined)
+        throw error
+      }
+    })
   }
 
   async repositoryOperation<T>(operation: BrowserSqliteRepositoryOperation, txId?: string): Promise<T> {
+    validateRepositoryOperation(operation)
     return await this.request<T>(txId === undefined ? { command: 'repo', operation } : { command: 'repo', operation, txId })
   }
 
@@ -225,9 +271,17 @@ export class BrowserSqliteWorkerClient {
   }
 
   private async request<T>(message: BrowserSqliteWorkerRequestWithoutId): Promise<T> {
-    if (this.closed && message.command !== 'close') {
+    if ((this.closed || this.closing) && message.command !== 'close' && !('txId' in message && message.txId === this.activeTransactionId)) {
       throw new LocalDataError('session_closed', 'Browser local data worker is closed')
     }
+    if ('txId' in message && message.txId !== undefined) {
+      this.assertActiveTransaction(message.txId)
+      return await this.requestDirect<T>(message)
+    }
+    return await this.enqueue(() => this.requestDirect<T>(message))
+  }
+
+  private async requestDirect<T>(message: BrowserSqliteWorkerRequestWithoutId): Promise<T> {
     const id = `browser-sqlite-${++this.sequence}`
     const request = { ...message, id } as BrowserSqliteWorkerRequest
     const bytes = new TextEncoder().encode(JSON.stringify(request)).byteLength
@@ -249,6 +303,18 @@ export class BrowserSqliteWorkerClient {
         reject(error)
       }
     })
+  }
+
+  private async enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const previous = this.rootQueue
+    let release!: () => void
+    this.rootQueue = new Promise<void>((resolve) => { release = resolve })
+    await previous
+    try { return await operation() } finally { release() }
+  }
+
+  private assertActiveTransaction(txId: string): void {
+    if (this.activeTransactionId !== txId) throw transactionBoundaryError('expired_transaction_repository')
   }
 
   private handleMessage(response: BrowserSqliteWorkerResponse): void {
@@ -288,6 +354,7 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
   readonly localTools: BrowserSqliteLocalToolStateRepository
   readonly peerGrants: BrowserSqlitePeerGrantRepository
   readonly localAudit: BrowserSqliteLocalAuditRepository
+  readonly transcripts: BrowserSqliteTranscriptArchiveRepository
   private closed = false
 
   constructor(
@@ -302,20 +369,15 @@ class BrowserSqliteLocalDataSession implements LocalDataSession {
     this.localTools = new BrowserSqliteLocalToolStateRepository(client, txId)
     this.peerGrants = new BrowserSqlitePeerGrantRepository(client, txId)
     this.localAudit = new BrowserSqliteLocalAuditRepository(client, txId)
+    this.transcripts = new BrowserSqliteTranscriptArchiveRepository(client, txId)
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
     this.assertOpen()
     const txId = crypto.randomUUID()
-    await this.client.beginTransaction(txId)
     const txSession = new BrowserSqliteLocalDataSession(this.profileId, this.localNodeId, this.schemaVersion, this.client, txId)
     try {
-      const result = await work(txSession)
-      await this.client.commitTransaction(txId)
-      return result
-    } catch (error) {
-      await this.client.rollbackTransaction(txId).catch(() => undefined)
-      throw error
+      return await this.client.runTransaction(txId, async () => await work(txSession))
     } finally {
       await txSession.markClosed()
     }
@@ -360,21 +422,36 @@ class BrowserSqliteConversationRepository {
     return await this.client.repositoryOperation<DeleteConversationResult>({ kind: 'conversations.deleteConversation', conversationId }, this.txId)
   }
 
-  async listConversations(): Promise<ConversationRecord[]> {
-    return (await this.client.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations' }, this.txId)).map(parseConversationRecord)
+  async getConversation(conversationId: string): Promise<ConversationRecord | null> {
+    const record = await this.client.repositoryOperation<ConversationRecord | null>({ kind: 'conversations.getConversation', conversationId }, this.txId)
+    return record === null ? null : parseConversationRecord(record)
+  }
+  async getMessage(conversationId: string, messageId: string): Promise<ConversationMessageRecord | null> {
+    const record = await this.client.repositoryOperation<ConversationMessageRecord | null>({ kind: 'conversations.getMessage', conversationId, messageId }, this.txId)
+    return record === null ? null : parseConversationMessageRecord(record)
+  }
+  async getLatestMessageSequence(conversationId: string): Promise<number | null> {
+    return await this.client.repositoryOperation<number | null>({ kind: 'conversations.getLatestMessageSequence', conversationId }, this.txId)
+  }
+  async listConversations(options?: ConversationListQuery): Promise<ConversationRecord[]> {
+    if (options !== undefined) validateConversationQuery(options)
+    return (await this.client.repositoryOperation<ConversationRecord[]>({ kind: 'conversations.listConversations', ...(options === undefined ? {} : { options }) }, this.txId)).map(parseConversationRecord)
   }
 
-  async listMessageCounts(): Promise<Record<string, number>> {
-    return await this.client.repositoryOperation<Record<string, number>>({ kind: 'conversations.listMessageCounts' }, this.txId)
+  async listMessageCounts(conversationIds?: readonly string[]): Promise<Record<string, number>> {
+    validateConversationIds(conversationIds)
+    return await this.client.repositoryOperation<Record<string, number>>({ kind: 'conversations.listMessageCounts', ...(conversationIds === undefined ? {} : { conversationIds }) }, this.txId)
   }
 
-  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
-    const messages = await this.client.repositoryOperation<Record<string, ConversationMessageRecord>>({ kind: 'conversations.listFirstUserMessages' }, this.txId)
+  async listFirstUserMessages(conversationIds?: readonly string[]): Promise<Record<string, ConversationMessageRecord>> {
+    validateConversationIds(conversationIds)
+    const messages = await this.client.repositoryOperation<Record<string, ConversationMessageRecord>>({ kind: 'conversations.listFirstUserMessages', ...(conversationIds === undefined ? {} : { conversationIds }) }, this.txId)
     return Object.fromEntries(Object.entries(messages).map(([conversationId, message]) => [conversationId, parseConversationMessageRecord(message)]))
   }
 
-  async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
-    return (await this.client.repositoryOperation<ConversationMessageRecord[]>({ kind: 'conversations.listMessages', conversationId }, this.txId)).map(parseConversationMessageRecord)
+  async listMessages(conversationId: string, options?: MessageListQuery): Promise<ConversationMessageRecord[]> {
+    if (options !== undefined) validateMessageQuery(options)
+    return (await this.client.repositoryOperation<ConversationMessageRecord[]>({ kind: 'conversations.listMessages', conversationId, ...(options === undefined ? {} : { options }) }, this.txId)).map(parseConversationMessageRecord)
   }
 }
 
@@ -434,6 +511,54 @@ class BrowserSqliteLocalAuditRepository {
 
   async listAudit(): Promise<LocalAuditRecord[]> {
     return (await this.client.repositoryOperation<LocalAuditRecord[]>({ kind: 'localAudit.listAudit' }, this.txId)).map(parseLocalAuditRecord)
+  }
+}
+
+class BrowserSqliteTranscriptArchiveRepository {
+  constructor(private readonly client: BrowserSqliteWorkerClient, private readonly txId?: string) {}
+
+  async createSession(record: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord>({ kind: 'transcripts.createSession', record: parseTranscriptSessionRecord(record) }, this.txId)
+    return parseTranscriptSessionRecord(result)
+  }
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord>({ kind: 'transcripts.startSession', sessionId, startedAtMs }, this.txId)
+    return parseTranscriptSessionRecord(result)
+  }
+  async appendSegment(record: TranscriptSegmentRecord): Promise<AppendTranscriptSegmentResult> {
+    const result = await this.client.repositoryOperation<AppendTranscriptSegmentResult>({ kind: 'transcripts.appendSegment', record: parseTranscriptSegmentRecord(record) }, this.txId)
+    return { appended: result.appended, record: parseTranscriptSegmentRecord(result.record) }
+  }
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord | null>({ kind: 'transcripts.getSession', sessionId }, this.txId)
+    return result === null ? null : parseTranscriptSessionRecord(result)
+  }
+  async listSessions(options?: TranscriptSessionListQuery): Promise<TranscriptSessionRecord[]> {
+    validateTranscriptSessionQuery(options)
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord[]>({ kind: 'transcripts.listSessions', ...(options === undefined ? {} : { options }) }, this.txId)
+    return result.map(parseTranscriptSessionRecord)
+  }
+  async listSegments(sessionId: string, options?: TranscriptSegmentListQuery): Promise<TranscriptSegmentRecord[]> {
+    validateLocalQueryId(sessionId, 'transcript.session_id')
+    validateTranscriptSegmentQuery(options)
+    const result = await this.client.repositoryOperation<TranscriptSegmentRecord[]>({ kind: 'transcripts.listSegments', sessionId, ...(options === undefined ? {} : { options }) }, this.txId)
+    return result.map(parseTranscriptSegmentRecord)
+  }
+  async finalizeSession(input: FinalizeTranscriptSessionInput): Promise<TranscriptSessionRecord> {
+    const result = await this.client.repositoryOperation<TranscriptSessionRecord>({ kind: 'transcripts.finalizeSession', input }, this.txId)
+    return parseTranscriptSessionRecord(result)
+  }
+  async recoverActiveSessions(nowMs: number, terminalReason?: string): Promise<RecoverTranscriptSessionsResult> {
+    return await this.client.repositoryOperation<RecoverTranscriptSessionsResult>({ kind: 'transcripts.recoverActiveSessions', nowMs, ...(terminalReason === undefined ? {} : { terminalReason }) }, this.txId)
+  }
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    validateLocalQueryId(sessionId, 'transcript.session_id')
+    return await this.client.repositoryOperation<DeleteTranscriptSessionResult>({ kind: 'transcripts.deleteSession', sessionId }, this.txId)
+  }
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<DeleteExpiredTranscriptSessionsResult> {
+    if (!Number.isSafeInteger(nowMs) || nowMs < 0 || Object.is(nowMs, -0)) throw transcriptError('transcript_delete_now')
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT) throw transcriptError('transcript_delete_limit')
+    return await this.client.repositoryOperation<DeleteExpiredTranscriptSessionsResult>({ kind: 'transcripts.deleteExpiredSessions', nowMs, limit }, this.txId)
   }
 }
 
@@ -566,6 +691,55 @@ CREATE INDEX idx_aurora_grants_profile_node_claimant_active
 CREATE INDEX idx_aurora_audit_profile_node_created
   ON aurora_local_audit (profile_id, local_node_id, created_at_ms DESC);
 `
+  },
+  {
+    version: 4,
+    sql: `PRAGMA foreign_keys = ON;
+
+CREATE TABLE aurora_transcript_sessions (
+  id TEXT PRIMARY KEY,
+  profile_id TEXT NOT NULL,
+  local_node_id TEXT NOT NULL,
+  capture_mode TEXT NOT NULL CHECK (capture_mode IN ('ambient', 'notification')),
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  started_at_ms INTEGER NOT NULL CHECK (started_at_ms >= created_at_ms),
+  ended_at_ms INTEGER CHECK (ended_at_ms >= started_at_ms),
+  lifecycle TEXT NOT NULL CHECK (lifecycle IN ('active', 'completed', 'interrupted', 'failed')),
+  terminal_reason TEXT,
+  expires_at_ms INTEGER CHECK (expires_at_ms >= created_at_ms),
+  language TEXT,
+  model_provenance_json TEXT NOT NULL,
+  diarization_state TEXT NOT NULL CHECK (diarization_state IN ('not_requested', 'pending', 'partial', 'available', 'unavailable')),
+  CHECK ((lifecycle = 'active' AND ended_at_ms IS NULL AND terminal_reason IS NULL)
+    OR (lifecycle <> 'active' AND ended_at_ms IS NOT NULL AND terminal_reason IS NOT NULL AND length(trim(terminal_reason)) > 0))
+);
+
+CREATE TABLE aurora_transcript_segments (
+  id TEXT PRIMARY KEY,
+  session_id TEXT NOT NULL REFERENCES aurora_transcript_sessions(id) ON DELETE CASCADE,
+  sequence INTEGER NOT NULL CHECK (sequence >= 0),
+  start_at_ms INTEGER NOT NULL CHECK (start_at_ms >= 0),
+  end_at_ms INTEGER NOT NULL CHECK (end_at_ms >= start_at_ms),
+  text_envelope_json TEXT NOT NULL,
+  confidence REAL CHECK (confidence >= 0 AND confidence <= 1),
+  speaker_id TEXT,
+  speaker_label TEXT,
+  created_at_ms INTEGER NOT NULL CHECK (created_at_ms >= 0),
+  UNIQUE (session_id, sequence)
+);
+
+CREATE INDEX idx_aurora_transcripts_profile_node_created
+  ON aurora_transcript_sessions (profile_id, local_node_id, created_at_ms DESC, id DESC);
+
+CREATE INDEX idx_aurora_transcripts_profile_node_expiry
+  ON aurora_transcript_sessions (profile_id, local_node_id, expires_at_ms, id);
+
+CREATE INDEX idx_aurora_transcripts_profile_node_lifecycle
+  ON aurora_transcript_sessions (profile_id, local_node_id, lifecycle);
+
+CREATE INDEX idx_aurora_transcript_segments_session_sequence
+  ON aurora_transcript_segments (session_id, sequence, id);
+`
   }
 ])
 
@@ -639,3 +813,51 @@ type BrowserSqliteWorkerRequestWithoutId =
   | Omit<Extract<BrowserSqliteWorkerRequest, { command: 'repo' }>, 'id'>
   | Omit<Extract<BrowserSqliteWorkerRequest, { command: 'exportV1' }>, 'id'>
   | Omit<Extract<BrowserSqliteWorkerRequest, { command: 'importV1' }>, 'id'>
+
+function transactionBoundaryError(reason: 'nested_transaction' | 'expired_transaction_repository'): LocalDataError {
+  return new LocalDataError('invalid_record', 'Invalid local data boundary: transaction.scope', {
+    boundaryId: 'transaction.scope', validation: 'redacted', issues: [{ code: reason, path: '' }]
+  })
+}
+
+function validateConversationQuery(query: ConversationListQuery): void {
+  if (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 501)) throw new LocalDataError('invalid_record', 'Invalid conversation query', { reason: 'conversation_limit' })
+  if (query.includeArchived !== undefined && typeof query.includeArchived !== 'boolean') throw new LocalDataError('invalid_record', 'Invalid archive filter', { reason: 'include_archived' })
+  if (query.cursor && (!Number.isSafeInteger(query.cursor.updatedAtMs) || query.cursor.updatedAtMs < 0 || Object.is(query.cursor.updatedAtMs, -0))) throw new LocalDataError('invalid_record', 'Invalid conversation cursor timestamp', { reason: 'conversation_cursor_updated_at' })
+  if (query.cursor) validateLocalQueryId(query.cursor.id, 'conversation_cursor_id')
+}
+function validateMessageQuery(query: MessageListQuery): void {
+  if (query.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > 2001)) throw new LocalDataError('invalid_record', 'Invalid message query', { reason: 'message_limit' })
+  if (query.beforeSequence !== undefined && query.afterSequence !== undefined) throw new LocalDataError('invalid_record', 'Ambiguous message bounds', { reason: 'ambiguous_message_cursor' })
+  if (query.direction !== undefined && query.direction !== 'asc' && query.direction !== 'desc') throw new LocalDataError('invalid_record', 'Invalid message direction', { reason: 'message_direction' })
+  if (query.beforeSequence !== undefined && (!Number.isSafeInteger(query.beforeSequence) || query.beforeSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_before_sequence' })
+  if (query.afterSequence !== undefined && (!Number.isSafeInteger(query.afterSequence) || query.afterSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_after_sequence' })
+}
+
+function validateTranscriptSessionQuery(query?: TranscriptSessionListQuery): void {
+  if (query?.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX)) throw transcriptError('transcript_session_limit')
+  if (query?.cursor !== undefined) {
+    if (!Number.isSafeInteger(query.cursor.createdAtMs) || query.cursor.createdAtMs < 0 || Object.is(query.cursor.createdAtMs, -0)) throw transcriptError('transcript_session_cursor_created_at')
+    validateLocalQueryId(query.cursor.id, 'transcript_session_cursor_id')
+  }
+}
+function validateTranscriptSegmentQuery(query?: TranscriptSegmentListQuery): void {
+  if (query?.limit !== undefined && (!Number.isSafeInteger(query.limit) || query.limit < 1 || query.limit > LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX)) throw transcriptError('transcript_segment_limit')
+  if (query?.afterSequence !== undefined && (!Number.isSafeInteger(query.afterSequence) || query.afterSequence < 0 || Object.is(query.afterSequence, -0))) throw transcriptError('transcript_segment_after_sequence')
+}
+function transcriptError(reason: string): LocalDataError { return new LocalDataError('invalid_record', 'Invalid transcript archive operation', { reason }) }
+function validateConversationIds(ids: readonly string[] | undefined): void {
+  if (ids !== undefined && ids.length > 500) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set_limit' })
+  if (ids !== undefined) ids.forEach((id) => validateLocalQueryId(id, 'conversation.id'))
+}
+function validateRepositoryOperation(operation: BrowserSqliteRepositoryOperation): void {
+  if (operation.kind === 'conversations.listConversations' && operation.options !== undefined) validateConversationQuery(operation.options)
+  if (operation.kind === 'conversations.listMessages') { validateLocalQueryId(operation.conversationId); if (operation.options !== undefined) validateMessageQuery(operation.options) }
+  if (operation.kind === 'conversations.getConversation' || operation.kind === 'conversations.getLatestMessageSequence') validateLocalQueryId(operation.conversationId)
+  if (operation.kind === 'conversations.getMessage') { validateLocalQueryId(operation.conversationId, 'conversation.id'); validateLocalQueryId(operation.messageId, 'message.id') }
+  if (operation.kind === 'conversations.listMessageCounts' || operation.kind === 'conversations.listFirstUserMessages') validateConversationIds(operation.conversationIds)
+}
+function validateLocalQueryId(value: string, boundaryId = 'conversation.id'): void {
+  const parsed = localDataIdSchema.safeParse(value)
+  if (!parsed.success) throw new LocalDataError('invalid_record', `Invalid local data boundary: ${boundaryId}`, { boundaryId, validation: 'redacted', issues: parsed.error.issues.map((issue) => ({ code: issue.code, path: issue.path.map((item) => String(item)).join('.') })) })
+}

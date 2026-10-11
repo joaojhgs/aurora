@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { CONFIG_METHODS, TOOLING_METHODS } from '../src/descriptors.js'
 
 import {
@@ -432,6 +432,31 @@ describe('AuroraClient', () => {
       [ORCHESTRATOR_MODEL_METHODS.downloadModel, '/api/Orchestrator/DownloadModel'],
       [ORCHESTRATOR_MODEL_METHODS.benchmarkModel, '/api/Orchestrator/BenchmarkModel']
     ])
+  })
+
+  it('forwards model catalog abort signals through the Aurora request boundary', async () => {
+    const controller = new AbortController()
+    const seenSignals: Array<AbortSignal | undefined> = []
+    const transport = MockAuroraTransport.empty().register(ORCHESTRATOR_MODEL_METHODS.getCatalog, (request) => {
+      seenSignals.push(request.signal)
+      return cloneFixture(modelRuntimeCatalogFixture)
+    })
+    const client = new AuroraClient({ transport })
+
+    await client.models.listCatalog({}, { signal: controller.signal })
+
+    expect(seenSignals).toEqual([controller.signal])
+  })
+
+  it('does not issue model catalog transport requests for already aborted callers', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const handler = vi.fn(() => cloneFixture(modelRuntimeCatalogFixture))
+    const transport = MockAuroraTransport.empty().register(ORCHESTRATOR_MODEL_METHODS.getCatalog, handler)
+    const client = new AuroraClient({ transport })
+
+    await expect(client.models.listCatalog({}, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' })
+    expect(handler).not.toHaveBeenCalled()
   })
 
   it('serializes remote model catalog selectors and exposes provider model metadata to typed callers', async () => {
@@ -3790,17 +3815,15 @@ describe('AuroraClient', () => {
 
     expect(registry.digest).toBe('fixture')
     expect(calls[0]).toEqual({ command: 'aurora_sidecar_session', args: undefined })
-    expect(calls[1]).toEqual({
-      command: 'aurora_command',
-      args: {
-        request: expect.objectContaining({
-          method: 'Gateway.GetRegistry',
-          busTopic: 'Gateway.GetRegistry',
-          path: '/api/registry',
-          httpMethod: 'GET',
-          headers: { 'x-aurora-sidecar-token': 'session-token' }
-        })
-      }
+    expect(calls[1]?.command).toBe('aurora_command')
+    expect(Object.keys(calls[1]?.args ?? {})).toEqual(['requestJson'])
+    const encodedRequest = calls[1]?.args?.requestJson
+    expect(typeof encodedRequest).toBe('string')
+    expect(JSON.parse(encodedRequest as string)).toEqual({
+      method: 'Gateway.GetRegistry',
+      path: '/api/registry',
+      httpMethod: 'GET',
+      headers: { 'x-aurora-sidecar-token': 'session-token' }
     })
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -3812,6 +3835,202 @@ describe('AuroraClient', () => {
           transport: 'tauri-local'
         })
       )
+    }
+  })
+
+  it('projects generic Tauri requests to JSON text while preserving opaque payload shapes and local audit state', async () => {
+    const markerPayload = {
+      nested: {
+        number: { '$serde_json::private::Number': '7' },
+        raw: { '$serde_json::private::RawValue': '{"answer":42}' },
+        items: ['ordinary', 3, { '$serde_json::private::RawValue': 'not-json' }],
+        escaped: JSON.parse(
+          '{"number":{"$serde_json\\u003a\\u003aprivate\\u003a\\u003aNumber":"8"},' +
+          '"raw":{"$serde_json\\u003a\\u003aprivate\\u003a\\u003aRawValue":"not-json"}}'
+        )
+      }
+    }
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        return {
+          data: { accepted: true },
+          status: 202,
+          audit: { correlationId: 'corr-text-request' }
+        }
+      }
+    })
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const result = await client.requestResult('Gateway.GetRegistry', markerPayload, {
+      path: '/api/registry',
+      httpMethod: 'POST',
+      busTopic: 'Gateway.CustomTopic',
+      headers: { 'x-client': 'webview' },
+      timeoutMs: 12_000,
+      signal: controller.signal
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.audit).toEqual(expect.objectContaining({
+        correlationId: 'corr-text-request',
+        method: 'Gateway.GetRegistry',
+        busTopic: 'Gateway.CustomTopic',
+        transport: 'tauri-local'
+      }))
+    }
+    expect(calls.map((call) => call.command)).toEqual(['aurora_sidecar_session', 'aurora_command'])
+    expect(Object.keys(calls[1]?.args ?? {})).toEqual(['requestJson'])
+    const encoded = calls[1]?.args?.requestJson
+    expect(typeof encoded).toBe('string')
+    const parsed: unknown = JSON.parse(encoded as string)
+    expect(parsed).toEqual({
+      method: 'Gateway.GetRegistry',
+      path: '/api/registry',
+      httpMethod: 'POST',
+      payload: markerPayload,
+      headers: {
+        'x-client': 'webview',
+        'x-aurora-sidecar-token': 'session-token'
+      }
+    })
+    expect(JSON.stringify(parsed)).not.toContain('Gateway.CustomTopic')
+    expect(JSON.stringify(parsed)).not.toContain('timeoutMs')
+    expect(JSON.stringify(parsed)).not.toContain('signal')
+  })
+
+  it('keeps request text naming separate from event object argument naming and forwards the request alias', async () => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      commands: { request: 'aurora_request' },
+      requestJsonArgName: 'wireBody',
+      requestArgName: 'eventRequest',
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        if (command === 'aurora_subscribe') return []
+        return { data: { ok: true }, status: 200 }
+      }
+    })
+
+    await transport.request({
+      method: 'TTS.Synthesize',
+      busTopic: 'TTS.Synthesize',
+      path: '/api/tts/synthesize',
+      httpMethod: 'POST',
+      payload: ['text', 4, { '$serde_json::private::Number': '1' }],
+      headers: { 'x-client': 'integration' },
+      timeoutMs: 4_000,
+      audit: { correlationId: 'local-only' }
+    })
+    await transport.subscribe({ stream: 'health', topics: ['Gateway.StatusChanged'], kinds: ['service.announced'] })
+
+    expect(calls.map((call) => call.command)).toEqual([
+      'aurora_sidecar_session',
+      'aurora_request',
+      'aurora_subscribe'
+    ])
+    expect(Object.keys(calls[1]?.args ?? {})).toEqual(['wireBody'])
+    expect(JSON.parse(calls[1]?.args?.wireBody as string)).toEqual({
+      method: 'TTS.Synthesize',
+      path: '/api/tts/synthesize',
+      httpMethod: 'POST',
+      payload: ['text', 4, { '$serde_json::private::Number': '1' }],
+      headers: {
+        'x-client': 'integration',
+        'x-aurora-sidecar-token': 'session-token'
+      }
+    })
+    expect(calls[2]?.args).toEqual({
+      eventRequest: expect.objectContaining({
+        stream: 'health',
+        topics: ['Gateway.StatusChanged'],
+        kinds: ['service.announced'],
+        headers: { 'x-aurora-sidecar-token': 'session-token' }
+      })
+    })
+  })
+
+  it.each([
+    ['string', 'plain text'],
+    ['number', 17],
+    ['boolean', false],
+    ['array', [null, 'value', 2]]
+  ] as const)('preserves a non-null JSON %s payload through the Tauri request text', async (_label, payload) => {
+    const calls: Array<{ command: string; args: Record<string, unknown> | undefined }> = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command, args) => {
+        calls.push({ command, args })
+        if (command === 'aurora_sidecar_session') return null
+        return { data: null, status: 200 }
+      }
+    })
+    const result = await new AuroraClient({ transport }).requestResult('Gateway.GetRegistry', payload)
+
+    expect(result.ok).toBe(true)
+    expect(calls).toHaveLength(2)
+    expect(JSON.parse(calls[1]?.args?.requestJson as string)).toEqual({
+      method: 'Gateway.GetRegistry',
+      payload
+    })
+  })
+
+  const serializationFailureCases: Array<[string, () => unknown]> = [
+    ['circular payload', () => {
+      const payload: { self?: unknown } = {}
+      payload.self = payload
+      return payload
+    }],
+    ['BigInt payload', () => ({ value: BigInt(1) })],
+    ['throwing toJSON', () => ({ toJSON() { throw new Error('private serialization detail') } })]
+  ]
+
+  it.each(serializationFailureCases)('rejects %s with a fixed error before invoking the generic command', async (_label, makePayload) => {
+    const calls: string[] = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command) => {
+        calls.push(command)
+        if (command === 'aurora_sidecar_session') return { token: 'session-token' }
+        return { data: {} }
+      }
+    })
+    const result = await new AuroraClient({ transport }).requestResult('Gateway.GetRegistry', makePayload())
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toMatchObject({ code: 'validation', message: 'Invalid request' })
+      expect(result.error.cause).toBeUndefined()
+      expect(result.error.detail).toBeUndefined()
+      expect(result.error.message).not.toContain('private serialization detail')
+    }
+    expect(calls).toContain('aurora_sidecar_session')
+    expect(calls).not.toContain('aurora_command')
+  })
+
+  it('rejects a non-string JSON encoder result without invoking the generic command', async () => {
+    const stringify = vi.spyOn(JSON, 'stringify').mockReturnValueOnce(undefined as never)
+    const calls: string[] = []
+    const transport = new TauriLocalTransport({
+      invoke: async (command) => {
+        calls.push(command)
+        if (command === 'aurora_sidecar_session') return null
+        return { data: {} }
+      }
+    })
+
+    try {
+      const result = await new AuroraClient({ transport }).requestResult('Gateway.GetRegistry', { safe: true })
+      expect(result.ok).toBe(false)
+      if (!result.ok) {
+        expect(result.error).toMatchObject({ code: 'validation', message: 'Invalid request' })
+        expect(result.error.cause).toBeUndefined()
+      }
+      expect(calls).not.toContain('aurora_command')
+    } finally {
+      stringify.mockRestore()
     }
   })
 
@@ -4121,7 +4340,7 @@ describe('AuroraClient', () => {
             }
           case 'voiceForegroundServiceStatus':
             return androidNativeCapabilityManifestFixture.voiceForegroundService
-          case 'startVoiceForegroundService':
+          case 'aurora_android_voice_foreground_service_start':
             return {
               started: false,
               reason: 'microphone_permission_missing',
@@ -4307,11 +4526,12 @@ describe('AuroraClient', () => {
       'localLightInferenceStatus',
       'requestAndroidPermission',
       'voiceForegroundServiceStatus',
-      'startVoiceForegroundService',
+      'aurora_android_voice_foreground_service_start',
       'stopVoiceForegroundService',
       'entrypointPayload'
     ])
     expect(calls[5]?.args).toEqual({ permission: 'aurora.android.microphone' })
+    expect(calls[7]?.args).toEqual({ request: { remoteAudioConsent: false, backgroundSession: false } })
   })
 
   it('exposes iOS Swift native plugin manifest, status, and action invocation through the Tauri transport', async () => {
@@ -4970,6 +5190,8 @@ describe('AuroraClient', () => {
     const result = await client.assistant.synthesizeReadAloud({
       text: 'hello from Aurora',
       voice: 'default',
+      model_id: 'piper:model-a:sha256:1234',
+      language: 'en',
       speed: 1.1
     })
 
@@ -4986,6 +5208,8 @@ describe('AuroraClient', () => {
     expect(capturedPayload).toEqual({
       text: 'hello from Aurora',
       voice: 'default',
+      model_id: 'piper:model-a:sha256:1234',
+      language: 'en',
       speed: 1.1,
       format: 'wav',
     })
@@ -5333,6 +5557,16 @@ describe('AuroraClient', () => {
     expect(events.every((event) => event.audit.redaction.secretsRedacted)).toBe(true)
   })
 
+  it('subscribes to stale service notifications alongside service announcements', async () => {
+    const transport = new MockAuroraTransport().stream('health', async function* (request) {
+      expect(request.kinds).toContain('service.stale')
+      yield { id: 'service-stale-1', kind: 'service.stale', payload: { status: 'disconnected', freshness: 'stale' } }
+    })
+    const client = new AuroraClient({ transport })
+    const events = await collectEvents(client.events.watchHealth(), 1)
+    expect(events[0]).toMatchObject({ kind: 'service.stale', payload: { status: 'disconnected', freshness: 'stale' } })
+  })
+
   it('reconnects streams with last event backfill hints after transport loss', async () => {
     let attempts = 0
     const seenLastEventIds: Array<string | null | undefined> = []
@@ -5340,10 +5574,10 @@ describe('AuroraClient', () => {
       attempts += 1
       seenLastEventIds.push(request.lastEventId)
       if (attempts === 1) {
-        yield { id: '1', kind: 'health.updated', payload: { status: 'starting' } }
+        yield { id: '1', kind: 'service.announced', payload: { status: 'connected', freshness: 'current' } }
         throw new TypeError('mock stream dropped')
       }
-      yield { id: '2', kind: 'health.updated', payload: { status: 'healthy' } }
+      yield { id: '2', kind: 'service.announced', payload: { status: 'connected', freshness: 'current' } }
     })
     const client = new AuroraClient({ transport })
 
@@ -5517,8 +5751,7 @@ describe('AuroraClient', () => {
     })
     const sseClient = new AuroraClient({ transport: sseTransport })
     const sseEvents = collectEvents(sseClient.events.watchHealth(), 1)
-    await Promise.resolve()
-    expect(sse).not.toBeNull()
+    await vi.waitFor(() => expect(sse).not.toBeNull())
     const currentSse = sse!
     currentSse.onmessage?.(
       new MessageEvent('message', {
@@ -5552,9 +5785,10 @@ describe('AuroraClient', () => {
     })
     const wsClient = new AuroraClient({ transport: wsTransport })
     const wsEvents = collectEvents(wsClient.events.streamAssistant({ prompt: 'hello' }, { protocol: 'websocket' }), 1)
-    await Promise.resolve()
-    expect(JSON.parse(sent ?? '{}')).toEqual(expect.objectContaining({ stream: 'assistant' }))
-    expect(socket).not.toBeNull()
+    await vi.waitFor(() => {
+      expect(JSON.parse(sent ?? '{}')).toEqual(expect.objectContaining({ stream: 'assistant' }))
+      expect(socket).not.toBeNull()
+    })
     const currentSocket = socket!
     currentSocket.onmessage?.(
       new MessageEvent('message', {
@@ -6135,6 +6369,33 @@ describe('AuroraClient assistant namespace', () => {
     expect(sourceClosed).toBe(true)
   })
 
+  it('surfaces a connecting update within one second while preserving the stream race', async () => {
+    const controller = new AbortController()
+    const transport = new MockAuroraTransport().stream('assistant', async function* () {
+      await new Promise<void>(() => undefined)
+      yield { id: 'never', kind: 'assistant.delta', payload: { text: 'never' } }
+    })
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => new Promise(() => undefined))
+    const client = new AuroraClient({ transport })
+    const iterator = client.assistant.streamMessage({
+      text: 'hello',
+      requestId: 'connecting-request',
+      signal: controller.signal,
+      lastEventId: 'previous-event',
+      replayFrom: 'previous-event'
+    })[Symbol.asyncIterator]()
+
+    const first = await raceWithTimeout(iterator.next(), 1_500)
+    expect(first).not.toBe('timeout')
+    expect(first !== 'timeout' && first.value).toEqual(expect.objectContaining({
+      kind: 'connecting',
+      requestId: 'connecting-request',
+      text: 'Connecting to Aurora…'
+    }))
+    controller.abort()
+    await raceWithTimeout(iterator.next(), 1_500)
+  })
+
   it('normalizes structured assistant tool events and TTS audio chunks without text deltas', async () => {
     const transport = new MockAuroraTransport().stream('assistant', [
       {
@@ -6196,6 +6457,7 @@ describe('AuroraClient assistant namespace', () => {
         payload: {
           session_id: 'session-structured',
           request_id: 'corr-structured',
+          stream_id: 'tts-corr-structured',
           chunk_id: 'chunk-1',
           sequence: 7,
           audio_data: 'UklGRg==',
@@ -6219,7 +6481,8 @@ describe('AuroraClient assistant namespace', () => {
       text: 'Forecast says rain later.',
       session_id: 'session-structured',
       request_id: (request.payload as { request_id?: string }).request_id,
-      correlation_id: 'corr-structured'
+      correlation_id: 'corr-structured',
+      metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-structured' }
     }))
     const client = new AuroraClient({ transport })
 
@@ -6277,11 +6540,42 @@ describe('AuroraClient assistant namespace', () => {
         correlation_id: 'corr-tts-drain'
       },
       {
+        id: 'duplicate-completed',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Spoken response',
+          session_id: 'session-tts-drain',
+          request_id: 'corr-tts-drain',
+          metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-tts-drain' }
+        },
+        correlation_id: 'corr-tts-drain'
+      },
+      {
+        id: 'stale-audio-final',
+        kind: 'tts.audio_chunk',
+        payload: {
+          session_id: 'session-tts-drain',
+          request_id: 'corr-tts-drain',
+          stream_id: 'tts-stale',
+          chunk_id: 'tts-stale',
+          sequence: 99,
+          audio_data: '',
+          encoding: 'base64',
+          mime_type: 'audio/wav',
+          sample_rate: 24000,
+          channels: 1,
+          duration_ms: 0,
+          final: true
+        },
+        correlation_id: 'corr-tts-drain'
+      },
+      {
         id: 'audio-final',
         kind: 'tts.audio_chunk',
         payload: {
           session_id: 'session-tts-drain',
           request_id: 'corr-tts-drain',
+          stream_id: 'tts-corr-tts-drain',
           chunk_id: 'tts-corr-tts-drain',
           sequence: 2,
           audio_data: '',
@@ -6314,6 +6608,241 @@ describe('AuroraClient assistant namespace', () => {
       chunkId: 'tts-corr-tts-drain',
       final: true
     }))
+  })
+
+  it('preserves completed text when the correlated stream fails afterward', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', async function* () {
+      yield {
+        id: 'done-before-close',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Completed before transport error',
+          request_id: 'corr-complete',
+          metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-complete' }
+        },
+        correlation_id: 'corr-complete'
+      }
+      throw new TypeError('audio transport closed')
+    })
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({ text: 'Completed before transport error' }))
+    const client = new AuroraClient({ transport })
+    const iterator = client.assistant.streamMessage({ text: 'speak', requestId: 'corr-complete' })[Symbol.asyncIterator]()
+
+    await expect(iterator.next()).resolves.toEqual(expect.objectContaining({
+      done: false,
+      value: expect.objectContaining({ kind: 'completed', text: 'Completed before transport error' })
+    }))
+    await expect(iterator.next()).resolves.toEqual(expect.objectContaining({
+      done: false,
+      value: expect.objectContaining({ kind: 'tts_playback_error', messageId: 'corr-complete' })
+    }))
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined })
+  })
+
+  it('reports playback degradation when completed text is followed by a TTS drain timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      const transport = new MockAuroraTransport().stream('assistant', async function* () {
+        yield {
+          id: 'done-before-timeout',
+          kind: 'assistant.completed',
+          payload: {
+            text: 'Completed without audio',
+            request_id: 'corr-timeout',
+            metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-timeout' }
+          },
+          correlation_id: 'corr-timeout'
+        }
+        await new Promise(() => undefined)
+      })
+      transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({
+        text: 'Completed without audio',
+        metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-timeout' }
+      }))
+      const client = new AuroraClient({ transport })
+      const iterator = client.assistant.streamMessage({ text: 'speak', requestId: 'corr-timeout', timeoutMs: 5_000 })[Symbol.asyncIterator]()
+
+      await expect(iterator.next()).resolves.toEqual(expect.objectContaining({
+        done: false,
+        value: expect.objectContaining({ kind: 'completed', text: 'Completed without audio' })
+      }))
+      const next = iterator.next()
+      await vi.advanceTimersByTimeAsync(5_000)
+      await expect(next).resolves.toEqual(expect.objectContaining({
+        done: false,
+        value: expect.objectContaining({
+          kind: 'tts_playback_error',
+          text: '',
+          messageId: 'corr-timeout',
+          metadata: expect.objectContaining({ tts_status: 'unavailable' })
+        })
+      }))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('reports playback degradation when the TTS stream ends before matching final audio', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'done-before-eof',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Completed before audio EOF',
+          request_id: 'corr-eof',
+          metadata: { tts_status: 'streaming', tts_stream_id: 'tts-corr-eof' }
+        },
+        correlation_id: 'corr-eof'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({ text: 'Completed before audio EOF' }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'speak', requestId: 'corr-eof' }), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['completed', 'tts_playback_error'])
+    expect(events[1]).toEqual(expect.objectContaining({ messageId: 'corr-eof', text: '' }))
+  })
+
+  it('buffers early audio and releases only the stream named by assistant metadata', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      {
+        id: 'early-stale',
+        kind: 'tts.audio_chunk',
+        payload: { stream_id: 'tts-stale', audio_data: 'c3RhbGU=', final: false },
+        correlation_id: 'corr-early'
+      },
+      {
+        id: 'early-matching',
+        kind: 'tts.audio_chunk',
+        payload: { stream_id: 'tts-early', audio_data: '', final: true },
+        correlation_id: 'corr-early'
+      },
+      {
+        id: 'early-completed',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Early audio response',
+          request_id: 'corr-early',
+          metadata: { tts_status: 'streaming', tts_stream_id: 'tts-early' }
+        },
+        correlation_id: 'corr-early'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({ text: 'Early audio response' }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'speak', requestId: 'corr-early' }), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['tts_audio_chunk', 'completed'])
+    expect(events[0]?.ttsAudio?.streamId).toBe('tts-early')
+  })
+
+  it('does not turn stale or missing early audio overflow into a text playback error', async () => {
+    const transport = new MockAuroraTransport().stream('assistant', [
+      ...Array.from({ length: 10 }, (_, index) => ({
+        id: `stale-overflow-${index}`,
+        kind: 'tts.audio_chunk',
+        payload: {
+          ...(index % 2 === 0 ? { stream_id: 'tts-stale' } : {}),
+          audio_data: 'c3RhbGU=',
+          final: false
+        },
+        correlation_id: 'corr-stale-overflow'
+      })),
+      {
+        id: 'stale-overflow-completed',
+        kind: 'assistant.completed',
+        payload: { text: 'Text only after stale audio', request_id: 'corr-stale-overflow' },
+        correlation_id: 'corr-stale-overflow'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({ text: 'Text only after stale audio' }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'speak', requestId: 'corr-stale-overflow' }), 2)
+
+    expect(events.map((event) => event.kind)).toEqual(['completed'])
+  })
+
+  it('degrades exactly once when the expected stream overflows before completion', async () => {
+    const streamId = 'tts-exact-overflow'
+    const transport = new MockAuroraTransport().stream('assistant', [
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `exact-overflow-${index}`,
+        kind: 'tts.audio_chunk',
+        payload: { stream_id: streamId, audio_data: 'ZXhhY3Q=', final: false },
+        correlation_id: 'corr-exact-overflow'
+      })),
+      {
+        id: 'exact-overflow-completed',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Text survives exact audio overflow',
+          request_id: 'corr-exact-overflow',
+          metadata: { tts_status: 'streaming', tts_stream_id: streamId }
+        },
+        correlation_id: 'corr-exact-overflow'
+      },
+      {
+        id: 'exact-overflow-tenth-matching',
+        kind: 'tts.audio_chunk',
+        payload: { stream_id: streamId, audio_data: '', final: true },
+        correlation_id: 'corr-exact-overflow'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({ text: 'Text survives exact audio overflow' }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'speak', requestId: 'corr-exact-overflow' }), 3)
+
+    expect(events.map((event) => event.kind)).toEqual(['completed', 'tts_playback_error'])
+    expect(events.filter((event) => event.kind === 'tts_audio_chunk')).toHaveLength(0)
+  })
+
+  it('keeps an overflowed stream dropped after metadata binds it before later audio', async () => {
+    const streamId = 'tts-bound-after-overflow'
+    const transport = new MockAuroraTransport().stream('assistant', [
+      ...Array.from({ length: 9 }, (_, index) => ({
+        id: `bound-overflow-${index}`,
+        kind: 'tts.audio_chunk',
+        payload: { stream_id: streamId, audio_data: 'ZXhhY3Q=', final: false },
+        correlation_id: 'corr-bound-overflow'
+      })),
+      {
+        id: 'bound-overflow-delta',
+        kind: 'assistant.delta',
+        payload: {
+          request_id: 'corr-bound-overflow',
+          delta: 'Text survives the overflow.',
+          metadata: { tts_status: 'streaming', tts_stream_id: streamId }
+        },
+        correlation_id: 'corr-bound-overflow'
+      },
+      {
+        id: 'bound-overflow-tenth',
+        kind: 'tts.audio_chunk',
+        payload: { stream_id: streamId, audio_data: '', final: true },
+        correlation_id: 'corr-bound-overflow'
+      },
+      {
+        id: 'bound-overflow-completed',
+        kind: 'assistant.completed',
+        payload: {
+          text: 'Text survives the overflow.',
+          request_id: 'corr-bound-overflow',
+          metadata: { tts_status: 'streaming', tts_stream_id: streamId }
+        },
+        correlation_id: 'corr-bound-overflow'
+      }
+    ])
+    transport.register(ORCHESTRATOR_METHODS.externalUserInput, () => ({ text: 'Text survives the overflow.' }))
+    const client = new AuroraClient({ transport })
+
+    const events = await collectEvents(client.assistant.streamMessage({ text: 'speak', requestId: 'corr-bound-overflow' }), 3)
+
+    expect(events.map((event) => event.kind)).toEqual(['delta', 'completed', 'tts_playback_error'])
+    expect(events.filter((event) => event.kind === 'tts_audio_chunk')).toHaveLength(0)
   })
 
   it('falls back to non-streaming assistant response when stream transport is unavailable before data', async () => {

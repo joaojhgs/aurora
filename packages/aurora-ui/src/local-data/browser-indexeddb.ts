@@ -13,6 +13,8 @@ import {
   parseLocalDataExportV1,
   parseLocalToolStateRecord,
   parsePeerGrantMetadataRecord,
+  parseTranscriptSessionRecord,
+  parseTranscriptSegmentRecord,
   type ConversationMessageRecord,
   type ConversationRecord,
   type DeleteConversationResult,
@@ -29,8 +31,24 @@ import {
   type LocalDataScope,
   type LocalDataSession,
   type LocalToolStateRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord,
+  type TranscriptSessionListQuery,
+  type TranscriptSegmentListQuery,
+  type FinalizeTranscriptSessionInput,
+  type AppendTranscriptSegmentResult,
+  type RecoverTranscriptSessionsResult,
+  type DeleteTranscriptSessionResult,
+  type DeleteExpiredTranscriptSessionsResult,
   type MutableLocalDataCollections,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type ConversationListQuery,
+  type MessageListQuery,
+  LOCAL_DATA_TRANSCRIPT_SESSION_LIMIT,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_LIMIT,
+  LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX,
+  LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT
 } from '@aurora/client/local-data'
 
 import {
@@ -147,6 +165,9 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
           this.session = null
         }
       })
+      if (writerLock.status.mode === 'web-locks') {
+        await this.session.transcripts.recoverActiveSessions(this.nowMs())
+      }
       this.lastStatus = {
         kind: 'indexeddb',
         persistent: true,
@@ -157,6 +178,7 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
       }
       return this.session
     } catch (error) {
+      this.session = null
       await writerLock.release()
       await documentStore.close()
       const degradedReason = error instanceof LocalDataError ? error.metadata?.reason : 'open_failed'
@@ -211,11 +233,18 @@ export class BrowserIndexedDbLocalDataBackend implements LocalDataBackend {
       throw new LocalDataError('invalid_record', 'Browser local data was created by a newer Aurora version', { reason: 'future_schema' })
     }
     assertStoredMigrationChecksums(localDataMigrationManifest, existing.migrationLedger)
-    if (existing.migrationLedger.length !== localDataMigrationManifest.latestVersion) {
-      if (hasAnyRecords(existing.records)) {
-        throw new LocalDataError('migration_integrity', 'Browser local data upgrade needs a reset before continuing', { reason: 'partial_upgrade_requires_reset' })
+    if (existing.migrationLedger.length !== existing.schemaVersion) {
+      throw new LocalDataError('migration_integrity', 'Browser local data upgrade needs a reset before continuing', { reason: 'partial_upgrade_requires_reset' })
+    }
+    if (existing.schemaVersion < localDataMigrationManifest.latestVersion) {
+      const upgraded = {
+        ...existing,
+        profileId,
+        schemaVersion: localDataMigrationManifest.latestVersion,
+        migrationLedger: currentMigrationLedger(),
+        records: cloneLocalDataCollections(existing.records)
       }
-      const upgraded = createStoredDocument(profileId, localNodeId)
+      validateStoredCollectionsForLocalNode(upgraded.records, localNodeId)
       await store.save(upgraded)
       return upgraded
     }
@@ -315,6 +344,7 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
   readonly localTools: BrowserLocalToolStateRepository
   readonly peerGrants: BrowserPeerGrantMetadataRepository
   readonly localAudit: BrowserLocalAuditRepository
+  readonly transcripts: BrowserTranscriptArchiveRepository
   private readonly documentStore: BrowserIndexedDbDocumentStore
   private readonly writerLock: BrowserStorageWriterLock
   private readonly nowMs: () => number
@@ -338,6 +368,7 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
     this.localTools = new BrowserLocalToolStateRepository(this, { kind: 'queued' })
     this.peerGrants = new BrowserPeerGrantMetadataRepository(this, { kind: 'queued' })
     this.localAudit = new BrowserLocalAuditRepository(this, { kind: 'queued' })
+    this.transcripts = new BrowserTranscriptArchiveRepository(this, { kind: 'queued' })
   }
 
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
@@ -440,6 +471,10 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
     return this.collections
   }
 
+  canRecoverTranscriptSessions(): boolean {
+    return this.writerLock.status.mode === 'web-locks'
+  }
+
   async withRepositoryAccess<T>(access: RepositoryAccess, mutation: boolean, work: () => T | Promise<T>): Promise<T> {
     if (access.kind === 'transaction') {
       this.assertTransactionToken(access.token)
@@ -485,7 +520,8 @@ export class BrowserIndexedDbLocalDataSession implements LocalDataSession {
       memory: new BrowserLightweightMemoryRepository(this, access),
       localTools: new BrowserLocalToolStateRepository(this, access),
       peerGrants: new BrowserPeerGrantMetadataRepository(this, access),
-      localAudit: new BrowserLocalAuditRepository(this, access)
+      localAudit: new BrowserLocalAuditRepository(this, access),
+      transcripts: new BrowserTranscriptArchiveRepository(this, access)
     }
   }
 
@@ -502,6 +538,166 @@ interface TransactionToken {
 type RepositoryAccess =
   | { kind: 'queued' }
   | { kind: 'transaction'; token: TransactionToken }
+
+export class BrowserTranscriptArchiveRepository {
+  constructor(
+    private readonly session: BrowserIndexedDbLocalDataSession,
+    private readonly access: RepositoryAccess,
+  ) {}
+
+  async createSession(input: TranscriptSessionRecord): Promise<TranscriptSessionRecord> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const record = parseTranscriptSessionRecord(input)
+      assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.transcript_session')
+      this.session.assertIdentity(record.profileId, record.localNodeId)
+      if (record.lifecycle !== 'active') throw transcriptError('transcript_create_requires_active')
+      if (this.session.mutable.transcriptSessions.some((item) => item.id === record.id)) throw transcriptError('duplicate_transcript_session_id')
+      if (this.session.mutable.transcriptSessions.length >= LOCAL_DATA_TRANSCRIPT_SESSION_LIMIT) throw transcriptError('transcript_session_limit')
+      this.session.mutable.transcriptSessions.push(record)
+      return clone(record)
+    })
+  }
+
+  async startSession(sessionId: string, startedAtMs: number): Promise<TranscriptSessionRecord> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const id = parseLocalDataId(sessionId, 'transcript.session_id')
+      const start = requireTranscriptTimestamp(startedAtMs, 'transcript_started_at')
+      const existing = this.findSession(id)
+      if (existing === undefined) throw transcriptError('transcript_session_missing')
+      if (existing.lifecycle !== 'active') throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      if (start < existing.createdAtMs) throw transcriptError('transcript_started_before_created')
+      const updated = parseTranscriptSessionRecord({ ...existing, startedAtMs: Math.min(existing.startedAtMs, start) })
+      this.replaceSession(id, updated)
+      return clone(updated)
+    })
+  }
+
+  async appendSegment(input: TranscriptSegmentRecord): Promise<AppendTranscriptSegmentResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const record = parseTranscriptSegmentRecord(input)
+      assertSafeLocalDataIds([record.id, record.sessionId], 'record.transcript_segment')
+      const parent = this.findSession(record.sessionId)
+      if (parent === undefined) throw transcriptError('transcript_session_missing')
+      const existing = this.session.mutable.transcriptSegments.find((item) => item.id === record.id)
+      if (existing !== undefined) {
+        if (JSON.stringify(existing) === JSON.stringify(record)) return { appended: false, record: clone(existing) }
+        throw transcriptError('transcript_segment_replay_conflict')
+      }
+      if (parent.lifecycle !== 'active') throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      if (record.startAtMs < parent.startedAtMs) throw transcriptError('transcript_segment_before_session')
+      if (this.session.mutable.transcriptSegments.some((item) => item.sessionId === record.sessionId && item.sequence === record.sequence)) throw transcriptError('duplicate_transcript_sequence')
+      if (this.session.mutable.transcriptSegments.length >= LOCAL_DATA_TRANSCRIPT_SEGMENT_LIMIT) throw transcriptError('transcript_segment_limit')
+      this.session.mutable.transcriptSegments.push(record)
+      return { appended: true, record: clone(record) }
+    })
+  }
+
+  async getSession(sessionId: string): Promise<TranscriptSessionRecord | null> {
+    const id = parseLocalDataId(sessionId, 'transcript.session_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(this.findSession(id) ?? null))
+  }
+
+  async listSessions(options: TranscriptSessionListQuery = {}): Promise<TranscriptSessionRecord[]> {
+    validateTranscriptSessionQuery(options)
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      return clone(this.session.mutable.transcriptSessions
+        .filter((record) => record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+        .sort((a, b) => b.createdAtMs - a.createdAtMs || compareUtf8(a.id, b.id))
+        .filter((record) => options.cursor === undefined || record.createdAtMs < options.cursor.createdAtMs || (record.createdAtMs === options.cursor.createdAtMs && compareUtf8(record.id, options.cursor.id) > 0))
+        .slice(0, options.limit ?? 100))
+    })
+  }
+
+  async listSegments(sessionId: string, options: TranscriptSegmentListQuery = {}): Promise<TranscriptSegmentRecord[]> {
+    const id = parseLocalDataId(sessionId, 'transcript.session_id')
+    validateTranscriptSegmentQuery(options)
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      if (this.findSession(id) === undefined) return []
+      return clone(this.session.mutable.transcriptSegments
+        .filter((record) => record.sessionId === id && (options.afterSequence === undefined || record.sequence > options.afterSequence))
+        .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+        .slice(0, options.limit ?? 500))
+    })
+  }
+
+  async finalizeSession(input: FinalizeTranscriptSessionInput): Promise<TranscriptSessionRecord> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const id = parseLocalDataId(input.sessionId, 'transcript.session_id')
+      if (input.lifecycle !== 'completed' && input.lifecycle !== 'interrupted' && input.lifecycle !== 'failed') throw transcriptError('transcript_lifecycle')
+      const endedAtMs = requireTranscriptTimestamp(input.endedAtMs, 'transcript_ended_at')
+      const existing = this.findSession(id)
+      if (existing === undefined) throw transcriptError('transcript_session_missing')
+      if (existing.lifecycle !== 'active') {
+        if (existing.lifecycle === input.lifecycle && existing.endedAtMs === endedAtMs && existing.terminalReason === input.terminalReason) return clone(existing)
+        throw new LocalDataError('session_closed', 'Transcript session is already terminal')
+      }
+      const updated = parseTranscriptSessionRecord({ ...existing, lifecycle: input.lifecycle, endedAtMs, terminalReason: input.terminalReason })
+      this.replaceSession(id, updated)
+      return clone(updated)
+    })
+  }
+
+  async recoverActiveSessions(nowMs: number, terminalReason = 'process_restart'): Promise<RecoverTranscriptSessionsResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const endedAtMs = requireTranscriptTimestamp(nowMs, 'transcript_recovery_now')
+      const hasActiveSessions = this.session.mutable.transcriptSessions.some((record) => record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId && record.lifecycle === 'active')
+      if (!this.session.canRecoverTranscriptSessions() && hasActiveSessions) {
+        throw new LocalDataError('unsupported_backend', 'Transcript recovery requires exclusive browser ownership', { reason: 'owner_exists' })
+      }
+      let interrupted = 0
+      for (const record of this.session.mutable.transcriptSessions) {
+        if (record.profileId !== this.session.profileId || record.localNodeId !== this.session.localNodeId || record.lifecycle !== 'active') continue
+        this.replaceSession(record.id, parseTranscriptSessionRecord({
+          ...record,
+          endedAtMs: Math.max(endedAtMs, record.startedAtMs),
+          lifecycle: 'interrupted',
+          terminalReason
+        }))
+        interrupted += 1
+      }
+      return { interrupted }
+    })
+  }
+
+  async deleteSession(sessionId: string): Promise<DeleteTranscriptSessionResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const id = parseLocalDataId(sessionId, 'transcript.session_id')
+      const index = this.session.mutable.transcriptSessions.findIndex((record) => record.id === id && record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+      if (index < 0) return { deleted: false, deletedSegments: 0 }
+      this.session.mutable.transcriptSessions.splice(index, 1)
+      const before = this.session.mutable.transcriptSegments.length
+      this.session.mutable.transcriptSegments = this.session.mutable.transcriptSegments.filter((record) => record.sessionId !== id)
+      return { deleted: true, deletedSegments: before - this.session.mutable.transcriptSegments.length }
+    })
+  }
+
+  async deleteExpiredSessions(nowMs: number, limit: number): Promise<DeleteExpiredTranscriptSessionsResult> {
+    return await this.session.withRepositoryAccess(this.access, true, () => {
+      const cutoffMs = requireTranscriptTimestamp(nowMs, 'transcript_delete_now')
+      if (!Number.isSafeInteger(limit) || limit < 1 || limit > LOCAL_DATA_TRANSCRIPT_DELETE_LIMIT) throw transcriptError('transcript_delete_limit')
+      const expiredIds = this.session.mutable.transcriptSessions
+        .filter((record) => record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId && record.expiresAtMs !== null && record.expiresAtMs <= cutoffMs)
+        .sort((a, b) => (a.expiresAtMs ?? 0) - (b.expiresAtMs ?? 0) || compareUtf8(a.id, b.id))
+        .slice(0, limit)
+        .map((record) => record.id)
+      const expired = new Set(expiredIds)
+      this.session.mutable.transcriptSessions = this.session.mutable.transcriptSessions.filter((record) => !expired.has(record.id))
+      const before = this.session.mutable.transcriptSegments.length
+      this.session.mutable.transcriptSegments = this.session.mutable.transcriptSegments.filter((record) => !expired.has(record.sessionId))
+      return { deletedSessions: expired.size, deletedSegments: before - this.session.mutable.transcriptSegments.length }
+    })
+  }
+
+  private findSession(id: string): TranscriptSessionRecord | undefined {
+    return this.session.mutable.transcriptSessions.find((record) => record.id === id && record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+  }
+
+  private replaceSession(id: string, record: TranscriptSessionRecord): void {
+    const index = this.session.mutable.transcriptSessions.findIndex((item) => item.id === id)
+    if (index < 0) throw transcriptError('transcript_session_missing')
+    this.session.mutable.transcriptSessions[index] = record
+  }
+}
 
 export class BrowserConversationRepository {
   constructor(
@@ -535,7 +731,7 @@ export class BrowserConversationRepository {
         throw new LocalDataError('invalid_record', 'Message conversation does not exist')
       }
       if (this.session.mutable.messages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
-        throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation')
+        throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
       }
       assertNoMessageIdCollision(this.session.mutable, record, this.session.profileId, this.session.localNodeId)
       upsert(this.session.mutable.messages, record, (item) => item.id === record.id)
@@ -561,29 +757,64 @@ export class BrowserConversationRepository {
     })
   }
 
-  async listConversations(): Promise<ConversationRecord[]> {
-    return await this.session.withRepositoryAccess(this.access, false, () => clone(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId))
-      .sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id)))
+  async getConversation(conversationId: string): Promise<ConversationRecord | null> {
+    parseLocalDataId(conversationId, 'query.conversation_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => clone(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).find((record) => record.id === conversationId) ?? null))
   }
 
-  async listMessageCounts(): Promise<Record<string, number>> {
+  async getMessage(conversationId: string, messageId: string): Promise<ConversationMessageRecord | null> {
+    parseLocalDataId(conversationId, 'query.conversation_id'); parseLocalDataId(messageId, 'query.message_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      const scoped = this.session.mutable.conversations.some((record) => record.id === conversationId && record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+      return scoped ? clone(this.session.mutable.messages.find((record) => record.conversationId === conversationId && record.id === messageId) ?? null) : null
+    })
+  }
+
+  async getLatestMessageSequence(conversationId: string): Promise<number | null> {
+    parseLocalDataId(conversationId, 'query.conversation_id')
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      const scoped = this.session.mutable.conversations.some((record) => record.id === conversationId && record.profileId === this.session.profileId && record.localNodeId === this.session.localNodeId)
+      if (!scoped) return null
+      const values = this.session.mutable.messages.filter((record) => record.conversationId === conversationId).map((record) => record.sequence)
+      return values.reduce<number | null>((latest, value) => latest === null || value > latest ? value : latest, null)
+    })
+  }
+
+  async listConversations(options?: ConversationListQuery): Promise<ConversationRecord[]> {
+    if (options !== undefined && hasQueryOptions(options)) validateConversationQuery(options)
+    return await this.session.withRepositoryAccess(this.access, false, () => {
+      let records = scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId)
+      if (options !== undefined && hasQueryOptions(options)) {
+        records = records.filter((record) => options.includeArchived !== false || record.archivedAtMs === null).filter((record) => options.cursor === undefined || record.updatedAtMs < options.cursor.updatedAtMs || (record.updatedAtMs === options.cursor.updatedAtMs && compareUtf8(record.id, options.cursor.id) > 0)).sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id))
+        if (options.limit !== undefined) records = records.slice(0, options.limit)
+      }
+      records = records.sort((a, b) => b.updatedAtMs - a.updatedAtMs || compareUtf8(a.id, b.id))
+      return clone(records)
+    })
+  }
+
+  async listMessageCounts(conversationIds?: readonly string[]): Promise<Record<string, number>> {
+    if (conversationIds !== undefined) { validateConversationIds(conversationIds); if (conversationIds.length === 0) return {} }
     return await this.session.withRepositoryAccess(this.access, false, () => {
       const counts: Record<string, number> = {}
-      const conversationIds = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const allowed = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const selected = conversationIds === undefined ? allowed : boundedIds(conversationIds, allowed)
       for (const message of this.session.mutable.messages) {
-        if (!conversationIds.has(message.conversationId)) continue
+        if (!selected.has(message.conversationId)) continue
         counts[message.conversationId] = (counts[message.conversationId] ?? 0) + 1
       }
       return counts
     })
   }
 
-  async listFirstUserMessages(): Promise<Record<string, ConversationMessageRecord>> {
+  async listFirstUserMessages(conversationIds?: readonly string[]): Promise<Record<string, ConversationMessageRecord>> {
+    if (conversationIds !== undefined) { validateConversationIds(conversationIds); if (conversationIds.length === 0) return {} }
     return await this.session.withRepositoryAccess(this.access, false, () => {
-      const conversationIds = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const allowed = new Set(scopedConversations(this.session.mutable, this.session.profileId, this.session.localNodeId).map((conversation) => conversation.id))
+      const selectedConversationIds = conversationIds === undefined ? allowed : boundedIds(conversationIds, allowed)
       const firstByConversation = new Map<string, ConversationMessageRecord>()
       for (const message of this.session.mutable.messages) {
-        if (message.role !== 'user' || !conversationIds.has(message.conversationId)) continue
+        if (message.role !== 'user' || !selectedConversationIds.has(message.conversationId)) continue
         const current = firstByConversation.get(message.conversationId)
         if (current === undefined || message.sequence < current.sequence || (message.sequence === current.sequence && compareUtf8(message.id, current.id) < 0)) {
           firstByConversation.set(message.conversationId, message)
@@ -593,11 +824,14 @@ export class BrowserConversationRepository {
     })
   }
 
-  async listMessages(conversationId: string): Promise<ConversationMessageRecord[]> {
+  async listMessages(conversationId: string, options?: MessageListQuery): Promise<ConversationMessageRecord[]> {
+    parseLocalDataId(conversationId, 'query.conversation_id'); if (options !== undefined && hasQueryOptions(options)) validateMessageQuery(options)
     return await this.session.withRepositoryAccess(this.access, false, () => {
       if (!this.session.mutable.conversations.some((conversation) => conversation.id === conversationId && conversation.profileId === this.session.profileId && conversation.localNodeId === this.session.localNodeId)) return []
-      return clone(this.session.mutable.messages.filter((message) => message.conversationId === conversationId))
-        .sort((a, b) => a.sequence - b.sequence || compareUtf8(a.id, b.id))
+      let records = this.session.mutable.messages.filter((message) => message.conversationId === conversationId && (options?.afterSequence === undefined || message.sequence > options.afterSequence) && (options?.beforeSequence === undefined || message.sequence < options.beforeSequence))
+        .sort((a, b) => (options?.direction === 'desc' ? b.sequence - a.sequence : a.sequence - b.sequence) || compareUtf8(a.id, b.id))
+      if (options !== undefined && hasQueryOptions(options) && options.limit !== undefined) records = records.slice(0, options.limit)
+      return clone(records)
     })
   }
 }
@@ -765,13 +999,31 @@ function parseStoredDocument(value: unknown): StoredBrowserLocalDataDocument | n
   }
   const record = value as Partial<StoredBrowserLocalDataDocument>
   if (record.formatVersion !== 1) throw new LocalDataError('invalid_record', 'Browser local data document version is unsupported', { reason: 'document_version' })
+  const schemaVersion = requireSafeVersion(record.schemaVersion)
+  const rawCollections = record.records
+  if (rawCollections === null || typeof rawCollections !== 'object' || Array.isArray(rawCollections)) {
+    throw new LocalDataError('migration_integrity', 'Browser local data records are invalid')
+  }
+  const collections = rawCollections as Record<string, unknown>
+  const hasTranscriptSessions = collections.transcriptSessions !== undefined
+  const hasTranscriptSegments = collections.transcriptSegments !== undefined
+  let normalizedCollections = rawCollections as LocalDataRecordCollections
+  if (schemaVersion < localDataMigrationManifest.latestVersion && !hasTranscriptSessions && !hasTranscriptSegments) {
+    normalizedCollections = {
+      ...collections,
+      transcriptSessions: [],
+      transcriptSegments: []
+    } as unknown as LocalDataRecordCollections
+  } else if (!hasTranscriptSessions || !hasTranscriptSegments) {
+    throw new LocalDataError('migration_integrity', 'Browser local data transcript collections are incomplete')
+  }
   return {
     formatVersion: 1,
     profileId: parseLocalDataId(record.profileId, 'identity.profile'),
     localNodeId: parseLocalDataId(record.localNodeId, 'identity.local_node'),
-    schemaVersion: requireSafeVersion(record.schemaVersion),
+    schemaVersion,
     migrationLedger: requireMigrationLedger(record.migrationLedger),
-    records: cloneLocalDataCollections(record.records as LocalDataRecordCollections)
+    records: cloneLocalDataCollections(normalizedCollections)
   }
 }
 
@@ -824,17 +1076,30 @@ function validateImportedCollections(records: LocalDataRecordCollections, profil
   requireUnique(records.localToolStates.map((record) => `${record.profileId}\u0000${record.localNodeId}\u0000${record.toolContractId}`), 'duplicate_tool_state')
   requireUnique(records.peerGrantMetadata.map((record) => record.grantId), 'duplicate_grant_id')
   requireUnique(records.localAudit.map((record) => record.id), 'duplicate_audit_id')
+  requireUnique(records.transcriptSessions.map((record) => record.id), 'duplicate_transcript_session_id')
+  requireUnique(records.transcriptSegments.map((record) => record.id), 'duplicate_transcript_segment_id')
   for (const record of records.conversations) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.conversation')
   for (const record of records.messages) assertSafeLocalDataIds([record.id, record.conversationId], 'record.conversation_message')
   for (const record of records.memoryItems) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.namespace], 'record.lightweight_memory')
   for (const record of records.localToolStates) assertSafeLocalDataIds([record.profileId, record.localNodeId, record.toolContractId], 'record.local_tool_state')
   for (const record of records.peerGrantMetadata) assertSafeLocalDataIds([record.grantId, record.profileId, record.localNodeId, record.claimantPeerId, record.tokenId], 'record.peer_grant_metadata')
   for (const record of records.localAudit) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.action, record.decision, record.resultStatus], 'record.local_audit')
+  for (const record of records.transcriptSessions) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.transcript_session')
+  for (const record of records.transcriptSegments) assertSafeLocalDataIds([record.id, record.sessionId], 'record.transcript_segment')
   for (const record of records.conversations) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.memoryItems) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.localToolStates) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.peerGrantMetadata) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
   for (const record of records.localAudit) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
+  for (const record of records.transcriptSessions) requireRecordIdentity(record.profileId, record.localNodeId, profileId, localNodeId)
+  const sessionIds = new Set(records.transcriptSessions.map((record) => record.id))
+  const transcriptSequences = new Set<string>()
+  for (const record of records.transcriptSegments) {
+    if (!sessionIds.has(record.sessionId)) throw transcriptError('transcript_segment_session_missing')
+    const sequenceKey = `${record.sessionId}\u0000${record.sequence}`
+    if (transcriptSequences.has(sequenceKey)) throw transcriptError('duplicate_transcript_sequence')
+    transcriptSequences.add(sequenceKey)
+  }
   const messageSequences = new Set<string>()
   for (const record of records.messages) {
     if (!conversationIds.has(record.conversationId)) {
@@ -855,6 +1120,7 @@ function validateStoredCollectionsForLocalNode(records: LocalDataRecordCollectio
   for (const record of records.localToolStates) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
   for (const record of records.peerGrantMetadata) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
   for (const record of records.localAudit) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
+  for (const record of records.transcriptSessions) requireStoredRecordLocalNode(record.localNodeId, localNodeId)
 }
 
 function validateCollectionShape(records: LocalDataRecordCollections): void {
@@ -864,12 +1130,16 @@ function validateCollectionShape(records: LocalDataRecordCollections): void {
   requireUnique(records.localToolStates.map((record) => `${record.profileId}\u0000${record.localNodeId}\u0000${record.toolContractId}`), 'duplicate_tool_state')
   requireUnique(records.peerGrantMetadata.map((record) => record.grantId), 'duplicate_grant_id')
   requireUnique(records.localAudit.map((record) => record.id), 'duplicate_audit_id')
+  requireUnique(records.transcriptSessions.map((record) => record.id), 'duplicate_transcript_session_id')
+  requireUnique(records.transcriptSegments.map((record) => record.id), 'duplicate_transcript_segment_id')
   for (const record of records.conversations) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.conversation')
   for (const record of records.messages) assertSafeLocalDataIds([record.id, record.conversationId], 'record.conversation_message')
   for (const record of records.memoryItems) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.namespace], 'record.lightweight_memory')
   for (const record of records.localToolStates) assertSafeLocalDataIds([record.profileId, record.localNodeId, record.toolContractId], 'record.local_tool_state')
   for (const record of records.peerGrantMetadata) assertSafeLocalDataIds([record.grantId, record.profileId, record.localNodeId, record.claimantPeerId, record.tokenId], 'record.peer_grant_metadata')
   for (const record of records.localAudit) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId, record.action, record.decision, record.resultStatus], 'record.local_audit')
+  for (const record of records.transcriptSessions) assertSafeLocalDataIds([record.id, record.profileId, record.localNodeId], 'record.transcript_session')
+  for (const record of records.transcriptSegments) assertSafeLocalDataIds([record.id, record.sessionId], 'record.transcript_segment')
   const messageSequences = new Set<string>()
   for (const record of records.messages) {
     if (!conversationIds.has(record.conversationId)) {
@@ -880,6 +1150,14 @@ function validateCollectionShape(records: LocalDataRecordCollections): void {
       throw new LocalDataError('invalid_record', 'Imported message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
     }
     messageSequences.add(sequenceKey)
+  }
+  const transcriptSessionIds = new Set(records.transcriptSessions.map((record) => record.id))
+  const transcriptSequences = new Set<string>()
+  for (const record of records.transcriptSegments) {
+    if (!transcriptSessionIds.has(record.sessionId)) throw transcriptError('transcript_segment_session_missing')
+    const sequenceKey = `${record.sessionId}\u0000${record.sequence}`
+    if (transcriptSequences.has(sequenceKey)) throw transcriptError('duplicate_transcript_sequence')
+    transcriptSequences.add(sequenceKey)
   }
 }
 
@@ -910,6 +1188,13 @@ function assertNoScopedKeyCollisions(
   for (const record of incoming.localAudit) {
     assertNoScopedKeyCollision(current.localAudit.find((item) => item.id === record.id), profileId, localNodeId)
   }
+  for (const record of incoming.transcriptSessions) {
+    assertNoScopedKeyCollision(current.transcriptSessions.find((item) => item.id === record.id), profileId, localNodeId)
+  }
+  for (const record of incoming.transcriptSegments) {
+    const existing = current.transcriptSegments.find((item) => item.id === record.id)
+    if (existing !== undefined && existing.sessionId !== record.sessionId) throw scopedKeyCollision()
+  }
 }
 
 function assertNoScopedKeyCollision(
@@ -935,7 +1220,7 @@ function assertNoMessageIdCollision(
   if (existingConversation === undefined || existingConversation.profileId !== profileId || existingConversation.localNodeId !== localNodeId) {
     throw scopedKeyCollision()
   }
-  throw new LocalDataError('invalid_record', 'Message IDs must be unique')
+    throw new LocalDataError('invalid_record', 'Message IDs must be unique', { reason: 'duplicate_message_id' })
 }
 
 function scopedKeyCollision(): LocalDataError {
@@ -969,25 +1254,20 @@ function assertSafeLocalDataIds(values: string[], boundaryId: string): void {
   }
 }
 
-function hasAnyRecords(records: LocalDataRecordCollections): boolean {
-  return records.conversations.length
-    + records.messages.length
-    + records.memoryItems.length
-    + records.localToolStates.length
-    + records.peerGrantMetadata.length
-    + records.localAudit.length > 0
-}
-
 function scopedCollections(records: LocalDataRecordCollections, profileId: string, localNodeId: string): LocalDataRecordCollections {
   const conversations = scopedConversations(records, profileId, localNodeId)
   const conversationIds = new Set(conversations.map((record) => record.id))
+  const transcriptSessions = records.transcriptSessions.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId)
+  const transcriptSessionIds = new Set(transcriptSessions.map((record) => record.id))
   return {
     conversations,
     messages: records.messages.filter((record) => conversationIds.has(record.conversationId)),
     memoryItems: records.memoryItems.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
     localToolStates: records.localToolStates.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
     peerGrantMetadata: records.peerGrantMetadata.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
-    localAudit: records.localAudit.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId)
+    localAudit: records.localAudit.filter((record) => record.profileId === profileId && record.localNodeId === localNodeId),
+    transcriptSessions,
+    transcriptSegments: records.transcriptSegments.filter((record) => transcriptSessionIds.has(record.sessionId))
   }
 }
 
@@ -1002,6 +1282,9 @@ function replaceScopedCollections(
   localNodeId: string
 ): MutableLocalDataCollections {
   const scopedConversationIds = new Set(scopedConversations(current, profileId, localNodeId).map((record) => record.id))
+  const scopedTranscriptSessionIds = new Set(current.transcriptSessions
+    .filter((record) => record.profileId === profileId && record.localNodeId === localNodeId)
+    .map((record) => record.id))
   return cloneLocalDataCollections({
     conversations: [
       ...current.conversations.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
@@ -1026,6 +1309,14 @@ function replaceScopedCollections(
     localAudit: [
       ...current.localAudit.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
       ...replacement.localAudit
+    ],
+    transcriptSessions: [
+      ...current.transcriptSessions.filter((record) => record.profileId !== profileId || record.localNodeId !== localNodeId),
+      ...replacement.transcriptSessions
+    ],
+    transcriptSegments: [
+      ...current.transcriptSegments.filter((record) => !scopedTranscriptSessionIds.has(record.sessionId)),
+      ...replacement.transcriptSegments
     ]
   })
 }
@@ -1037,7 +1328,9 @@ function emptyLocalDataCollections(): MutableLocalDataCollections {
     memoryItems: [],
     localToolStates: [],
     peerGrantMetadata: [],
-    localAudit: []
+    localAudit: [],
+    transcriptSessions: [],
+    transcriptSegments: []
   }
 }
 
@@ -1048,7 +1341,9 @@ function cloneLocalDataCollections(collections: LocalDataRecordCollections): Mut
     memoryItems: collections.memoryItems.map((record) => structuredClone(record)),
     localToolStates: collections.localToolStates.map((record) => structuredClone(record)),
     peerGrantMetadata: collections.peerGrantMetadata.map((record) => structuredClone(record)),
-    localAudit: collections.localAudit.map((record) => structuredClone(record))
+    localAudit: collections.localAudit.map((record) => structuredClone(record)),
+    transcriptSessions: collections.transcriptSessions.map((record) => structuredClone(record)),
+    transcriptSegments: collections.transcriptSegments.map((record) => structuredClone(record))
   }
 }
 
@@ -1074,6 +1369,57 @@ function requireDeleteLimit(limit: number): number {
     throw new LocalDataError('invalid_record', 'Delete limit must be a positive safe integer', { reason: 'delete_limit' })
   }
   return limit
+}
+
+function requireTranscriptTimestamp(value: number, reason: string): number {
+  if (!Number.isSafeInteger(value) || value < 0 || Object.is(value, -0)) throw transcriptError(reason)
+  return value
+}
+
+function validateTranscriptSessionQuery(options: TranscriptSessionListQuery): void {
+  if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX)) throw transcriptError('transcript_session_limit')
+  if (options.cursor !== undefined) {
+    requireTranscriptTimestamp(options.cursor.createdAtMs, 'transcript_session_cursor_created_at')
+    parseLocalDataId(options.cursor.id, 'transcript_session_cursor_id')
+  }
+}
+
+function validateTranscriptSegmentQuery(options: TranscriptSegmentListQuery): void {
+  if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX)) throw transcriptError('transcript_segment_limit')
+  if (options.afterSequence !== undefined && (!Number.isSafeInteger(options.afterSequence) || options.afterSequence < 0 || Object.is(options.afterSequence, -0))) throw transcriptError('transcript_segment_after_sequence')
+}
+
+function transcriptError(reason: string): LocalDataError {
+  return new LocalDataError('invalid_record', 'Invalid transcript archive operation', { reason })
+}
+
+function validateConversationQuery(options: ConversationListQuery): void {
+  if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > 501)) throw new LocalDataError('invalid_record', 'Invalid conversation query', { reason: 'conversation_limit' })
+  if (typeof options.includeArchived !== 'boolean' && options.includeArchived !== undefined) throw new LocalDataError('invalid_record', 'Invalid archive filter', { reason: 'include_archived' })
+  if (options.cursor !== undefined) {
+    if (!Number.isSafeInteger(options.cursor.updatedAtMs) || options.cursor.updatedAtMs < 0 || Object.is(options.cursor.updatedAtMs, -0)) throw new LocalDataError('invalid_record', 'Invalid conversation cursor timestamp', { reason: 'conversation_cursor_updated_at' })
+    parseLocalDataId(options.cursor.id, 'conversation_cursor_id')
+  }
+}
+
+function validateMessageQuery(options: MessageListQuery): void {
+  if (options.limit !== undefined && (!Number.isSafeInteger(options.limit) || options.limit < 1 || options.limit > 2001)) throw new LocalDataError('invalid_record', 'Invalid message query', { reason: 'message_limit' })
+  if (options.beforeSequence !== undefined && options.afterSequence !== undefined) throw new LocalDataError('invalid_record', 'Message bounds are ambiguous', { reason: 'ambiguous_message_cursor' })
+  if (options.beforeSequence !== undefined && (!Number.isSafeInteger(options.beforeSequence) || options.beforeSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_before_sequence' })
+  if (options.afterSequence !== undefined && (!Number.isSafeInteger(options.afterSequence) || options.afterSequence < 0)) throw new LocalDataError('invalid_record', 'Invalid message bound', { reason: 'message_after_sequence' })
+  if (options.direction !== undefined && options.direction !== 'asc' && options.direction !== 'desc') throw new LocalDataError('invalid_record', 'Invalid message direction', { reason: 'message_direction' })
+}
+function hasQueryOptions(options: object): boolean { return Object.values(options).some((value) => value !== undefined) }
+
+function boundedIds(ids: readonly string[], allowed: Set<string>): Set<string> {
+  validateConversationIds(ids)
+  if (ids.length === 0) return new Set()
+  return new Set(ids.filter((id) => allowed.has(id)))
+}
+
+function validateConversationIds(ids: readonly string[]): void {
+  if (ids.length > 500) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set_limit' })
+  if (ids.some((id) => !localDataIdSchema.safeParse(id).success)) throw new LocalDataError('invalid_record', 'Invalid conversation ID set', { reason: 'conversation_id_set' })
 }
 
 function transactionScopeError(reason: string): LocalDataError {

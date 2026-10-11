@@ -151,6 +151,30 @@ internal object AuroraLocalDataEnvelopeCrypto {
         return aad.toByteArray(Charsets.UTF_8)
     }
 
+    fun encryptTranscriptText(
+        context: Context,
+        profileId: String,
+        localNodeId: String,
+        segmentId: String,
+        plaintext: String,
+    ): JSONObject {
+        require(plaintext.length in 1..16_384) { "transcript_text_invalid" }
+        validateId("segmentId", segmentId)
+        val aad = "{\"envelopeVersion\":1,\"field\":\"text_envelope_json\",\"localNodeId\":" +
+            JSONObject.quote(localNodeId) +
+            ",\"profileId\":" + JSONObject.quote(profileId) +
+            ",\"recordId\":" + JSONObject.quote(segmentId) +
+            ",\"table\":\"aurora_transcript_segments\"}"
+        return encrypt(
+            context,
+            LOCAL_DATA_KEY_PURPOSE,
+            profileId,
+            localNodeId,
+            plaintext.toByteArray(Charsets.UTF_8),
+            aad.toByteArray(Charsets.UTF_8),
+        )
+    }
+
     private fun key(context: Context, keyId: String): SecretKey {
         validateKeyId(keyId)
         val alias = LOCAL_DATA_KEY_PREFIX + sha256Hex(keyId.toByteArray(Charsets.UTF_8))

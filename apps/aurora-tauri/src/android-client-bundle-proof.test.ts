@@ -4,7 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, dirname, join, resolve } from 'node:path'
+import { basename, delimiter, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 
@@ -42,6 +42,49 @@ function writeNativeSpeechRuntime(directory: string) {
   for (const library of requiredNativeSpeechLibraries.slice(1)) {
     writeFileSync(join(directory, library), `${library} test fixture\n`)
   }
+}
+
+function writePinnedLlamaRuntime(directory: string, target: string) {
+  const repoRoot = resolve(packageRoot, '..', '..')
+  const lock = JSON.parse(readFileSync(join(repoRoot, 'tools/local-inference/llama.cpp.lock.json'), 'utf8'))
+  const libraries = [
+    'libllama-common.a',
+    'libllama-common-base.a',
+    'libllama.a',
+    'libggml.a',
+    'libggml-cpu.a',
+    'libggml-base.a',
+    'libcpp-httplib.a',
+  ]
+  mkdirSync(join(directory, 'include/llama-common'), { recursive: true })
+  mkdirSync(join(directory, 'include/vendor'), { recursive: true })
+  const fileSha: Record<string, string> = {}
+  for (const library of libraries) {
+    const bytes = Buffer.from('!<arch>\nfixture')
+    writeFileSync(join(directory, library), bytes)
+    fileSha[library] = createHash('sha256').update(bytes).digest('hex')
+  }
+  for (const header of ['include/llama.h', 'include/llama-common/chat.h', 'include/llama-common/json.h', 'include/vendor/json.hpp']) {
+    const path = join(directory, header)
+    mkdirSync(dirname(path), { recursive: true })
+    const bytes = Buffer.from(`fixture:${header}`)
+    writeFileSync(path, bytes)
+    fileSha[header] = createHash('sha256').update(bytes).digest('hex')
+  }
+  writeFileSync(join(directory, 'aurora-llama-runtime.json'), JSON.stringify({
+    format: 1,
+    link_kind: 'static',
+    source: {
+      version: lock.source.version,
+      commit: lock.source.commit,
+      archive_sha256: lock.source.archive_sha256,
+      archive_bytes: lock.source.archive_bytes,
+    },
+    target,
+    static_libraries: libraries,
+    include_dirs: ['include', 'include/llama-common', 'include/vendor'],
+    file_sha256: fileSha,
+  }))
 }
 
 interface AndroidClientProofContext {
@@ -318,14 +361,23 @@ describeIfNode('Android client bundle artifact proof', () => {
     const stubDir = mkdtempSync(join(tmpdir(), 'aurora-android-thin-build-pnpm-'))
     const arm64NativeLibDir = join(stubDir, 'native', 'arm64-v8a')
     const x86_64NativeLibDir = join(stubDir, 'native', 'x86_64')
+    const llamaArm64Runtime = join(stubDir, 'llama', 'android-arm64')
+    const llamaX86_64Runtime = join(stubDir, 'llama', 'android-x86_64')
     const jdkHome = join(stubDir, 'jdk', 'temurin-17.0.20+8')
     const jdkBin = join(jdkHome, 'bin')
     const callsPath = join(stubDir, 'calls.jsonl')
+    const needleCallsPath = join(stubDir, 'needle-calls.jsonl')
+    const needleOutputRoot = join(resolve(packageRoot, '..', '..'), '.artifacts/local-inference/runtime/android-arm64/needle2')
+    const needleHelper = join(packageRoot, '..', '..', 'tools/local-inference/fetch_needle_native.py')
+    const needlePreload = join(stubDir, 'intercept-needle-helper.cjs')
+    const nodeOptions = `${process.env.NODE_OPTIONS ? `${process.env.NODE_OPTIONS} ` : ''}--require=${needlePreload}`
     const pnpmStub = join(stubDir, 'pnpm')
     const javaStub = join(stubDir, 'java')
     const asdfStub = join(stubDir, 'asdf')
     writeNativeSpeechRuntime(arm64NativeLibDir)
     writeNativeSpeechRuntime(x86_64NativeLibDir)
+    writePinnedLlamaRuntime(llamaArm64Runtime, 'android-arm64')
+    writePinnedLlamaRuntime(llamaX86_64Runtime, 'android-x86_64')
     mkdirSync(jdkBin, { recursive: true })
     writeFileSync(join(jdkBin, 'java'), '#!/usr/bin/env sh\nexit 0\n')
     chmodSync(join(jdkBin, 'java'), 0o755)
@@ -359,6 +411,9 @@ fs.appendFileSync(callsPath, JSON.stringify({
   androidNativeTargets: process.env.AURORA_ANDROID_NATIVE_TARGETS,
   arm64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR,
   x86_64NativeLibDir: process.env.AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR,
+  llamaArm64Runtime: process.env.AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR,
+  llamaX86_64Runtime: process.env.AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR,
+  needleArm64LibDir: process.env.AURORA_NEEDLE2_ANDROID_ARM64_LIB_DIR,
 }) + '\\n')
 if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
   const configPath = argv[argv.indexOf('--config') + 1]
@@ -371,7 +426,11 @@ if (argv[0] === 'tauri' && argv[1] === 'android' && argv[2] === 'build') {
     process.exit(3)
   }
   const config = JSON.parse(fs.readFileSync(configPath, 'utf8'))
-  if (JSON.stringify(config.app.security.capabilities) !== JSON.stringify(['aurora-android-thin', 'aurora-mobile-mesh'])) process.exit(4)
+  const capabilities = config.app.security.capabilities
+  const liveFeature = argv.includes('android-voice-live-test')
+  if (JSON.stringify(capabilities.slice(0, 2)) !== JSON.stringify(['aurora-android-thin', 'aurora-mobile-mesh'])) process.exit(4)
+  if (capabilities.length !== (liveFeature ? 3 : 2)) process.exit(7)
+  if (liveFeature && capabilities[2]?.identifier !== 'aurora-android-voice-live-e2e-capability') process.exit(8)
   if (config.build.beforeBuildCommand !== null) process.exit(5)
   if (!config.build.frontendDist || !fs.existsSync(config.build.frontendDist)) process.exit(6)
 }
@@ -383,26 +442,59 @@ if (argv[0] === 'build:frontend:android-client') {
 }
 `)
     chmodSync(pnpmStub, 0o755)
+    writeFileSync(needlePreload, `const childProcess = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const { syncBuiltinESMExports } = require('node:module')
+const needleHelper = path.resolve(${JSON.stringify(needleHelper)})
+const expectedOutputRoot = path.resolve(${JSON.stringify(needleOutputRoot)})
+const callsPath = ${JSON.stringify(needleCallsPath)}
+const originalSpawnSync = childProcess.spawnSync
+childProcess.spawnSync = function (command, args, ...rest) {
+  const argv = Array.isArray(args) ? args : []
+  const helperIndex = argv.findIndex((arg) => typeof arg === 'string' && path.resolve(arg) === needleHelper)
+  if (helperIndex < 0) return originalSpawnSync.call(this, command, args, ...rest)
+  const helperArgs = argv.slice(helperIndex + 1)
+  const supportedInterpreter = command === 'uv'
+    || (typeof command === 'string' && command.endsWith('/.venv/bin/python'))
+  const valid = supportedInterpreter && helperArgs.length === 6
+    && helperArgs[0] === '--lock-variant' && helperArgs[1] === 'android-v2'
+    && helperArgs[2] === '--target' && helperArgs[3] === 'android-arm64'
+    && helperArgs[4] === '--output-root' && path.resolve(helperArgs[5]) === expectedOutputRoot
+  fs.appendFileSync(callsPath, JSON.stringify({ command, helperArgs, valid }) + '\\n')
+  return { status: valid ? 0 : 2, signal: null, error: undefined, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), output: [] }
+}
+syncBuiltinESMExports()
+`)
+    chmodSync(needlePreload, 0o600)
 
     const result = spawnSync(process.execPath, [buildClient, '--kind', 'aab'], {
       cwd: packageRoot,
       encoding: 'utf8',
       env: androidClientEnv(context, 'aab', {
         PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+        NODE_OPTIONS: nodeOptions,
         ASDF_JAVA_VERSION: undefined,
         JAVA_HOME: undefined,
         AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
         AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+        AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR: llamaArm64Runtime,
+        AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR: llamaX86_64Runtime,
         AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS: 'https://gateway.example.invalid wss://signaling.example.invalid',
       }),
     })
 
     expect(result.status, result.stderr).toBe(0)
     const calls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    const needleCalls = readFileSync(needleCallsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    const expectedNeedleArgs = [
+      '--lock-variant', 'android-v2', '--target', 'android-arm64', '--output-root', needleOutputRoot,
+    ]
+    expect(needleCalls).toEqual([{ command: expect.any(String), helperArgs: expectedNeedleArgs, valid: true }])
     expect(calls.map((call) => call.argv.join(' '))).toEqual([
       'build:frontend:android-client',
       'tauri android init --ci --skip-targets-install',
-      'android:sync-native-plugin',
+      'android:prepare-native-plugin',
       'tauri android build --debug --aab --target aarch64 x86_64 --config ' + calls[3].argv.at(-1),
     ])
     expect(calls[3].argv.at(-1)).not.toContain('src-tauri/tauri.android-client.conf.json')
@@ -412,6 +504,9 @@ if (argv[0] === 'build:frontend:android-client') {
       androidNativeTargets: 'aarch64,x86_64',
       arm64NativeLibDir,
       x86_64NativeLibDir,
+      llamaArm64Runtime,
+      llamaX86_64Runtime,
+      needleArm64LibDir: join(needleOutputRoot, 'android-arm64'),
     })
     expect(calls[2]).toMatchObject({
       androidNativeTargets: 'aarch64,x86_64',
@@ -435,6 +530,14 @@ if (argv[0] === 'build:frontend:android-client') {
         libraries: requiredNativeSpeechLibraries.slice(1),
         sourceDirectoriesRedacted: true,
       },
+      llamaCppRuntime: {
+        targets: [
+          { target: 'android-arm64', linkKind: 'static' },
+          { target: 'android-x86_64', linkKind: 'static' },
+        ],
+        staticLink: true,
+        sourceDirectoriesRedacted: true,
+      },
     })
     expect(provenance.artifactRoot).toBe(context.buildOutputRoot)
     expect(provenance.config.app.security.capabilities).toEqual([
@@ -451,9 +554,11 @@ if (argv[0] === 'build:frontend:android-client') {
         encoding: 'utf8',
         env: androidClientEnv(context, 'apk', {
           PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+          NODE_OPTIONS: nodeOptions,
           ASDF_JAVA_VERSION: undefined,
           JAVA_HOME: undefined,
           AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+          AURORA_LLAMA_CPP_ANDROID_ARM64_LIB_DIR: llamaArm64Runtime,
         }),
       },
     )
@@ -463,13 +568,57 @@ if (argv[0] === 'build:frontend:android-client') {
       'tauri android build --apk --target aarch64 --config ' + releaseCalls[3].argv.at(-1),
     )
     expect(releaseCalls[3].argv).not.toContain('--debug')
+    expect(releaseCalls[3].llamaArm64Runtime).toBe(llamaArm64Runtime)
+    expect(releaseCalls[3].needleArm64LibDir).toBe(join(needleOutputRoot, 'android-arm64'))
+    expect(readFileSync(needleCallsPath, 'utf8').trim().split('\n')).toHaveLength(2)
+    expect(readFileSync(needleCallsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line).helperArgs))
+      .toEqual([expectedNeedleArgs, expectedNeedleArgs])
     expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
       buildMode: 'release',
       kind: 'apk',
       target: 'aarch64',
       targets: ['aarch64'],
     })
+
+    const liveResult = spawnSync(
+      process.execPath,
+      [buildClient, '--kind', 'apk', '--target', 'x86_64', '--voice-live-test'],
+      {
+        cwd: packageRoot,
+        encoding: 'utf8',
+        env: androidClientEnv(context, 'apk', {
+          PATH: `${stubDir}${delimiter}${process.env.PATH ?? ''}`,
+          NODE_OPTIONS: nodeOptions,
+          JAVA_HOME: jdkHome,
+          AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+          AURORA_LLAMA_CPP_ANDROID_X86_64_LIB_DIR: llamaX86_64Runtime,
+        }),
+      },
+    )
+    expect(liveResult.status, liveResult.stderr).toBe(0)
+    const liveCalls = readFileSync(callsPath, 'utf8').trim().split('\n').map((line) => JSON.parse(line)).slice(-4)
+    expect(liveCalls[3].argv).toEqual([
+      'tauri', 'android', 'build', '--debug', '--features', 'android-voice-live-test',
+      '--apk', '--target', 'x86_64', '--config', liveCalls[3].argv.at(-1),
+    ])
+    expect(liveCalls[3].llamaX86_64Runtime).toBe(llamaX86_64Runtime)
+    expect(liveCalls[3].needleArm64LibDir).toBeUndefined()
+    expect(readFileSync(needleCallsPath, 'utf8').trim().split('\n')).toHaveLength(2)
+    expect(JSON.parse(readFileSync(context.apkProvenancePath, 'utf8'))).toMatchObject({
+      bundleMode: 'android-client-voice-live-test',
+      buildMode: 'debug',
+      voiceLiveTest: true,
+    })
   }, 30_000)
+
+  it('rejects release voice-live builds before preparing native dependencies', () => {
+    const result = spawnSync(process.execPath, [buildClient, '--voice-live-test', '--release'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+    })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('--voice-live-test requires a debug build')
+  })
 
   it('auto-discovers generated universal debug APK and AAB artifacts from nested Tauri output paths', () => {
     const context = createAndroidClientProofContext()
@@ -593,7 +742,7 @@ if (argv[0] === 'build:frontend:android-client') {
 
     expect(directAndroidBuildScripts.length).toBeGreaterThanOrEqual(5)
     for (const [name, command] of directAndroidBuildScripts) {
-      expect(command, `${name} must sync native plugin before compilation`).toMatch(/^pnpm android:sync-native-plugin && pnpm tauri android build/)
+      expect(command, `${name} must prepare native plugin before Cargo generation`).toMatch(/^pnpm android:prepare-native-plugin && pnpm tauri android build/)
     }
     for (const [name, command] of clientWrapperScripts) {
       expect(command, `${name} must use the temp-config build wrapper`).toMatch(/^node \.\/scripts\/build-android-client-bundle\.mjs --kind (apk|aab)$/)
@@ -603,7 +752,7 @@ if (argv[0] === 'build:frontend:android-client') {
       ['android:build:thin:aab', 'pnpm android:build:client:aab'],
     ])
     expect(readFileSync(buildClient, 'utf8')).toContain(
-      "run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)",
+      "run('pnpm', ['android:prepare-native-plugin'], nativeSpeechBuild.env)",
     )
     const syncSource = readFileSync(syncNativePlugin, 'utf8')
     expect(syncSource).toContain("resolve('src-tauri/icons/android')")
@@ -669,7 +818,7 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(readFileSync(buildClient, 'utf8')).toContain('cleanAndroidBuildOutputs')
   })
 
-  it('syncs init-time Android projects before Tauri writes mobile Gradle plugin files', () => {
+  it('prepares the Android scaffold before generated metadata and syncs after Cargo', () => {
     const root = mkdtempSync(join(tmpdir(), 'aurora-android-init-sync-'))
     const arm64NativeLibDir = join(root, 'native-source', 'arm64-v8a')
     const x86_64NativeLibDir = join(root, 'native-source', 'x86_64')
@@ -719,6 +868,68 @@ if (argv[0] === 'build:frontend:android-client') {
       ].join('\n'),
     )
 
+    // Model the completed `tauri android init` app scaffold. Tauri's Rust build
+    // metadata is added only after the preparation phase below.
+    writeFileSync(
+      join(root, 'build.gradle.kts'),
+      'buildscript {\n    dependencies {\n        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:1.9.0")\n    }\n}\n',
+    )
+    writeFileSync(
+      join(root, 'app', 'build.gradle.kts'),
+      'dependencies {\n}\n\nkotlinOptions {\n    jvmTarget = "1.8"\n}\n',
+    )
+    const prepareResult = spawnSync(process.execPath, [syncNativePlugin, '--prepare'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_NATIVE_TARGETS: 'aarch64,x86_64',
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+      },
+    })
+    expect(prepareResult.status, prepareResult.stderr).toBe(0)
+    expect(prepareResult.stdout).toContain('generated dependency-project synchronization runs after the Tauri Rust build')
+
+    const scaffoldPreflight = spawnSync(process.execPath, [androidPreflight, '--require-android-project'], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_PREFLIGHT_REPORT: reportPath,
+      },
+    })
+    expect(scaffoldPreflight.status, scaffoldPreflight.stderr).toBe(0)
+    const scaffoldReport = JSON.parse(readFileSync(reportPath, 'utf8'))
+    expect(scaffoldReport.androidDependencyProjectValidation).toMatchObject({
+      phase: 'pre-cargo-scaffold',
+      complete: false,
+      status: 'deferred-until-tauri-cargo-build',
+      observedSettingsFile: false,
+    })
+
+    const nativeProjectRoot = join(dirname(root), `${basename(root)}-native-kotlin-projects`)
+    const nativeProjectNames = ['tauri-android', 'tauri-plugin-barcode-scanner', 'tauri-plugin-deep-link']
+    const nativeSettingsLines: string[] = []
+    for (const name of nativeProjectNames) {
+      if (name === 'tauri-plugin-barcode-scanner') {
+        nativeSettingsLines.push(`project(":${name}").projectDir = new File("${join(vendorBarcodeScanner, 'android')}")`)
+        continue
+      }
+      const projectDir = join(nativeProjectRoot, name)
+      mkdirSync(projectDir, { recursive: true })
+      writeFileSync(
+        join(projectDir, 'build.gradle.kts'),
+        'dependencies {\n}\n\nkotlinOptions {\n    jvmTarget = "1.8"\n}\n',
+      )
+      nativeSettingsLines.push(`project(":${name}").projectDir = new File("${projectDir}")`)
+    }
+    // Tauri's Rust build emits both files after the init scaffold is prepared.
+    writeFileSync(join(root, 'app', 'tauri.build.gradle.kts'), '// generated by tauri_build::try_build\n')
+    writeFileSync(join(root, 'tauri.settings.gradle'), `${nativeSettingsLines.join('\n')}\n`)
+
     const syncResult = spawnSync(process.execPath, [syncNativePlugin], {
       cwd: packageRoot,
       encoding: 'utf8',
@@ -737,6 +948,39 @@ if (argv[0] === 'build:frontend:android-client') {
     )
     expect(syncResult.stdout).toContain(
       'Staged Android native speech runtime libraries for arm64-v8a, x86_64',
+    )
+    const stagedTauriAndroid = join(root, 'aurora-kotlin-compat', 'tauri-android')
+    const generatedBuildConfigMarker = join(
+      stagedTauriAndroid,
+      'build',
+      'generated',
+      'source',
+      'buildConfig',
+      'debug',
+      'preserved-marker.txt',
+    )
+    const gradleOutputMarker = join(stagedTauriAndroid, '.gradle', 'aurora-stage-test', 'preserved-marker.txt')
+    mkdirSync(dirname(generatedBuildConfigMarker), { recursive: true })
+    mkdirSync(dirname(gradleOutputMarker), { recursive: true })
+    writeFileSync(generatedBuildConfigMarker, 'generated output survives source reconciliation\n')
+    writeFileSync(gradleOutputMarker, 'gradle output survives source reconciliation\n')
+    const repeatedSyncResult = spawnSync(process.execPath, [syncNativePlugin], {
+      cwd: packageRoot,
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        AURORA_ANDROID_GENERATED_PROJECT_DIR: root,
+        AURORA_ANDROID_NATIVE_TARGETS: 'aarch64,x86_64',
+        AURORA_SHERPA_ONNX_ANDROID_ARM64_V8A_LIB_DIR: arm64NativeLibDir,
+        AURORA_SHERPA_ONNX_ANDROID_X86_64_LIB_DIR: x86_64NativeLibDir,
+      },
+    })
+    expect(repeatedSyncResult.status, repeatedSyncResult.stderr).toBe(0)
+    expect(readFileSync(generatedBuildConfigMarker, 'utf8')).toBe(
+      'generated output survives source reconciliation\n',
+    )
+    expect(readFileSync(gradleOutputMarker, 'utf8')).toBe(
+      'gradle output survives source reconciliation\n',
     )
     for (const [abi, sourceDir] of [
       ['arm64-v8a', arm64NativeLibDir],
@@ -786,8 +1030,8 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(mainActivity.match(/applyAuroraImeInsets\(\)/g)).toHaveLength(2)
     expect(mainActivity).toContain('ApplicationInfo.FLAG_DEBUGGABLE')
     expect(mainActivity).toContain('WebView.setWebContentsDebuggingEnabled(true)')
-    expect(existsSync(join(root, 'tauri.settings.gradle'))).toBe(false)
-    expect(existsSync(join(root, 'app', 'tauri.build.gradle.kts'))).toBe(false)
+    expect(existsSync(join(root, 'tauri.settings.gradle'))).toBe(true)
+    expect(existsSync(join(root, 'app', 'tauri.build.gradle.kts'))).toBe(true)
     expect(
       existsSync(
         join(
@@ -843,11 +1087,18 @@ if (argv[0] === 'build:frontend:android-client') {
     const report = JSON.parse(readFileSync(reportPath, 'utf8'))
     expect(report.barcodeScannerCancellation).toMatchObject({
       checked: true,
-      settings: null,
-      settingsUseVendor: null,
+      settings: join(root, 'tauri.settings.gradle'),
+      settingsUseVendor: true,
       dependencyUsesVendor: true,
       buildScriptUsesAndroidPath: true,
       matched: true,
+    })
+    expect(report.androidDependencyProjectValidation).toMatchObject({
+      phase: 'generated-settings-observed-pre-cargo',
+      complete: false,
+      status: 'generated-vendor-source-verified',
+      observedSettingsFile: true,
+      strictThreeProjectSync: 'required-in-build-rs-after-tauri_build',
     })
   })
 
@@ -879,9 +1130,9 @@ if (argv[0] === 'build:frontend:android-client') {
     expect(packageJson.scripts['android:prepare:client']).toBe('node ./scripts/prepare-android-client-bundle.mjs')
     expect(packageJson.scripts['android:prepare:thin']).toBe('pnpm android:prepare:client')
     expect(packageJson.scripts['android:sync-native-plugin']).toBe('node ./scripts/install-android-native-plugin.mjs')
-    expect(packageJson.scripts['android:init']).toContain('android:sync-native-plugin')
-    expect(packageJson.scripts['android:preflight']).toContain('android:sync-native-plugin')
-    expect(packageJson.scripts['android:preflight:ci']).toContain('android:sync-native-plugin')
+    expect(packageJson.scripts['android:init']).toContain('android:prepare-native-plugin')
+    expect(packageJson.scripts['android:preflight']).toContain('android:prepare-native-plugin')
+    expect(packageJson.scripts['android:preflight:ci']).toContain('android:prepare-native-plugin')
     expect(packageJson.scripts['android:preflight:strict']).toContain('android:sync-native-plugin')
     expect(packageJson.scripts['android:build:client:apk']).toBe('node ./scripts/build-android-client-bundle.mjs --kind apk')
     expect(packageJson.scripts['android:build:voice-live:apk']).toBe(

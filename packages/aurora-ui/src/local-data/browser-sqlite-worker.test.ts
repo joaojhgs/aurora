@@ -1,24 +1,100 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { pathToFileURL } from 'node:url'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import sqlite3InitModule from '@sqlite.org/sqlite-wasm'
 import {
   buildLocalDataExportV1,
+  localDataMigrationManifest,
   type ConversationMessageRecord,
   type ConversationRecord,
   type EncryptedDataEnvelopeV1,
   type LightweightMemoryRecord,
   type LocalAuditRecord,
-  type PeerGrantMetadataRecord
+  type LocalDataRepositories,
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord
 } from '@aurora/client/local-data'
 
 import {
   assertExistingSqliteLocalNodeOwnership,
+  executeRepositoryOperation,
   handleBrowserSqliteWorkerMessage,
   type BrowserSqliteRepositoryOperation,
   type BrowserSqliteWorkerResponse
 } from './browser-sqlite-worker.js'
+import { browserSqliteMigrationSql } from './browser-sqlite-worker-client.js'
+
+const executeForTest = executeRepositoryOperation
+type TestWorkerState = Parameters<typeof executeForTest>[0]
+type TestSqliteDatabase = NonNullable<TestWorkerState['db']>
+const resolve = createRequire(import.meta.url).resolve
+const sqliteWasmUrl = pathToFileURL(resolve('@sqlite.org/sqlite-wasm/sqlite3.wasm')).href
 
 describe('browser sqlite worker protocol guardrails', () => {
+  it('executes bounded SQL pages and preserves legacy omitted-option reads', async () => {
+    const db = new FakeSqliteDatabase({
+      'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? ORDER BY updated_at_ms DESC, id ASC;': [{ id: 'conversation-c', profile_id: 'profile-1', local_node_id: 'node-1', title_envelope_json: null, created_at_ms: 1, updated_at_ms: 2, archived_at_ms: null }],
+      'SELECT * FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ? AND archived_at_ms IS NULL ORDER BY updated_at_ms DESC, id ASC LIMIT ?;': []
+    })
+    const state = openWorkerState(db, 'profile-1', 'node-1')
+    const legacy = executeForTest(state, { kind: 'conversations.listConversations' })
+    expect(legacy).toHaveLength(1)
+    expect(db.statements.some((sql) => sql.includes('LIMIT'))).toBe(false)
+    executeForTest(state, { kind: 'conversations.listConversations', options: { limit: 1, includeArchived: false } })
+    expect(db.statements.some((sql) => sql.includes('LIMIT ?'))).toBe(true)
+  })
+
+  it('rejects invalid bounds and exact ID sets before SQL access', () => {
+    const db = new FakeSqliteDatabase({})
+    const state = openWorkerState(db, 'profile-1', 'node-1')
+    expect(() => executeForTest(state, { kind: 'conversations.listMessages', conversationId: 'c', options: { beforeSequence: 1, afterSequence: 0 } })).toThrow()
+    expect(() => executeForTest(state, { kind: 'conversations.listMessageCounts', conversationIds: [] })).not.toThrow()
+    expect(db.statements).toHaveLength(0)
+  })
+
+  it('runs repository paging and collision rules against real in-memory SQLite WASM', async () => {
+    const initSqlite = sqlite3InitModule as unknown as (options: { locateFile: (path: string) => string }) => Promise<{ oo1: { DB: new (filename: string) => { exec: (input: unknown) => unknown; close: () => void } } }>
+    const sqlite3 = await initSqlite({ locateFile: (path) => path.endsWith('.wasm') ? sqliteWasmUrl : path })
+    const db = new sqlite3.oo1.DB(':memory:')
+    try {
+      for (const migration of browserSqliteMigrationSql) {
+        db.exec(migration.sql)
+        const manifestEntry = localDataMigrationManifest.migrations.find((entry) => entry.version === migration.version)
+        db.exec(manifestEntry?.ledger_sql ?? '')
+      }
+      const state = openWorkerState(db, 'profile-1', 'node-1')
+      for (const [id, updatedAtMs, archivedAtMs] of [['conversation-z', 1100, null], ['conversation-a', 1100, null], ['conversation-archived', 1090, 20]] as const) {
+        executeForTest(state, { kind: 'conversations.upsertConversation', record: conversationFixture({ id, updatedAtMs, archivedAtMs }) })
+      }
+      executeForTest(state, { kind: 'conversations.upsertConversation', record: conversationFixture({ id: 'conversation-b', updatedAtMs: 1080 }) })
+      executeForTest(state, { kind: 'conversations.appendMessage', record: messageFixture({ id: 'm-a', conversationId: 'conversation-a', sequence: 1 }) })
+      executeForTest(state, { kind: 'conversations.appendMessage', record: messageFixture({ id: 'm-z', conversationId: 'conversation-a', sequence: 2, role: 'assistant' }) })
+      expect(() => executeForTest(state, { kind: 'conversations.appendMessage', record: messageFixture({ id: 'm-other', conversationId: 'conversation-a', sequence: 1 }) })).toThrowError(expect.objectContaining({ metadata: { reason: 'duplicate_message_sequence' } }))
+      expect(() => executeForTest(state, { kind: 'conversations.appendMessage', record: messageFixture({ id: 'm-a', conversationId: 'conversation-b', sequence: 1 }) })).toThrowError(expect.objectContaining({ metadata: { reason: 'duplicate_message_id' } }))
+      expect(executeForTest(state, { kind: 'conversations.listConversations', options: { limit: 2, includeArchived: false } })).toHaveLength(2)
+      expect(executeForTest(state, { kind: 'conversations.listConversations', options: { cursor: { updatedAtMs: 1100, id: 'conversation-a' } } })).toEqual([
+        expect.objectContaining({ id: 'conversation-z' }),
+        expect.objectContaining({ id: 'conversation-archived' }),
+        expect.objectContaining({ id: 'conversation-b' })
+      ])
+      expect(executeForTest(state, { kind: 'conversations.listMessages', conversationId: 'conversation-a', options: { direction: 'desc', beforeSequence: 3 } })).toMatchObject([{ id: 'm-z' }, { id: 'm-a' }])
+      expect(executeForTest(state, { kind: 'conversations.listMessageCounts', conversationIds: [] })).toEqual({})
+
+      const archive = transcriptSessionFixture()
+      const segment = transcriptSegmentFixture()
+      expect(executeForTest(state, { kind: 'transcripts.createSession', record: archive })).toEqual(archive)
+      expect(executeForTest(state, { kind: 'transcripts.appendSegment', record: segment })).toEqual({ appended: true, record: segment })
+      expect(executeForTest(state, { kind: 'transcripts.finalizeSession', input: { sessionId: archive.id, lifecycle: 'completed', endedAtMs: 1200, terminalReason: 'finished' } })).toMatchObject({ lifecycle: 'completed' })
+      expect(executeForTest(state, { kind: 'transcripts.appendSegment', record: segment })).toEqual({ appended: false, record: segment })
+      expect(() => executeForTest(state, { kind: 'transcripts.appendSegment', record: transcriptSegmentFixture({ id: 'segment-2', sequence: 1 }) })).toThrow()
+      expect(executeForTest(state, { kind: 'transcripts.listSegments', sessionId: archive.id })).toEqual([segment])
+    } finally {
+      db.close()
+    }
+  })
   it('redacts unknown commands and oversized messages without exposing SQL', async () => {
     const responses: BrowserSqliteWorkerResponse[] = []
     await handleBrowserSqliteWorkerMessage(
@@ -115,7 +191,9 @@ describe('browser sqlite worker protocol guardrails', () => {
             memoryItems: [],
             localToolStates: [],
             peerGrantMetadata: [],
-            localAudit: []
+            localAudit: [],
+            transcriptSessions: [],
+            transcriptSegments: []
           }
         })
       },
@@ -211,7 +289,9 @@ describe('browser sqlite worker protocol guardrails', () => {
             memoryItems: [memoryFixture({ profileId: 'profile-2' })],
             localToolStates: [],
             peerGrantMetadata: [],
-            localAudit: []
+            localAudit: [],
+            transcriptSessions: [],
+            transcriptSegments: []
           }
         })
       },
@@ -472,6 +552,8 @@ class FakeSqliteDatabase {
     if (typeof input !== 'string' && input.returnValue === 'resultRows') return this.rowsBySql[sql] ?? []
     return undefined
   }
+
+  close(): void {}
 }
 
 interface SnapshotSqliteState {
@@ -596,13 +678,13 @@ const envelopeFixture: EncryptedDataEnvelopeV1 = Object.freeze({
   createdAtMs: 1000
 })
 
-function openWorkerState(db: FakeSqliteDatabase | SnapshotSqliteDatabase, profileId: string, localNodeId: string) {
+function openWorkerState(db: TestSqliteDatabase, profileId: string, localNodeId: string): TestWorkerState {
   return {
     db,
     profileId,
     localNodeId,
     schemaVersion: 3,
-    migrationState: 'idle',
+    migrationState: 'idle' as const,
     closed: false,
     activeTransactionId: null,
     operationQueue: Promise.resolve(),
@@ -627,7 +709,9 @@ function largeTransferDocument() {
         id: `audit-large-${index}`,
         redactedDetailJson: { note: 'A'.repeat(60 * 1024) },
         createdAtMs: 2000 + index
-      }))
+      })),
+      transcriptSessions: [],
+      transcriptSegments: []
     }
   })
 }
@@ -692,11 +776,29 @@ function stateWithRows(records: SnapshotSqliteState['records']): SnapshotSqliteS
       aurora_memory_items: ['id', 'profile_id', 'local_node_id'],
       aurora_local_tool_state: ['profile_id', 'local_node_id', 'tool_contract_id'],
       aurora_peer_grant_metadata: ['grant_id', 'profile_id', 'local_node_id'],
-      aurora_local_audit: ['id', 'profile_id', 'local_node_id']
+      aurora_local_audit: ['id', 'profile_id', 'local_node_id'],
+      aurora_transcript_sessions: ['id', 'profile_id', 'local_node_id', 'lifecycle'],
+      aurora_transcript_segments: ['id', 'session_id', 'sequence']
     },
     ledger: [],
     identity: { singleton_id: 1, local_node_id: 'node-1', created_at_ms: 1000 },
     records
+  }
+}
+
+function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-1', profileId: 'profile-1', localNodeId: 'node-1', captureMode: 'ambient',
+    createdAtMs: 1000, startedAtMs: 1000, endedAtMs: null, lifecycle: 'active', terminalReason: null,
+    expiresAtMs: 86_401_000, language: 'en', modelProvenance: { provider: 'local', modelId: 'stt-small', version: null },
+    diarizationState: 'not_requested', ...overrides
+  }
+}
+
+function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'segment-1', sessionId: 'transcript-1', sequence: 0, startAtMs: 1001, endAtMs: 1100,
+    textEnvelope: envelopeFixture, confidence: 0.9, speakerId: null, speakerLabel: null, createdAtMs: 1100, ...overrides
   }
 }
 

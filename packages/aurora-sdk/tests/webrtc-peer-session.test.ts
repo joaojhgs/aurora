@@ -14,6 +14,7 @@ import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
+  CAP_GATEWAY_STATUS_EVENTS_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   parseProtocolHello
 } from '../src/webrtc/peer-protocol.js'
@@ -502,6 +503,80 @@ describe('WebRtcPeerSession', () => {
       toPeer: 'a-browser',
       envelope: expect.objectContaining({ sdp: 'explicit-setup-offer-sdp' })
     }))
+  })
+
+  it('rolls back a materialized browser offer when the lower-id Python offer wins glare', async () => {
+    const signaling = new FakeSignaling()
+    const answerPublished = deferred<void>()
+    signaling.publish = vi.fn(async (channel: any, envelope: any, toPeer?: string) => {
+      signaling.published.push({ channel, envelope, ...(toPeer === undefined ? {} : { toPeer }) })
+      if (channel === 'answer') answerPublished.resolve(undefined)
+    })
+    const pc = new FakePeerConnection('stale-browser-offer', 'browser-answer')
+    const remoteDescriptionReady = deferred<void>()
+    pc.setRemoteDescription = async (description) => {
+      pc.remoteDescription = description
+      remoteDescriptionReady.resolve(undefined)
+    }
+    const pairingContexts: PeerSessionAuthContext[] = []
+    const pairingCommitHandled = deferred<void>()
+    const auth = {
+      handleFrame: vi.fn(async (frame: unknown, context: PeerSessionAuthContext) => {
+        if ((frame as { type?: string }).type === 'pairing_commit') {
+          pairingContexts.push(context)
+          pairingCommitHandled.resolve(undefined)
+        }
+        return (frame as { type?: string }).type === 'pairing_commit' ? { authenticated: true } : undefined
+      })
+    }
+    const session = new WebRtcPeerSession({
+      localSignalingId: 'z-browser',
+      localStableId: 'stable-browser',
+      expectedRemoteStableId: 'stable-python',
+      negotiationIntent: 'offerer',
+      signaling,
+      createPeerConnection: () => pc,
+      codec,
+      timers: new FakeTimers(),
+      auth
+    })
+
+    await session.start()
+    signaling.emit(presence('a-python', 'stable-python'))
+    await flush()
+    expect(session.getSnapshot()).toMatchObject({ role: 'offerer', state: 'negotiating' })
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'offer',
+      envelope: expect.objectContaining({ sdp: 'stale-browser-offer' })
+    }))
+
+    signaling.emit({
+      channel: 'offer',
+      from: 'a-python',
+      stablePeerId: 'stable-python',
+      envelope: { type: 'offer', sdp: 'winning-python-offer' }
+    })
+    await remoteDescriptionReady.promise
+    expect(pc.remoteDescription).toEqual({ type: 'offer', sdp: 'winning-python-offer' })
+
+    await answerPublished.promise
+    expect(signaling.published).toContainEqual(expect.objectContaining({
+      channel: 'answer',
+      toPeer: 'a-python',
+      envelope: expect.objectContaining({ sdp: 'browser-answer' })
+    }))
+
+    const channel = new FakeDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL)
+    pc.remoteChannel(channel)
+    channel.open()
+    await flush()
+    channel.onmessage?.({ data: JSON.stringify({ type: 'pairing_commit', id: 'winning-python-commit' }) })
+    await pairingCommitHandled.promise
+    expect(pairingContexts).toHaveLength(1)
+    expect(pairingContexts[0]).toMatchObject({
+      offerSdp: 'winning-python-offer',
+      answerSdp: 'browser-answer'
+    })
   })
 
   it('keeps an explicitly materialized inbound session in the answerer role', async () => {
@@ -1520,6 +1595,8 @@ describe('WebRtcPeerSession', () => {
       timers: new FakeTimers(),
       auth
     })
+    const frames: unknown[] = []
+    session.subscribeFrames((frame) => frames.push(frame))
     await session.start()
     signaling.emit({ channel: 'offer', from: 'a', envelope: { type: 'offer', sdp: 'offer' } })
     await flush()
@@ -1658,7 +1735,61 @@ describe('WebRtcPeerSession', () => {
     expect(helloFrames).toHaveLength(1)
     const parsed = parseProtocolHello(helloFrames[0])
     expect(parsed.role).toBe('consumer')
-    expect(parsed.capabilities).toEqual(new Set([CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_CONSUMER_ONLY_V1]))
+    expect(parsed.capabilities).toEqual(new Set([CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1, CAP_CONSUMER_ONLY_V1]))
+  })
+
+  it('forwards one validated reciprocal hello after authorized auth consumes it', async () => {
+    const auth = { tryReconnect: vi.fn(async () => true), handleFrame: vi.fn(async () => ({ authenticated: true })) }
+    const { session, channel } = await authorizedAnswerer({ auth })
+    const frames: unknown[] = []
+    session.subscribeFrames((frame) => frames.push(frame))
+    const hello = { type: 'protocol_hello', v: 1, role: 'hybrid', capabilities: [], limits: { fragment_payload_bytes: 16384, max_logical_bytes: 8388608, max_peer_aggregate_bytes: 16777216, incomplete_ttl_seconds: 30, max_fragments: 4096 } }
+    channel.onmessage?.({ data: JSON.stringify(hello) })
+    channel.onmessage?.({ data: JSON.stringify(hello) })
+    await flush()
+    expect(frames).toEqual([hello])
+    expect(auth.handleFrame).toHaveBeenCalledTimes(2)
+    await session.close()
+  })
+
+  it('rejects malformed or denied authorized hellos before frame delivery', async () => {
+    const deniedAuth = { tryReconnect: vi.fn(async () => true), handleFrame: vi.fn(async () => ({ denied: true })) }
+    const denied = await authorizedAnswerer({ auth: deniedAuth })
+    const deniedFrames: unknown[] = []
+    denied.session.subscribeFrames((frame) => deniedFrames.push(frame))
+    const hello = { type: 'protocol_hello', v: 1, role: 'hybrid', capabilities: [], limits: { fragment_payload_bytes: 16384, max_logical_bytes: 8388608, max_peer_aggregate_bytes: 16777216, incomplete_ttl_seconds: 30, max_fragments: 4096 } }
+    denied.channel.onmessage?.({ data: JSON.stringify(hello) })
+    await flush()
+    expect(deniedFrames).toEqual([])
+    expect(denied.session.getSnapshot()).toMatchObject({ state: 'failed', authorized: false })
+    await denied.session.close()
+
+    const malformedAuth = { tryReconnect: vi.fn(async () => true), handleFrame: vi.fn(async () => ({ authenticated: true })) }
+    const malformed = await authorizedAnswerer({ auth: malformedAuth })
+    const malformedFrames: unknown[] = []
+    malformed.session.subscribeFrames((frame) => malformedFrames.push(frame))
+    malformed.channel.onmessage?.({ data: JSON.stringify({ ...hello, limits: { ...hello.limits, fragment_payload_bytes: 0 } }) })
+    await flush()
+    expect(malformedFrames).toEqual([])
+    expect(malformedAuth.handleFrame).not.toHaveBeenCalled()
+    expect(malformed.session.getSnapshot()).toMatchObject({ state: 'failed', authorized: false })
+    await malformed.session.close()
+  })
+
+  it.each([
+    ['handled', { handled: true }],
+    ['undefined', undefined]
+  ] as const)('consumes a valid authorized hello when auth returns %s without dispatching it', async (_label, result) => {
+    const auth = { tryReconnect: vi.fn(async () => true), handleFrame: vi.fn(async () => result) }
+    const { session, channel } = await authorizedAnswerer({ auth })
+    const frames: unknown[] = []
+    session.subscribeFrames((frame) => frames.push(frame))
+    const hello = { type: 'protocol_hello', v: 1, role: 'hybrid', capabilities: [], limits: { fragment_payload_bytes: 16384, max_logical_bytes: 8388608, max_peer_aggregate_bytes: 16777216, incomplete_ttl_seconds: 30, max_fragments: 4096 } }
+    channel.onmessage?.({ data: JSON.stringify(hello) })
+    await flush()
+    expect(frames).toEqual([])
+    expect(session.getSnapshot()).toMatchObject({ state: 'authorized', authorized: true })
+    await session.close()
   })
 
   it('replays a protocol hello buffered while reconnect proof authentication is pending', async () => {
@@ -1728,6 +1859,8 @@ describe('WebRtcPeerSession', () => {
       reconnect: { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 1, jitterRatio: 0 },
       auth
     })
+    const frames: unknown[] = []
+    session.subscribeFrames((frame) => frames.push(frame))
     await session.start()
     signaling.emit({ channel: 'offer', from: 'a', stablePeerId: 'stable-a', envelope: { type: 'offer', sdp: 'offer-1' } })
     await flush()
@@ -1758,6 +1891,7 @@ describe('WebRtcPeerSession', () => {
     expect(session.getSnapshot()).toMatchObject({ state: 'authorized', remoteStableId: 'stable-a' })
     expect(second.sent.map(String).filter((item) => JSON.parse(item).type === 'protocol_hello')).toHaveLength(1)
     expect(first.sent.map(String).filter((item) => JSON.parse(item).type === 'protocol_hello')).toHaveLength(1)
+    expect(frames.filter((frame) => typeof frame === 'object' && frame !== null && (frame as { type?: unknown }).type === 'protocol_hello')).toHaveLength(2)
   })
 
 })

@@ -10,6 +10,41 @@ import type { AuditReceipt, AuroraEvent, AuroraTransportEnvelope, JsonObject } f
 
 export type MeshPeerId = string
 
+/** Redacted wire form of a validated, currently ready speech-stage capability. */
+export interface MeshSpeechStageCapabilityV1 {
+  schema: 'speech-stage-capability.v1'
+  stage: 'stt' | 'tts' | 'kws' | 'vad'
+  method_ids: string[]
+  modes: Array<'finite' | 'streaming'>
+  implementation: 'native' | 'wasm' | 'python'
+  peer_id: string
+  resource_id: string | null
+  capability_revision: number
+  supported_formats: string[]
+  sample_rates: number[]
+  channels: number[]
+  supported_languages: string[]
+  model_ids: string[]
+  lifecycle: Array<'foreground' | 'active_native_capture'>
+  max_input_bytes: number
+  max_chunk_bytes: number
+  max_concurrent: number
+  max_queue: number
+  lease_ms: number
+  readiness: 'ready' | 'missing_model' | 'loading' | 'incompatible' | 'unavailable'
+  required_permissions: string[]
+  audio_consent_required: boolean
+  experimental: boolean
+  exported: boolean
+}
+
+/** Provider-owned wrapper binding a ready stage to logical voices. */
+export interface MeshSpeechStageCapabilityExportV1 {
+  capability: MeshSpeechStageCapabilityV1
+  voice_ids: string[]
+  requires_remote_audio_egress: boolean
+}
+
 export interface MeshAddressSelector {
   peer_id?: string | null
   peerId?: string | null
@@ -49,6 +84,7 @@ export interface MeshPeerManifest {
     capabilities?: string[]
     providerId?: string | null
     serviceInstanceId?: string | null
+    speechStageCapabilities?: MeshSpeechStageCapabilityExportV1[]
   }>
   raw?: unknown
 }

@@ -261,7 +261,7 @@
       "handler": "process_external_input",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 558
+        "line": 651
       },
       "exposure": "external",
       "method_type": "use",
@@ -282,7 +282,7 @@
       "handler": "infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 635
+        "line": 729
       },
       "exposure": "external",
       "method_type": "use",
@@ -303,7 +303,7 @@
       "handler": "stream_infer_chat",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 664
+        "line": 783
       },
       "exposure": "external",
       "method_type": "use",
@@ -324,7 +324,7 @@
       "handler": "ingest_context",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 692
+        "line": 828
       },
       "exposure": "external",
       "method_type": "use",
@@ -345,7 +345,7 @@
       "handler": "list_pending_tool_approvals",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 880
+        "line": 1016
       },
       "exposure": "external",
       "method_type": "use",
@@ -366,7 +366,7 @@
       "handler": "resume_tool_approval",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 931
+        "line": 1067
       },
       "exposure": "external",
       "method_type": "use",
@@ -387,7 +387,7 @@
       "handler": "interrupt_assistant",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1082
+        "line": 1218
       },
       "exposure": "external",
       "method_type": "use",
@@ -408,7 +408,7 @@
       "handler": "get_model_runtime",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1209
+        "line": 1373
       },
       "exposure": "external",
       "method_type": "use",
@@ -429,7 +429,7 @@
       "handler": "get_model_catalog",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1253
+        "line": 1417
       },
       "exposure": "external",
       "method_type": "use",
@@ -450,7 +450,7 @@
       "handler": "get_model_operation",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1281
+        "line": 1445
       },
       "exposure": "external",
       "method_type": "use",
@@ -471,7 +471,7 @@
       "handler": "import_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1308
+        "line": 1472
       },
       "exposure": "external",
       "method_type": "manage",
@@ -492,7 +492,7 @@
       "handler": "download_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1324
+        "line": 1488
       },
       "exposure": "external",
       "method_type": "manage",
@@ -513,7 +513,7 @@
       "handler": "benchmark_model",
       "source": {
         "file": "app/services/orchestrator/service.py",
-        "line": 1340
+        "line": 1504
       },
       "exposure": "external",
       "method_type": "manage",
@@ -759,7 +759,7 @@
       "handler": "_on_external_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1070
+        "line": 1235
       },
       "exposure": "both",
       "method_type": "use",
@@ -780,7 +780,7 @@
       "handler": "start_speech_stream",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1353
+        "line": 1530
       },
       "exposure": "both",
       "method_type": "use",
@@ -801,7 +801,7 @@
       "handler": "push_speech_stream_chunk",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1424
+        "line": 1601
       },
       "exposure": "both",
       "method_type": "use",
@@ -822,7 +822,7 @@
       "handler": "end_speech_stream",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1638
+        "line": 1815
       },
       "exposure": "both",
       "method_type": "use",
@@ -843,7 +843,7 @@
       "handler": "cancel_speech_stream",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1746
+        "line": 1923
       },
       "exposure": "both",
       "method_type": "use",
@@ -864,7 +864,7 @@
       "handler": "speech_stream_status",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1794
+        "line": 1971
       },
       "exposure": "both",
       "method_type": "use",
@@ -885,7 +885,7 @@
       "handler": "speech_stream_result",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1889
+        "line": 2066
       },
       "exposure": "both",
       "method_type": "use",
@@ -906,7 +906,7 @@
       "handler": "transcribe_audio",
       "source": {
         "file": "app/services/stt_transcription/service.py",
-        "line": 1919
+        "line": 2096
       },
       "exposure": "both",
       "method_type": "use",
@@ -1914,7 +1914,7 @@
       "handler": "get_capabilities",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1478
+        "line": 1623
       },
       "exposure": "both",
       "method_type": "use",
@@ -1934,7 +1934,7 @@
       "handler": "list_voices",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1559
+        "line": 1704
       },
       "exposure": "both",
       "method_type": "use",
@@ -1954,7 +1954,7 @@
       "handler": "list_language_packs",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1584
+        "line": 1729
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1974,7 +1974,7 @@
       "handler": "list_voice_profiles",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1614
+        "line": 1759
       },
       "exposure": "both",
       "method_type": "manage",
@@ -1994,7 +1994,7 @@
       "handler": "get_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1641
+        "line": 1786
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2014,7 +2014,7 @@
       "handler": "update_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1667
+        "line": 1812
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2034,7 +2034,7 @@
       "handler": "install_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 1800
+        "line": 1945
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2054,7 +2054,7 @@
       "handler": "remove_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2016
+        "line": 2161
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2074,7 +2074,7 @@
       "handler": "set_default_voice",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2136
+        "line": 2281
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2094,7 +2094,7 @@
       "handler": "voice_import_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2235
+        "line": 2380
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2114,7 +2114,7 @@
       "handler": "voice_import_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2299
+        "line": 2444
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2134,7 +2134,7 @@
       "handler": "voice_import_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2382
+        "line": 2527
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2154,7 +2154,7 @@
       "handler": "voice_import_abort",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2441
+        "line": 2586
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2174,7 +2174,7 @@
       "handler": "create_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2490
+        "line": 2635
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2194,7 +2194,7 @@
       "handler": "delete_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2621
+        "line": 2766
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2214,7 +2214,7 @@
       "handler": "export_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2696
+        "line": 2841
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2234,7 +2234,7 @@
       "handler": "import_voice_profile",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2828
+        "line": 2973
       },
       "exposure": "both",
       "method_type": "manage",
@@ -2254,7 +2254,7 @@
       "handler": "_on_tts_request",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 2948
+        "line": 3093
       },
       "exposure": "both",
       "method_type": "use",
@@ -2274,7 +2274,7 @@
       "handler": "_on_stream_start",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3003
+        "line": 3148
       },
       "exposure": "both",
       "method_type": "use",
@@ -2294,7 +2294,7 @@
       "handler": "prepare_speech_stream",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3096
+        "line": 3241
       },
       "exposure": "both",
       "method_type": "use",
@@ -2314,7 +2314,7 @@
       "handler": "speech_stream_status",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3180
+        "line": 3325
       },
       "exposure": "both",
       "method_type": "use",
@@ -2334,7 +2334,7 @@
       "handler": "cancel_speech_stream",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3267
+        "line": 3412
       },
       "exposure": "both",
       "method_type": "use",
@@ -2354,7 +2354,7 @@
       "handler": "speech_stream_result",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3318
+        "line": 3463
       },
       "exposure": "both",
       "method_type": "use",
@@ -2374,7 +2374,7 @@
       "handler": "_on_stream_chunk",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3344
+        "line": 3489
       },
       "exposure": "both",
       "method_type": "use",
@@ -2394,7 +2394,7 @@
       "handler": "_on_stream_end",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3468
+        "line": 3613
       },
       "exposure": "both",
       "method_type": "use",
@@ -2414,7 +2414,7 @@
       "handler": "synthesize",
       "source": {
         "file": "app/services/tts/service.py",
-        "line": 3927
+        "line": 4072
       },
       "exposure": "both",
       "method_type": "use",
@@ -2569,7 +2569,29 @@
       "permission_status": "protected"
     }
   ],
-  "mesh_publishers": [],
+  "mesh_publishers": [
+    {
+      "topic": "Gateway.StatusChanged",
+      "payload_type": "GatewayStatusChangedEvent",
+      "payload_fields_or_shape": [
+        "event_id",
+        "timestamp",
+        "kind",
+        "status",
+        "freshness",
+        "service_id"
+      ],
+      "sensitivity": "low",
+      "current_forwarding": "active_for_authorized_status_subscribers",
+      "safe_for_service_wide_broadcast": false,
+      "remediation_goal": null,
+      "blocker_reason": "Not safe for blanket service-wide broadcast: recipients are restricted to peers with the status-events capability and current Gateway status authority.",
+      "source": {
+        "file": "app/services/gateway/service.py",
+        "line": 2160
+      }
+    }
+  ],
   "tooling_rule_selectors": {
     "matching_semantics": "non_null_conjunctive_exact_match",
     "precedence": "first_match_wins",
@@ -2691,7 +2713,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 775
+        "line": 781
       }
     },
     {
@@ -2706,7 +2728,7 @@
       ],
       "source": {
         "file": "app/services/gateway/webrtc/rpc.py",
-        "line": 1998
+        "line": 2037
       }
     },
     {

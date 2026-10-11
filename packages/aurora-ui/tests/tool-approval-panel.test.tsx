@@ -1,4 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
+import type { ComponentProps } from 'react'
 import { describe, expect, it } from 'vitest'
 import {
   AuroraClient as Aurora,
@@ -10,12 +11,14 @@ import {
 } from '@aurora/client'
 import {
   ToolApprovalPanel,
+  ToolingConsole,
   auroraNavSections,
   buildToolCategories,
   filterTools,
   navItemSnapshot,
   type RouteAvailability,
 } from '../src'
+import { fetchToolApprovalCards } from '../src/tool-approval-panel-queries'
 
 function toolsRoute(): RouteAvailability {
   const toolsItem = auroraNavSections
@@ -68,7 +71,82 @@ function renderToolsPanel() {
   )
 }
 
+function renderToolingConsoleState(
+  props: Partial<ComponentProps<typeof ToolingConsole>> = {},
+) {
+  const client = new Aurora({ transport: new MockAuroraTransport() })
+  return renderToStaticMarkup(
+    <ToolingConsole
+      client={client}
+      route={toolsRoute()}
+      tools={[]}
+      loading={false}
+      error={null}
+      schedulerJobs={[]}
+      schedulerLoading={false}
+      schedulerError={null}
+      selectedProviders={{}}
+      decisionMessages={{}}
+      policySummary={null}
+      sourceSummaries={[]}
+      sourceDetails={{}}
+      grants={[]}
+      pendingApprovals={[]}
+      auditEvents={[]}
+      builtinPlugins={[]}
+      managementLoading={false}
+      managementError={null}
+      sharingPolicy={null}
+      sharingPeers={[]}
+      sharingDecisions={{}}
+      sharingLoading={false}
+      sharingError={null}
+      sharingMessage={null}
+      sharingPendingKey={null}
+      sourceManagementEnabled={true}
+      sourceConfiguredTrustTiers={{}}
+      onSelectProvider={() => undefined}
+      onApprove={() => undefined}
+      onDeny={() => undefined}
+      onExecuteSafe={() => undefined}
+      {...props}
+    />,
+  )
+}
+
 describe('ToolApprovalPanel tools and automations stories', () => {
+
+  it('loads approval cards through the scoped, cancellable catalog query path', async () => {
+    const controller = new AbortController()
+    let capturedSignal: AbortSignal | undefined
+    let capturedPayload: unknown
+    const transport = MockAuroraTransport.empty().register('Tooling.GetToolCatalog', (request) => {
+      capturedSignal = request.signal
+      capturedPayload = request.payload
+      return toolCatalogFixture
+    })
+    const client = new Aurora({ transport })
+
+    const cards = await fetchToolApprovalCards(client, controller.signal)
+
+    expect(capturedSignal).toBe(controller.signal)
+    expect(capturedPayload).toEqual({})
+    expect(cards.map((tool) => tool.id)).toEqual(
+      normalizeToolCatalog(toolCatalogFixture, { transportKind: client.transport.kind }).map((tool) => tool.id),
+    )
+  })
+
+  it('does not start the approval-card query when its scope has already been cancelled', async () => {
+    const controller = new AbortController()
+    const transport = MockAuroraTransport.empty().register('Tooling.GetToolCatalog', () => {
+      throw new Error('catalog should not load after cancellation')
+    })
+    const client = new Aurora({ transport })
+    controller.abort()
+
+    await expect(fetchToolApprovalCards(client, controller.signal)).rejects.toThrow('Tool approval request was cancelled')
+  })
+
   it('matches the source-first Tools & Plugins console with policy summary, source rail, and detail panel', () => {
     const markup = renderToolsPanel()
 
@@ -116,6 +194,26 @@ describe('ToolApprovalPanel tools and automations stories', () => {
     expect(markup).not.toContain('>Deny<')
     expect(markup).not.toContain('>Approve<')
     expect(markup.match(/role="tab"/g)?.length).toBe(2)
+  })
+
+  it('renders shared loading, error, and empty states for the tools route', () => {
+    const loadingMarkup = renderToolingConsoleState({
+      loading: true,
+      managementLoading: true,
+      error: 'connection_lost',
+      managementError: 'connection_lost',
+      schedulerLoading: true,
+    })
+    const emptyMarkup = renderToolingConsoleState()
+
+    expect(loadingMarkup).toContain('Tools need attention')
+    expect(loadingMarkup).toContain('Tool settings need attention')
+    expect(loadingMarkup).toContain('Tool settings loading')
+    expect(loadingMarkup).toContain('Loading tool sources')
+    expect(loadingMarkup).toContain('disabled')
+
+    expect(emptyMarkup).toContain('No tool sources')
+    expect(emptyMarkup).toContain('No tools available')
   })
 
 })

@@ -8,6 +8,8 @@ import {
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTtsAudio,
   type AuroraVoiceTtsRequest,
+  type AuroraVoiceSttRequest,
+  type AuroraVoiceFiniteSttResult,
   type AuroraVoiceInferenceOutput,
   type AuroraVoiceLifecycleEligibility,
   type AuroraVoiceWebCapabilities,
@@ -26,7 +28,10 @@ const DEFAULT_MAX_FRAME_SAMPLES = 4_800
 const DEFAULT_MAX_QUEUED_BYTES = 16_000 * 2 * 10
 const DEFAULT_WORKER_TIMEOUT_MS = 5_000
 const DEFAULT_TTS_TIMEOUT_MS = 120_000
+const DEFAULT_STT_TIMEOUT_MS = 60_000
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
+const MAX_FINITE_STT_BYTES = 4 * 1024 * 1024
+const MAX_FINITE_STT_SAMPLES = 16_000 * 60
 const MAX_TTS_TEXT_CHARS = 1_000
 const MAX_TTS_AUDIO_SAMPLES = 48_000 * 60
 
@@ -58,6 +63,9 @@ export class AuroraVoiceWebRuntime {
   private generation = 0
   private ttsGeneration = 0
   private activeTtsGeneration: number | null = null
+  private sttGeneration = 0
+  private activeSttGeneration: number | null = null
+  private operationRevision = 0
   private nextSequence = 0
   private queuedBytes = 0
   private frameChain: Promise<void> = Promise.resolve()
@@ -100,6 +108,19 @@ export class AuroraVoiceWebRuntime {
     }
   }
 
+  /** Initialize the selected local engines and return their real worker readiness. */
+  async initialize(): Promise<AuroraVoiceWebCapabilities> {
+    const eligibility = this.currentLifecycle()
+    if (!eligibility.eligible || !eligibility.visible || eligibility.frozen) {
+      throw new AuroraVoiceWebRuntimeError('lifecycle_ineligible', 'Speech processing is not available')
+    }
+    if (this.session !== null || this.pendingStoppedSession !== null || this.activeSttGeneration !== null || this.activeTtsGeneration !== null) {
+      throw new AuroraVoiceWebRuntimeError('inference_busy', 'Speech is still being processed')
+    }
+    await this.initializeWorker(this.hasTtsModelBindings() ? this.ttsTimeoutMs : this.workerTimeoutMs)
+    return this.capabilities
+  }
+
   async start(): Promise<AuroraVoiceWebSession> {
     const eligibility = this.currentLifecycle()
     if (!eligibility.eligible || !eligibility.visible || eligibility.frozen) {
@@ -110,6 +131,9 @@ export class AuroraVoiceWebRuntime {
     }
     if (this.pendingStoppedSession !== null) {
       throw new AuroraVoiceWebRuntimeError('turn_pending', 'The previous voice turn is still pending')
+    }
+    if (this.activeSttGeneration !== null) {
+      throw new AuroraVoiceWebRuntimeError('inference_busy', 'Speech is still being processed')
     }
     if (activeVoiceLock !== null) {
       throw new AuroraVoiceWebRuntimeError('active_owner_exists', 'A voice session is already active')
@@ -125,6 +149,7 @@ export class AuroraVoiceWebRuntime {
     })
 
     activeVoiceLock = { ownerId: this.ownerId, token: this.lockToken }
+    this.operationRevision += 1
     this.state = 'active'
     this.generation = nextGeneration
     this.nextSequence = 0
@@ -192,14 +217,68 @@ export class AuroraVoiceWebRuntime {
     await this.finishTurn('abandoned')
   }
 
+  async transcribeSpeech(request: AuroraVoiceSttRequest): Promise<AuroraVoiceFiniteSttResult> {
+    const eligibility = this.currentLifecycle()
+    if (!eligibility.eligible || !eligibility.visible || eligibility.frozen) {
+      throw new AuroraVoiceWebRuntimeError('lifecycle_ineligible', 'Speech processing is not available')
+    }
+    if (this.session !== null || this.pendingStoppedSession !== null || activeVoiceLock !== null) {
+      throw new AuroraVoiceWebRuntimeError('session_active', 'A voice session is already active')
+    }
+    if (this.activeSttGeneration !== null || this.activeTtsGeneration !== null) {
+      throw new AuroraVoiceWebRuntimeError('inference_busy', 'Speech is still being processed')
+    }
+    const pcm = validateFiniteSttAudio(request.pcm)
+    const generation = boundedSttGeneration(request.generation ?? this.sttGeneration + 1)
+    const language = request.language === undefined ? undefined : safeIdentifier(request.language, 'language')
+    this.sttGeneration = Math.max(this.sttGeneration, generation)
+    this.operationRevision += 1
+    this.activeSttGeneration = generation
+    try {
+      await this.initializeWorker(DEFAULT_STT_TIMEOUT_MS)
+      if (this.activeSttGeneration !== generation || generation < this.sttGeneration) {
+        throw new AuroraVoiceWebRuntimeError('stale_generation', 'Speech processing was cancelled')
+      }
+      const afterInitialize = this.currentLifecycle()
+      if (!afterInitialize.eligible || !afterInitialize.visible || afterInitialize.frozen) {
+        throw new AuroraVoiceWebRuntimeError('lifecycle_ineligible', 'Speech processing is not available')
+      }
+      if (!this.capabilities.stt) throw new AuroraVoiceWebRuntimeError('stt_unavailable', 'Speech is not available')
+      const transferredPcm = new Int16Array(pcm)
+      const response = await this.worker.request({
+        type: 'transcribe_stt',
+        generation,
+        pcm: transferredPcm,
+        ...(language !== undefined ? { language } : {})
+      }, { timeoutMs: DEFAULT_STT_TIMEOUT_MS, transfer: [transferredPcm.buffer] })
+      if (this.activeSttGeneration !== generation || generation < this.sttGeneration) {
+        throw new AuroraVoiceWebRuntimeError('stale_generation', 'Speech processing was cancelled')
+      }
+      const afterInference = this.currentLifecycle()
+      if (!afterInference.eligible || !afterInference.visible || afterInference.frozen) {
+        throw new AuroraVoiceWebRuntimeError('lifecycle_ineligible', 'Speech processing is not available')
+      }
+      return Object.freeze({ generation, text: validateSttResult(response, generation), redacted: true })
+    } catch (error) {
+      if (error instanceof AuroraVoiceWebRuntimeError) throw error
+      throw new AuroraVoiceWebRuntimeError('stt_failed', 'Speech could not be transcribed')
+    } finally {
+      if (this.activeSttGeneration === generation) this.activeSttGeneration = null
+    }
+  }
+
   async synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio> {
     const eligibility = this.currentLifecycle()
     if (!eligibility.eligible || !eligibility.visible || eligibility.frozen) {
       throw new AuroraVoiceWebRuntimeError('lifecycle_ineligible', 'Foreground speech is not available')
     }
+    if (this.activeSttGeneration !== null) {
+      throw new AuroraVoiceWebRuntimeError('inference_busy', 'Speech is still being processed')
+    }
     const text = validateTtsText(request.text)
     const generation = boundedTtsGeneration(request.generation ?? this.ttsGeneration + 1)
     this.ttsGeneration = Math.max(this.ttsGeneration, generation)
+    this.operationRevision += 1
     this.activeTtsGeneration = generation
     try {
       await this.initializeWorker(this.ttsTimeoutMs)
@@ -232,7 +311,9 @@ export class AuroraVoiceWebRuntime {
       this.ttsGeneration = Math.max(this.ttsGeneration, ttsGeneration + 1)
       this.activeTtsGeneration = null
     }
-    if (session === null && pending === null && ttsGeneration === null) return
+    const sttGeneration = this.activeSttGeneration
+    if (sttGeneration !== null) this.sttGeneration = Math.max(this.sttGeneration, sttGeneration + 1)
+    if (session === null && pending === null && ttsGeneration === null && sttGeneration === null) return
     const generation = this.generation
     let failed = false
     try {
@@ -245,7 +326,7 @@ export class AuroraVoiceWebRuntime {
         const cancelled = await this.worker.request({
           type: 'cancel',
           sessionId: session?.sessionId ?? pending?.sessionId ?? null,
-          generation: session?.generation ?? pending?.generation ?? ttsGeneration ?? generation,
+          generation: session?.generation ?? pending?.generation ?? sttGeneration ?? ttsGeneration ?? generation,
           reason: 'cancelled'
         }, { timeoutMs: this.workerTimeoutMs })
         const owner = session ?? pending
@@ -255,11 +336,21 @@ export class AuroraVoiceWebRuntime {
       }
       this.emit(failed ? 'error' : 'session_cancelled', null, null, 0, 0, 0, failed ? 'cancel_failed' : normalizeReason(reason))
     } finally {
-      if (failed && session === null && pending !== null) {
-        this.clearActiveSession('stopped')
-        this.pendingStoppedSession = pending
-      } else {
+      // A newer finite operation may start while cancellation waits. Clear only
+      // the capture/turn whose exact session identity this request cancelled.
+      const ownsSession = session !== null && this.session?.sessionId === session.sessionId &&
+        this.session.generation === session.generation
+      const ownsPendingTurn = pending !== null && this.pendingStoppedSession?.sessionId === pending.sessionId &&
+        this.pendingStoppedSession.generation === pending.generation
+      if (ownsSession) {
         this.clearSession('cancelled')
+      } else if (ownsPendingTurn) {
+        if (failed) {
+          this.state = 'stopped'
+        } else {
+          this.pendingStoppedSession = null
+          if (this.session === null && this.state === 'stopped') this.state = 'cancelled'
+        }
       }
     }
     if (failed) throw new AuroraVoiceWebRuntimeError('cancel_failed', 'Voice session could not cancel cleanly')
@@ -271,12 +362,55 @@ export class AuroraVoiceWebRuntime {
 
   protected async refreshLifecycleEligibility(eligibility: AuroraVoiceLifecycleEligibility): Promise<void> {
     eligibility = validateLifecycle(eligibility)
-    if ((this.session === null && this.pendingStoppedSession === null) || eligibility.eligible && eligibility.visible && !eligibility.frozen) return
+    if ((this.session === null && this.pendingStoppedSession === null && this.activeSttGeneration === null) || eligibility.eligible && eligibility.visible && !eligibility.frozen) return
     try {
       await this.cancel('lifecycle_lost')
     } finally {
       this.emit('lifecycle_lost', null, null, 0, 0, 0, eligibility.reason)
     }
+  }
+
+  /** Cancel only the operation observed by a lifecycle notification. */
+  protected async refreshLifecycleForObservedOperation(
+    eligibility: AuroraVoiceLifecycleEligibility,
+    observed: {
+      readonly sessionId: string | null
+      readonly generation: number
+      readonly sttGeneration: number | null
+      readonly ttsGeneration: number | null
+      readonly operationRevision: number
+    }
+  ): Promise<void> {
+    eligibility = validateLifecycle(eligibility)
+    if (eligibility.eligible && eligibility.visible && !eligibility.frozen) return
+    if (this.operationRevision !== observed.operationRevision) return
+    const current = this.snapshot()
+    const sameSession = observed.sessionId !== null &&
+      current.sessionId === observed.sessionId && current.generation === observed.generation
+    const sameStt = observed.sttGeneration !== null && this.activeSttGeneration === observed.sttGeneration
+    const sameTts = observed.ttsGeneration !== null && this.activeTtsGeneration === observed.ttsGeneration
+    if (!sameSession && !sameStt && !sameTts) return
+    try {
+      await this.cancel('lifecycle_lost')
+    } finally {
+      this.emit('lifecycle_lost', null, null, 0, 0, 0, eligibility.reason)
+    }
+  }
+
+  protected activeFiniteSttGeneration(): number | null {
+    return this.activeSttGeneration
+  }
+
+  protected activeFiniteTtsGeneration(): number | null {
+    return this.activeTtsGeneration
+  }
+
+  protected currentOperationRevision(): number {
+    return this.operationRevision
+  }
+
+  protected hasActiveFiniteInference(): boolean {
+    return this.activeSttGeneration !== null || this.activeTtsGeneration !== null
   }
 
   async dispose(): Promise<void> {
@@ -706,6 +840,34 @@ function validateTtsText(text: string): string {
     throw new AuroraVoiceWebRuntimeError('invalid_tts_request', 'Speech text is invalid')
   }
   return normalized
+}
+
+function validateFiniteSttAudio(value: unknown): Int16Array {
+  if (!(value instanceof Int16Array) || value.length === 0 || value.length > MAX_FINITE_STT_SAMPLES || value.byteLength > MAX_FINITE_STT_BYTES) {
+    throw new AuroraVoiceWebRuntimeError('invalid_stt_request', 'Speech audio is invalid')
+  }
+  return new Int16Array(value)
+}
+
+function boundedSttGeneration(value: number): number {
+  if (!Number.isSafeInteger(value) || value < 1) {
+    throw new AuroraVoiceWebRuntimeError('invalid_stt_request', 'Speech request is invalid')
+  }
+  return value
+}
+
+function validateSttResult(response: unknown, generation: number): string {
+  if (
+    typeof response !== 'object' ||
+    response === null ||
+    (response as { type?: unknown }).type !== 'stt_result' ||
+    (response as { generation?: unknown }).generation !== generation ||
+    typeof (response as { text?: unknown }).text !== 'string' ||
+    (response as { text: string }).text.length > 65_536
+  ) {
+    throw new AuroraVoiceWebRuntimeError('worker_rejected', 'Voice worker rejected the request')
+  }
+  return (response as { text: string }).text
 }
 
 function boundedTtsGeneration(value: number): number {

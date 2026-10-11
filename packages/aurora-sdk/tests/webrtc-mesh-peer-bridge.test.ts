@@ -11,6 +11,7 @@ import {
   CAP_BACKPRESSURE_V1,
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
+  CAP_GATEWAY_STATUS_EVENTS_V1,
   CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
   PeerHostContractRegistry,
@@ -55,8 +56,10 @@ class FakeSession {
   }
 }
 
+const scheduleFlush = globalThis.setImmediate
+
 async function flush(): Promise<void> {
-  await Promise.resolve(); await Promise.resolve(); await Promise.resolve()
+  await new Promise<void>((resolve) => scheduleFlush(resolve))
 }
 
 async function isSettled(promise: Promise<unknown>): Promise<boolean> {
@@ -356,13 +359,17 @@ describe('WebRtcMeshPeerBridge', () => {
 
   it('streams scoped events with correlation isolation and rejects wildcard subscriptions', async () => {
     const session = new FakeSession()
-    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'sub-1' })
+    const ids = ['pending-sub', 'sub-1']
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => ids.shift() ?? 'extra-sub' })
     expect(() => bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Assistant.*'], candidates: [] } as any)).toThrow('wildcard')
-    expect(() => bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Orchestrator.Response'], candidates: [] } as any)).toThrow('unsupported')
+    const pending = bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Orchestrator.Response'], payload: { correlation_id: 'corr-pending' }, candidates: [] } as any)
+    expect(session.sent.some((frame) => (frame as any).type === 'subscribe')).toBe(false)
     session.emit(hello())
 
     const stream = bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Orchestrator.Response'], payload: { correlation_id: 'corr-1' }, candidates: [] } as any)
-    expect(session.sent[0]).toMatchObject({ type: 'subscribe', id: 'sub-1', topics: ['Orchestrator.Response'], correlation_ids: ['corr-1'] })
+    expect(session.sent.filter((frame) => (frame as any).type === 'subscribe')).toHaveLength(2)
+    expect(session.sent).toContainEqual(expect.objectContaining({ type: 'subscribe', id: 'sub-1', topics: ['Orchestrator.Response'], correlation_ids: ['corr-1'] }))
+    expect(session.sent).toContainEqual(expect.objectContaining({ type: 'subscribe', id: 'pending-sub', topics: ['Orchestrator.Response'], correlation_ids: ['corr-pending'] }))
     session.emit({ type: 'subscribed', id: 'sub-1', subscription_id: 'sub-1', accepted: true, accepted_topics: ['Orchestrator.Response'], rejected_topics: [], correlation_ids: ['corr-1'], ttl_seconds: 60, reason: null, idempotent: false })
     await flush()
     session.emit({ type: 'event', topic: 'Orchestrator.Response', params: { text: 'wrong' }, correlation_id: 'other' })
@@ -371,6 +378,187 @@ describe('WebRtcMeshPeerBridge', () => {
     await expect(iterator.next()).resolves.toMatchObject({ value: { kind: 'Orchestrator.Response', topic: 'Orchestrator.Response', payload: { text: 'ok' }, correlation_id: 'corr-1' }, done: false })
     await iterator.return?.()
     expect(session.sent.some((frame) => (frame as any).type === 'unsubscribe' && (frame as any).id === 'sub-1')).toBe(true)
+    await pending[Symbol.asyncIterator]().return?.()
+    bridge.close()
+  })
+
+  it('defers subscriptions until hello and fails closed only after negotiated capabilities are known', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'pending-status' })
+    const pending = bridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], candidates: [] } as any)
+    expect(session.sent.some((frame) => (frame as any).type === 'subscribe')).toBe(false)
+
+    session.emit(buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1],
+      limits: new PeerProtocolLimits()
+    }))
+    await expect(pending.ready).rejects.toMatchObject({ code: 'unsupported_feature' })
+    await expect(pending[Symbol.asyncIterator]().next()).rejects.toMatchObject({ code: 'unsupported_feature' })
+    expect(session.sent.some((frame) => (frame as any).type === 'subscribe')).toBe(false)
+    bridge.close()
+  })
+
+  it('filters simultaneous status subscriptions by their requested event kind', async () => {
+    const session = new FakeSession()
+    const ids = ['health-kind', 'config-kind']
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => ids.shift() ?? 'extra-kind' })
+    const health = bridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], kinds: ['health.changed'], candidates: [] } as any)
+    const config = bridge.subscribe({ peerId: 'peer-a', stream: 'config', topics: ['Gateway.StatusChanged'], kinds: ['config.updated'], candidates: [] } as any)
+    session.emit(buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1],
+      limits: new PeerProtocolLimits()
+    }))
+    await vi.waitFor(() => {
+      expect(session.sent.filter((frame) => (frame as any).type === 'subscribe')).toHaveLength(2)
+    })
+    session.emit({ type: 'subscribed', id: 'health-kind', subscription_id: 'health-kind', accepted: true, accepted_topics: ['Gateway.StatusChanged'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    session.emit({ type: 'subscribed', id: 'config-kind', subscription_id: 'config-kind', accepted: true, accepted_topics: ['Gateway.StatusChanged'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    await Promise.all([health.ready, config.ready])
+    const healthIterator = health[Symbol.asyncIterator]()
+    const configIterator = config[Symbol.asyncIterator]()
+    session.emit({ type: 'event', topic: 'Gateway.StatusChanged', params: { kind: 'config.updated', status: 'updated' } })
+    session.emit({ type: 'event', topic: 'Gateway.StatusChanged', params: { kind: 'health.changed', status: 'ready' } })
+    await expect(configIterator.next()).resolves.toMatchObject({ value: { kind: 'config.updated' }, done: false })
+    await expect(healthIterator.next()).resolves.toMatchObject({ value: { kind: 'health.changed' }, done: false })
+    session.emit({ type: 'event', topic: 'Gateway.StatusChanged', params: { kind: 'health.changed', status: 'ready-again' } })
+    session.emit({ type: 'event', topic: 'Gateway.StatusChanged', params: { kind: 'config.updated', status: 'updated-again' } })
+    await expect(configIterator.next()).resolves.toMatchObject({ value: { kind: 'config.updated', payload: { status: 'updated-again' } }, done: false })
+    await expect(healthIterator.next()).resolves.toMatchObject({ value: { kind: 'health.changed', payload: { status: 'ready-again' } }, done: false })
+    await healthIterator.return?.()
+    await configIterator.return?.()
+  })
+
+  it('opens both status subscriptions once after hello and ignores duplicate hello frames', async () => {
+    const session = new FakeSession()
+    const ids = ['gateway-status', 'config-status']
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => ids.shift() ?? 'extra-status' })
+    const gateway = bridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], candidates: [] } as any)
+    const config = bridge.subscribe({ peerId: 'peer-a', stream: 'config', topics: ['Config.StatusChanged'], candidates: [] } as any)
+    expect(session.sent.filter((frame) => (frame as any).type === 'subscribe')).toHaveLength(0)
+
+    const supportedHello = buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1],
+      limits: new PeerProtocolLimits()
+    })
+    session.emit(supportedHello)
+    await flush()
+    session.emit(supportedHello)
+    await flush()
+    const subscribeFrames = session.sent.filter((frame) => (frame as any).type === 'subscribe') as Array<Record<string, unknown>>
+    expect(subscribeFrames).toHaveLength(2)
+    expect(subscribeFrames.map((frame) => frame.topics)).toEqual([
+      ['Gateway.StatusChanged'],
+      ['Config.StatusChanged']
+    ])
+    session.emit({ type: 'subscribed', id: 'gateway-status', subscription_id: 'gateway-status', accepted: true, accepted_topics: ['Gateway.StatusChanged'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    session.emit({ type: 'subscribed', id: 'config-status', subscription_id: 'config-status', accepted: true, accepted_topics: ['Config.StatusChanged'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    await expect(gateway.ready).resolves.toBeUndefined()
+    await expect(config.ready).resolves.toBeUndefined()
+    const gatewayIterator = gateway[Symbol.asyncIterator]()
+    const configIterator = config[Symbol.asyncIterator]()
+    await gatewayIterator.return?.()
+    await configIterator.return?.()
+    await expect(gatewayIterator.next()).resolves.toMatchObject({ done: true })
+    await expect(configIterator.next()).resolves.toMatchObject({ done: true })
+    const unsubscribeIds = session.sent
+      .filter((frame) => (frame as any).type === 'unsubscribe')
+      .map((frame) => (frame as any).id)
+    expect(unsubscribeIds).toHaveLength(2)
+    expect(unsubscribeIds).toEqual(expect.arrayContaining(['gateway-status', 'config-status']))
+    expect(unsubscribeIds.filter((id) => id === 'gateway-status')).toHaveLength(1)
+    expect(unsubscribeIds.filter((id) => id === 'config-status')).toHaveLength(1)
+    expect((bridge as any).eventSubscriptions.snapshot('peer-a')).toEqual([])
+    bridge.close()
+  })
+
+  it('cleans a pre-hello subscription locally for abort, return, reset, and close', async () => {
+    const abortSession = new FakeSession()
+    const abortBridge = new WebRtcMeshPeerBridge({ session: abortSession, remotePeerId: 'peer-a', randomId: () => 'abort-before-hello' })
+    const abortController = new AbortController()
+    const aborted = abortBridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], signal: abortController.signal, candidates: [] } as any)
+    abortController.abort()
+    await expect(aborted.ready).rejects.toThrow('aborted')
+    abortController.abort()
+    abortSession.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1], limits: new PeerProtocolLimits() }))
+    expect(abortSession.sent.filter((frame) => (frame as any).type === 'subscribe' || (frame as any).type === 'unsubscribe')).toHaveLength(0)
+    abortBridge.close()
+
+    const returnSession = new FakeSession()
+    const returnBridge = new WebRtcMeshPeerBridge({ session: returnSession, remotePeerId: 'peer-a', randomId: () => 'return-before-hello' })
+    const returnController = new AbortController()
+    const returned = returnBridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], signal: returnController.signal, candidates: [] } as any)
+    await returned[Symbol.asyncIterator]().return?.()
+    await expect(returned.ready).rejects.toThrow('subscription closed')
+    returnController.abort()
+    returnSession.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1], limits: new PeerProtocolLimits() }))
+    expect(returnSession.sent.filter((frame) => (frame as any).type === 'subscribe' || (frame as any).type === 'unsubscribe')).toHaveLength(0)
+    returnBridge.close()
+
+    const resetSession = new FakeSession()
+    const resetBridge = new WebRtcMeshPeerBridge({ session: resetSession, remotePeerId: 'peer-a', randomId: () => 'reset-before-hello' })
+    const resetController = new AbortController()
+    const resetPending = resetBridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], signal: resetController.signal, candidates: [] } as any)
+    resetSession.setSnapshot({ state: 'reconnecting', authorized: false })
+    await expect(resetPending.ready).rejects.toThrow('transport lost during epoch reset')
+    resetController.abort()
+    resetSession.setSnapshot({ state: 'authorized', authorized: true, failed: false })
+    resetSession.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1], limits: new PeerProtocolLimits() }))
+    expect(resetSession.sent.filter((frame) => (frame as any).type === 'subscribe' || (frame as any).type === 'unsubscribe')).toHaveLength(0)
+    resetBridge.close()
+
+    const closeSession = new FakeSession()
+    const closeBridge = new WebRtcMeshPeerBridge({ session: closeSession, remotePeerId: 'peer-a', randomId: () => 'close-before-hello' })
+    const closeController = new AbortController()
+    const closePending = closeBridge.subscribe({ peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], signal: closeController.signal, candidates: [] } as any)
+    closeBridge.close()
+    await expect(closePending.ready).rejects.toThrow('bridge closed')
+    closeController.abort()
+    closeSession.emit(buildProtocolHello({ role: 'provider', capabilities: [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1], limits: new PeerProtocolLimits() }))
+    expect(closeSession.sent.filter((frame) => (frame as any).type === 'subscribe' || (frame as any).type === 'unsubscribe')).toHaveLength(0)
+  })
+
+  it.each([
+    ['missing gateway status capability', hello()],
+    ['missing scoped subscription capability', buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_GATEWAY_STATUS_EVENTS_V1],
+      limits: new PeerProtocolLimits()
+    })],
+    ['missing both capabilities', buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1],
+      limits: new PeerProtocolLimits()
+    })]
+  ])('does not send a status subscription when the peer has %s', (_label, protocolHello) => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'status-sub-1' })
+    session.emit(protocolHello)
+
+    expect(() => bridge.subscribe({
+      peerId: 'peer-a', stream: 'health', topics: ['Gateway.StatusChanged'], candidates: []
+    } as any)).toThrow(expect.objectContaining({ code: 'unsupported_feature' }))
+    expect(session.sent.some((frame) => (frame as any).type === 'subscribe')).toBe(false)
+  })
+
+  it('delivers supported framed status events with status and freshness intact', async () => {
+    const session = new FakeSession()
+    const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => 'status-sub-2' })
+    session.emit(buildProtocolHello({
+      role: 'provider',
+      capabilities: [CAP_FRAGMENTATION_V1, CAP_BACKPRESSURE_V1, CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1],
+      limits: new PeerProtocolLimits()
+    }))
+    const stream = bridge.subscribe({ peerId: 'peer-a', stream: 'config', topics: ['Gateway.StatusChanged'], candidates: [] } as any)
+    session.emit({ type: 'subscribed', id: 'status-sub-2', subscription_id: 'status-sub-2', accepted: true, accepted_topics: ['Gateway.StatusChanged'], rejected_topics: [], correlation_ids: [], ttl_seconds: 60, reason: null, idempotent: false })
+    await flush()
+    session.emit({ type: 'event', topic: 'Gateway.StatusChanged', kind: 'config.updated', params: { event_id: 'status-1', timestamp: '2026-09-17T00:00:00Z', kind: 'config.updated', status: 'updated', freshness: 'current' } })
+    await flush()
+    const iterator = stream[Symbol.asyncIterator]()
+    await expect(iterator.next()).resolves.toMatchObject({ value: { kind: 'config.updated', payload: expect.objectContaining({ kind: 'config.updated', status: 'updated', freshness: 'current' }) }, done: false })
+    await iterator.return?.()
   })
 
   it('refreshes tooling projections from the authenticated WebRTC event source peer only', async () => {
@@ -1812,7 +2000,7 @@ describe('WebRtcMeshPeerBridge', () => {
 
   it('resets recoverable epoch without permanent close and requires fresh protocol state', async () => {
     const session = new FakeSession()
-    const ids = ['call-1', 'sub-active', 'sub-pending', 'call-2']
+    const ids = ['call-1', 'sub-active', 'sub-pending', 'fresh-sub', 'call-2']
     const bridge = new WebRtcMeshPeerBridge({ session, remotePeerId: 'peer-a', randomId: () => ids.shift() ?? 'extra' })
     session.emit(hello())
 
@@ -1845,8 +2033,13 @@ describe('WebRtcMeshPeerBridge', () => {
     expect(session.sent.filter((frame) => (frame as any).type === 'call' && (frame as any).id === 'call-1')).toHaveLength(1)
 
     session.setSnapshot({ state: 'authorized', authorized: true, failed: false })
-    expect(() => bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Orchestrator.Response'], candidates: [] } as any)).toThrow('unsupported')
+    const freshStream = bridge.subscribe({ peerId: 'peer-a', stream: 'assistant', topics: ['Orchestrator.Response'], payload: { correlation_id: 'corr-fresh' }, candidates: [] } as any)
     session.emit(hello())
+    await flush()
+    expect(session.sent).toContainEqual(expect.objectContaining({ type: 'subscribe', id: 'fresh-sub', correlation_ids: ['corr-fresh'] }))
+    session.emit({ type: 'subscribed', id: 'fresh-sub', subscription_id: 'fresh-sub', accepted: true, accepted_topics: ['Orchestrator.Response'], rejected_topics: [], correlation_ids: ['corr-fresh'], ttl_seconds: 60, reason: null, idempotent: false })
+    await expect(freshStream.ready).resolves.toBeUndefined()
+    await freshStream[Symbol.asyncIterator]().return?.()
     const fresh = bridge.call({ peerId: 'peer-a', method: 'Fresh', busTopic: 'Fresh', timeoutMs: 1000, candidates: [] })
     await flush()
     expect(session.sent.some((frame) => (frame as any).type === 'call' && (frame as any).id === 'call-2')).toBe(true)

@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { History, RotateCcw, Save, ShieldCheck } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   AuroraClient,
   AuroraError,
@@ -14,7 +15,7 @@ import type {
 } from '@aurora/client'
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge, ToneBadge, presentableSignal } from './status-badges'
-import { EmptyState, PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice } from './state-surface'
 import { AdminConfirmDialog, Button, Card, Checkbox, DataTable, StatStrip, type DataColumn } from './primitives'
 import { cn } from '#lib/utils'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '#components/ui/accordion'
@@ -23,6 +24,8 @@ import { Input } from '#components/ui/input'
 import { Textarea } from '#components/ui/textarea'
 import { safeErrorCopy } from './product-copy'
 import { adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy } from './admin-product-copy'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
+import { AuroraQueryProvider, AURORA_QUERY_STALE_TIMES, useAuroraQueryScope, useAuroraQueryScopeKey } from './query'
 
 export interface ConfigEditorViewProps {
   client: AuroraClient
@@ -40,25 +43,19 @@ export interface ConfigEditorModel {
   error: string | null
 }
 
-export async function buildConfigEditorModel(client: AuroraClient, route?: RouteAvailability): Promise<ConfigEditorModel> {
+export async function buildConfigEditorModel(client: AuroraClient, route?: RouteAvailability, signal?: AbortSignal): Promise<ConfigEditorModel> {
   if (route?.disabled) {
-    return {
-      state: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'unavailable',
-      fields: [],
-      versions: [],
-      validationErrors: [],
-      secretsRedacted: true,
-      evidence: route.providerLabel,
-      error: adminRouteCopy(route)
-    }
+    return unavailableRouteModel(route)
   }
 
   try {
+    if (signal?.aborted) throw configRequestAbortError()
     const [schema, history, validation] = await Promise.all([
-      client.config.getSchemaMetadata({ include_values: true }),
+      client.config.getSchemaMetadata({ include_values: true }, { ...(signal ? { signal } : {}) }),
       client.config.getVersionHistory({ limit: 8 }),
       client.config.validate({})
     ])
+    if (signal?.aborted) throw configRequestAbortError()
     if (!schema.ok) return errorModel(schema.error, 'configuration details')
     if (!history.ok) return errorModel(history.error, 'version history')
     const validationErrors = validation.ok ? validation.data.errors : [safeErrorCopy(validation.error).title]
@@ -72,17 +69,70 @@ export async function buildConfigEditorModel(client: AuroraClient, route?: Route
       error: null
     }
   } catch (error) {
+    if (isConfigAbortError(error)) throw error
     return errorModel(error, 'config editor')
   }
 }
 
 type ConfigDialogKind = 'apply' | 'rollback'
 
-export function ConfigEditorView({ client, route, initialModel }: ConfigEditorViewProps) {
-  const [model, setModel] = useState<ConfigEditorModel>(initialModel ?? loadingModel(route))
+interface ConfigPreviewModel {
+  diff: ConfigDiffEntry[]
+  impact: ConfigReloadImpactEntry[]
+  error: string | null
+}
+
+async function previewConfigChanges(client: AuroraClient, changes: ConfigChange[]): Promise<ConfigPreviewModel> {
+  try {
+    const [diffResult, impactResult] = await Promise.all([
+      client.config.previewDiff({ changes }),
+      client.config.previewReloadImpact({ changes })
+    ])
+    return {
+      diff: diffResult.ok ? diffResult.data.diffs : [],
+      impact: impactResult.ok ? impactResult.data.impacts : [],
+      error: !diffResult.ok
+        ? `Review failed: ${safeErrorCopy(diffResult.error).title}`
+        : !impactResult.ok
+          ? `Refresh review failed: ${safeErrorCopy(impactResult.error).title}`
+          : null
+    }
+  } catch (error) {
+    return { diff: [], impact: [], error: `Review failed: ${productAdminErrorCopy(error, 'Review failed. Try again.')}` }
+  }
+}
+
+function configEditorRouteRequest(route: RouteAvailability): Record<string, unknown> {
+  return {
+    routeId: route.item.id,
+    routeState: route.state,
+    disabled: route.disabled,
+    providerLabel: route.providerLabel
+  }
+}
+
+export function ConfigEditorView(props: ConfigEditorViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <ConfigEditorViewWithQuery {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <ConfigEditorViewWithQuery {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function ConfigEditorViewWithQuery({ client, route, initialModel }: ConfigEditorViewProps) {
+  const scopeKey = useAuroraQueryScopeKey()
+  const scopeId = scopeKey[1]
+  const initialScopeIdRef = useRef(scopeId)
+  const activeScopeIdRef = useRef(scopeId)
+  const mountedRef = useRef(false)
+  const lifecycleGenerationRef = useRef(0)
+  activeScopeIdRef.current = scopeId
+  const [localScopeId, setLocalScopeId] = useState(scopeId)
   const [edits, setEdits] = useState<Record<string, string>>({})
-  const [diff, setDiff] = useState<ConfigDiffEntry[]>([])
-  const [impact, setImpact] = useState<ConfigReloadImpactEntry[]>([])
+  const previewInstanceId = useId()
+  const [previewRevision, setPreviewRevision] = useState(0)
   const [reason, setReason] = useState('Admin config update from Aurora UI')
   const [rollbackReason, setRollbackReason] = useState('')
   const [rollbackTarget, setRollbackTarget] = useState<ConfigVersionEntry | null>(null)
@@ -91,25 +141,74 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   const [message, setMessage] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval()
+  const modelQueryKey = queryKeys.admin('config-editor', configEditorRouteRequest(route))
+  const canReadConfig = !route.disabled
+  const canUseInitialModel = initialScopeIdRef.current === scopeId
+  const localStateCurrent = localScopeId === scopeId
+  const modelQuery = useQuery({
+    queryKey: modelQueryKey,
+    queryFn: ({ signal }) => buildConfigEditorModel(client, route, signal),
+    initialData: canUseInitialModel && initialModel && initialModel.state !== 'loading' ? initialModel : undefined,
+    enabled: canReadConfig,
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
+  const model = route.disabled
+    ? unavailableRouteModel(route)
+    : modelQuery.data ?? (canUseInitialModel ? initialModel : undefined) ?? loadingModel(route)
+  const effectiveEdits = localStateCurrent ? edits : {}
+  const effectiveDialogKind = localStateCurrent ? dialogKind : null
+  const effectiveMessage = localStateCurrent ? message : null
+  const effectiveBusy = localStateCurrent ? busy : false
+  const effectiveRollbackTarget = localStateCurrent ? rollbackTarget : null
+  const effectiveReason = localStateCurrent ? reason : 'Admin config update from Aurora UI'
+  const effectiveRollbackReason = localStateCurrent ? rollbackReason : ''
+  const effectiveReauthConfirmed = localStateCurrent ? reauthConfirmed : false
+
   useEffect(() => {
-    let cancelled = false
-    if (initialModel && initialModel.state !== 'loading') return
-    buildConfigEditorModel(client, route).then((next) => {
-      if (!cancelled) setModel(next)
-    })
+    mountedRef.current = true
     return () => {
-      cancelled = true
+      mountedRef.current = false
+      lifecycleGenerationRef.current += 1
     }
-  }, [client, route, initialModel])
+  }, [])
+
+  useEffect(() => {
+    lifecycleGenerationRef.current += 1
+    setLocalScopeId(scopeId)
+    setEdits({})
+    setPreviewRevision((current) => current + 1)
+    setReason('Admin config update from Aurora UI')
+    setRollbackReason('')
+    setRollbackTarget(null)
+    setReauthConfirmed(false)
+    setDialogKind(null)
+    setMessage(null)
+    setBusy(false)
+  }, [scopeId])
 
   const changes = useMemo<ConfigChange[]>(() => {
-    return Object.entries(edits).flatMap(([key_path, raw]) => {
+    return Object.entries(effectiveEdits).flatMap(([key_path, raw]) => {
       const field = model.fields.find((candidate) => candidate.key_path === key_path)
       if (!field || stringifyValue(field.current_value) === raw) return []
       return [{ key_path, value: parseFieldValue(raw, field.type) }]
     })
-  }, [edits, model.fields])
+  }, [effectiveEdits, model.fields])
   const sections = useMemo(() => groupConfigFields(model.fields), [model.fields])
+  const previewQueryKey = queryKeys.admin('config-preview', { instance: previewInstanceId, revision: previewRevision })
+  const previewQuery = useQuery({
+    queryKey: previewQueryKey,
+    queryFn: () => previewConfigChanges(client, changes),
+    enabled: canReadConfig && localStateCurrent && changes.length > 0,
+    staleTime: AURORA_QUERY_STALE_TIMES.volatile,
+    refetchInterval: false
+  })
+  const diff = changes.length > 0 ? (previewQuery.data?.diff ?? []) : []
+  const impact = changes.length > 0 ? (previewQuery.data?.impact ?? []) : []
+  const previewError = changes.length > 0 ? previewQuery.data?.error ?? null : null
   const displayLabels = useMemo(
     () => buildConfigDisplayLabels(model.fields, model.versions, diff, impact, changes),
     [model.fields, model.versions, diff, impact, changes]
@@ -117,34 +216,19 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
   const localValidationErrors = useMemo(() => validateConfigChanges(model.fields, changes, displayLabels), [model.fields, changes, displayLabels])
   const restartCount = model.fields.filter((field) => field.restart_required).length
   const secretCount = model.fields.filter((field) => field.secret).length
-  const reviewBlocked = changes.length === 0 || localValidationErrors.length > 0 || reason.trim().length === 0
+  const reviewBlocked = changes.length === 0 || localValidationErrors.length > 0 || effectiveReason.trim().length === 0
 
-  useEffect(() => {
-    if (changes.length === 0) {
-      setDiff([])
-      setImpact([])
-      return
-    }
-    let cancelled = false
-    Promise.all([
-      client.config.previewDiff({ changes }),
-      client.config.previewReloadImpact({ changes })
-    ]).then(([diffResult, impactResult]) => {
-      if (cancelled) return
-      setDiff(diffResult.ok ? diffResult.data.diffs : [])
-      setImpact(impactResult.ok ? impactResult.data.impacts : [])
-      if (!diffResult.ok) setMessage(`Review failed: ${safeErrorCopy(diffResult.error).title}`)
-      else if (!impactResult.ok) setMessage(`Refresh review failed: ${safeErrorCopy(impactResult.error).title}`)
-    }).catch((error) => {
-      if (!cancelled) setMessage(`Review failed: ${productAdminErrorCopy(error, 'Review failed. Try again.')}`)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client, changes])
-
-  async function refresh() {
-    setModel(await buildConfigEditorModel(client, route))
+  async function invalidateConfigDerivedQueries() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: modelQueryKey }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.capabilities({ include_unavailable: true, include_internal: true }) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.capabilityGraph({ include_unavailable: true, include_internal: true }) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.services() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.toolCatalog({ include_unavailable: true }) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin('plugins') }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin('models') }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin('service-routing') })
+    ])
   }
 
   function closeDialog() {
@@ -158,44 +242,69 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
     setDialogKind('rollback')
   }
 
+  function updateEdit(keyPath: string, value: string) {
+    setEdits((current) => ({ ...current, [keyPath]: value }))
+    setPreviewRevision((current) => current + 1)
+  }
+
+  function clearEdits() {
+    setEdits({})
+    setPreviewRevision((current) => current + 1)
+  }
+
+  function isCurrentLifecycle(targetScopeId: string, generation: number): boolean {
+    return mountedRef.current && activeScopeIdRef.current === targetScopeId && lifecycleGenerationRef.current === generation
+  }
+
   async function confirmApply() {
     if (reviewBlocked) return
+    const mutationScopeId = scopeId
+    const mutationGeneration = lifecycleGenerationRef.current
     setBusy(true)
     setMessage(null)
     try {
       for (const change of changes) {
-        const result = await client.config.applyChange({ change, reason, reauthConfirmed: true })
+        const result = await client.config.applyChange({ change, reason: effectiveReason, reauthConfirmed: true })
+        if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
         if (!result.data.success) throw new Error(result.data.error ?? `Configuration update failed for ${change.key_path}`)
       }
-      setEdits({})
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
+      clearEdits()
       closeDialog()
+      await invalidateConfigDerivedQueries()
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setMessage(`Applied ${changes.length} change(s).`)
-      await refresh()
     } catch (error) {
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setMessage(`Apply failed: ${productAdminErrorCopy(error, 'Settings update failed. Try again.')}`)
     } finally {
-      setBusy(false)
+      if (isCurrentLifecycle(mutationScopeId, mutationGeneration)) setBusy(false)
     }
   }
 
   async function confirmRollback() {
-    if (!rollbackTarget) return
+    if (!effectiveRollbackTarget) return
+    const mutationScopeId = scopeId
+    const mutationGeneration = lifecycleGenerationRef.current
     setBusy(true)
     setMessage(null)
     try {
       const result = await client.config.rollback({
-        versionId: rollbackTarget.version_id,
-        reason: rollbackReason,
+        versionId: effectiveRollbackTarget.version_id,
+        reason: effectiveRollbackReason,
         reauthConfirmed: true
       })
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       if (!result.data.success) throw new Error(result.data.error ?? 'Configuration rollback failed')
-      setMessage('Rolled back selected setting.')
       closeDialog()
-      await refresh()
+      await invalidateConfigDerivedQueries()
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
+      setMessage('Rolled back selected setting.')
     } catch (error) {
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setMessage(`Rollback failed: ${productAdminErrorCopy(error, 'Rollback failed. Try again.')}`)
     } finally {
-      setBusy(false)
+      if (isCurrentLifecycle(mutationScopeId, mutationGeneration)) setBusy(false)
     }
   }
 
@@ -224,7 +333,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
       header: 'Action',
       align: 'end',
       render: (version) => (
-        <Button variant="outline" disabled={!canMutate || busy} onClick={() => openRollbackDialog(version)}>
+        <Button variant="outline" disabled={!canMutate || effectiveBusy} onClick={() => openRollbackDialog(version)}>
           Rollback
         </Button>
       )
@@ -258,20 +367,32 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         ]}
       />
 
-      {model.state === 'loading' ? <p className="text-sm text-muted-foreground">Loading config from Aurora.</p> : null}
+      {model.state === 'loading' ? <RouteStateNotice state="loading" title="Loading configuration" message="Loading configuration from Aurora." /> : null}
       {model.state === 'empty' ? <EmptyState title="No settings" message="Aurora returned no editable settings." /> : null}
       {model.state === 'denied' || model.state === 'unavailable' || model.state === 'error'
-        ? <EmptyState title="Configuration editor is unavailable" message={productAdminReasonCopy(model.error ?? route.explanation, 'Configuration editor is unavailable.')} />
+        ? (
+          <RouteStateNotice
+            state={model.state === 'denied' ? 'permission' : 'error'}
+            title="Configuration editor is unavailable"
+            message={productAdminReasonCopy(model.error ?? route.explanation, 'Configuration editor is unavailable.')}
+          />
+        )
         : null}
       {model.validationErrors.length > 0 ? (
-        <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
-          <strong>Validation errors</strong>
-          <ul className="list-disc pl-4">{model.validationErrors.map((error, index) => <li key={`${index}-${error}`}>{configValidationErrorText(error, displayLabels)}</li>)}</ul>
+        <RouteStateNotice
+          state="error"
+          title="Configuration values need attention"
+          message={model.validationErrors.map((error) => configValidationErrorText(error, displayLabels)).join(' ')}
+        />
+      ) : null}
+      {previewError ? (
+        <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm" role="status">
+          <span>{previewError}</span>
         </div>
       ) : null}
-      {message ? (
+      {effectiveMessage ? (
         <div className="rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm" role="status">
-          <span>{message}</span>
+          <span>{effectiveMessage}</span>
         </div>
       ) : null}
 
@@ -279,7 +400,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         <Card
           title="Configuration sections"
           actions={
-            <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={() => setEdits({})} disabled={changes.length === 0 || busy}>
+            <Button variant="ghost" icon={<RotateCcw size={14} aria-hidden />} onClick={clearEdits} disabled={changes.length === 0 || effectiveBusy}>
               Discard
             </Button>
           }
@@ -303,7 +424,7 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                 <AccordionContent>
                   <div className="flex flex-col gap-4">
                     {fields.map((field) => {
-                      const editedValue = edits[field.key_path] ?? stringifyValue(field.current_value)
+                      const editedValue = effectiveEdits[field.key_path] ?? stringifyValue(field.current_value)
                       const changed = changes.some((change) => change.key_path === field.key_path)
                       const sensitive = isSensitiveConfigField(field)
                       return (
@@ -317,10 +438,10 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
                             <ConfigFieldControl
                               field={field}
                               value={sensitive ? '[REDACTED]' : editedValue}
-                              disabled={!canMutate || sensitive || busy}
+                              disabled={!canMutate || sensitive || effectiveBusy}
                               invalid={fieldHasValidationError(field.key_path, model.validationErrors, localValidationErrors, displayLabels)}
                               changed={changed}
-                              onChange={(value) => setEdits((current) => ({ ...current, [field.key_path]: value }))}
+                              onChange={(value) => updateEdit(field.key_path, value)}
                             />
                             <em className="text-[11px] not-italic text-muted-foreground">
                               {configSourceLayerLabel(field.source_layer)}; {fieldModeLabel(field)}
@@ -347,15 +468,16 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
             <DiffList diff={diff} labels={displayLabels} />
             <ImpactList impact={impact} labels={displayLabels} />
             {localValidationErrors.length > 0 ? (
-              <div className="flex flex-col gap-1 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
-                <strong>Staged validation</strong>
-                <ul className="list-disc pl-4">{localValidationErrors.map((error, index) => <li key={`${index}-${error}`}>{error}</li>)}</ul>
-              </div>
+              <RouteStateNotice
+                state="error"
+                title="Staged changes need attention"
+                message={localValidationErrors.join(' ')}
+              />
             ) : null}
             <Button
               variant="primary"
               icon={<Save size={16} aria-hidden />}
-              disabled={!canMutate || reviewBlocked || busy}
+              disabled={!canMutate || reviewBlocked || effectiveBusy}
               onClick={() => setDialogKind('apply')}
             >
               Review and apply
@@ -373,30 +495,30 @@ export function ConfigEditorView({ client, route, initialModel }: ConfigEditorVi
         />
       </Card>
 
-      {dialogKind ? (
+      {effectiveDialogKind ? (
         <AdminConfirmDialog
           open
-          title={dialogKind === 'apply' ? 'Apply staged config changes' : 'Roll back configuration value'}
+          title={effectiveDialogKind === 'apply' ? 'Apply staged config changes' : 'Roll back configuration value'}
           description={
-            dialogKind === 'apply'
+            effectiveDialogKind === 'apply'
               ? `Apply ${changes.length} staged change(s). Refresh impact is shown in the staged review card; secret values stay protected.`
-              : `Roll back ${rollbackTarget ? configDisplayLabel(rollbackTarget.key_path, displayLabels) : 'this setting'} to a prior version.`
+              : `Roll back ${effectiveRollbackTarget ? configDisplayLabel(effectiveRollbackTarget.key_path, displayLabels) : 'this setting'} to a prior version.`
           }
           methodId="Config.Set"
-          actionLabel={dialogKind === 'apply' ? 'Apply settings changes' : 'Roll back setting'}
-          affected={dialogKind === 'apply' ? changes.map((change) => configDisplayLabel(change.key_path, displayLabels)) : rollbackTarget ? [configDisplayLabel(rollbackTarget.key_path, displayLabels)] : []}
+          actionLabel={effectiveDialogKind === 'apply' ? 'Apply settings changes' : 'Roll back setting'}
+          affected={effectiveDialogKind === 'apply' ? changes.map((change) => configDisplayLabel(change.key_path, displayLabels)) : effectiveRollbackTarget ? [configDisplayLabel(effectiveRollbackTarget.key_path, displayLabels)] : []}
           requireReason
-          reasonValue={dialogKind === 'apply' ? reason : rollbackReason}
-          onReasonChange={dialogKind === 'apply' ? setReason : setRollbackReason}
-          confirmLabel={dialogKind === 'apply' ? 'Confirm apply' : 'Confirm rollback'}
-          onConfirm={dialogKind === 'apply' ? confirmApply : confirmRollback}
+          reasonValue={effectiveDialogKind === 'apply' ? effectiveReason : effectiveRollbackReason}
+          onReasonChange={effectiveDialogKind === 'apply' ? setReason : setRollbackReason}
+          confirmLabel={effectiveDialogKind === 'apply' ? 'Confirm apply' : 'Confirm rollback'}
+          onConfirm={effectiveDialogKind === 'apply' ? confirmApply : confirmRollback}
           onCancel={closeDialog}
-          busy={busy}
-          extraValid={reauthConfirmed}
+          busy={effectiveBusy}
+          extraValid={effectiveReauthConfirmed}
           extraInvalidReason="Confirm your recent admin unlock before changing settings."
         >
           <Checkbox
-            checked={reauthConfirmed}
+            checked={effectiveReauthConfirmed}
             onChange={setReauthConfirmed}
             label="Recent admin unlock confirmed for settings"
           />
@@ -506,6 +628,26 @@ function loadingModel(route: RouteAvailability): ConfigEditorModel {
     evidence: route.providerLabel,
     error: null
   }
+}
+
+function unavailableRouteModel(route: RouteAvailability): ConfigEditorModel {
+  return {
+    state: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'unavailable',
+    fields: [],
+    versions: [],
+    validationErrors: [],
+    secretsRedacted: true,
+    evidence: route.providerLabel,
+    error: adminRouteCopy(route)
+  }
+}
+
+function configRequestAbortError(): DOMException {
+  return new DOMException('Configuration request was cancelled', 'AbortError')
+}
+
+function isConfigAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 function errorModel(error: unknown, source: string): ConfigEditorModel {

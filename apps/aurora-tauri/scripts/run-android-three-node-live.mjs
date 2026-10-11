@@ -127,12 +127,12 @@ async function waitForHttp(url, child, timeoutMs = DEFAULT_READY_TIMEOUT_MS) {
   throw new Error(`Timed out waiting for the hosted Aurora UI at ${url}.`)
 }
 
-function buildHostedUi() {
+function buildHostedUi(environment = process.env) {
   commandRun('pnpm', ['--filter', '@aurora/voice-web', 'build'])
   commandRun('pnpm', ['--filter', '@aurora/client', 'build'])
   commandRun('pnpm', ['--filter', '@aurora/web', 'build'], {
     env: {
-      ...process.env,
+      ...environment,
       NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
     },
   })
@@ -149,31 +149,58 @@ function buildHostedUi() {
   })
 }
 
+export async function startHostedUi({
+  configuration = resolveThreeNodeConfiguration(),
+  environment = process.env,
+} = {}) {
+  if (configuration.baseUrl) {
+    return { baseUrl: configuration.baseUrl, externallyOwned: true, close: async () => {} }
+  }
+  let webProcess
+  if (environment.AURORA_THREE_NODE_SKIP_WEB_BUILD !== '1') buildHostedUi(environment)
+  if (!existsSync(resolve(STANDALONE_ROOT, 'server.js'))) {
+    throw new Error('No hosted Aurora UI build is available.')
+  }
+  const port = await allocateLoopbackPort()
+  const baseUrl = `http://127.0.0.1:${port}`
+  webProcess = spawn('node', [resolve(STANDALONE_ROOT, 'server.js')], {
+    cwd: STANDALONE_ROOT,
+    env: {
+      ...environment,
+      HOSTNAME: '127.0.0.1',
+      PORT: String(port),
+      NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
+    },
+    stdio: 'inherit',
+  })
+  try {
+    await waitForHttp(baseUrl, webProcess)
+  } catch (error) {
+    await stopHostedUi(webProcess)
+    throw error
+  }
+  return {
+    baseUrl,
+    externallyOwned: false,
+    close: async () => await stopHostedUi(webProcess),
+  }
+}
+
+async function stopHostedUi(webProcess) {
+  if (!webProcess || webProcess.exitCode != null) return
+  webProcess.kill('SIGTERM')
+  await Promise.race([
+    new Promise((resolvePromise) => webProcess.once('exit', resolvePromise)),
+    new Promise((resolvePromise) => setTimeout(resolvePromise, 5_000)),
+  ])
+  if (webProcess.exitCode == null) webProcess.kill('SIGKILL')
+}
+
 async function run() {
   const configuration = resolveThreeNodeConfiguration()
-  let webProcess
-  let baseUrl = configuration.baseUrl
+  const hostedUi = await startHostedUi({ configuration, environment: process.env })
+  const baseUrl = hostedUi.baseUrl
   try {
-    if (!baseUrl) {
-      if (process.env.AURORA_THREE_NODE_SKIP_WEB_BUILD !== '1') buildHostedUi()
-      if (!existsSync(resolve(STANDALONE_ROOT, 'server.js'))) {
-        throw new Error('No hosted Aurora UI build is available.')
-      }
-      const port = await allocateLoopbackPort()
-      baseUrl = `http://127.0.0.1:${port}`
-      webProcess = spawn('node', [resolve(STANDALONE_ROOT, 'server.js')], {
-        cwd: STANDALONE_ROOT,
-        env: {
-          ...process.env,
-          HOSTNAME: '127.0.0.1',
-          PORT: String(port),
-          NEXT_PUBLIC_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: '1',
-        },
-        stdio: 'inherit',
-      })
-      await waitForHttp(baseUrl, webProcess)
-    }
-
     commandRun(
       'pnpm',
       ['exec', 'playwright', 'test', '--config', PLAYWRIGHT_CONFIG, '--project', 'chromium'],
@@ -188,14 +215,7 @@ async function run() {
       },
     )
   } finally {
-    if (webProcess && webProcess.exitCode == null) {
-      webProcess.kill('SIGTERM')
-      await Promise.race([
-        new Promise((resolvePromise) => webProcess.once('exit', resolvePromise)),
-        new Promise((resolvePromise) => setTimeout(resolvePromise, 5_000)),
-      ])
-      if (webProcess.exitCode == null) webProcess.kill('SIGKILL')
-    }
+    await hostedUi.close()
   }
 }
 

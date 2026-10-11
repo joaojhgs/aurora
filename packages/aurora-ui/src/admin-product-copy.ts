@@ -113,6 +113,7 @@ export function adminModuleLabel(module: string): string {
 }
 
 const PRODUCT_ACTION_LABELS: Record<string, string> = {
+  'orchestrator.getmodelcatalog': 'Assistant model availability',
   'tts.synthesize': 'Speak a reply',
   'tts.stop': 'Stop speaking',
   'tts.listvoices': 'Available voices',

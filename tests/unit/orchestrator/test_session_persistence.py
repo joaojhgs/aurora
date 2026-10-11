@@ -136,7 +136,8 @@ async def test_rejected_session_ownership_does_not_run_the_graph(
         caller_identity_source="gateway_http",
     )
 
-    assert response == "Error: session belongs to another principal"
+    assert response == "Error: Aurora could not complete this request."
+    assert "session belongs to another principal" not in response
     graph.stream_graph_updates.assert_not_awaited()
     failure_publish = next(
         call for call in bus.publish.await_args_list if call.args[0] == OrchestratorMethods.RESPONSE

@@ -75,6 +75,7 @@ from app.shared.speech_language_policy import (
     SpeechLanguagePolicy,
     resolve_speech_language_policy,
 )
+from app.shared.speech_lifecycle_observer import SpeechLifecycleObserver, emit_speech_lifecycle
 
 config_api = ConfigAPI()
 _MAX_ACTIVE_SPEECH_STREAMS = 4
@@ -135,7 +136,7 @@ class TranscriptionService(BaseService):
     - Emit TranscriptionResult events
     """
 
-    def __init__(self) -> None:
+    def __init__(self, *, lifecycle_observer: SpeechLifecycleObserver | None = None) -> None:
         """Initialize transcription service."""
         super().__init__(
             module=TranscriptionModule.NAME,
@@ -143,6 +144,10 @@ class TranscriptionService(BaseService):
             capabilities=["audio_transcription", "vad", "whisper"],
         )
         self._running = False
+        self._speech_lifecycle_observer = lifecycle_observer
+        self._speech_stream_observation_revisions: dict[str, tuple[int, str]] | None = (
+            {} if lifecycle_observer is not None else None
+        )
         self._transcribing = False
         self._paused = False
         self._speech_streams: dict[str, TranscriptionStreamAdmission] = {}
@@ -162,6 +167,11 @@ class TranscriptionService(BaseService):
         self._realtime_model: Any | None = None
         self._accurate_model: Any | None = None
         self._model_lock = threading.Lock()
+        # Local finite-work fence; distinct from BaseService lifecycle generation.
+        self._model_revision = 0
+        # A timed-out worker keeps ownership of these model references until a
+        # fresh startup reaps the worker and commits replacement models.
+        self._retained_model_references = False
         self._model_cache_dir = ""
         self._model_status: dict[str, str] = {
             "realtime": "unavailable",
@@ -178,6 +188,9 @@ class TranscriptionService(BaseService):
         )  # ~10 seconds at 16kHz
         self._audio_format: AudioFormat | None = None
         self._buffer_lock = threading.Lock()
+        # Serializes the processing worker with control operations that must
+        # prove no buffered or in-flight speech work remains.
+        self._processing_lock = threading.Lock()
 
         # Track current audio source and stream
         self._current_source: str = "microphone"  # Default to microphone
@@ -220,11 +233,36 @@ class TranscriptionService(BaseService):
 
     async def on_start(self) -> None:
         """Start the transcription service."""
+        runtime_generation = self._runtime_generation
+        if self._runtime_retirement_pending():
+            raise RuntimeError("Transcription startup was superseded")
+
         if self._running:
             log_warning("Transcription service already running")
             return
 
-        await self._load_config()
+        # A timed-out prior worker is still the sole processing owner. Never
+        # acquire new runtime resources while it can still touch the old ones.
+        self._require_processing_thread_stopped()
+        self._reap_retained_model_references()
+        # Capture after synchronous reaping/revision advancement and before the
+        # first startup await; both config and model helpers share this fence.
+        operation_revision = self._model_revision
+
+        if not await self._load_config(runtime_generation, operation_revision):
+            if (
+                runtime_generation == self._runtime_generation
+                and not self._runtime_retirement_pending()
+            ):
+                raise RuntimeError("Transcription startup was superseded")
+            return
+        if not self._startup_operation_current(runtime_generation, operation_revision):
+            if (
+                runtime_generation == self._runtime_generation
+                and not self._runtime_retirement_pending()
+            ):
+                raise RuntimeError("Transcription startup was superseded")
+            return
 
         log_info("Starting transcription service...")
         self._running = True
@@ -240,10 +278,35 @@ class TranscriptionService(BaseService):
 
         # Load models. Missing optional model packages, offline first-run
         # downloads, or unavailable devices must not kill the service process.
-        await self._load_models()
+        if not await self._load_models(runtime_generation, operation_revision):
+            if (
+                runtime_generation == self._runtime_generation
+                and not self._runtime_retirement_pending()
+            ):
+                raise RuntimeError("Transcription startup was superseded")
+            return
+        # _load_models commits a local model revision. It is synchronous after
+        # its final awaited construction boundary, so this task resumes with
+        # the exact revision produced by that commit.
+        operation_revision = self._model_revision
+        if not self._startup_operation_current(runtime_generation, operation_revision):
+            if (
+                runtime_generation == self._runtime_generation
+                and not self._runtime_retirement_pending()
+            ):
+                raise RuntimeError("Transcription startup was superseded")
+            return
 
         # Subscribe to audio stream
         await self.bus.subscribe_event(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        if not self._startup_operation_current(runtime_generation, operation_revision):
+            self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+            if (
+                runtime_generation == self._runtime_generation
+                and not self._runtime_retirement_pending()
+            ):
+                raise RuntimeError("Transcription startup was superseded")
+            return
 
         # Start processing thread
         self._start_processing_thread()
@@ -253,15 +316,32 @@ class TranscriptionService(BaseService):
 
     async def on_stop(self) -> None:
         """Stop the transcription service."""
-        if not self._running:
-            return
-
-        log_info("Stopping transcription service...")
+        was_running = self._running
+        self._model_revision += 1
         self._running = False
         self._transcribing = False
-        self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        if was_running or self._process_thread is not None:
+            self.bus.unsubscribe(AudioTopics.STREAM_MICROPHONE, self._on_audio_chunk)
+        terminal_observations = [] if self._speech_lifecycle_observer is not None else None
         async with self._speech_stream_lock:
+            if terminal_observations is not None:
+                for session_id, admission in self._speech_streams.items():
+                    revisions = (
+                        self._speech_stream_observation_revisions.get(session_id)
+                        if self._speech_stream_observation_revisions is not None
+                        else None
+                    )
+                    terminal_observations.append(
+                        (
+                            admission,
+                            revisions,
+                            self._speech_stream_input_bytes.get(session_id, 0),
+                            self._speech_stream_next_sequence.get(session_id, 0),
+                        )
+                    )
             self._speech_streams.clear()
+            if self._speech_stream_observation_revisions is not None:
+                self._speech_stream_observation_revisions.clear()
             self._speech_stream_next_sequence.clear()
             self._speech_stream_terminal.clear()
             self._speech_stream_results.clear()
@@ -273,20 +353,103 @@ class TranscriptionService(BaseService):
             self._speech_stream_last_activity.clear()
             self._speech_stream_formats.clear()
 
-        # Wait for processing thread to finish
-        if self._process_thread and self._process_thread.is_alive():
-            self._process_thread.join(timeout=5.0)
+        if terminal_observations is not None:
+            for admission, revisions, byte_count, chunk_count in terminal_observations:
+                self._emit_stt_stream_terminal(
+                    admission,
+                    revisions,
+                    outcome="canceled",
+                    byte_count=byte_count,
+                    chunk_count=chunk_count,
+                )
 
-        # Clean up models
-        if self._realtime_model:
-            del self._realtime_model
-            self._realtime_model = None
-        if self._accurate_model:
-            del self._accurate_model
-            self._accurate_model = None
+        # A native inference call cannot be preempted. Keep its handle and
+        # models if it survives the bounded join so no replacement overlaps it.
+        worker = self._process_thread
+        if worker is not None and worker.is_alive():
+            await asyncio.to_thread(worker.join, timeout=5.0)
+        worker_alive = worker is not None and worker.is_alive()
+        if not worker_alive and worker is not None and self._process_thread is worker:
+            self._process_thread = None
 
-        self._set_started(False)
-        log_info("Transcription service stopped")
+        if worker_alive:
+            self._retained_model_references = True
+        else:
+            if self._realtime_model:
+                del self._realtime_model
+                self._realtime_model = None
+            if self._accurate_model:
+                del self._accurate_model
+                self._accurate_model = None
+            self._retained_model_references = False
+
+        # BaseService owns the started marker during managed lifecycle
+        # transitions. Keeping it set through a managed deactivation allows
+        # the process-level Config.Updated subscription to reactivate this
+        # service. Direct hook calls retain the legacy cleanup behavior.
+        if asyncio.current_task() is not self._runtime_owner_task:
+            self._set_started(False)
+        if was_running:
+            log_info("Transcription service stopped")
+
+    def _emit_stt_stream_terminal(
+        self,
+        admission: TranscriptionStreamAdmission | None,
+        revisions: tuple[int, str] | None,
+        *,
+        outcome: str,
+        reason_code: str | None = None,
+        byte_count: int | None = None,
+        chunk_count: int | None = None,
+    ) -> None:
+        if admission is None:
+            return
+        emit_speech_lifecycle(
+            self._speech_lifecycle_observer,
+            event="terminal",
+            operation_id=admission.operation_id,
+            attempt_id=admission.attempt_id,
+            generation=admission.generation,
+            stage="stt",
+            config_revision=revisions[0] if revisions else None,
+            route_revision=revisions[1] if revisions else None,
+            outcome=outcome,
+            reason_code=reason_code,
+            byte_count=byte_count,
+            chunk_count=chunk_count,
+        )
+
+    def _require_processing_thread_stopped(self) -> None:
+        worker = self._process_thread
+        if worker is not None and worker.is_alive():
+            raise RuntimeError("Transcription processing is still stopping")
+        if worker is not None and self._process_thread is worker:
+            self._process_thread = None
+
+    def _reap_retained_model_references(self) -> None:
+        """Retire models kept alive for a worker that has now exited."""
+        if not self._retained_model_references:
+            return
+        self._realtime_model = None
+        self._accurate_model = None
+        self._retained_model_references = False
+        self._model_revision += 1
+
+    def _processing_thread_is_retained(self) -> bool:
+        """Return true while a timed-out native worker still owns the models."""
+        worker = self._process_thread
+        if worker is None or not worker.is_alive():
+            return False
+        return not (self._runtime_state == "active" and self._running and self._transcribing)
+
+    def _startup_operation_current(self, generation: int, revision: int) -> bool:
+        return (
+            generation == self._runtime_generation
+            and revision == self._model_revision
+            and not self._runtime_retirement_pending()
+            and not self._processing_thread_is_retained()
+            and self._runtime_state not in ("stopping", "stopped")
+        )
 
     def _ensure_huggingface_cache_env(self) -> None:
         """Point HF hub/xet at a writable tree (bind-mounted ./data is often root-owned)."""
@@ -339,6 +502,17 @@ class TranscriptionService(BaseService):
         # Reload transcription models if config changed
         if config_section is None or config_section in ("system", "services", "services.stt"):
             log_info("Reloading transcription models due to config change...")
+            if (
+                self._runtime_retirement_pending()
+                or self._processing_thread_is_retained()
+                or self._retained_model_references
+                or self._runtime_state in ("stopping", "stopped")
+            ):
+                log_debug("Discarding transcription reload while runtime is retiring")
+                return
+            runtime_generation = self._runtime_generation
+            self._model_revision += 1
+            operation_revision = self._model_revision
             (
                 language,
                 policy,
@@ -346,11 +520,33 @@ class TranscriptionService(BaseService):
                 realtime_enabled,
                 accurate_enabled,
             ) = await self._read_runtime_config()
+            if (
+                self._model_revision != operation_revision
+                or self._runtime_generation != runtime_generation
+                or self._runtime_retirement_pending()
+                or self._processing_thread_is_retained()
+                or self._retained_model_references
+                or self._runtime_state in ("stopping", "stopped")
+            ):
+                log_debug("Discarding superseded transcription configuration reload")
+                return
+
             new_realtime, new_accurate = await self._create_models(
                 transcription_cfg,
                 realtime_enabled=realtime_enabled,
                 accurate_enabled=accurate_enabled,
             )
+            if (
+                self._model_revision != operation_revision
+                or self._runtime_generation != runtime_generation
+                or self._runtime_retirement_pending()
+                or self._processing_thread_is_retained()
+                or self._retained_model_references
+                or self._runtime_state in ("stopping", "stopped")
+            ):
+                log_debug("Discarding superseded transcription model load")
+                return
+
             old_realtime, old_accurate = self._realtime_model, self._accurate_model
             self._language = language
             self._language_policy = policy
@@ -361,6 +557,7 @@ class TranscriptionService(BaseService):
             )
             self._realtime_model = new_realtime
             self._accurate_model = new_accurate
+            self._model_revision += 1
             if old_realtime and old_realtime is not new_realtime:
                 del old_realtime
             if old_accurate and old_accurate is not new_accurate:
@@ -368,7 +565,11 @@ class TranscriptionService(BaseService):
             await self._republish_readiness()
         log_info("TranscriptionService configuration reloaded")
 
-    async def _load_config(self) -> None:
+    async def _load_config(
+        self,
+        runtime_generation: int | None = None,
+        expected_revision: int | None = None,
+    ) -> bool:
         """Load canonical speech and STT configuration."""
 
         (
@@ -378,6 +579,11 @@ class TranscriptionService(BaseService):
             realtime_enabled,
             accurate_enabled,
         ) = await self._read_runtime_config()
+        if runtime_generation is not None and not self._startup_operation_current(
+            runtime_generation,
+            self._model_revision if expected_revision is None else expected_revision,
+        ):
+            return False
         self._language = language
         self._language_policy = policy
         self._realtime_enabled = realtime_enabled
@@ -385,6 +591,7 @@ class TranscriptionService(BaseService):
         self._max_speech_duration_s = int(
             self._cfg_value(transcription_cfg, "max_speech_duration_s") or 30
         )
+        return True
 
     async def _read_runtime_config(
         self,
@@ -442,19 +649,39 @@ class TranscriptionService(BaseService):
             log_error(f"Failed to initialize VAD: {e}")
             self._vad = None
 
-    async def _load_models(self) -> None:
+    async def _load_models(
+        self,
+        runtime_generation: int | None = None,
+        expected_revision: int | None = None,
+    ) -> bool:
         """Load Faster Whisper models."""
+        if runtime_generation is not None:
+            if expected_revision is None:
+                expected_revision = self._model_revision
+            if not self._startup_operation_current(runtime_generation, expected_revision):
+                return False
         log_info("Loading transcription models...")
 
         _, _, transcription_cfg, _, _ = await self._read_runtime_config()
+        if runtime_generation is not None and not self._startup_operation_current(
+            runtime_generation, expected_revision
+        ):
+            return False
         new_realtime, new_accurate = await self._create_models(
             transcription_cfg or Transcription(),
             realtime_enabled=self._realtime_enabled,
             accurate_enabled=self._accurate_enabled,
         )
+        if runtime_generation is not None and not self._startup_operation_current(
+            runtime_generation, expected_revision
+        ):
+            return False
         self._realtime_model = new_realtime
         self._accurate_model = new_accurate
+        self._retained_model_references = False
+        self._model_revision += 1
         self._refresh_callable_capabilities()
+        return True
 
     def _set_model_status(self, model_role: str, status: str, message: str) -> None:
         """Record model readiness without exposing local paths in status messages."""
@@ -592,6 +819,7 @@ class TranscriptionService(BaseService):
 
     def _start_processing_thread(self) -> None:
         """Start the audio processing thread."""
+        self._require_processing_thread_stopped()
         self._transcribing = True
         self._process_thread = threading.Thread(
             target=self._processing_loop, daemon=True, name="Transcription-Processor"
@@ -619,26 +847,26 @@ class TranscriptionService(BaseService):
 
     def _process_audio_buffer(self) -> None:
         """Process buffered audio for speech detection and transcription."""
-        if self._paused or not self._audio_buffer:
-            return
-
-        with self._buffer_lock:
-            if len(self._audio_buffer) == 0:
+        with self._processing_lock:
+            if self._paused:
                 return
+            with self._buffer_lock:
+                if len(self._audio_buffer) == 0:
+                    return
 
-            # Get next chunk
-            item = self._audio_buffer.popleft()
+                # Get next chunk
+                item = self._audio_buffer.popleft()
 
-            # Handle tuple (data, stream_id, source)
-            if isinstance(item, tuple):
-                audio_data, stream_id, source = item
-            else:
-                # Fallback for legacy bytes (should not happen with new code)
-                audio_data = item
-                stream_id = self._current_stream_id
-                source = self._current_source
+                # Handle tuple (data, stream_id, source)
+                if isinstance(item, tuple):
+                    audio_data, stream_id, source = item
+                else:
+                    # Fallback for legacy bytes (should not happen with new code)
+                    audio_data = item
+                    stream_id = self._current_stream_id
+                    source = self._current_source
 
-        self._process_audio_item(audio_data, stream_id, source)
+            self._process_audio_item(audio_data, stream_id, source)
 
     def _process_audio_item(self, audio_data: bytes, stream_id: str, source: str) -> None:
         """Process one audio item for VAD segmentation."""
@@ -686,39 +914,54 @@ class TranscriptionService(BaseService):
 
     def _flush_pending_audio(self) -> None:
         """Drain queued audio and force transcription of the current speech segment."""
-        with self._buffer_lock:
-            pending_items = list(self._audio_buffer)
-            self._audio_buffer.clear()
+        with self._processing_lock:
+            with self._buffer_lock:
+                pending_items = list(self._audio_buffer)
+                self._audio_buffer.clear()
 
-        fallback_audio: list[bytes] = []
-        fallback_peak = 0.0
-        for item in pending_items:
-            if isinstance(item, tuple):
-                audio_data, stream_id, source = item
-            else:
-                audio_data = item
-                stream_id = self._current_stream_id
-                source = self._current_source
-            fallback_audio.append(audio_data)
-            fallback_peak = max(fallback_peak, self._audio_peak_percent(audio_data))
-            self._process_audio_item(audio_data, stream_id, source)
+            fallback_audio: list[bytes] = []
+            fallback_peak = 0.0
+            for item in pending_items:
+                if isinstance(item, tuple):
+                    audio_data, stream_id, source = item
+                else:
+                    audio_data = item
+                    stream_id = self._current_stream_id
+                    source = self._current_source
+                fallback_audio.append(audio_data)
+                fallback_peak = max(fallback_peak, self._audio_peak_percent(audio_data))
+                self._process_audio_item(audio_data, stream_id, source)
 
-        if self._speech_segments:
-            log_info("Flushing pending speech segment for manual stop")
-            self._transcribe_segment()
-            self._reset_speech_state()
-        elif fallback_audio and fallback_peak >= 1.0:
-            segment_data = b"".join(fallback_audio)
-            duration_ms = len(segment_data) / 32
-            if duration_ms >= self._min_audio_length_ms:
-                log_info(
-                    "Flushing buffered audio for manual stop "
-                    f"({duration_ms:.0f}ms, peak={fallback_peak:.1f}%)"
-                )
-                self._speech_segments.append(segment_data)
-                self._speech_segment_bytes += len(segment_data)
+            if self._speech_segments:
+                log_info("Flushing pending speech segment for manual stop")
                 self._transcribe_segment()
                 self._reset_speech_state()
+            elif fallback_audio and fallback_peak >= 1.0:
+                segment_data = b"".join(fallback_audio)
+                duration_ms = len(segment_data) / 32
+                if duration_ms >= self._min_audio_length_ms:
+                    log_info(
+                        "Flushing buffered audio for manual stop "
+                        f"({duration_ms:.0f}ms, peak={fallback_peak:.1f}%)"
+                    )
+                    self._speech_segments.append(segment_data)
+                    self._speech_segment_bytes += len(segment_data)
+                    self._transcribe_segment()
+                    self._reset_speech_state()
+
+    def _pause_and_clear_audio(self) -> bool:
+        """Wait for current inference, then discard audio owned by the old capture."""
+        if not self._processing_lock.acquire(timeout=5.0):
+            return False
+        try:
+            with self._buffer_lock:
+                self._audio_buffer.clear()
+            self._reset_speech_state()
+            self._last_realtime_partial_at = 0.0
+            self._last_realtime_partial_text = ""
+            return True
+        finally:
+            self._processing_lock.release()
 
     def _audio_peak_percent(self, audio_data: bytes) -> float:
         sample_count = len(audio_data) // 2
@@ -955,6 +1198,11 @@ class TranscriptionService(BaseService):
             model=model,
         )
 
+        # A handoff can begin while native inference is in flight. Do not
+        # publish its stale result after pause has taken ownership of the fence.
+        if self._paused:
+            return
+
         # Emit to general result topic
         asyncio.run_coroutine_threadsafe(
             self.bus.publish(
@@ -973,7 +1221,7 @@ class TranscriptionService(BaseService):
             error_message: Error description
             error_type: Type of error
         """
-        if not self._loop or not self._loop.is_running():
+        if self._paused or not self._loop or not self._loop.is_running():
             return
 
         error = TranscriptionError(
@@ -1226,8 +1474,18 @@ class TranscriptionService(BaseService):
 
         log_info(f"Transcription control: {action}")
 
+        if action in {"enable_realtime", "enable_accurate"} and (
+            self._runtime_retirement_pending()
+            or self._processing_thread_is_retained()
+            or self._retained_model_references
+        ):
+            log_debug("Ignoring transcription enable control while runtime is retiring")
+            return EmptyOutput()
+
         if action == "pause":
             self._paused = True
+            if not await asyncio.to_thread(self._pause_and_clear_audio):
+                raise RuntimeError("transcription_drain_timeout")
         elif action == "flush":
             await asyncio.to_thread(self._flush_pending_audio)
         elif action == "resume":
@@ -1247,11 +1505,15 @@ class TranscriptionService(BaseService):
                 self._language = data.language
                 log_info(f"Language set to: {self._language}")
         elif action == "enable_realtime" and data.enabled is not None:
-            self._realtime_enabled = data.enabled
+            if self._realtime_enabled != data.enabled:
+                self._model_revision += 1
+                self._realtime_enabled = data.enabled
             await self._republish_readiness()
             log_info(f"Realtime transcription: {'enabled' if data.enabled else 'disabled'}")
         elif action == "enable_accurate" and data.enabled is not None:
-            self._accurate_enabled = data.enabled
+            if self._accurate_enabled != data.enabled:
+                self._model_revision += 1
+                self._accurate_enabled = data.enabled
             await self._republish_readiness()
             log_info(f"Accurate transcription: {'enabled' if data.enabled else 'disabled'}")
 
@@ -1419,6 +1681,23 @@ class TranscriptionService(BaseService):
                 encoding=AudioEncoding.PCM_S16LE,
                 bits_per_sample=16,
             )
+            if self._speech_stream_observation_revisions is not None:
+                self._speech_stream_observation_revisions[session_id] = (
+                    request.config_revision,
+                    request.route_revision,
+                )
+        emit_speech_lifecycle(
+            self._speech_lifecycle_observer,
+            event="action_admitted",
+            operation_id=request.operation_id,
+            attempt_id=request.attempt_id,
+            generation=request.generation,
+            stage="stt",
+            config_revision=request.config_revision,
+            route_revision=request.route_revision,
+            outcome="started",
+            reason_code="accepted",
+        )
         return admission
 
     @method_contract(
@@ -1445,6 +1724,11 @@ class TranscriptionService(BaseService):
                 request.sequence
             )
             owner = self._speech_stream_owners.get(request.session_id)
+            observation_revisions = (
+                self._speech_stream_observation_revisions.get(request.session_id)
+                if self._speech_stream_observation_revisions is not None
+                else None
+            )
         if admission is None:
             if terminal is not None:
                 if not _stream_owner_matches(owner, envelope):
@@ -1525,6 +1809,8 @@ class TranscriptionService(BaseService):
         ):
             async with self._speech_stream_lock:
                 self._speech_streams.pop(request.session_id, None)
+                if self._speech_stream_observation_revisions is not None:
+                    self._speech_stream_observation_revisions.pop(request.session_id, None)
                 self._speech_stream_next_sequence.pop(request.session_id, None)
                 self._speech_stream_payload_digests.pop(request.session_id, None)
                 self._speech_stream_audio.pop(request.session_id, None)
@@ -1546,6 +1832,13 @@ class TranscriptionService(BaseService):
                     lease_remaining_ms=0,
                     terminal_outcome="timed_out",
                 )
+            self._emit_stt_stream_terminal(
+                admission,
+                observation_revisions,
+                outcome="failed",
+                byte_count=input_bytes,
+                chunk_count=expected,
+            )
             return self._speech_stream_terminal[request.session_id]
         reason = (
             "resource_exhausted"
@@ -1556,6 +1849,8 @@ class TranscriptionService(BaseService):
         if reason is not None:
             async with self._speech_stream_lock:
                 self._speech_streams.pop(request.session_id, None)
+                if self._speech_stream_observation_revisions is not None:
+                    self._speech_stream_observation_revisions.pop(request.session_id, None)
                 self._speech_stream_next_sequence.pop(request.session_id, None)
                 self._speech_stream_payload_digests.pop(request.session_id, None)
                 self._speech_stream_audio.pop(request.session_id, None)
@@ -1579,6 +1874,13 @@ class TranscriptionService(BaseService):
                 )
                 self._speech_stream_results[request.session_id] = result
                 self._speech_stream_terminal[request.session_id] = terminal_status
+            self._emit_stt_stream_terminal(
+                admission,
+                observation_revisions,
+                outcome="failed",
+                byte_count=input_bytes,
+                chunk_count=expected,
+            )
             return terminal_status
         await self._process_audio_data(
             request.audio_data,
@@ -1596,6 +1898,20 @@ class TranscriptionService(BaseService):
                 request.audio_data
             )
             self._speech_stream_last_activity[request.session_id] = now
+        if request.sequence == 0:
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="stream_first_input",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="started",
+                byte_count=len(request.audio_data),
+                chunk_count=1,
+            )
         return TranscriptionStreamStatus(
             session_id=request.session_id,
             state="active",
@@ -1661,6 +1977,11 @@ class TranscriptionService(BaseService):
                 return existing
             admission = self._speech_streams.get(request.session_id)
             next_sequence = self._speech_stream_next_sequence.get(request.session_id, 0)
+            observation_revisions = (
+                self._speech_stream_observation_revisions.get(request.session_id)
+                if self._speech_stream_observation_revisions is not None
+                else None
+            )
             if admission is None:
                 result = TranscriptionStreamResult(
                     session_id=request.session_id, state="failed", reason_code="outcome_unknown"
@@ -1682,6 +2003,8 @@ class TranscriptionService(BaseService):
                 self._speech_stream_started_at.pop(request.session_id, None)
                 self._speech_stream_last_activity.pop(request.session_id, None)
                 self._speech_stream_formats.pop(request.session_id, None)
+                if self._speech_stream_observation_revisions is not None:
+                    self._speech_stream_observation_revisions.pop(request.session_id, None)
                 result = TranscriptionStreamResult(
                     session_id=request.session_id,
                     state="timed_out",
@@ -1697,6 +2020,13 @@ class TranscriptionService(BaseService):
                     lease_remaining_ms=0,
                     terminal_outcome="timed_out",
                     accepted_chunks=next_sequence,
+                )
+                self._emit_stt_stream_terminal(
+                    admission,
+                    observation_revisions,
+                    outcome="failed",
+                    byte_count=input_count,
+                    chunk_count=next_sequence,
                 )
                 return result
             if request.final_sequence is not None and request.final_sequence != next_sequence - 1:
@@ -1714,12 +2044,115 @@ class TranscriptionService(BaseService):
             self._speech_stream_payload_digests.pop(request.session_id, None)
             self._speech_stream_last_activity.pop(request.session_id, None)
             self._speech_stream_started_at.pop(request.session_id, None)
+            if self._speech_stream_observation_revisions is not None:
+                self._speech_stream_observation_revisions.pop(request.session_id, None)
 
-        output_count = (
-            await self._transcribe_stream_audio(audio_data, stream_format, request.session_id)
-            if stream_format is not None
-            else 0
+        emit_speech_lifecycle(
+            self._speech_lifecycle_observer,
+            event="finish_requested",
+            operation_id=admission.operation_id,
+            attempt_id=admission.attempt_id,
+            generation=admission.generation,
+            stage="stt",
+            config_revision=observation_revisions[0] if observation_revisions else None,
+            route_revision=observation_revisions[1] if observation_revisions else None,
+            outcome="started",
+            reason_code="input_ended",
+            byte_count=input_count,
+            chunk_count=next_sequence,
         )
+        if stream_format is not None and audio_data:
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="model_invoke_start",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="started",
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
+        try:
+            output_count = (
+                await self._transcribe_stream_audio(audio_data, stream_format, request.session_id)
+                if stream_format is not None
+                else 0
+            )
+        except asyncio.CancelledError:
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="model_invoke_end",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="canceled",
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="terminal",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="canceled",
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
+            raise
+        except Exception:
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="model_invoke_end",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="failed",
+                reason_code="provider_failure",
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="terminal",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="failed",
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
+            raise
+        else:
+            if stream_format is not None and audio_data:
+                emit_speech_lifecycle(
+                    self._speech_lifecycle_observer,
+                    event="model_invoke_end",
+                    operation_id=admission.operation_id,
+                    attempt_id=admission.attempt_id,
+                    generation=admission.generation,
+                    stage="stt",
+                    config_revision=observation_revisions[0] if observation_revisions else None,
+                    route_revision=observation_revisions[1] if observation_revisions else None,
+                    outcome="completed" if output_count else "failed",
+                    byte_count=input_count,
+                    chunk_count=next_sequence,
+                )
         state = "completed" if output_count else "failed"
         reason_code = "completed" if state == "completed" else "model_unavailable"
         result = TranscriptionStreamResult(
@@ -1741,6 +2174,19 @@ class TranscriptionService(BaseService):
                 terminal_outcome="completed" if state == "completed" else "failed",
                 accepted_chunks=next_sequence,
             )
+        emit_speech_lifecycle(
+            self._speech_lifecycle_observer,
+            event="terminal",
+            operation_id=admission.operation_id,
+            attempt_id=admission.attempt_id,
+            generation=admission.generation,
+            stage="stt",
+            config_revision=observation_revisions[0] if observation_revisions else None,
+            route_revision=observation_revisions[1] if observation_revisions else None,
+            outcome=state,
+            byte_count=input_count,
+            chunk_count=next_sequence,
+        )
         return result
 
     @method_contract(
@@ -1767,6 +2213,11 @@ class TranscriptionService(BaseService):
             existing = self._speech_stream_results.get(request.session_id)
             if existing is not None:
                 return existing
+            observation_revisions = (
+                self._speech_stream_observation_revisions.pop(request.session_id, None)
+                if self._speech_stream_observation_revisions is not None
+                else None
+            )
             admission = self._speech_streams.pop(request.session_id, None)
             next_sequence = self._speech_stream_next_sequence.pop(request.session_id, 0)
             self._speech_stream_payload_digests.pop(request.session_id, None)
@@ -1789,6 +2240,35 @@ class TranscriptionService(BaseService):
                 lease_remaining_ms=0,
                 terminal_outcome=request.reason if admission is not None else "outcome_unknown",
             )
+        if admission is not None:
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="cancel_requested",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="canceled",
+                reason_code="user_cancelled" if request.reason == "canceled" else None,
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="terminal",
+                operation_id=admission.operation_id,
+                attempt_id=admission.attempt_id,
+                generation=admission.generation,
+                stage="stt",
+                config_revision=observation_revisions[0] if observation_revisions else None,
+                route_revision=observation_revisions[1] if observation_revisions else None,
+                outcome="canceled",
+                reason_code="user_cancelled" if request.reason == "canceled" else None,
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
         return result
 
     @method_contract(
@@ -1809,6 +2289,11 @@ class TranscriptionService(BaseService):
         async with self._speech_stream_lock:
             terminal = self._speech_stream_terminal.get(request.session_id)
             admission = self._speech_streams.get(request.session_id)
+            observation_revisions = (
+                self._speech_stream_observation_revisions.get(request.session_id)
+                if self._speech_stream_observation_revisions is not None
+                else None
+            )
             owner = self._speech_stream_owners.get(request.session_id)
             if owner is not None and not _stream_owner_matches(owner, envelope):
                 return TranscriptionStreamStatus(
@@ -1854,6 +2339,8 @@ class TranscriptionService(BaseService):
                 self._speech_stream_started_at.pop(request.session_id, None)
                 self._speech_stream_last_activity.pop(request.session_id, None)
                 self._speech_stream_formats.pop(request.session_id, None)
+                if self._speech_stream_observation_revisions is not None:
+                    self._speech_stream_observation_revisions.pop(request.session_id, None)
                 result = TranscriptionStreamResult(
                     session_id=request.session_id,
                     state="timed_out",
@@ -1871,6 +2358,13 @@ class TranscriptionService(BaseService):
                 )
                 self._speech_stream_results[request.session_id] = result
                 self._speech_stream_terminal[request.session_id] = status
+            self._emit_stt_stream_terminal(
+                admission,
+                observation_revisions,
+                outcome="failed",
+                byte_count=input_count,
+                chunk_count=next_sequence,
+            )
             return status
         return TranscriptionStreamStatus(
             session_id=request.session_id,
@@ -1938,87 +2432,190 @@ class TranscriptionService(BaseService):
         Returns:
             TranscribeAudioResponse with transcription text
         """
-        try:
-            log_info(
-                f"Transcription request: format={request.format}, "
-                f"sample_rate={request.sample_rate}, model={request.model}"
+        request_snapshot = request.model_copy(deep=True)
+        observation_ids = (
+            (uuid.uuid4().hex, uuid.uuid4().hex)
+            if self._speech_lifecycle_observer is not None
+            else None
+        )
+        if observation_ids is not None:
+            emit_speech_lifecycle(
+                self._speech_lifecycle_observer,
+                event="action_admitted",
+                operation_id=observation_ids[0],
+                attempt_id=observation_ids[1],
+                stage="stt",
+                outcome="started",
             )
+        cancellation_requested = threading.Event()
+        runtime_generation = self._runtime_generation
+        model_revision = self._model_revision
+        if request_snapshot.model == "accurate":
+            model_role = "accurate"
+            model_enabled = self._accurate_enabled
+            model = self._accurate_model
+            beam_size = 5
+        else:
+            model_role = "realtime"
+            model_enabled = self._realtime_enabled
+            model = self._realtime_model
+            beam_size = 1
+        model_status_message = dict(self._model_status_message)
+        base64_decode_error: ValueError | None = None
+        decoded_audio_byte_count: int | None = None
 
-            # Decode base64 audio
+        def model_state_is_current() -> bool:
+            if (
+                cancellation_requested.is_set()
+                or self._runtime_generation != runtime_generation
+                or self._model_revision != model_revision
+                or self._runtime_retirement_pending()
+                or self._processing_thread_is_retained()
+                or self._retained_model_references
+            ):
+                return False
+            if model_role == "accurate":
+                return self._accurate_enabled and self._accurate_model is model
+            return self._realtime_enabled and self._realtime_model is model
+
+        def transcribe_sync() -> tuple[str, float, str | None, float]:
+            """Decode and transcribe one finite request outside the event loop."""
+            nonlocal base64_decode_error, decoded_audio_byte_count
             try:
-                audio_bytes = base64.b64decode(request.audio_data)
-            except Exception as e:
-                raise ValueError(f"Invalid base64 audio data: {e}") from e
+                audio_bytes = base64.b64decode(request_snapshot.audio_data)
+            except Exception as exc:
+                base64_decode_error = ValueError(f"Invalid base64 audio data: {exc}")
+                raise base64_decode_error from exc
+            decoded_audio_byte_count = len(audio_bytes)
 
             log_debug(f"Decoded {len(audio_bytes)} bytes of audio")
-
-            # Convert to numpy array
             audio_np = self._decode_audio_to_numpy(
                 audio_bytes,
-                request.format,
-                request.sample_rate,
-                request.channels,
+                request_snapshot.format,
+                request_snapshot.sample_rate,
+                request_snapshot.channels,
             )
-
-            # Calculate duration
-            duration_ms = (len(audio_np) / request.sample_rate) * 1000
+            duration_ms = (len(audio_np) / request_snapshot.sample_rate) * 1000
             log_debug(f"Audio duration: {duration_ms:.0f}ms")
 
-            # Select model
-            if request.model == "accurate":
-                if not self._accurate_enabled or self._accurate_model is None:
-                    raise RuntimeError(
-                        "Accurate model unavailable: "
-                        f"{self._model_status_message.get('accurate', 'not_loaded')}"
-                    )
-                model = self._accurate_model
-                beam_size = 5
-            else:
-                if not self._realtime_enabled or self._realtime_model is None:
-                    raise RuntimeError(
-                        "Realtime model unavailable: "
-                        f"{self._model_status_message.get('realtime', 'not_loaded')}"
-                    )
-                model = self._realtime_model
-                beam_size = 1
-
-            # Transcribe
-            start_time = time.time()
-
-            with self._model_lock:
-                segments, info = model.transcribe(
-                    audio_np,
-                    language=request.language if request.language else None,
-                    beam_size=beam_size,
-                    vad_filter=True,  # Let Whisper do VAD for complete files
+            if not model_enabled or model is None:
+                raise RuntimeError(
+                    f"{model_role.capitalize()} model unavailable: "
+                    f"{model_status_message.get(model_role, 'not_loaded')}"
                 )
 
-                # Combine segments into full text
-                text_parts = []
-                for segment in segments:
-                    text_parts.append(segment.text.strip())
+            start_time = time.time()
+            with self._model_lock:
+                if not model_state_is_current():
+                    raise RuntimeError("Transcription model state changed")
+                if observation_ids is not None:
+                    emit_speech_lifecycle(
+                        self._speech_lifecycle_observer,
+                        event="model_invoke_start",
+                        operation_id=observation_ids[0],
+                        attempt_id=observation_ids[1],
+                        stage="stt",
+                        outcome="started",
+                        byte_count=len(audio_bytes),
+                    )
+                try:
+                    segments, info = model.transcribe(
+                        audio_np,
+                        language=request_snapshot.language if request_snapshot.language else None,
+                        beam_size=beam_size,
+                        vad_filter=True,
+                    )
+                    text_parts = [segment.text.strip() for segment in segments]
+                except Exception:
+                    if observation_ids is not None:
+                        emit_speech_lifecycle(
+                            self._speech_lifecycle_observer,
+                            event="model_invoke_end",
+                            operation_id=observation_ids[0],
+                            attempt_id=observation_ids[1],
+                            stage="stt",
+                            outcome="failed",
+                            reason_code="provider_failure",
+                            byte_count=len(audio_bytes),
+                        )
+                    raise
+                else:
+                    if observation_ids is not None:
+                        emit_speech_lifecycle(
+                            self._speech_lifecycle_observer,
+                            event="model_invoke_end",
+                            operation_id=observation_ids[0],
+                            attempt_id=observation_ids[1],
+                            stage="stt",
+                            outcome="completed",
+                            byte_count=len(audio_bytes),
+                        )
 
             text = " ".join(text_parts).strip()
             elapsed_ms = (time.time() - start_time) * 1000
+            language = info.language if hasattr(info, "language") else request_snapshot.language
+            return text, duration_ms, language, elapsed_ms
 
+        try:
+            text, duration_ms, language, elapsed_ms = await asyncio.to_thread(transcribe_sync)
+            if not model_state_is_current():
+                raise RuntimeError("Transcription model state changed")
             log_info(
-                f"Transcription complete: '{text[:50]}...' "
-                f"({elapsed_ms:.0f}ms, model={request.model})"
+                f"Transcription complete: text_chars={len(text)}, "
+                f"duration_ms={duration_ms:.0f}, elapsed_ms={elapsed_ms:.0f}"
             )
-
+            if observation_ids is not None:
+                emit_speech_lifecycle(
+                    self._speech_lifecycle_observer,
+                    event="terminal",
+                    operation_id=observation_ids[0],
+                    attempt_id=observation_ids[1],
+                    stage="stt",
+                    outcome="completed",
+                    byte_count=decoded_audio_byte_count,
+                )
             return TranscribeAudioResponse(
                 text=text,
                 confidence=None,  # Whisper doesn't provide overall confidence
-                language=info.language if hasattr(info, "language") else request.language,
+                language=language,
                 duration_ms=duration_ms,
-                model_used=request.model,
+                model_used=request_snapshot.model,
             )
 
-        except Exception as e:
-            log_error("Transcription error: %s", self._safe_exception_type(e), exc_info=True)
-            if isinstance(e, ValueError) and str(e).startswith("Invalid base64 audio data"):
+        except asyncio.CancelledError:
+            cancellation_requested.set()
+            if observation_ids is not None:
+                emit_speech_lifecycle(
+                    self._speech_lifecycle_observer,
+                    event="cancel_requested",
+                    operation_id=observation_ids[0],
+                    attempt_id=observation_ids[1],
+                    stage="stt",
+                    outcome="canceled",
+                )
+                emit_speech_lifecycle(
+                    self._speech_lifecycle_observer,
+                    event="terminal",
+                    operation_id=observation_ids[0],
+                    attempt_id=observation_ids[1],
+                    stage="stt",
+                    outcome="canceled",
+                )
+            raise
+        except Exception as exc:
+            log_error("Transcription error: %s", self._safe_exception_type(exc))
+            if observation_ids is not None:
+                emit_speech_lifecycle(
+                    self._speech_lifecycle_observer,
+                    event="terminal",
+                    operation_id=observation_ids[0],
+                    attempt_id=observation_ids[1],
+                    stage="stt",
+                    outcome="failed",
+                )
+            if exc is base64_decode_error:
                 raise
-            raise RuntimeError("Transcription failed") from e
+            raise RuntimeError("Transcription failed") from None
 
 
 # Export service

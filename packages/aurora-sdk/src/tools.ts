@@ -1,6 +1,7 @@
 import { AuroraError } from './errors.js'
 import { TOOLING_METHODS } from './descriptors.js'
 import { ToolingGetExportCatalogOutputToolingGetExportCatalogResponseSchema } from './generated/index.js'
+import type { ToolApprovalConfirmResponse, ToolApprovalRequestResponse } from './admin.js'
 import type { AuroraClient } from './client.js'
 import type { AuroraResponse } from './transport.js'
 import type {
@@ -581,6 +582,7 @@ export interface ToolApprovalDecisionInput {
   reason: string
   selectedProviderId?: string | null
   dryRun?: boolean
+  signal?: AbortSignal | undefined
 }
 
 export interface ToolApprovalDenialInput {
@@ -589,6 +591,7 @@ export interface ToolApprovalDenialInput {
   reason: string
   scope?: ToolApprovalScope
   selectedProviderId?: string | null | undefined
+  signal?: AbortSignal | undefined
 }
 
 export interface ToolApprovalDecisionResult {
@@ -658,11 +661,14 @@ function retainedToolDisabledReason(retained: ToolRetainedRemoteToolModel): stri
   return `Retained peer tool is currently unavailable: ${readableReason}.`
 }
 
-export async function loadToolApprovalCards(client: AuroraClient): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
+export async function loadToolApprovalCards(
+  client: AuroraClient,
+  options: { signal?: AbortSignal } = {}
+): Promise<AuroraResponse<ToolApprovalCardModel[]>> {
   const result = await client.requestResult<ToolCatalogResponse>(
     TOOLING_METHODS.listCatalog,
     {},
-    { path: '/api/Tooling/GetToolCatalog' }
+    { path: '/api/Tooling/GetToolCatalog', ...(options.signal ? { signal: options.signal } : {}) }
   )
   if (!result.ok) return result
   return {
@@ -676,12 +682,15 @@ export async function submitToolApprovalDecision(
   client: AuroraClient,
   input: ToolApprovalDecisionInput
 ): Promise<ToolApprovalDecisionResult> {
+  throwToolAbortIfRequested(input.signal)
   const approval = await requestToolApproval(client, {
     tool: input.tool,
     scope: input.scope,
     selectedProviderId: input.selectedProviderId,
-    dryRun: input.dryRun
+    dryRun: input.dryRun,
+    signal: input.signal
   })
+  throwToolAbortIfRequested(input.signal)
   if (!approval.approval_request_id) {
     return {
       toolId: input.tool.id,
@@ -694,20 +703,36 @@ export async function submitToolApprovalDecision(
     }
   }
 
-  const token = await client.approvals.approve({
+  const token = await client.tools.confirmExecution<ToolApprovalConfirmResponse, Record<string, unknown>>({
     approval_request_id: approval.approval_request_id,
     approver_principal_id: input.approverPrincipalId,
+    approve: true,
     grant_scope: grantScopeForApproval(input.scope, input.dryRun),
     include_future_tools: includeFutureToolsForApproval(input.scope),
     reason: input.reason,
     correlation_id: approval.correlation_id
+  }, input.signal ? { signal: input.signal } : {})
+  throwToolAbortIfRequested(input.signal)
+  assertToolBackendOk(token.ok, token.error, {
+    method: TOOLING_METHODS.confirmExecution,
+    correlationId: token.correlation_id,
+    detail: token
   })
+  if (!token.approval_token) {
+    throw new AuroraError({
+      code: 'validation',
+      message: 'Tool approval confirmation did not include a backend-issued approval token',
+      method: TOOLING_METHODS.confirmExecution,
+      correlationId: token.correlation_id ?? undefined,
+      detail: token
+    })
+  }
   return {
     toolId: input.tool.id,
     approvalRequestId: approval.approval_request_id,
-    approvalToken: token.approvalToken,
-    correlationId: token.correlationId ?? approval.correlation_id,
-    policyDecisionId: token.policyDecisionId ?? approval.policy_decision.decision_id ?? input.tool.policyDecisionId,
+    approvalToken: token.approval_token,
+    correlationId: token.correlation_id ?? approval.correlation_id,
+    policyDecisionId: token.policy_decision_id ?? approval.policy_decision.decision_id ?? input.tool.policyDecisionId,
     approved: true,
     audit: null
   }
@@ -717,14 +742,17 @@ export async function submitToolDenialDecision(
   client: AuroraClient,
   input: ToolApprovalDenialInput
 ): Promise<ToolApprovalDecisionResult> {
+  throwToolAbortIfRequested(input.signal)
   const approval = input.tool.approvalRequestId
     ? null
     : await requestToolApproval(client, {
       tool: input.tool,
       scope: input.tool.requestedApprovalScope ?? 'once',
       selectedProviderId: input.selectedProviderId,
-      dryRun: input.tool.dryRunRequired
+      dryRun: input.tool.dryRunRequired,
+      signal: input.signal
     })
+  throwToolAbortIfRequested(input.signal)
   const approvalRequestId = input.tool.approvalRequestId ?? approval?.approval_request_id ?? null
   if (!approvalRequestId) {
     throw new AuroraError({
@@ -736,13 +764,19 @@ export async function submitToolDenialDecision(
     })
   }
 
-  const confirmation = await client.approvals.confirm({
+  const confirmation = await client.tools.confirmExecution<ToolApprovalConfirmResponse, Record<string, unknown>>({
     approval_request_id: approvalRequestId,
     approver_principal_id: input.approverPrincipalId,
     approve: false,
     grant_scope: denialGrantScope(input.scope),
     reason: input.reason,
     correlation_id: input.tool.correlationId ?? approval?.correlation_id ?? null
+  }, input.signal ? { signal: input.signal } : {})
+  throwToolAbortIfRequested(input.signal)
+  assertToolBackendOk(confirmation.ok, confirmation.error, {
+    method: TOOLING_METHODS.confirmExecution,
+    correlationId: confirmation.correlation_id ?? input.tool.correlationId ?? approval?.correlation_id ?? null,
+    detail: confirmation
   })
   return {
     toolId: input.tool.id,
@@ -753,6 +787,27 @@ export async function submitToolDenialDecision(
     approved: false,
     audit: null
   }
+}
+
+
+function assertToolBackendOk(
+  ok: boolean | undefined,
+  error: string | null | undefined,
+  context: { method: string; correlationId?: string | null; detail: unknown }
+): void {
+  if (ok === false) {
+    throw new AuroraError({
+      code: 'unknown',
+      message: error ?? `${context.method} failed`,
+      method: context.method,
+      correlationId: context.correlationId ?? undefined,
+      detail: context.detail
+    })
+  }
+}
+
+function throwToolAbortIfRequested(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException('Tool approval mutation was cancelled', 'AbortError')
 }
 
 function grantScopeForApproval(scope: ToolApprovalScope, dryRun?: boolean): ToolingApprovalGrantScope {
@@ -778,8 +833,10 @@ async function requestToolApproval(
     scope: ToolApprovalScope
     selectedProviderId?: string | null | undefined
     dryRun?: boolean | undefined
+    signal?: AbortSignal | undefined
   }
 ) {
+  throwToolAbortIfRequested(input.signal)
   const selectedProvider = selectedToolProvider(input.tool, input.selectedProviderId)
   if (input.tool.providerSelectorRequired && !selectedProvider) {
     throw new AuroraError({
@@ -790,7 +847,7 @@ async function requestToolApproval(
     })
   }
 
-  return client.approvals.request({
+  const response = await client.tools.requestApproval<ToolApprovalRequestResponse, Record<string, unknown>>({
     global_tool_id: input.tool.id,
     provider_peer_id: selectedProvider?.providerPeerId ?? input.tool.providerPeerId,
     provider_service_instance_id: selectedProvider?.serviceInstanceId ?? input.tool.serviceInstanceId,
@@ -802,7 +859,14 @@ async function requestToolApproval(
     requested_approval_scope: input.scope,
     expected_audit_event: input.tool.auditDestination,
     dry_run: input.dryRun ?? input.tool.dryRunRequired
+  }, input.signal ? { signal: input.signal } : {})
+  throwToolAbortIfRequested(input.signal)
+  assertToolBackendOk(response.ok, response.error, {
+    method: TOOLING_METHODS.requestApproval,
+    correlationId: response.correlation_id,
+    detail: response
   })
+  return response
 }
 
 function selectedToolProvider(tool: ToolApprovalCardModel, selectedProviderId: string | null | undefined) {

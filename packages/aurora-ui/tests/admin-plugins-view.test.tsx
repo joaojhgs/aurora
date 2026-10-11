@@ -2,10 +2,11 @@
 import { act, type ReactElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { AuroraClient as Aurora, MockAuroraTransport, type ToolCatalogResponse } from '@aurora/client'
 import { AdminPluginsView, buildAdminPluginsSnapshot, sourceIsActive, type AdminPluginsSnapshot } from '../src/admin-plugins-view'
 import { auroraEmbeddedNavItems, auroraNavSections, navItemSnapshot } from '../src/nav'
+import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
 import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
@@ -51,6 +52,54 @@ describe('AdminPluginsView', () => {
     expect(markup).toContain('Connected tool sources')
     expect(markup).toContain('Connected devices')
     expect(markup).toContain('diagnostics.serviceHealth')
+  })
+
+  it('threads the caller abort signal through Tooling snapshot reads', async () => {
+    const controller = new AbortController()
+    const seenSignals: Array<AbortSignal | undefined> = []
+    const record = <T,>(value: T) => (request: { signal?: AbortSignal | undefined }) => {
+      seenSignals.push(request.signal)
+      return value
+    }
+    const transport = MockAuroraTransport.empty()
+      .register('Tooling.GetToolCatalog', record({ tools: [], secrets_redacted: true }))
+      .register('Tooling.GetSharingPolicy', record({ policy: { default_share: true, default_approval_mode: 'approve_all_local_safe', policy_mode: 'enforce', default_token_ttl_seconds: 300, rules: [] } }))
+      .register('Tooling.ListApprovalGrants', record({ count: 0, grants: [] }))
+      .register('Orchestrator.ListPendingToolApprovals', record({ count: 0, approvals: [] }))
+      .register('Auth.AuditLog', record({ events: [], total: 0 }))
+      .register('Tooling.GetMCPStatus', record({ started: false, servers: [], total_servers: 0, active_servers: 0 }))
+
+    await buildAdminPluginsSnapshot(new Aurora({ transport }), pluginsRoute(), { signal: controller.signal })
+
+    expect(seenSignals).toHaveLength(6)
+    expect(seenSignals.every((signal) => signal === controller.signal)).toBe(true)
+  })
+
+  it('projects terminal Tooling permission failures as terminal query data', async () => {
+    const transport = MockAuroraTransport.empty().fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
+    const client = new Aurora({ transport })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = mount(
+      <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'admin-plugins' }}>
+        <AdminPluginsView client={client} route={pluginsRoute()} />
+      </AuroraQueryProvider>
+    )
+
+    await vi.waitFor(async () => {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(container.textContent).toContain('Permission is needed to use this feature')
+    })
+
+    const query = queryClient.getQueryCache().findAll()[0]
+    if (!query) throw new Error('Expected plugin query to be registered')
+    expect(query.state.error).toBeNull()
+    expect(query.state.data).toMatchObject({
+      loadState: 'denied',
+      queryFailure: { code: 'permission', message: 'Permission is needed to use this feature' }
+    })
+    queryClient.clear()
   })
 
   it('renders unconfigured plugin templates as Configure cards in the Plugins tab', async () => {
@@ -145,11 +194,16 @@ describe('AdminPluginsView', () => {
     ).toContain('No tools are available from Aurora yet')
 
     const deniedTransport = MockAuroraTransport.empty().fail('Tooling.GetToolCatalog', 'permission', 'tool catalog denied')
-    const deniedSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: deniedTransport }), pluginsRoute())
+    const deniedClient = new Aurora({ transport: deniedTransport })
+    const deniedSnapshot = await buildAdminPluginsSnapshot(deniedClient, pluginsRoute())
     expect(deniedSnapshot.loadState).toBe('denied')
     expect(
-      renderToStaticMarkup(<AdminPluginsView client={client} route={pluginsRoute()} initialSnapshot={deniedSnapshot} />)
-    ).toContain('Permission is needed to use this feature')
+      renderToStaticMarkup(
+        <AuroraQueryProvider client={deniedClient} queryClient={createAuroraQueryClient()} queryScope={{ backend: 'unit', peerId: 'admin-plugins-denied' }}>
+          <AdminPluginsView client={deniedClient} route={pluginsRoute()} initialSnapshot={deniedSnapshot} />
+        </AuroraQueryProvider>
+      )
+    ).toContain('Tooling unavailable')
 
     const unavailableTransport = MockAuroraTransport.empty().lose('Tooling.GetToolCatalog')
     const unavailableSnapshot = await buildAdminPluginsSnapshot(new Aurora({ transport: unavailableTransport }), pluginsRoute())

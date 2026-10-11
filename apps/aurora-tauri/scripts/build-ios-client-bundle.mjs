@@ -5,12 +5,18 @@ import { mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveLlamaCppRuntime } from './native-local-inference-build.mjs'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
 const srcTauriRoot = join(packageRoot, 'src-tauri')
 const reportDir = join(packageRoot, 'reports')
 const prepareScript = join(packageRoot, 'scripts', 'prepare-ios-client-bundle.mjs')
+const llamaRuntimeBuild = resolveLlamaCppRuntime({
+  targets: ['ios-simulator-arm64'],
+  env: process.env,
+  repoRoot,
+})
 const tempDir = mkdtempSync(join(tmpdir(), 'aurora-ios-client-simulator-'))
 const tempConfigPath = join(tempDir, 'tauri.ios-client.conf.json')
 const tempPrepareReportPath = join(tempDir, 'ios-client-bundle-prepare.json')
@@ -41,7 +47,10 @@ try {
   // Tauri uses a fixed simulator archive path. A preceding baseline build can
   // leave Aurora.app there and make the client build's final rename fail.
   rmSync(appleBuildRoot, { recursive: true, force: true })
-  run('pnpm', buildArgs)
+  run('pnpm', buildArgs, {
+    ...llamaRuntimeBuild.env,
+    CARGO_AURORA_LLAMA_CPP_LIB_DIR: llamaRuntimeBuild.env.AURORA_LLAMA_CPP_LIB_DIR,
+  })
 
   mkdirSync(reportDir, { recursive: true })
   writeAtomicJson(buildProvenancePath, {
@@ -63,6 +72,11 @@ try {
     ],
     artifactRoot: redacted(join(srcTauriRoot, 'gen', 'apple')),
     expectedCapabilities: ['aurora-ios-thin', 'aurora-mobile-mesh'],
+    llamaCppRuntime: {
+      targets: llamaRuntimeBuild.records,
+      staticLink: true,
+      sourceDirectoriesRedacted: true,
+    },
     pythonSidecarStaged: false,
     externalBin: config.bundle?.externalBin ?? [],
     resources: config.bundle?.resources ?? {},

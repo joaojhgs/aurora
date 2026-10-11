@@ -50,6 +50,7 @@ from app.services.gateway.mesh.provider_eligibility import (
 )
 from app.services.gateway.mesh.route_errors import RouteDispatchError, public_route_error
 from app.services.gateway.mesh.speech_constraints import extract_speech_route_constraints
+from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.speech import SpeechRouteBinding
@@ -313,18 +314,29 @@ class MeshBus:
                 module = topic.split(".")[0] if "." in topic else topic
                 mesh_config = self.current_mesh_policy_snapshot().mesh_config
                 sharing_cfg = mesh_config.services.get(module)
-                if mesh_config.enabled and sharing_cfg and sharing_cfg.export.share:
+                status_control_plane = topic == GatewayMethods.STATUS_CHANGED
+                if mesh_config.enabled and (
+                    status_control_plane or (sharing_cfg and sharing_cfg.export.share)
+                ):
                     target_peer_id = caller_peer_id if topic in _SCOPED_ONLY_EVENT_TOPICS else None
                     if topic in _SCOPED_ONLY_EVENT_TOPICS and not target_peer_id:
                         log_debug(
                             f"MeshBus: Suppressed scoped-only event {topic}; target peer absent"
                         )
                         return
-                    recipient_peer_ids = (
-                        [target_peer_id]
-                        if target_peer_id is not None
-                        else [peer.peer_id for peer in self._routing_table.get_negotiated_peers()]
-                    )
+                    if target_peer_id is not None:
+                        recipient_peer_ids = [target_peer_id]
+                    elif status_control_plane:
+                        recipient_provider = getattr(
+                            self._peer_bridge, "gateway_status_event_recipient_ids", None
+                        )
+                        recipient_peer_ids = (
+                            list(recipient_provider()) if callable(recipient_provider) else []
+                        )
+                    else:
+                        recipient_peer_ids = [
+                            peer.peer_id for peer in self._routing_table.get_negotiated_peers()
+                        ]
                     for recipient_peer_id in recipient_peer_ids:
                         try:
                             event_kwargs = {"correlation_id": event_correlation_id}

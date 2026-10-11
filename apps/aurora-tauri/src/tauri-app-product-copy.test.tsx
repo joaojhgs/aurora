@@ -1,5 +1,12 @@
+import { act, Suspense, type ReactNode } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
+import {
+  cloneFixture,
+  MockAuroraTransport,
+  supportBundleFixture,
+} from "@aurora/client";
 import {
   AppShell,
   getAuroraSurfaceProfile,
@@ -36,6 +43,31 @@ function expectProductCopy(...values: string[]) {
       (term) => term.id,
     );
     expect(matches, value).toEqual([]);
+  }
+}
+
+async function renderResolvedRouteCopy(
+  elements: ReactNode,
+  expectedText: string,
+): Promise<string> {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(<Suspense fallback={null}>{elements}</Suspense>);
+    });
+    await vi.waitFor(
+      async () => {
+        await act(async () => {});
+        expect(container.textContent).toContain(expectedText);
+      },
+      { timeout: 5_000 },
+    );
+    return renderedUserCopy(container.innerHTML);
+  } finally {
+    await act(async () => root.unmount());
+    container.remove();
   }
 }
 
@@ -199,7 +231,7 @@ describe("Tauri application product copy", () => {
     expectProductCopy(...values);
   });
 
-  it("renders hostile Tauri route states without echoing command or diagnostic metadata", () => {
+  it("renders hostile Tauri route states without echoing command or diagnostic metadata", async () => {
     const hostileFeature = {
       available: false,
       permission: "manifest.schema.permission",
@@ -270,9 +302,24 @@ describe("Tauri application product copy", () => {
       ],
     };
     const client = createAuroraTauriRuntime().client;
+    const transport = client.transport as MockAuroraTransport;
+    const supportBundle = cloneFixture(supportBundleFixture);
+    supportBundle.sidecar_logs[0] = {
+      ...supportBundle.sidecar_logs[0],
+      source: "Existing log row",
+      details: { reason: "Existing row detail" },
+    };
+    supportBundle.sidecar_logs.push({
+      name: "catalog_method_shared",
+      status: "metadata_only",
+      source: "Additional log row",
+      details: { reason: "Additional row detail" },
+      redacted: true,
+    });
+    transport.register("Gateway.GetSupportBundle", () => supportBundle);
     const route = routeFor("assistant");
 
-    const routeMarkups = [
+    const routeElements = [
       tauriRouteRegistry.assistant({
         route,
         snapshot,
@@ -319,14 +366,24 @@ describe("Tauri application product copy", () => {
         assistantNativePermissions: [],
         assistantNativeCapabilities: [],
       } as never),
-    ].map((element) => renderToStaticMarkup(element));
+    ];
 
-    const rendered = routeMarkups.map(renderedUserCopy).join(" ");
+    const rendered = await renderResolvedRouteCopy(
+      routeElements,
+      "Device controls",
+    );
 
     expect(rendered).toContain("Device controls");
     expect(rendered).toContain("2 permissions need review");
     expect(rendered).toContain("Aurora on this computer");
     expect(rendered).toContain("Needs attention");
+    expect(rendered).toContain("Assistant model availability");
+    expect(rendered).toContain("App logs");
+    expect(rendered).toContain("Device check");
+    expect(rendered).toContain("Existing log row");
+    expect(rendered).toContain("Additional log row");
+    expect(rendered).not.toContain("gateway_sidecar_logs");
+    expect(rendered).not.toContain("catalog_method_shared");
     for (const leaked of [
       "manifest.schema.permission",
       "provider.runtime.capability",
@@ -371,7 +428,7 @@ describe("Tauri application product copy", () => {
     expectProductCopy(rendered);
   });
 
-  it("renders synthesized unavailable route state without internal route metadata", () => {
+  it("renders synthesized unavailable route state without internal route metadata", async () => {
     const client = createAuroraTauriRuntime().client;
     const baseSnapshot = {
       ...loadingShellSnapshot,
@@ -408,7 +465,7 @@ describe("Tauri application product copy", () => {
       androidMediaPolicy: null,
     };
 
-    const markup = renderToStaticMarkup(
+    const rendered = await renderResolvedRouteCopy(
       tauriRouteRegistry.diagnostics({
         route: diagnosticsRoute,
         snapshot,
@@ -418,8 +475,8 @@ describe("Tauri application product copy", () => {
         assistantNativePermissions: [],
         assistantNativeCapabilities: [],
       } as never),
+      "This page is still starting. Try again in a moment.",
     );
-    const rendered = renderedUserCopy(markup);
 
     expect(diagnosticsRoute.evidenceSources).toEqual(["Page is starting"]);
     expect(rendered).toContain(

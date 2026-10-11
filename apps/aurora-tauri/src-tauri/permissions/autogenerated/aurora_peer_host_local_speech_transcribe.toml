@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-peer-host-local-speech-transcribe"
+description = "Enables the aurora_peer_host_local_speech_transcribe command without any pre-configured scope."
+commands.allow = ["aurora_peer_host_local_speech_transcribe"]
+
+[[permission]]
+identifier = "deny-aurora-peer-host-local-speech-transcribe"
+description = "Denies the aurora_peer_host_local_speech_transcribe command without any pre-configured scope."
+commands.deny = ["aurora_peer_host_local_speech_transcribe"]

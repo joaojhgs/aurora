@@ -78,6 +78,7 @@ const LEGACY_MANIFEST_PROTOCOL = 'legacy-unfiltered-v0'
 const ACTIVE_VERSION = 'v1'
 const ACTIVE_TIER = 'projection'
 const TOOLING_PROVIDER_CAPABILITIES = Object.freeze(['tool_discovery', 'tool_execution'] as const)
+const SPEECH_HOST_METHOD_IDS = new Set(['Transcription.Transcribe', 'TTS.Synthesize'])
 const MAX_STALE_MANIFEST_ACK_RETRIES = 3
 const DEFAULT_MAX_EVENT_BYTES = 64 * 1024
 const MAX_SUBSCRIPTION_EVENT_QUEUE = 32
@@ -106,6 +107,7 @@ export class WebRtcPeerHost {
    * never a grant: every authorization question still goes to the authority.
    */
   private readonly recipients = new Map<string, PeerHostRecipient>()
+  private readonly disconnectCleanups = new Map<string, { readonly remotePeerId: string; readonly promise: Promise<void> }>()
   private timeoutSendFailureCount = 0
   private lastTimeoutFailureReason: 'timeout_send_failed' | null = null
 
@@ -147,8 +149,10 @@ export class WebRtcPeerHost {
   detach(remotePeerId: string): boolean {
     const state = this.recipients.get(remotePeerId)
     if (!state) return false
+    state.acceptingInbound = false
     this.cancelAll('detached', remotePeerId)
     this.unbindRevocation(state)
+    this.requestRemotePeerCleanup(remotePeerId, state.connectionEpoch, 'detached')
     return this.recipients.delete(remotePeerId)
   }
 
@@ -226,6 +230,21 @@ export class WebRtcPeerHost {
   }
 
   async startEpoch(remotePeerId?: string, authenticatedPeerContext?: AuthenticatedPeerContext): Promise<Record<string, unknown>> {
+    const previousPeerId = remotePeerId ?? this.soleRecipientPeerId()
+    const previousState = previousPeerId === undefined
+      ? this.fallbackRecipient
+      : this.recipients.get(previousPeerId)
+    if (previousPeerId !== undefined) {
+      if (previousState) {
+        previousState.acceptingInbound = false
+        previousState.admittedServices = new Set<string>()
+        this.requestRemotePeerCleanup(previousPeerId, previousState.connectionEpoch, 'epoch_replaced')
+      }
+      await this.awaitPeerCleanup(previousPeerId)
+      for (const [key, cleanup] of this.disconnectCleanups) {
+        if (cleanup.remotePeerId === previousPeerId) this.disconnectCleanups.delete(key)
+      }
+    }
     const state = this.stateFor(remotePeerId)
     state.acceptingInbound = false
     state.admittedServices = new Set<string>()
@@ -440,11 +459,16 @@ export class WebRtcPeerHost {
     const authority = await this.manifestAuthoritySnapshot(remotePeerId, epochContext, nowMs, state)
     const grantedMethodIds = new Set(authority.grantedMethodIds)
     const registryMethods = this.options.registry.list()
-    const registryDigest = digest({ services: manifestServices(registryMethods) })
+    const speechStageCapabilities = this.options.speechStageCapabilities?.() ?? []
+    const readySpeechMethodIds = new Set(speechStageCapabilities.flatMap(({ capability }) => capability.method_ids))
+    const advertisedMethods = registryMethods.filter((method) =>
+      !SPEECH_HOST_METHOD_IDS.has(method.methodId) || readySpeechMethodIds.has(method.methodId)
+    )
+    const registryDigest = digest({ services: manifestServices(advertisedMethods, speechStageCapabilities) })
     const registryRevision = registryDigest
     const policyDigest = digest({ recipient_peer_id: authority.recipientPeerId ?? '', granted_method_ids: sortedUnique(authority.grantedMethodIds) })
     const policyRevision = policyDigest
-    const methods = registryMethods.filter((method) => grantedMethodIds.has(method.methodId))
+    const methods = advertisedMethods.filter((method) => grantedMethodIds.has(method.methodId))
     const projectionReady = authority.authGrantState === 'active'
       && authority.authGrantRevision >= 1
       && typeof authority.recipientPeerId === 'string'
@@ -472,11 +496,11 @@ export class WebRtcPeerHost {
     }
     const effectivePermissions = sortedUnique([
       ...effectivePermissionsForMethods(
-        registryMethods.filter((method) => grantedMethodIds.has(method.methodId))
+        advertisedMethods.filter((method) => grantedMethodIds.has(method.methodId))
       ),
       ...(authority.grantedPermissions ?? [])
     ])
-    const sharedServices = manifestServices(methods)
+    const sharedServices = manifestServices(methods, speechStageCapabilities)
     const projectionDigest = digest({
       provider_peer_id: this.options.localPeerId,
       services: sharedServices.map((item) => withoutDigest(item))
@@ -839,10 +863,13 @@ export class WebRtcPeerHost {
 
   handleDisconnect(reason = 'disconnect', remotePeerId?: string): void {
     if (remotePeerId === undefined) {
-      for (const [, state] of this.recipientStates()) {
+      for (const [peerId, state] of this.recipientStates()) {
         state.acceptingInbound = false
         state.admittedServices = new Set<string>()
         this.unbindRevocation(state)
+        if (peerId !== undefined) {
+          this.requestRemotePeerCleanup(peerId, state.connectionEpoch, reason)
+        }
       }
       this.cancelAll(reason)
       return
@@ -852,6 +879,7 @@ export class WebRtcPeerHost {
     state.admittedServices = new Set<string>()
     this.cancelAll(reason, remotePeerId)
     this.unbindRevocation(state)
+    this.requestRemotePeerCleanup(remotePeerId, state.connectionEpoch, reason)
   }
 
   getActiveWorkCount(): number {
@@ -1034,6 +1062,27 @@ export class WebRtcPeerHost {
     return context
   }
 
+  private requestRemotePeerCleanup(remotePeerId: string, connectionEpoch: string, reason: string): Promise<void> {
+    const key = `${remotePeerId}\u0000${connectionEpoch}`
+    const existing = this.disconnectCleanups.get(key)
+    if (existing) return existing.promise
+    const promise = Promise.resolve().then(() =>
+      this.options.onRemotePeerDisconnected?.(remotePeerId, connectionEpoch, reason)
+    ).then(() => undefined)
+    this.disconnectCleanups.set(key, { remotePeerId, promise })
+    // The rejected promise stays recorded so a later epoch cannot replace an owner
+    // whose cleanup failed; attaching a handler prevents a sync callback from
+    // creating an unhandled rejection before the next async lifecycle boundary.
+    void promise.catch(() => undefined)
+    return promise
+  }
+
+  private async awaitPeerCleanup(remotePeerId: string): Promise<void> {
+    await Promise.all([...this.disconnectCleanups.values()]
+      .filter((cleanup) => cleanup.remotePeerId === remotePeerId)
+      .map((cleanup) => cleanup.promise))
+  }
+
   private cancelAll(reason: string, remotePeerId?: string): void {
     for (const [id, active] of this.active) {
       if (remotePeerId !== undefined && active.remotePeerId !== remotePeerId) continue
@@ -1049,6 +1098,9 @@ export class WebRtcPeerHost {
       state.authorityRevoked = true
       state.acceptingInbound = false
       state.admittedServices = new Set<string>()
+      if (remotePeerId !== undefined) {
+        this.requestRemotePeerCleanup(remotePeerId, state.connectionEpoch, 'peer_authority_revoked')
+      }
       for (const active of [...this.active.values()]) {
         if (active.remotePeerId !== remotePeerId) continue
         active.abort.abort('peer_authority_revoked')
@@ -1206,7 +1258,10 @@ function identityFromAuthority(context: AuthenticatedPeerContext | undefined, fr
   }
 }
 
-function manifestServices(methods: readonly PeerHostMethodDescriptor[]): Array<Record<string, unknown>> {
+function manifestServices(
+  methods: readonly PeerHostMethodDescriptor[],
+  speechStageCapabilities: readonly import('../mesh.js').MeshSpeechStageCapabilityExportV1[] = []
+): Array<Record<string, unknown>> {
   const byModule = new Map<string, PeerHostMethodDescriptor[]>()
   for (const method of methods) {
     const module = methodModule(method)
@@ -1216,12 +1271,13 @@ function manifestServices(methods: readonly PeerHostMethodDescriptor[]): Array<R
   }
   return [...byModule.entries()]
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
-    .map(([module, serviceMethods]) => manifestService(module, serviceMethods))
+    .map(([module, serviceMethods]) => manifestService(module, serviceMethods, speechStageCapabilities))
 }
 
 function manifestService(
   module: string,
-  descriptors: readonly PeerHostMethodDescriptor[]
+  descriptors: readonly PeerHostMethodDescriptor[],
+  speechStageCapabilities: readonly import('../mesh.js').MeshSpeechStageCapabilityExportV1[] = []
 ): Record<string, unknown> {
   const methods = descriptors
     .map((method) => manifestMethod(method))
@@ -1257,7 +1313,15 @@ function manifestService(
     ),
     available_feature_ids: availableFeatureIds,
     methods,
-    max_concurrent: concurrencyLimits.length > 0 ? Math.min(...concurrencyLimits) : 10
+    max_concurrent: concurrencyLimits.length > 0 ? Math.min(...concurrencyLimits) : 10,
+    ...(() => {
+      const registeredMethods = new Set(descriptors.map((descriptor) => descriptor.methodId))
+      const exported = speechStageCapabilities.filter(({ capability }) =>
+        capability.readiness === 'ready' && capability.exported &&
+        capability.method_ids.length > 0 && capability.method_ids.every((methodId) => registeredMethods.has(methodId))
+      )
+      return exported.length > 0 ? { speech_stage_capabilities: exported } : {}
+    })()
   }
   return { ...service, digest: digest(service) }
 }

@@ -31,7 +31,7 @@ import type { RouteAvailability } from '../shell-data'
 import { getAuroraSurfaceProfile } from '../platform-surface'
 import { safeErrorCopy } from '../product-copy'
 import { ToneBadge, riskTone, trustTone, stateTone, type BadgeTone } from '../status-badges'
-import { PageHeader } from '../state-surface'
+import { EmptyState, PageHeader, RouteStateNotice, SurfaceSkeleton } from '../state-surface'
 import { Button, Card, DataTable, MetaGrid, StatStrip, Switch, type DataColumn } from '../primitives'
 import { PageTabs } from '../shared-components'
 import { Alert, AlertDescription } from '#components/ui/alert'
@@ -95,8 +95,8 @@ export interface ToolingConsoleProps {
   sourceConfiguredTrustTiers?: Readonly<Record<string, string | null>> | undefined
   localApprovalPolicyOnly?: boolean | undefined
   onMutateSharing?: ((mutation: ToolSharingMutation) => void) | undefined
-  onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => void) | undefined
-  onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => void) | undefined
+  onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => Promise<void> | void) | undefined
+  onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => Promise<void> | void) | undefined
   onSetPolicyMode?: ((policyMode: string) => void) | undefined
   onUpsertSourcePolicy?: ((source: ToolingSourceModel, trustTier: string, includeFutureTools?: boolean) => void) | undefined
   onUpsertToolOverride?: ((tool: ToolApprovalCardModel, approvalMode: string) => void) | undefined
@@ -167,6 +167,7 @@ export function ToolingConsole({
   const sourceDetailRef = useRef<HTMLElement>(null)
   const revealSelectedSourceRef = useRef(false)
   const [wizardResult, setWizardResult] = useState<string | null>(null)
+  const [wizardPendingAction, setWizardPendingAction] = useState<'test' | 'create' | null>(null)
   const [mcpDraft, setMcpDraft] = useState<McpSourceWizardDraft>(() => ({
     name: 'Aurora MCP source',
     url: '',
@@ -262,28 +263,32 @@ export function ToolingConsole({
       />
 
       {route.disabled ? (
-        <Alert variant="destructive" role="alert">
-          <ShieldAlert />
-          <AlertDescription>Tools are unavailable. Review access and try again.</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          state="error"
+          title="Tools unavailable"
+          message="Review access and try again."
+        />
       ) : null}
       {error ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTriangle />
-          <AlertDescription>{productToolingMessageCopy(error)}</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          state="error"
+          title="Tools need attention"
+          message={productToolingMessageCopy(error)}
+        />
       ) : null}
       {managementError ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTriangle />
-          <AlertDescription>{productToolingMessageCopy(managementError)}</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          state="error"
+          title="Tool settings need attention"
+          message={productToolingMessageCopy(managementError)}
+        />
       ) : null}
       {managementLoading ? (
-        <Alert role="status">
-          <RefreshCw />
-          <AlertDescription>Loading tools and approval settings...</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          state="loading"
+          title="Tool settings loading"
+          message="Aurora is loading tools and approval settings."
+        />
       ) : null}
 
       <PageTabs
@@ -376,6 +381,7 @@ export function ToolingConsole({
                 wizardStep={wizardStep}
                 pluginDraft={pluginDraft}
                 resultMessage={decisionMessages.__plugins__ ?? wizardResult ?? decisionMessages.__policy__ ?? null}
+                pendingAction={wizardPendingAction}
                 onTogglePlugin={onTogglePlugin}
                 onSavePluginConfig={onSavePluginConfig}
                 onStep={setWizardStep}
@@ -393,21 +399,29 @@ export function ToolingConsole({
                   })
                 }}
                 onTestSource={async (draft) => {
+                  if (wizardPendingAction) return
+                  setWizardPendingAction('test')
                   setWizardResult('Checking plugin...')
                   try {
                     const result = await onTestSource?.('plugin', draft)
                     setWizardResult(onboardingResultMessage('plugin', 'test', result))
                   } catch (error) {
                     setWizardResult(productToolingMessageCopy(error))
+                  } finally {
+                    setWizardPendingAction(null)
                   }
                 }}
                 onCreateSource={async (draft) => {
+                  if (wizardPendingAction) return
+                  setWizardPendingAction('create')
                   setWizardResult('Saving plugin...')
                   try {
                     const result = await onCreateSource?.('plugin', draft)
                     setWizardResult(onboardingResultMessage('plugin', 'create', result))
                   } catch (error) {
                     setWizardResult(productToolingMessageCopy(error))
+                  } finally {
+                    setWizardPendingAction(null)
                   }
                 }}
               />
@@ -422,25 +436,36 @@ export function ToolingConsole({
           wizardStep={wizardStep}
           mcpDraft={mcpDraft}
           resultMessage={wizardResult ?? decisionMessages.__policy__ ?? null}
-          onClose={() => setWizard(null)}
+          pendingAction={wizardPendingAction}
+          onClose={() => {
+            if (!wizardPendingAction) setWizard(null)
+          }}
           onStep={setWizardStep}
           onMcpDraft={setMcpDraft}
           onTestSource={async (draft) => {
+            if (wizardPendingAction) return
+            setWizardPendingAction('test')
             setWizardResult('Testing MCP source...')
             try {
               const result = await onTestSource?.('mcp', draft)
               setWizardResult(onboardingResultMessage('mcp', 'test', result))
             } catch (error) {
               setWizardResult(productToolingMessageCopy(error))
+            } finally {
+              setWizardPendingAction(null)
             }
           }}
           onCreateSource={async (draft) => {
+            if (wizardPendingAction) return
+            setWizardPendingAction('create')
             setWizardResult('Creating MCP source...')
             try {
               const result = await onCreateSource?.('mcp', draft)
               setWizardResult(onboardingResultMessage('mcp', 'create', result))
             } catch (error) {
               setWizardResult(productToolingMessageCopy(error))
+            } finally {
+              setWizardPendingAction(null)
             }
           }}
         />
@@ -663,14 +688,15 @@ function SourceRail({
             disabled={loading}
           />
         </label>
-        {loading ? <p className="text-sm text-muted-foreground">Loading tools…</p> : null}
+        {loading ? <SurfaceSkeleton title="Loading tool sources" lines={3} /> : null}
         <div className="flex flex-col gap-1" aria-label="Tool sources">
           {!loading && visibleSources.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              {query.trim()
+            <EmptyState
+              title={query.trim() ? 'No matching sources' : 'No tool sources'}
+              message={query.trim()
                 ? 'No sources match this search.'
-                : 'No core, MCP, plugin, mesh, unknown, or blocked sources are available right now.'}
-            </p>
+                : 'No tool sources are available right now.'}
+            />
           ) : null}
           {visibleSources.map((source) => (
             <button
@@ -801,6 +827,7 @@ function PluginsWorkspace({
   wizardStep,
   pluginDraft,
   resultMessage,
+  pendingAction,
   onStep,
   onPluginDraft,
   onConfigure,
@@ -819,22 +846,36 @@ function PluginsWorkspace({
   wizardStep: number
   pluginDraft: PluginSourceWizardDraft
   resultMessage: string | null
+  pendingAction: 'test' | 'create' | null
   onStep: (step: number) => void
   onPluginDraft: (draft: PluginSourceWizardDraft) => void
   onConfigure: (source: ToolingSourceModel) => void
   onClose: () => void
-  onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => void) | undefined
-  onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => void) | undefined
+  onTogglePlugin?: ((plugin: BuiltinPluginModel, active: boolean) => Promise<void> | void) | undefined
+  onSavePluginConfig?: ((plugin: BuiltinPluginModel, values: Record<string, JsonValue>) => Promise<void> | void) | undefined
   onTestSource?: ((draft: PluginSourceWizardDraft) => Promise<void> | void) | undefined
   onCreateSource?: ((draft: PluginSourceWizardDraft) => Promise<void> | void) | undefined
 }) {
   void tools
   const [configPluginId, setConfigPluginId] = useState<string | null>(null)
+  const [configSaving, setConfigSaving] = useState(false)
+  const [pluginActionPendingId, setPluginActionPendingId] = useState<string | null>(null)
   const configPlugin = builtinPlugins.find((plugin) => plugin.id === configPluginId) ?? null
   const plugins = pluginSources.map((source) => ({ source, status: pluginStatus(source) }))
+
+  async function toggleBuiltinPlugin(plugin: BuiltinPluginModel, checked: boolean): Promise<void> {
+    if (!onTogglePlugin || pluginActionPendingId) return
+    setPluginActionPendingId(plugin.id)
+    try {
+      await onTogglePlugin(plugin, checked)
+    } finally {
+      setPluginActionPendingId(null)
+    }
+  }
+
   return (
     <main className="flex flex-col gap-4 py-4" aria-label="Plugins">
-      {loading ? <LoadingState title="Loading plugins" detail="Loading plugins and saved settings." /> : null}
+      {loading ? <LoadingState title="Loading plugins" /> : null}
       {resultMessage ? <Alert><AlertDescription>{resultMessage}</AlertDescription></Alert> : null}
       {!loading && builtinPlugins.length > 0 ? (
         <div className="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3.5">
@@ -852,13 +893,13 @@ function PluginsWorkspace({
                   <Switch
                     checked={plugin.active}
                     label={plugin.active ? 'Active' : 'Inactive'}
-                    disabled={!onTogglePlugin || (!plugin.active && !plugin.configured && plugin.fields.length > 0)}
-                    disabledReason={!onTogglePlugin ? 'Plugin activation is unavailable in this surface.' : 'Configure credentials before activating.'}
-                    onChange={(checked) => onTogglePlugin?.(plugin, checked)}
+                    disabled={!onTogglePlugin || pluginActionPendingId !== null || (!plugin.active && !plugin.configured && plugin.fields.length > 0)}
+                    disabledReason={!onTogglePlugin ? 'Plugin activation is unavailable in this surface.' : pluginActionPendingId ? 'Plugin settings are still saving.' : 'Configure credentials before activating.'}
+                    onChange={(checked) => { void toggleBuiltinPlugin(plugin, checked) }}
                     id={`plugin-active-${plugin.id}`}
                   />
                   {plugin.fields.length > 0 ? (
-                    <Button variant={plugin.configured ? 'outline' : 'primary'} onClick={() => setConfigPluginId(plugin.id)}>
+                    <Button variant={plugin.configured ? 'outline' : 'primary'} onClick={() => setConfigPluginId(plugin.id)} disabled={configSaving || pluginActionPendingId !== null} disabledReason="Plugin settings are still saving.">
                       Configure
                     </Button>
                   ) : null}
@@ -884,15 +925,35 @@ function PluginsWorkspace({
         </>
       ) : null}
       {!loading && builtinPlugins.length === 0 && plugins.length === 0 ? (
-        <Card title="Plugins" icon={<Package size={18} aria-hidden />} description="No plugins are available on this Aurora device yet." actions={<Button variant="primary" icon={<Package size={15} aria-hidden />} onClick={() => onConfigure(newPluginSourceDraft())}>Add plugin source</Button>} />
+        <Card
+          title="Plugins"
+          icon={<Package size={18} aria-hidden />}
+          actions={<Button variant="primary" icon={<Package size={15} aria-hidden />} onClick={() => onConfigure(newPluginSourceDraft())}>Add plugin source</Button>}
+        >
+          <EmptyState
+            title="No plugins available"
+            message="No plugins are available on this Aurora device yet."
+          />
+        </Card>
       ) : null}
       {configPlugin ? (
         <BuiltinPluginConfigModal
           plugin={configPlugin}
-          onClose={() => setConfigPluginId(null)}
-          onSave={(values) => {
-            onSavePluginConfig?.(configPlugin, values)
-            setConfigPluginId(null)
+          saving={configSaving}
+          onClose={() => {
+            if (!configSaving) setConfigPluginId(null)
+          }}
+          onSave={async (values) => {
+            if (configSaving) return
+            setConfigSaving(true)
+            try {
+              await onSavePluginConfig?.(configPlugin, values)
+              setConfigPluginId(null)
+            } catch {
+              // The caller owns user-facing recovery copy. Keep the dialog open so the fields can be corrected.
+            } finally {
+              setConfigSaving(false)
+            }
           }}
         />
       ) : null}
@@ -902,8 +963,13 @@ function PluginsWorkspace({
           wizardStep={wizardStep}
           pluginDraft={pluginDraft}
           resultMessage={resultMessage}
-          onClose={onClose}
-          onStep={onStep}
+          pendingAction={pendingAction}
+          onClose={() => {
+            if (!pendingAction) onClose()
+          }}
+          onStep={(step) => {
+            if (!pendingAction) onStep(step)
+          }}
           onPluginDraft={onPluginDraft}
           onTestSource={onTestSource}
           onCreateSource={onCreateSource}
@@ -918,7 +984,17 @@ function builtinPluginDescription(plugin: BuiltinPluginModel): string {
   return `Built-in plugin; needs ${plugin.fields.length} setting${plugin.fields.length === 1 ? '' : 's'}.`
 }
 
-function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: BuiltinPluginModel; onClose: () => void; onSave: (values: Record<string, JsonValue>) => void }) {
+function BuiltinPluginConfigModal({
+  plugin,
+  saving,
+  onClose,
+  onSave
+}: {
+  plugin: BuiltinPluginModel
+  saving: boolean
+  onClose: () => void
+  onSave: (values: Record<string, JsonValue>) => Promise<void> | void
+}) {
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const changes: Record<string, JsonValue> = {}
   for (const [keyPath, value] of Object.entries(drafts)) {
@@ -931,7 +1007,7 @@ function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: Builtin
         title={`Configure ${plugin.label}`}
         icon={<KeyRound size={18} aria-hidden />}
         description="Credentials are saved securely; secrets are never shown again."
-        actions={<Button variant="ghost" onClick={onClose} ariaLabel={`Close configure ${plugin.label}`}>Close</Button>}
+        actions={<Button variant="ghost" onClick={onClose} ariaLabel={`Close configure ${plugin.label}`} disabled={saving} disabledReason="Save is still running.">Close</Button>}
       >
         <div className="flex flex-col gap-3">
           {plugin.fields.map((field, index) => {
@@ -950,14 +1026,15 @@ function BuiltinPluginConfigModal({ plugin, onClose, onSave }: { plugin: Builtin
                   className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
                   placeholder={isSet ? 'Leave blank to keep the current value' : fieldDescription}
                   value={drafts[field.key_path] ?? ''}
+                  disabled={saving}
                   onChange={(event) => setDrafts((current) => ({ ...current, [field.key_path]: event.currentTarget.value }))}
                 />
               </label>
             )
           })}
           <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={onClose}>Cancel</Button>
-            <Button variant="primary" onClick={() => onSave(changes)} ariaLabel={`Save ${plugin.label} configuration`}>
+            <Button variant="outline" onClick={onClose} disabled={saving} disabledReason="Save is still running.">Cancel</Button>
+            <Button variant="primary" onClick={() => { void onSave(changes) }} busy={saving} disabled={saving} disabledReason="Save is still running." ariaLabel={`Save ${plugin.label} configuration`}>
               Save
             </Button>
           </div>
@@ -989,6 +1066,7 @@ function McpSourceModal({
   wizardStep,
   mcpDraft,
   resultMessage,
+  pendingAction,
   onClose,
   onStep,
   onMcpDraft,
@@ -999,6 +1077,7 @@ function McpSourceModal({
   wizardStep: number
   mcpDraft: McpSourceWizardDraft
   resultMessage: string | null
+  pendingAction: 'test' | 'create' | null
   onClose: () => void
   onStep: (step: number) => void
   onMcpDraft: (draft: McpSourceWizardDraft) => void
@@ -1007,10 +1086,10 @@ function McpSourceModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
-      <Card className="w-full max-w-lg" title="Add MCP source" icon={<Plug size={18} aria-hidden />} description="Connect a new MCP server. New tools need review before Aurora uses them." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close Add MCP source">Close</Button>}>
+      <Card className="w-full max-w-lg" title="Add MCP source" icon={<Plug size={18} aria-hidden />} description="Connect a new MCP server. New tools need review before Aurora uses them." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close Add MCP source" disabled={Boolean(pendingAction)} disabledReason="Action is still running.">Close</Button>}>
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="MCP source steps">{['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => <Button key={label} variant={wizardStep === index + 1 ? 'primary' : 'outline'} ariaPressed={wizardStep === index + 1} onClick={() => onStep(index + 1)}>{index + 1}. {label}</Button>)}</div>
-          <WizardStep wizard="mcp" step={wizardStep} canLaunchLocalCommands={canLaunchLocalCommands} mcpDraft={mcpDraft} pluginDraft={{ packageName: '', pluginId: '', version: '', sourceUrl: '', trustTier: 'untrusted', includeFutureTools: false }} resultMessage={resultMessage} onMcpDraft={onMcpDraft} onPluginDraft={() => undefined} onTestSource={(_, draft) => onTestSource?.(draft as McpSourceWizardDraft)} onCreateSource={(_, draft) => onCreateSource?.(draft as McpSourceWizardDraft)} />
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="MCP source steps">{['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => <Button key={label} variant={wizardStep === index + 1 ? 'primary' : 'outline'} ariaPressed={wizardStep === index + 1} onClick={() => onStep(index + 1)} disabled={Boolean(pendingAction)} disabledReason="Action is still running.">{index + 1}. {label}</Button>)}</div>
+          <WizardStep wizard="mcp" step={wizardStep} pendingAction={pendingAction} canLaunchLocalCommands={canLaunchLocalCommands} mcpDraft={mcpDraft} pluginDraft={{ packageName: '', pluginId: '', version: '', sourceUrl: '', trustTier: 'untrusted', includeFutureTools: false }} resultMessage={resultMessage} onMcpDraft={onMcpDraft} onPluginDraft={() => undefined} onTestSource={(_, draft) => onTestSource?.(draft as McpSourceWizardDraft)} onCreateSource={(_, draft) => onCreateSource?.(draft as McpSourceWizardDraft)} />
         </div>
       </Card>
     </div>
@@ -1022,6 +1101,7 @@ function PluginConfigModal({
   wizardStep,
   pluginDraft,
   resultMessage,
+  pendingAction,
   onClose,
   onStep,
   onPluginDraft,
@@ -1032,6 +1112,7 @@ function PluginConfigModal({
   wizardStep: number
   pluginDraft: PluginSourceWizardDraft
   resultMessage: string | null
+  pendingAction: 'test' | 'create' | null
   onClose: () => void
   onStep: (step: number) => void
   onPluginDraft: (draft: PluginSourceWizardDraft) => void
@@ -1040,11 +1121,11 @@ function PluginConfigModal({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" role="presentation">
-      <Card className="w-full max-w-lg" title={`Configure ${pluginName}`} icon={<ServerCog size={18} aria-hidden />} description="Save the plugin details, then review its tools before Aurora uses them." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close plugin configuration">Close</Button>}>
+      <Card className="w-full max-w-lg" title={`Configure ${pluginName}`} icon={<ServerCog size={18} aria-hidden />} description="Save the plugin details, then review its tools before Aurora uses them." actions={<Button variant="ghost" onClick={onClose} ariaLabel="Close plugin configuration" disabled={Boolean(pendingAction)} disabledReason="Action is still running.">Close</Button>}>
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Plugin configure steps">{['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => <Button key={label} variant={wizardStep === index + 1 ? 'primary' : 'outline'} ariaPressed={wizardStep === index + 1} onClick={() => onStep(index + 1)}>{index + 1}. {label}</Button>)}</div>
-          <WizardStep wizard="plugin" step={wizardStep} canLaunchLocalCommands={false} mcpDraft={{ name: '', transport: 'streamable_http', trustTier: 'untrusted', includeFutureTools: false }} pluginDraft={pluginDraft} resultMessage={resultMessage} onMcpDraft={() => undefined} onPluginDraft={onPluginDraft} onTestSource={(_, draft) => onTestSource?.(draft as PluginSourceWizardDraft)} onCreateSource={(_, draft) => onCreateSource?.(draft as PluginSourceWizardDraft)} />
-          <div className="flex items-center gap-2"><Button variant="outline" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={() => { void onCreateSource?.(pluginDraft) }}>Save & activate</Button></div>
+          <div className="flex flex-wrap gap-1.5" role="tablist" aria-label="Plugin configure steps">{['Details', 'Authenticate', 'Discover', 'Trust'].map((label, index) => <Button key={label} variant={wizardStep === index + 1 ? 'primary' : 'outline'} ariaPressed={wizardStep === index + 1} onClick={() => onStep(index + 1)} disabled={Boolean(pendingAction)} disabledReason="Action is still running.">{index + 1}. {label}</Button>)}</div>
+          <WizardStep wizard="plugin" step={wizardStep} pendingAction={pendingAction} canLaunchLocalCommands={false} mcpDraft={{ name: '', transport: 'streamable_http', trustTier: 'untrusted', includeFutureTools: false }} pluginDraft={pluginDraft} resultMessage={resultMessage} onMcpDraft={() => undefined} onPluginDraft={onPluginDraft} onTestSource={(_, draft) => onTestSource?.(draft as PluginSourceWizardDraft)} onCreateSource={(_, draft) => onCreateSource?.(draft as PluginSourceWizardDraft)} />
+          <div className="flex items-center gap-2"><Button variant="outline" onClick={onClose} disabled={Boolean(pendingAction)} disabledReason="Action is still running.">Cancel</Button><Button variant="primary" onClick={() => { void onCreateSource?.(pluginDraft) }} busy={pendingAction === 'create'} disabled={Boolean(pendingAction)} disabledReason="Action is still running.">Save & activate</Button></div>
         </div>
       </Card>
     </div>
@@ -1147,7 +1228,10 @@ function ToolDetailTable({
   return (
     <Card title="Tools" icon={<Wrench size={18} aria-hidden />} description="Expand a tool to review what it can do and choose whether it needs approval.">
       {tools.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No tools match the current source/search filter.</p>
+        <EmptyState
+          title="No matching tools"
+          message="No tools match the current source or search."
+        />
       ) : (
         <Table className="border-separate border-spacing-y-1">
           <TableHeader className="[&_tr]:border-0 [&_th]:border-b [&_th]:border-border/30">
@@ -1344,7 +1428,14 @@ function ToolInventory(props: {
   onDeny: (tool: ToolApprovalCardModel) => void
   onExecuteSafe: (tool: ToolApprovalCardModel) => void
 }) {
-  if (props.tools.length === 0) return <p className="text-sm text-muted-foreground">No tools match the current source/search filter.</p>
+  if (props.tools.length === 0) {
+    return (
+      <EmptyState
+        title="No matching tools"
+        message="No tools match the current source or search."
+      />
+    )
+  }
   return (
     <div className="flex flex-col gap-2" aria-label={`${productSafeSourceName(props.source)} tools`}>
       {props.tools.map((tool) => (
@@ -1577,13 +1668,19 @@ function SchedulerPanel({ jobs, loading, error }: { jobs: NormalizedSchedulerJob
   return (
     <Card title="Scheduled tool actions" icon={<CalendarClock size={18} aria-hidden />} description="Scheduled actions show whether approval is still valid before they run.">
       {error ? (
-        <Alert variant="destructive" role="alert">
-          <AlertTriangle />
-          <AlertDescription>{productToolingMessageCopy(error)}</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          state="error"
+          title="Scheduled actions need attention"
+          message={productToolingMessageCopy(error)}
+        />
       ) : null}
-      {loading ? <p className="text-sm text-muted-foreground">Loading scheduled actions through Aurora...</p> : null}
-      {!loading && jobs.length === 0 && !error ? <p className="text-sm text-muted-foreground">No scheduled tool actions are set up.</p> : null}
+      {loading ? <SurfaceSkeleton title="Loading scheduled actions" lines={2} /> : null}
+      {!loading && jobs.length === 0 && !error ? (
+        <EmptyState
+          title="No scheduled tool actions"
+          message="No scheduled tool actions are set up."
+        />
+      ) : null}
       <div className="flex flex-col gap-2">
         {jobs.map((job) => (
           <div key={job.job_id} className="flex flex-wrap items-center gap-2 rounded-lg border border-border p-2.5 text-sm">
@@ -1679,6 +1776,7 @@ function OnboardingPanel({
           mcpDraft={mcpDraft}
           pluginDraft={pluginDraft}
           resultMessage={resultMessage}
+          pendingAction={null}
           onMcpDraft={onMcpDraft}
           onPluginDraft={onPluginDraft}
           onTestSource={onTestSource}
@@ -1696,6 +1794,7 @@ function WizardStep({
   mcpDraft,
   pluginDraft,
   resultMessage,
+  pendingAction,
   onMcpDraft,
   onPluginDraft,
   onTestSource,
@@ -1707,6 +1806,7 @@ function WizardStep({
   mcpDraft: McpSourceWizardDraft
   pluginDraft: PluginSourceWizardDraft
   resultMessage: string | null
+  pendingAction: 'test' | 'create' | null
   onMcpDraft: (draft: McpSourceWizardDraft) => void
   onPluginDraft: (draft: PluginSourceWizardDraft) => void
   onTestSource?: ((kind: 'mcp' | 'plugin', draft: McpSourceWizardDraft | PluginSourceWizardDraft) => Promise<void> | void) | undefined
@@ -1714,6 +1814,7 @@ function WizardStep({
 }) {
   const draft = wizard === 'mcp' ? mcpDraft : pluginDraft
   const endpointValue = wizard === 'mcp' ? (mcpDraft.url || mcpDraft.command || '') : (pluginDraft.sourceUrl || '')
+  const pending = Boolean(pendingAction)
 
   function updateEndpoint(value: string) {
     if (wizard === 'mcp') {
@@ -1741,26 +1842,28 @@ function WizardStep({
         <input
           className={inputClassName}
           value={wizard === 'mcp' ? mcpDraft.name : pluginDraft.packageName}
+          disabled={pending}
           onChange={(event) => wizard === 'mcp' ? onMcpDraft({ ...mcpDraft, name: event.currentTarget.value }) : onPluginDraft({ ...pluginDraft, packageName: event.currentTarget.value })}
           placeholder={wizard === 'mcp' ? 'Filesystem MCP' : '@aurora/plugin-package'}
         />
       </label>
       <label className="flex flex-col gap-1 text-sm">
         <span>{wizard === 'mcp' ? 'Server URL or command profile' : 'Package source or install path'}</span>
-        <input className={inputClassName} value={endpointValue} onChange={(event) => updateEndpoint(event.currentTarget.value)} placeholder={canLaunchLocalCommands ? 'stdio command or https://server' : 'https://server'} />
+        <input className={inputClassName} value={endpointValue} disabled={pending} onChange={(event) => updateEndpoint(event.currentTarget.value)} placeholder={canLaunchLocalCommands ? 'stdio command or https://server' : 'https://server'} />
       </label>
       <p className="text-sm text-muted-foreground">Aurora checks the connection before saving.</p>
     </div>
   )
   if (step === 2) return (
     <div className="flex flex-col gap-3">
-      <label className="flex flex-col gap-1 text-sm"><span>Auth type</span><select className={inputClassName} defaultValue="none"><option value="none">No auth</option><option value="bearer">Bearer token</option><option value="oauth">OAuth</option></select></label>
+      <label className="flex flex-col gap-1 text-sm"><span>Auth type</span><select className={inputClassName} defaultValue="none" disabled={pending}><option value="none">No auth</option><option value="bearer">Bearer token</option><option value="oauth">OAuth</option></select></label>
       <label className="flex flex-col gap-1 text-sm">
         <span>Secret value</span>
         <input
           className={inputClassName}
           type="password"
           placeholder="Stored only for active submission"
+          disabled={pending}
           onChange={(event) => updateSecret(event.currentTarget.value)}
         />
       </label>
@@ -1770,14 +1873,14 @@ function WizardStep({
   if (step === 3) return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">Check the connection before saving. Secrets are never shown again.</p>
-      <Button variant="outline" onClick={() => { void onTestSource?.(wizard, draft) }} disabled={!onTestSource} disabledReason={!onTestSource ? 'Connection check is unavailable right now.' : undefined}>Test connection</Button>
+      <Button variant="outline" onClick={() => { void onTestSource?.(wizard, draft) }} busy={pendingAction === 'test'} disabled={!onTestSource || pending} disabledReason={!onTestSource ? 'Connection check is unavailable right now.' : pending ? 'Connection check is still running.' : undefined}>Test connection</Button>
       {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{resultMessage}</p> : null}
     </div>
   )
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">New tools require approval unless you choose to trust this source.</p>
-      <Button variant="primary" onClick={() => { void onCreateSource?.(wizard, draft) }} disabled={!onCreateSource} disabledReason={!onCreateSource ? 'Saving is unavailable right now.' : undefined}>Create source</Button>
+      <Button variant="primary" onClick={() => { void onCreateSource?.(wizard, draft) }} busy={pendingAction === 'create'} disabled={!onCreateSource || pending} disabledReason={!onCreateSource ? 'Saving is unavailable right now.' : pending ? 'Saving is still running.' : undefined}>Create source</Button>
       {resultMessage ? <p className="text-sm text-muted-foreground" role="status">{resultMessage}</p> : null}
     </div>
   )
@@ -1795,16 +1898,26 @@ function onboardingResultMessage(kind: 'mcp' | 'plugin', action: 'test' | 'creat
 
 function LoadingState({
   title = 'Loading tool sources',
-  detail = 'Loading tools, approvals, sharing state, and connected devices.'
 }: {
   title?: string
-  detail?: string
 } = {}) {
-  return <Card title={title} icon={<RefreshCw size={18} aria-hidden />}><p className="text-sm text-muted-foreground" role="status">{detail}</p></Card>
+  return (
+    <Card title={title} icon={<RefreshCw size={18} aria-hidden />}>
+      <SurfaceSkeleton title={title} lines={4} />
+    </Card>
+  )
 }
 
 function EmptyCatalog({ onAddMcp }: { onAddMcp?: (() => void) | undefined }) {
-  return <Card title="No tools available" icon={<Boxes size={18} aria-hidden />}><p className="text-sm text-muted-foreground">No tools are available on this device or its approved devices right now.</p>{onAddMcp ? <Button variant="primary" onClick={onAddMcp}>Connect your first MCP server</Button> : null}</Card>
+  return (
+    <Card title="No tools available" icon={<Boxes size={18} aria-hidden />}>
+      <EmptyState
+        title="No tools available"
+        message="No tools are available on this device or its approved devices right now."
+      />
+      {onAddMcp ? <Button variant="primary" onClick={onAddMcp}>Connect your first MCP server</Button> : null}
+    </Card>
+  )
 }
 
 function TrustPill({ trust }: { trust: ToolingTrustState }) {

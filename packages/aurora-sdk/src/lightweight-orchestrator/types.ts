@@ -36,6 +36,8 @@ export interface LightweightProviderRequest {
   readonly maxToolCalls: number
   readonly providerId?: string | null
   readonly modelId?: string | null
+  /** Stable lifetime across provider calls and approval pauses in one assistant turn. */
+  readonly turnSignal?: AbortSignal
   readonly signal: AbortSignal
 }
 
@@ -117,6 +119,8 @@ export interface LightweightTurnResult {
   readonly status: LightweightTurnStatus
   readonly conversationId: string
   readonly assistantText: string
+  /** Present only when a completed turn has been durably saved as an assistant message. */
+  readonly assistantMessageId?: string
   readonly confirmation?: LightweightConfirmationEvent
   readonly diagnostics?: JsonObject
 }

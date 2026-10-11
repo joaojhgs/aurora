@@ -9,6 +9,12 @@ from app.helpers.aurora_logger import log_debug, log_error, log_info, log_warnin
 from app.helpers.getUseHardwareAcceleration import get_use_hardware_acceleration
 from app.messaging import MessageBus
 from app.messaging.priority_helpers import get_interactive_priority
+from app.services.orchestrator.native_worker import (
+    RetirementResult,
+    provider_owner,
+    retire_native,
+    run_native,
+)
 from app.services.orchestrator.remote_mesh_chat_model import RemoteMeshChatModel
 from app.services.orchestrator.state import State
 from app.services.orchestrator.tool_bindings import (
@@ -111,10 +117,53 @@ The chatbot agent is the main agent coordinator in the graph.
 llm = None
 _llm_initialized = False
 _llm_init_lock = asyncio.Lock()
+_llm_initialization_task: asyncio.Task[None] | None = None
+_llm_generation = 0
+
+
+async def _construct_llama_model(constructor, options):
+    """Construct the synchronous model outside the event-loop thread."""
+
+    return await asyncio.to_thread(constructor, **options)
+
+
+async def _run_native_llm(provider, function, *args):
+    """Compatibility wrapper for native provider work."""
+
+    return await run_native(provider, function, *args)
+
+
+async def dispose_llm(instance) -> RetirementResult:
+    """Retire one provider instance and return its retained local result."""
+
+    # ChatLlamaCpp's backend client is the explicit close owner. Do not guess
+    # by trying both a runnable wrapper and its nested client.
+    from app.services.orchestrator.chat_llama_cpp import ChatLlamaCpp
+
+    owner = provider_owner(instance)
+    if isinstance(ChatLlamaCpp, type) and isinstance(owner, ChatLlamaCpp):
+        return await retire_native(owner, close_target=owner.client)
+    return await retire_native(owner)
+
+
+async def _initialize_llm_for_generation(generation: int) -> None:
+    """Initialize once and discard a model made obsolete while it loaded."""
+
+    global llm, _llm_initialized
+
+    await _initialize_llm_unlocked()
+    if generation != _llm_generation:
+        stale = llm
+        llm = None
+        _llm_initialized = False
+        if stale is not None:
+            await dispose_llm(stale)
 
 
 async def _initialize_llm() -> None:
     """Serialize lazy LLM initialization and reuse a completed model."""
+
+    global _llm_initialization_task
 
     if _llm_initialized:
         log_debug("LLM already initialized, skipping initialization")
@@ -124,7 +173,52 @@ async def _initialize_llm() -> None:
         if _llm_initialized:
             log_debug("LLM initialized by another request")
             return
-        await _initialize_llm_unlocked()
+        task = _llm_initialization_task
+        if task is None or task.done():
+            task = asyncio.create_task(_initialize_llm_for_generation(_llm_generation))
+            _llm_initialization_task = task
+
+    try:
+        # Caller cancellation must not abandon or duplicate an uninterruptible
+        # native constructor; another caller can await this same task.
+        await asyncio.shield(task)
+    finally:
+        if task.done() and not _llm_initialized:
+            async with _llm_init_lock:
+                if _llm_initialization_task is task:
+                    _llm_initialization_task = None
+
+
+async def fence_llm() -> object | None:
+    """Detach the provider and invalidate in-flight initialization publication."""
+
+    global llm, _llm_initialized, _llm_generation, _llm_initialization_task
+
+    async with _llm_init_lock:
+        _llm_generation += 1
+        current = llm
+        llm = None
+        _llm_initialized = False
+        task = _llm_initialization_task
+
+    if task is not None:
+        try:
+            await asyncio.shield(task)
+        except Exception as exc:
+            log_debug(f"Obsolete LLM initialization ended with {type(exc).__name__}")
+
+    async with _llm_init_lock:
+        if _llm_initialization_task is task:
+            _llm_initialization_task = None
+    return current
+
+
+async def invalidate_llm() -> None:
+    """Invalidate and dispose the provider for callers without active generation work."""
+
+    current = await fence_llm()
+    if current is not None:
+        await dispose_llm(current)
 
 
 async def _initialize_llm_unlocked() -> None:
@@ -399,7 +493,7 @@ async def _initialize_llm_unlocked() -> None:
                     log_info(
                         f"Attempting to initialize Llama.cpp LLM with model: {resolved_model_path}"
                     )
-                    llm = ChatLlamaCpp(**llama_init_options)
+                    llm = await _construct_llama_model(ChatLlamaCpp, llama_init_options)
                     log_info(
                         f"Successfully initialized Llama.cpp LLM with model: {resolved_model_path}"
                     )
@@ -623,7 +717,9 @@ async def chatbot(state: State, bus: MessageBus):
             if inspect.isawaitable(maybe_response):
                 response_message = await maybe_response
         if response_message is None:
-            response_message = await asyncio.to_thread(llm_with_tools.invoke, prompt_messages)
+            response_message = await _run_native_llm(
+                active_llm, llm_with_tools.invoke, prompt_messages
+            )
 
     return {
         "messages": [response_message],

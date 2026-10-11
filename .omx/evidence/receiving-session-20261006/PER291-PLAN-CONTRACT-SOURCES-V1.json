@@ -1,0 +1,129 @@
+{
+  "sourceHead": "b434edd2d50b195a5110b9de67db4e82b0fef873",
+  "plan": {
+    "path": ".omx/plans/transcript-library-20261010/implementation-plan.md",
+    "sha256": "5332fc73da338ff08296b9e13c36e37cd59a4b43452a27383184943800efba6b"
+  },
+  "sources": [
+    {
+      "path": ".omx/task-intake/PER-291.md",
+      "sha256": "0070fab1323899d0de89504115b0f4c1a55f80e202368e244d47d25946433349",
+      "lines": [
+        1,
+        42
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/records.zod.ts",
+      "sha256": "65b736dd3a1b1c3c5c7705364ce011a31f597e377b642a232c17fa037aae6c28",
+      "lines": [
+        135,
+        205
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/repositories.ts",
+      "sha256": "6f766f4a513773e1308f1aa1add8153f0be042b09889b00f040bb33bfe2d8c4f",
+      "lines": [
+        90,
+        157
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/session.ts",
+      "sha256": "e79c8550ddccd1e3c19a67a2bd75952dc406ee5a698a872d738ed94630904caf",
+      "lines": [
+        1,
+        17
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/search.ts",
+      "sha256": "4afac1daddbf7c3e5c7f994d5305deb1d80a7bc1b0f3823d6af54b7531a541d8",
+      "lines": [
+        1,
+        398
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/export-v1.ts",
+      "sha256": "da10de8cd80bcf71f753a9fe62a9538078bb8eb0938db110ce21e7a1a29af9f3",
+      "lines": [
+        1,
+        177
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/local-data/envelope-crypto-port.ts",
+      "sha256": "9dd3b7be9afd34c4ca1568d50af535af2410f66e793205b8dd90cced5666d903",
+      "lines": [
+        1,
+        13
+      ]
+    },
+    {
+      "path": "apps/aurora-tauri/src/local-data/tauri-envelope-crypto.ts",
+      "sha256": "f424128d07a04e26fd0bc1aa93d74e62feca559ca4163b0fbd5796fe997f2e8b",
+      "lines": [
+        1,
+        84
+      ]
+    },
+    {
+      "path": "packages/aurora-ui/src/local-data/local-data-context.ts",
+      "sha256": "54ce8d53e14cb9974e0520fb3c19d2b78387a6a1296a08e18348486980bfa95f",
+      "lines": [
+        1,
+        63
+      ]
+    },
+    {
+      "path": "packages/aurora-ui/src/local-data/local-data-provider.tsx",
+      "sha256": "8df5e6a5237ad8fafd8614e3894b67c3bab6a7e03da9dbb0817e9f91fd6e9a05",
+      "lines": [
+        65,
+        161
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/background-transcription.ts",
+      "sha256": "33e9fc3ff6a5bec0487dbf368c0f2a6cfed5a73e49a109eabf9937e21078cc07",
+      "lines": [
+        1,
+        57
+      ]
+    },
+    {
+      "path": "packages/aurora-sdk/src/types.ts",
+      "sha256": "31c26f3b5fa84103bd899e16afd6f6b46c1351ada796b3ee11da292b88edfcdc",
+      "lines": [
+        2730,
+        2765
+      ]
+    },
+    {
+      "path": "packages/aurora-ui/src/native-speech-policy.ts",
+      "sha256": "d574ec220195b941329cffda02e29b7faf7169134df23bdb1dd8b44b73cc3d7a",
+      "lines": [
+        23,
+        87
+      ]
+    },
+    {
+      "path": "apps/aurora-tauri/src-tauri/src/native_transcription_archive.rs",
+      "sha256": "dff90b6bd4a6a9b00a67b258fdd76e86603a21b847d22e0a8623cff3340b66b7",
+      "lines": [
+        1,
+        462
+      ]
+    },
+    {
+      "path": "packages/aurora-ui/src/platform-surface.ts",
+      "sha256": "cd48d57c6001958e2f03bef6ed7f3028d93296acd840519de81038b6300b2afe",
+      "lines": [
+        1,
+        672
+      ]
+    }
+  ]
+}

@@ -1,6 +1,10 @@
 import { sha256 } from '@noble/hashes/sha2.js'
 
-import type { MeshPeerManifest } from '../mesh.js'
+import type {
+  MeshPeerManifest,
+  MeshSpeechStageCapabilityExportV1,
+  MeshSpeechStageCapabilityV1
+} from '../mesh.js'
 import type { ManifestAck, ManifestServiceCompatibility } from '../types.js'
 import { bytesToHex, canonicalJson } from './encoding.js'
 
@@ -38,6 +42,39 @@ const EVIDENCE_FIELDS: ReadonlySet<string> = new Set([
   'grants'
 ])
 const GRANT_FIELDS: ReadonlySet<string> = new Set(['permission', 'source'])
+const SPEECH_CAPABILITY_FIELDS: ReadonlySet<string> = new Set([
+  'schema',
+  'stage',
+  'method_ids',
+  'modes',
+  'implementation',
+  'peer_id',
+  'resource_id',
+  'capability_revision',
+  'supported_formats',
+  'sample_rates',
+  'channels',
+  'supported_languages',
+  'model_ids',
+  'lifecycle',
+  'max_input_bytes',
+  'max_chunk_bytes',
+  'max_concurrent',
+  'max_queue',
+  'lease_ms',
+  'readiness',
+  'required_permissions',
+  'audio_consent_required',
+  'experimental',
+  'exported'
+])
+const SPEECH_EXPORT_FIELDS: ReadonlySet<string> = new Set([
+  'capability',
+  'voice_ids',
+  'requires_remote_audio_egress'
+])
+const SPEECH_ID_RE = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/u
+const LOGICAL_VOICE_ID_RE = /^(?:standard:[a-z0-9][a-z0-9._-]{0,63}:[a-z0-9][a-z0-9._-]{0,63}|clone:[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})$/u
 
 type MeshManifestAckFrame = ManifestAck & { type: 'manifest_ack' }
 
@@ -66,7 +103,7 @@ export function parseWebRtcMeshManifest(
 
   const seenModules = new Set<string>()
   const services = sharedServices.map((service, index) => {
-    const normalized = parseService(service, index)
+    const normalized = parseService(service, index, peerId)
     if (seenModules.has(normalized.module)) {
       throw new WebRtcManifestParseError('duplicate manifest service module')
     }
@@ -150,7 +187,11 @@ export function buildWebRtcManifestAck(
   }
 }
 
-function parseService(value: unknown, index: number): NonNullable<MeshPeerManifest['services']>[number] {
+function parseService(
+  value: unknown,
+  index: number,
+  manifestPeerId: string
+): NonNullable<MeshPeerManifest['services']>[number] {
   const service = requirePlainRecord(value, `shared_services[${index}]`)
   const module = requireString(service.module, 'service.module')
   if (!MODULE_RE.test(module)) throw new WebRtcManifestParseError('invalid service module')
@@ -169,7 +210,250 @@ function parseService(value: unknown, index: number): NonNullable<MeshPeerManife
   if (version !== undefined) out.version = version
   if (providerId !== null) out.providerId = providerId
   if (serviceInstanceId !== null) out.serviceInstanceId = serviceInstanceId
+  if (Object.prototype.hasOwnProperty.call(service, 'speech_stage_capabilities')) {
+    out.speechStageCapabilities = parseSpeechStageCapabilities(
+      service.speech_stage_capabilities,
+      manifestPeerId,
+      module,
+      methodsValue
+    )
+  }
   return out
+}
+
+function parseSpeechStageCapabilities(
+  value: unknown,
+  manifestPeerId: string,
+  serviceModule: string,
+  methods: unknown[]
+): MeshSpeechStageCapabilityExportV1[] {
+  const wrappers = requireArray(value, 'speech_stage_capabilities', MAX_RAW_ARRAY_ITEMS).map(
+    (item, index) => parseSpeechStageExport(item, index, manifestPeerId, serviceModule, methods)
+  )
+  const canonicalWrappers = wrappers.map((wrapper) => canonicalJson(wrapper))
+  assertUnique(canonicalWrappers, 'speech_stage_capabilities')
+  for (let index = 1; index < canonicalWrappers.length; index += 1) {
+    if (canonicalWrappers[index - 1]! > canonicalWrappers[index]!) {
+      throw new WebRtcManifestParseError('speech_stage_capabilities is not canonical')
+    }
+  }
+  return wrappers
+}
+
+function parseSpeechStageExport(
+  value: unknown,
+  index: number,
+  manifestPeerId: string,
+  serviceModule: string,
+  methods: unknown[]
+): MeshSpeechStageCapabilityExportV1 {
+  const label = `speech_stage_capabilities[${index}]`
+  const wrapper = requirePlainRecord(value, label)
+  assertExactKeys(wrapper, SPEECH_EXPORT_FIELDS, label)
+  const capability = parseSpeechStageCapability(
+    wrapper.capability,
+    `${label}.capability`,
+    manifestPeerId,
+    serviceModule,
+    methods
+  )
+  const voiceIds = requireStringArray(wrapper.voice_ids, `${label}.voice_ids`, 256)
+  if (voiceIds.some((voiceId) => !LOGICAL_VOICE_ID_RE.test(voiceId))) {
+    throw new WebRtcManifestParseError(`${label}.voice_ids contains an invalid logical voice ID`)
+  }
+  assertUnique(voiceIds, `${label}.voice_ids`)
+  if (typeof wrapper.requires_remote_audio_egress !== 'boolean') {
+    throw new WebRtcManifestParseError(`${label}.requires_remote_audio_egress must be a boolean`)
+  }
+  return {
+    capability,
+    voice_ids: voiceIds,
+    requires_remote_audio_egress: wrapper.requires_remote_audio_egress
+  }
+}
+
+function parseSpeechStageCapability(
+  value: unknown,
+  label: string,
+  manifestPeerId: string,
+  serviceModule: string,
+  methods: unknown[]
+): MeshSpeechStageCapabilityV1 {
+  const capability = requirePlainRecord(value, label)
+  assertExactKeys(capability, SPEECH_CAPABILITY_FIELDS, label)
+  if (capability.schema !== 'speech-stage-capability.v1') {
+    throw new WebRtcManifestParseError(`${label}.schema is unsupported`)
+  }
+
+  const stages = new Set(['stt', 'tts', 'kws', 'vad'])
+  if (typeof capability.stage !== 'string' || !stages.has(capability.stage)) {
+    throw new WebRtcManifestParseError(`${label}.stage is invalid`)
+  }
+  const methodIds = requireStringArray(capability.method_ids, `${label}.method_ids`, 16)
+  assertCanonicalUnique(methodIds, `${label}.method_ids`)
+  if (methodIds.length === 0 || methodIds.some((methodId) => !TOPIC_RE.test(methodId))) {
+    throw new WebRtcManifestParseError(`${label}.method_ids must contain valid methods`)
+  }
+
+  const modes = requireStringArray(capability.modes, `${label}.modes`, 2) as Array<'finite' | 'streaming'>
+  if (modes.length === 0 || modes.some((mode) => mode !== 'finite' && mode !== 'streaming')) {
+    throw new WebRtcManifestParseError(`${label}.modes is invalid`)
+  }
+  assertUnique(modes, `${label}.modes`)
+  if ((capability.stage === 'kws' || capability.stage === 'vad') && modes.includes('streaming') && capability.experimental !== true) {
+    throw new WebRtcManifestParseError(`${label} requires experimental streaming mode`)
+  }
+  const implementations = new Set(['native', 'wasm', 'python'])
+  if (typeof capability.implementation !== 'string' || !implementations.has(capability.implementation)) {
+    throw new WebRtcManifestParseError(`${label}.implementation is invalid`)
+  }
+
+  const peerId = requireString(capability.peer_id, `${label}.peer_id`, 256)
+  if (!SPEECH_ID_RE.test(peerId) || peerId !== manifestPeerId) {
+    throw new WebRtcManifestParseError(`${label}.peer_id does not match manifest provider`)
+  }
+  const resourceId = capability.resource_id
+  if (typeof resourceId !== 'string' || !SPEECH_ID_RE.test(resourceId)) {
+    throw new WebRtcManifestParseError(`${label}.resource_id is invalid`)
+  }
+  if (resourceId !== `remote:${manifestPeerId}:${serviceModule}`) {
+    throw new WebRtcManifestParseError(`${label}.resource_id does not match service`)
+  }
+
+  const capabilityRevision = requireBoundedInteger(
+    capability.capability_revision,
+    `${label}.capability_revision`,
+    0,
+    Number.MAX_SAFE_INTEGER
+  )
+  const supportedFormats = requireUniqueSpeechStrings(capability.supported_formats, `${label}.supported_formats`, 16)
+  const sampleRates = requireUniqueSpeechIntegers(capability.sample_rates, `${label}.sample_rates`, 16, 1, Number.MAX_SAFE_INTEGER)
+  const channels = requireUniqueSpeechIntegers(capability.channels, `${label}.channels`, 8, 1, Number.MAX_SAFE_INTEGER)
+  const supportedLanguages = requireUniqueSpeechStrings(capability.supported_languages, `${label}.supported_languages`, 64)
+  const modelIds = requireUniqueSpeechStrings(capability.model_ids, `${label}.model_ids`, 64)
+  const lifecycle = requireStringArray(capability.lifecycle, `${label}.lifecycle`, 2) as Array<'foreground' | 'active_native_capture'>
+  if (lifecycle.length === 0 || lifecycle.some((item) => item !== 'foreground' && item !== 'active_native_capture')) {
+    throw new WebRtcManifestParseError(`${label}.lifecycle is invalid`)
+  }
+  assertUnique(lifecycle, `${label}.lifecycle`)
+
+  const maxInputBytes = requireBoundedInteger(capability.max_input_bytes, `${label}.max_input_bytes`, 1, 4 * 1024 * 1024)
+  const maxChunkBytes = requireBoundedInteger(capability.max_chunk_bytes, `${label}.max_chunk_bytes`, 1, 64 * 1024)
+  if (maxChunkBytes > maxInputBytes) {
+    throw new WebRtcManifestParseError(`${label}.max_chunk_bytes exceeds max_input_bytes`)
+  }
+  const maxConcurrent = requireBoundedInteger(capability.max_concurrent, `${label}.max_concurrent`, 1, 4)
+  const maxQueue = requireBoundedInteger(capability.max_queue, `${label}.max_queue`, 0, 4)
+  const leaseMs = requireBoundedInteger(capability.lease_ms, `${label}.lease_ms`, 1, 300_000)
+
+  const readinessValues = new Set(['ready', 'missing_model', 'loading', 'incompatible', 'unavailable'])
+  if (typeof capability.readiness !== 'string' || !readinessValues.has(capability.readiness)) {
+    throw new WebRtcManifestParseError(`${label}.readiness is invalid`)
+  }
+  const requiredPermissions = requireUniqueSpeechStrings(capability.required_permissions, `${label}.required_permissions`, 16)
+  assertCanonicalUnique(requiredPermissions, `${label}.required_permissions`)
+  const audioConsentRequired = requireSpeechBoolean(capability.audio_consent_required, `${label}.audio_consent_required`)
+  const experimental = requireSpeechBoolean(capability.experimental, `${label}.experimental`)
+  const exported = requireSpeechBoolean(capability.exported, `${label}.exported`)
+  if (capability.readiness !== 'ready' || !exported) {
+    throw new WebRtcManifestParseError(`${label} is not ready and exported`)
+  }
+
+  if (methodIds.some((methodId) => !methodId.startsWith(`${serviceModule}.`))) {
+    throw new WebRtcManifestParseError(`${label}.method_ids must belong to ${serviceModule}`)
+  }
+
+  const methodPermissions = new Map<string, string[]>()
+  for (const [methodIndex, methodValue] of methods.entries()) {
+    if (typeof methodValue === 'string') {
+      continue
+    }
+    const method = requirePlainRecord(methodValue, `methods[${methodIndex}]`)
+    const topic = method.bus_topic ?? method.busTopic
+    if (typeof topic !== 'string') continue
+    const permissions = requireStringArray(
+      method.required_perms ?? method.requiredPerms ?? [],
+      `methods[${methodIndex}].required_perms`,
+      MAX_CAPABILITIES
+    )
+    methodPermissions.set(topic, permissions)
+  }
+  const permissionUnion = new Set<string>()
+  for (const methodId of methodIds) {
+    const permissions = methodPermissions.get(methodId)
+    if (permissions === undefined || permissions.length === 0 || permissions.some((item) => item.trim() !== item)) {
+      throw new WebRtcManifestParseError(`${label} references a method with unknown permissions`)
+    }
+    for (const permission of permissions) permissionUnion.add(permission)
+  }
+  const expectedPermissions = [...permissionUnion].sort()
+  if (
+    expectedPermissions.length === 0
+    || expectedPermissions.length !== requiredPermissions.length
+    || expectedPermissions.some((permission, permissionIndex) => requiredPermissions[permissionIndex] !== permission)
+  ) {
+    throw new WebRtcManifestParseError(`${label}.required_permissions do not match its methods`)
+  }
+
+  return {
+    schema: 'speech-stage-capability.v1',
+    stage: capability.stage as MeshSpeechStageCapabilityV1['stage'],
+    method_ids: methodIds,
+    modes,
+    implementation: capability.implementation as MeshSpeechStageCapabilityV1['implementation'],
+    peer_id: peerId,
+    resource_id: resourceId,
+    capability_revision: capabilityRevision,
+    supported_formats: supportedFormats,
+    sample_rates: sampleRates,
+    channels,
+    supported_languages: supportedLanguages,
+    model_ids: modelIds,
+    lifecycle,
+    max_input_bytes: maxInputBytes,
+    max_chunk_bytes: maxChunkBytes,
+    max_concurrent: maxConcurrent,
+    max_queue: maxQueue,
+    lease_ms: leaseMs,
+    readiness: capability.readiness as MeshSpeechStageCapabilityV1['readiness'],
+    required_permissions: requiredPermissions,
+    audio_consent_required: audioConsentRequired,
+    experimental,
+    exported
+  }
+}
+
+function requireUniqueSpeechStrings(value: unknown, label: string, max: number): string[] {
+  const values = requireStringArray(value, label, max)
+  if (values.some((item) => item.trim() !== item)) {
+    throw new WebRtcManifestParseError(`${label} contains surrounding whitespace`)
+  }
+  assertUnique(values, label)
+  return values
+}
+
+function requireUniqueSpeechIntegers(
+  value: unknown,
+  label: string,
+  max: number,
+  minimum: number,
+  maximum: number
+): number[] {
+  const values = requireArray(value, label, max).map((item) => requireBoundedInteger(item, label, minimum, maximum))
+  assertUnique(values.map(String), label)
+  return values
+}
+
+function requireBoundedInteger(value: unknown, label: string, minimum: number, maximum: number): number {
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+    throw new WebRtcManifestParseError(`${label} must be an integer from ${minimum} through ${maximum}`)
+  }
+  return value
+}
+
+function requireSpeechBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== 'boolean') throw new WebRtcManifestParseError(`${label} must be a boolean`)
+  return value
 }
 
 function parseMethod(value: unknown, index: number): string {

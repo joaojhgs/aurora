@@ -9,8 +9,6 @@ export default async function Page() {
   return (
     <AuroraRoutePage
       routeId="mesh"
-      title="Mesh"
-      description="Trusted device actions appear when Aurora confirms the device is reachable and allowed."
     />
   )
 }

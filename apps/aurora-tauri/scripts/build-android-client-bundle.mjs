@@ -5,6 +5,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, r
 import { delimiter, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { fileURLToPath } from 'node:url'
+import { resolveLlamaCppRuntime } from './native-local-inference-build.mjs'
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const repoRoot = resolve(packageRoot, '..', '..')
@@ -47,11 +48,19 @@ const kind = readOption('--kind') ?? (args.includes('--aab') ? 'aab' : args.incl
 const target = readOption('--target')
 const voiceLiveTest = args.includes('--voice-live-test')
 const buildMode = args.includes('--release') ? 'release' : 'debug'
+if (voiceLiveTest && buildMode !== 'debug') {
+  throw new Error('--voice-live-test requires a debug build')
+}
 if (!['apk', 'aab'].includes(kind)) {
   throw new Error(`--kind must be apk or aab, got ${kind}`)
 }
 const targets = target ? [target] : defaultAndroidTargets
 const nativeSpeechBuild = resolveNativeSpeechBuild(process.env, targets)
+const llamaRuntimeBuild = resolveLlamaCppRuntime({
+  targets: targets.map((selectedTarget) => selectedTarget === 'aarch64' ? 'android-arm64' : 'android-x86_64'),
+  env: nativeSpeechBuild.env,
+  repoRoot,
+})
 
 const tempDir = mkdtempSync(join(tmpdir(), `aurora-android-client-${kind}-`))
 const tempConfigPath = join(tempDir, 'tauri.android-client.conf.json')
@@ -88,17 +97,18 @@ try {
   const configSha256 = createHash('sha256').update(configRaw).digest('hex')
 
   run('pnpm', ['tauri', 'android', 'init', '--ci', '--skip-targets-install'])
-  run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)
+  run('pnpm', ['android:prepare-native-plugin'], nativeSpeechBuild.env)
   cleanAndroidBuildOutputs()
 
   const buildArgs = ['tauri', 'android', 'build']
   if (buildMode === 'debug') buildArgs.push('--debug')
+  if (voiceLiveTest) buildArgs.push('--features', 'android-voice-live-test')
   if (kind === 'apk') buildArgs.push('--apk')
   else buildArgs.push('--aab')
   buildArgs.push('--target', ...targets)
   buildArgs.push('--config', tempConfigPath)
 
-  run('pnpm', buildArgs, androidBuildEnv(nativeSpeechBuild.env))
+  run('pnpm', buildArgs, androidBuildEnv(llamaRuntimeBuild.env))
 
   mkdirSync(dirname(buildProvenancePath), { recursive: true })
   writeAtomicJson(buildProvenancePath, {
@@ -126,6 +136,11 @@ try {
     nativeSpeechRuntime: {
       abis: nativeSpeechBuild.records.map((record) => record.abi),
       libraries: requiredNativeSpeechLibraries,
+      sourceDirectoriesRedacted: true,
+    },
+    llamaCppRuntime: {
+      targets: llamaRuntimeBuild.records,
+      staticLink: true,
       sourceDirectoriesRedacted: true,
     },
     pythonSidecarStaged: false,

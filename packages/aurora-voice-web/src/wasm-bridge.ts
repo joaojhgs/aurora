@@ -4,6 +4,7 @@ import {
   type AuroraCapturedAudio,
   type AuroraVoiceTtsAudio,
   type AuroraVoiceTtsRequest,
+  type AuroraVoiceSttRequest,
   type AuroraVoiceInferenceOutput,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTurnFinishOutcome,
@@ -19,6 +20,8 @@ import type { AuroraVoiceWorkerSherpaAssets } from './worker-assets.js'
 const DEFAULT_WASM_MAX_FRAMES = 4_096
 const DEFAULT_WASM_MAX_SAMPLES = 16_000 * 60
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
+const MAX_FINITE_STT_BYTES = 4 * 1024 * 1024
+const MAX_FINITE_STT_SAMPLES = 16_000 * 60
 const MAX_FRAME_SAMPLES = 4_800
 const MICROS_PER_MS = 1_000
 const RUST_ROUTE_REVISION = 1
@@ -166,10 +169,28 @@ export class AuroraWasmVoiceBridge implements AuroraVoiceWasmBridge {
     }
   }
 
+  async transcribeSpeech(request: AuroraVoiceSttRequest & { readonly generation: number }): Promise<string> {
+    if (this.active !== null || this.pendingStopped !== null) throw sanitizedError('session_active')
+    if (this.sherpaEngine.transcribeSpeech === undefined) throw sanitizedError('stt_unavailable')
+    if (!(request.pcm instanceof Int16Array) || request.pcm.length === 0 || request.pcm.byteLength > MAX_FINITE_STT_BYTES || request.pcm.length > MAX_FINITE_STT_SAMPLES) {
+      throw sanitizedError('invalid_stt_audio')
+    }
+    await this.ensureRuntime()
+    if (!this.capabilities.stt) throw sanitizedError('stt_unavailable')
+    try {
+      return await this.sherpaEngine.transcribeSpeech(request)
+    } catch (error) {
+      if (error instanceof AuroraVoiceWebRuntimeError && error.code === 'stale_generation') throw sanitizedError('stale_generation')
+      if (error instanceof AuroraVoiceWebRuntimeError && error.code === 'unsupported_language') throw sanitizedError('unsupported_language')
+      throw sanitizedError('stt_failed')
+    }
+  }
+
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {
     const normalizedReason = /^[A-Za-z0-9_.-]{1,48}$/.test(reason) ? reason : 'cancelled'
     if (sessionId === null && normalizedReason === 'cancelled') {
       this.sherpaEngine.cancelTtsGeneration?.(generation)
+      this.sherpaEngine.cancelFiniteSttGeneration?.(generation)
       return
     }
     if (this.active !== null && this.matches(this.active, sessionId, generation)) {

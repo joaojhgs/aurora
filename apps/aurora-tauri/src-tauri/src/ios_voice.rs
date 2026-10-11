@@ -786,6 +786,50 @@ pub unsafe extern "C" fn aurora_ios_voice_session_finish(
         .map_or_else(command_error_code, |_| AURORA_IOS_VOICE_OK)
 }
 
+/// Finishes the matching foreground generation and returns its completed
+/// native transcript as an owned UTF-8 string. A successful call may return
+/// an empty string when native speech recognition produced no words.
+///
+/// # Safety
+/// `session` and `out_transcript` must be non-null valid pointers; the caller
+/// owns the returned string and must free it with
+/// `aurora_ios_voice_transcript_free`.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_session_finish_with_transcript(
+    session: *mut IosVoiceSession,
+    generation: u64,
+    out_transcript: *mut *mut c_char,
+) -> i32 {
+    if session.is_null() || out_transcript.is_null() {
+        return AURORA_IOS_VOICE_INVALID_ARGUMENT;
+    }
+    // SAFETY: the caller guarantees that non-null output pointers are valid.
+    unsafe { *out_transcript = std::ptr::null_mut() };
+    // SAFETY: the caller guarantees that a non-null session pointer is valid.
+    match unsafe { &*session }.finish_with_transcript(generation) {
+        Ok(transcript) => match CString::new(transcript) {
+            Ok(transcript) => {
+                // SAFETY: validated caller-owned output pointer.
+                unsafe { *out_transcript = transcript.into_raw() };
+                AURORA_IOS_VOICE_OK
+            }
+            Err(_) => AURORA_IOS_VOICE_UNAVAILABLE,
+        },
+        Err(error) => command_error_code(error),
+    }
+}
+
+/// # Safety
+/// `value` must be null or an unfreed pointer returned by
+/// `aurora_ios_voice_session_finish_with_transcript`.
+#[no_mangle]
+pub unsafe extern "C" fn aurora_ios_voice_transcript_free(value: *mut c_char) {
+    if !value.is_null() {
+        // SAFETY: ownership is transferred by the result function above.
+        unsafe { drop(CString::from_raw(value)) };
+    }
+}
+
 /// # Safety
 /// `session` must be null or a valid session pointer.
 #[no_mangle]

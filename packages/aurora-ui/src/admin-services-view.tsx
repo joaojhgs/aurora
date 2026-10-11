@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Activity, FileCode2, Lock } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import {
   AuroraError,
   summarizeCapabilities,
@@ -30,6 +29,9 @@ import { HealthBadge, ToneBadge, type BadgeTone } from './status-badges'
 import { ConfirmDialog } from './shared-components'
 import { Button, Card, StatStrip, FilterBar } from './primitives'
 import { adminActionLabel, adminErrorTitle, adminModuleLabel, adminReasonText, sanitizeAdminText } from './admin-product-copy'
+import { RouteStateNotice } from './state-surface'
+import { useAdminList } from './query-hooks'
+import { AuroraQueryProvider, useAuroraQueryScope } from './query'
 
 export type AdminServicesLoadState =
   | 'loading'
@@ -127,28 +129,39 @@ const loadingSnapshot: AdminServicesSnapshot = {
   evidenceSource: 'Checking Aurora'
 }
 
-export function AdminServicesResource({ client, onPreviewAdminAction }: AdminServicesResourceProps) {
-  const [snapshot, setSnapshot] = useState<AdminServicesSnapshot>(loadingSnapshot)
+export function AdminServicesResource(props: AdminServicesResourceProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (!hasQueryScope) {
+    return (
+      <AuroraQueryProvider client={props.client}>
+        <AdminServicesQueryResource {...props} />
+      </AuroraQueryProvider>
+    )
+  }
+  return <AdminServicesQueryResource {...props} />
+}
 
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingSnapshot)
-    void buildAdminServicesSnapshot(client).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client])
+function AdminServicesQueryResource({ client: _client, onPreviewAdminAction }: AdminServicesResourceProps) {
+  const servicesQuery = useAdminServicesSnapshot()
+  const snapshot = servicesQuery.data ?? (servicesQuery.error ? adminServicesQueryErrorSnapshot(servicesQuery.error) : loadingSnapshot)
 
   return <AdminServicesView snapshot={snapshot} onPreviewAdminAction={onPreviewAdminAction} />
 }
 
-export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<AdminServicesSnapshot> {
+function useAdminServicesSnapshot() {
+  return useAdminList({
+    resource: 'services-contracts',
+    request: { includeContracts: true },
+    queryFn: (client, _request, signal) => buildAdminServicesSnapshot(client, { signal }),
+  })
+}
+
+export async function buildAdminServicesSnapshot(client: AuroraClient, options: { signal?: AbortSignal } = {}): Promise<AdminServicesSnapshot> {
+  const signalOptions = options.signal ? { signal: options.signal } : {}
   const [servicesResult, methodsResult, catalogResult] = await Promise.allSettled([
-    client.registry.listServices(),
-    client.registry.listMethods(),
-    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true, include_schemas: true })
+    client.registry.listServices(signalOptions),
+    client.registry.listMethods(signalOptions),
+    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true, include_schemas: true }, signalOptions)
   ])
 
   const services = valueOrNull(servicesResult)
@@ -195,6 +208,17 @@ export async function buildAdminServicesSnapshot(client: AuroraClient): Promise<
   }
 }
 
+function adminServicesQueryErrorSnapshot(error: unknown): AdminServicesSnapshot {
+  const message = adminErrorTitle(error, 'Service actions are unavailable. Try again.')
+  return {
+    ...loadingSnapshot,
+    loadState: 'error',
+    error: message,
+    warnings: [message],
+    evidenceSource: 'Aurora request error'
+  }
+}
+
 export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServicesViewProps) {
   const [pendingAction, setPendingAction] = useState<AdminServiceControlAction | null>(null)
 
@@ -225,19 +249,21 @@ export function AdminServicesView({ snapshot, onPreviewAdminAction }: AdminServi
   )
 }
 
-export function AdminContractsResource({ client }: { client: AuroraClient }) {
-  const [snapshot, setSnapshot] = useState<AdminServicesSnapshot>(loadingSnapshot)
+export function AdminContractsResource(props: { client: AuroraClient }) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (!hasQueryScope) {
+    return (
+      <AuroraQueryProvider client={props.client}>
+        <AdminContractsQueryResource {...props} />
+      </AuroraQueryProvider>
+    )
+  }
+  return <AdminContractsQueryResource {...props} />
+}
 
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingSnapshot)
-    void buildAdminServicesSnapshot(client).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client])
+function AdminContractsQueryResource({ client: _client }: { client: AuroraClient }) {
+  const servicesQuery = useAdminServicesSnapshot()
+  const snapshot = servicesQuery.data ?? (servicesQuery.error ? adminServicesQueryErrorSnapshot(servicesQuery.error) : loadingSnapshot)
 
   return <AdminContractsView snapshot={snapshot} />
 }
@@ -307,28 +333,19 @@ function isAvailabilityState(value: string): value is AvailabilityState {
 }
 
 function StatusPanel({ snapshot }: { snapshot: AdminServicesSnapshot }) {
-  if (snapshot.loadState === 'loading') {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" aria-live="polite">
-        <Activity size={16} aria-hidden />
-        <span>Loading services and available actions through Aurora.</span>
-      </div>
-    )
-  }
   if (snapshot.loadState === 'ready') return null
+  if (snapshot.loadState === 'loading') {
+    return <RouteStateNotice state="loading" title="Loading service actions" message="Loading services and available actions through Aurora." />
+  }
   if (snapshot.loadState === 'empty') {
-    return (
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground" role="status">
-        <FileCode2 size={16} aria-hidden />
-        <span>No services or actions were returned by Aurora.</span>
-      </div>
-    )
+    return <RouteStateNotice state="empty" title="No service actions" message="No services or actions were returned by Aurora." />
   }
   return (
-    <div className="flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning" role="alert">
-      <Lock size={16} aria-hidden />
-      <span>{snapshot.error ?? 'Some service status needs attention. Controls remain disabled until Aurora marks them ready.'}</span>
-    </div>
+    <RouteStateNotice
+      state={snapshot.loadState === 'denied' ? 'permission' : 'error'}
+      title="Service actions need attention"
+      message={snapshot.error ?? 'Some service status needs attention. Controls remain disabled until Aurora marks them ready.'}
+    />
   )
 }
 

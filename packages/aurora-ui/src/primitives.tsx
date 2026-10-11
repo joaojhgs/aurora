@@ -777,7 +777,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <SonnerToaster theme="dark" position="bottom-right" />
+      <SonnerToaster theme="system" position="bottom-right" />
     </ToastContext.Provider>
   )
 }

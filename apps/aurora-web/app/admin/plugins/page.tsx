@@ -12,8 +12,6 @@ export default async function Page() {
       {!route ? (
         <AuroraRoutePage
           routeId="plugins"
-          title="Plugins"
-          description="Plugin and tool-sharing controls are unavailable until Aurora finishes setting up access and approvals."
         />
       ) : null}
     </>

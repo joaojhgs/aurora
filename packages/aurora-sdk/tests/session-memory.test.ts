@@ -20,6 +20,30 @@ const session: DBSessionRecord = {
 }
 
 describe('MemoryClient chat sessions', () => {
+  it('forwards cancellation to every session operation and rejects aborted calls before dispatch', async () => {
+    const signals: Array<AbortSignal | undefined> = []
+    const transport = MockAuroraTransport.empty()
+    for (const method of [DB_METHODS.createSession, DB_METHODS.listSessions, DB_METHODS.getSession, DB_METHODS.setActiveSession]) {
+      transport.register(method, (request) => {
+        signals.push(request.signal)
+        return { session, sessions: [session], messages: [], active_session_id: session.id, total: 1 }
+      })
+    }
+    const client = new AuroraClient({ transport })
+    const controller = new AbortController()
+    const operations = [
+      () => client.memory.createSession({ type: 'chat' }, { signal: controller.signal }),
+      () => client.memory.listSessions({}, { signal: controller.signal }),
+      () => client.memory.getSession({ session_id: session.id }, { signal: controller.signal }),
+      () => client.memory.setActiveSession({ session_id: session.id }, { signal: controller.signal }),
+    ]
+    for (const operation of operations) await operation()
+    expect(signals).toEqual(Array(4).fill(controller.signal))
+    controller.abort()
+    for (const operation of operations) await expect(operation()).rejects.toMatchObject({ name: 'AbortError' })
+    expect(signals).toHaveLength(4)
+  })
+
   it('routes typed session operations through the principal-scoped DB API', async () => {
     const calls: Array<{ method: string; path: string | undefined; payload: unknown }> = []
     const record = (request: AuroraTransportRequest) => {

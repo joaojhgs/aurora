@@ -2,8 +2,9 @@ import { LocalDataError } from './backend.js'
 import { buildEnvelopeAad } from './encrypted-envelope.js'
 import type { EnvelopeCryptoPort } from './envelope-crypto-port.js'
 import { compareUtf8 } from './export-v1.js'
-import { localDataIdSchema, type ConversationMessageRecord, type ConversationRecord, type LightweightMemoryRecord } from './records.zod.js'
+import { localDataIdSchema, localDataCollectionLimits, type ConversationMessageRecord, type ConversationRecord, type LightweightMemoryRecord, type TranscriptSegmentRecord } from './records.zod.js'
 import type { LocalDataSession } from './session.js'
+import { LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX, LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX, type TranscriptSessionCursor } from './repositories.js'
 import { parseLocalDataBoundary } from './validation.js'
 import {
   assertNoImplicitPythonHistoryMerge,
@@ -26,8 +27,11 @@ const MAX_RESULTS = 200
 const MAX_DECRYPT_BYTES = 64 * 1024
 const MAX_TOTAL_DECRYPT_BYTES = 512 * 1024
 const MAX_HIGHLIGHT_BYTES = 256
+const MAX_TRANSCRIPT_SEARCH_SESSIONS = localDataCollectionLimits.transcriptSessions
+const LOCAL_TRANSCRIPT_SEARCH_SESSION_LIMIT = LOCAL_DATA_TRANSCRIPT_SESSION_QUERY_MAX
+const LOCAL_TRANSCRIPT_SEARCH_SEGMENT_LIMIT = LOCAL_DATA_TRANSCRIPT_SEGMENT_QUERY_MAX
 
-export type LocalDataSearchDomain = 'conversations' | 'messages' | 'memory'
+export type LocalDataSearchDomain = 'conversations' | 'messages' | 'memory' | 'transcripts'
 export type LocalDataSearchMatchField = 'metadata' | 'decrypted_content'
 
 export interface LocalDataSearchOptions {
@@ -53,6 +57,7 @@ export interface LocalDataSearchOptions {
 export interface LocalDataSearchResult {
   readonly domain: LocalDataSearchDomain
   readonly id: string
+  readonly sessionId?: string
   readonly conversationId: string | null
   readonly sequence: number | null
   readonly namespace: string | null
@@ -221,6 +226,72 @@ export async function searchLocalData(session: LocalDataSession, options: LocalD
     }
   }
 
+  if (domains.has('transcripts') && checkBounds()) {
+    let cursor: TranscriptSessionCursor | undefined
+    let scannedSessions = 0
+    while (checkBounds() && scannedSessions < MAX_TRANSCRIPT_SEARCH_SESSIONS) {
+      const page = await session.transcripts.listSessions({
+        limit: LOCAL_TRANSCRIPT_SEARCH_SESSION_LIMIT,
+        ...(cursor === undefined ? {} : { cursor })
+      })
+      if (page.length === 0) break
+
+      for (const transcriptSession of page) {
+        if (!checkBounds() || scannedSessions >= MAX_TRANSCRIPT_SEARCH_SESSIONS) break
+        scannedSessions += 1
+        if (transcriptSession.profileId !== scope.profileId || transcriptSession.localNodeId !== scope.localNodeId) continue
+        if (options.includeExpired !== true && isExpiredAt(transcriptSession, nowMs)) continue
+
+        let afterSequence: number | undefined
+        while (checkBounds()) {
+          const segments = await session.transcripts.listSegments(transcriptSession.id, {
+            limit: LOCAL_TRANSCRIPT_SEARCH_SEGMENT_LIMIT,
+            ...(afterSequence === undefined ? {} : { afterSequence })
+          })
+          if (segments.length === 0) break
+          for (const record of segments) {
+            throwIfAborted(options.signal)
+            if (!checkBounds()) break
+            summary.scannedRecords += 1
+            const provenance = null
+            const resultIdentity = {
+              domain: 'transcripts' as const,
+              id: record.id,
+              sessionId: transcriptSession.id,
+              conversationId: null,
+              sequence: record.sequence,
+              namespace: null,
+              provenance
+            }
+            addMetadataResult(results, query, transcriptSegmentMetadata(record, transcriptSession.captureMode, transcriptSession.lifecycle), resultIdentity)
+            if (contentAuthorized) {
+              await addDecryptedResult(options.decrypt?.crypto, summary, results, query, maxDecryptedRecordBytes, maxTotalDecryptedBytes, {
+                envelope: record.textEnvelope,
+                aad: buildEnvelopeAad({
+                  table: 'aurora_transcript_segments',
+                  recordId: record.id,
+                  field: 'text_envelope_json',
+                  profileId: scope.profileId,
+                  localNodeId: scope.localNodeId
+                }),
+                ...resultIdentity,
+                signal: options.signal
+              })
+            }
+          }
+          const last = segments[segments.length - 1]
+          if (last === undefined || segments.length < LOCAL_TRANSCRIPT_SEARCH_SEGMENT_LIMIT) break
+          afterSequence = last.sequence
+        }
+      }
+
+      if (page.length < LOCAL_TRANSCRIPT_SEARCH_SESSION_LIMIT || scannedSessions >= MAX_TRANSCRIPT_SEARCH_SESSIONS) break
+      const last = page[page.length - 1]
+      if (last === undefined) break
+      cursor = { createdAtMs: last.createdAtMs, id: last.id }
+    }
+  }
+
   const sorted = results.sort(compareResults).slice(0, limit)
   return {
     results: sorted,
@@ -232,7 +303,7 @@ export async function searchLocalData(session: LocalDataSession, options: LocalD
 }
 
 function normalizeDomains(domains: readonly LocalDataSearchDomain[] | undefined): ReadonlySet<LocalDataSearchDomain> {
-  const allowed = new Set<LocalDataSearchDomain>(['conversations', 'messages', 'memory'])
+  const allowed = new Set<LocalDataSearchDomain>(['conversations', 'messages', 'memory', 'transcripts'])
   if (domains === undefined) return allowed
   if (domains.length < 1 || domains.length > allowed.size) {
     throw new LocalDataError('invalid_record', 'Search domains must be a non-empty bounded list', { reason: 'search_domains' })
@@ -245,6 +316,10 @@ function normalizeDomains(domains: readonly LocalDataSearchDomain[] | undefined)
     selected.add(domain)
   }
   return selected
+}
+
+function transcriptSegmentMetadata(record: TranscriptSegmentRecord, captureMode: string, lifecycle: string): string {
+  return [record.id, record.sessionId, String(record.sequence), captureMode, lifecycle].join(' ')
 }
 
 function normalizeQuery(query: string, maxBytes: number): string {

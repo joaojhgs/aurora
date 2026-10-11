@@ -33,6 +33,7 @@ from app.services.gateway.mesh.provider_export import (
     ProjectionResult,
     RecipientEvidence,
     RegistrySnapshot,
+    canonical_bytes,
     canonical_digest,
 )
 from app.shared.contracts.mesh_surface import (
@@ -115,7 +116,10 @@ def generate_manifest(
     # services (received via the bus).  In thread mode every service lives
     # in the same process, so the in-memory list_modules() is authoritative.
     if registry is not None:
-        shared_services = _build_services_from_aggregator(registry, mesh_config)
+        shared_services = _build_services_from_aggregator(
+            registry,
+            mesh_config,
+        )
     else:
         modules = list_modules()
         shared_services = _build_services_from_local(modules, mesh_config)
@@ -285,7 +289,10 @@ def _build_services_from_aggregator(
     """
     snapshot_reader = getattr(registry, "snapshot_registry", None)
     if callable(snapshot_reader):
-        return _build_services_from_registry_snapshot(snapshot_reader(), mesh_config)
+        return _build_services_from_registry_snapshot(
+            snapshot_reader(),
+            mesh_config,
+        )
 
     shared: list[PeerServiceInfo] = []
     services_snapshot: dict = registry.snapshot_services()
@@ -443,6 +450,7 @@ def _peer_service_from_projection_service(service: Any) -> PeerServiceInfo:
         ),
         available_feature_ids=sorted(service.feature_ids),
         methods=methods,
+        speech_stage_capabilities=list(service.speech_stage_capabilities) or None,
         max_concurrent=int(dict(service.capacity or {}).get("max_concurrent", 10)),
     )
     peer_service.digest = _compute_service_digest(peer_service)
@@ -848,6 +856,7 @@ _ALLOWED_SERVICE_FIELDS = {
     "methods",
     "max_concurrent",
     "digest",
+    "speech_stage_capabilities",
 }
 
 _ALLOWED_METHOD_FIELDS = {
@@ -1139,12 +1148,61 @@ def _validate_projection_canonical_order(manifest: PeerManifest) -> None:
             _require_canonical_unique(method.callable_feature_ids, "callable_feature_ids")
             _require_canonical_unique(method.required_perms, "required_perms")
             _validate_feature_arrays(method.callable_features, canonical=True)
+        _validate_projection_speech_stage_capabilities(manifest, service)
         if not service.digest:
             raise ValueError("service_digest_missing")
         if service.digest != _compute_service_digest(service):
             raise ValueError("service_digest_mismatch")
     if manifest.supported_protocols is not None:
         _require_canonical_unique(manifest.supported_protocols, "supported_protocols")
+
+
+def _validate_projection_speech_stage_capabilities(
+    manifest: PeerManifest,
+    service: PeerServiceInfo,
+) -> None:
+    wrappers = service.speech_stage_capabilities or []
+    serialized_wrappers = [canonical_bytes(wrapper.model_dump(mode="json")) for wrapper in wrappers]
+    if serialized_wrappers != sorted(serialized_wrappers):
+        raise ValueError("speech_stage_capabilities is not canonical")
+    if len(serialized_wrappers) != len(set(serialized_wrappers)):
+        raise ValueError("speech_stage_capabilities contains duplicates")
+
+    methods_by_topic = {
+        str(method.bus_topic): method for method in service.methods if method.bus_topic is not None
+    }
+    for wrapper in wrappers:
+        capability = wrapper.capability
+        if capability.readiness != "ready" or not capability.exported:
+            raise ValueError("speech stage capability is not ready and exported")
+        if capability.peer_id != manifest.peer_id:
+            raise ValueError("speech stage capability provider does not match manifest")
+        if capability.resource_id != f"remote:{manifest.peer_id}:{service.module}":
+            raise ValueError("speech stage capability resource identity is invalid")
+
+        method_ids = capability.method_ids
+        _require_canonical_unique(method_ids, "speech_stage_capability.method_ids")
+        if not method_ids:
+            raise ValueError("speech stage capability method group is empty")
+
+        permission_union: set[str] = set()
+        for method_id in method_ids:
+            method = methods_by_topic.get(method_id)
+            if method is None:
+                raise ValueError("speech stage capability references an absent method")
+            if not method.required_perms or any(
+                not permission.strip() for permission in method.required_perms
+            ):
+                raise ValueError("speech stage capability method permissions are unknown")
+            permission_union.update(method.required_perms)
+
+        required_permissions = capability.required_permissions
+        _require_canonical_unique(
+            required_permissions,
+            "speech_stage_capability.required_permissions",
+        )
+        if not required_permissions or required_permissions != sorted(permission_union):
+            raise ValueError("speech stage capability permissions do not match its methods")
 
 
 def _validate_feature_arrays(callable_features: list, *, canonical: bool) -> None:

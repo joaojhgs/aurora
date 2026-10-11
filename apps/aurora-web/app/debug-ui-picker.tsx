@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   AURORA_DEBUG_UI_DEFAULT_OVERRIDE,
   AURORA_DEBUG_UI_OVERRIDE_EVENT,
@@ -59,42 +59,11 @@ const VIEWPORT_LABELS: Record<AuroraDebugUiViewport, string> = {
   phone: 'Phone',
 }
 
-const BADGE_STYLE: CSSProperties = {
-  position: 'fixed',
-  right: 16,
-  bottom: 16,
-  zIndex: 2147483647,
-  display: 'grid',
-  width: 36,
-  height: 36,
-  margin: 0,
-  padding: 0,
-  placeItems: 'center',
-  border: '1px solid rgba(255, 255, 255, 0.14)',
-  borderRadius: 999,
-  background: '#18181b',
-  color: '#f4f4f5',
-  boxShadow: '0 6px 18px rgba(0, 0, 0, 0.35)',
-  font: '700 13px/1 ui-sans-serif, system-ui, sans-serif',
-  letterSpacing: '-0.02em',
-  cursor: 'pointer',
-  pointerEvents: 'auto',
-}
-
-const PANEL_STYLE: CSSProperties = {
-  position: 'fixed',
-  right: 16,
-  bottom: 60,
-  zIndex: 2147483647,
-  width: 'min(22rem, calc(100vw - 2rem))',
-  padding: '0.75rem',
-  border: '1px solid rgba(255, 255, 255, 0.12)',
-  borderRadius: 12,
-  background: 'rgba(9, 9, 11, 0.96)',
-  color: '#e4e4e7',
-  boxShadow: '0 18px 40px rgba(0, 0, 0, 0.35)',
-  pointerEvents: 'auto',
-}
+const BADGE_CLASS_NAME = 'aurora-debug-ui-badge fixed bottom-4 right-4 z-[2147483647] grid h-9 w-9 place-items-center m-0 cursor-pointer rounded-[999px] border border-[rgba(255,255,255,0.14)] bg-[#18181b] p-0 text-[#f4f4f5] ![font:700_13px/1_ui-sans-serif,system-ui,sans-serif] tracking-[-0.02em] shadow-[0_6px_18px_rgba(0,0,0,0.35)] pointer-events-auto after:absolute after:right-[3px] after:top-[3px] after:h-[7px] after:w-[7px] after:rounded-[999px] after:bg-[#f59e0b] after:shadow-[0_0_0_2px_#18181b] after:content-[""]'
+const PANEL_CLASS_NAME = 'fixed right-4 bottom-[60px] z-[2147483647] w-[min(22rem,calc(100vw_-_2rem))] rounded-[12px] border border-[rgba(255,255,255,0.12)] bg-[rgba(9,9,11,0.96)] p-3 text-[#e4e4e7] shadow-[0_18px_40px_rgba(0,0,0,0.35)] pointer-events-auto'
+const PANEL_TITLE_CLASS_NAME = 'm-0 mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-[#a1a1aa]'
+const FIELD_CLASS_NAME = 'grid gap-1 text-[12px]'
+const SELECT_CLASS_NAME = 'rounded-[0.45rem] border border-[rgba(255,255,255,0.12)] bg-[#09090b] px-2 py-[0.35rem] ![font:400_13px/normal_ui-sans-serif,system-ui,sans-serif] [color:inherit]'
 
 type DebugUiPickerProps = {
   children?: ReactNode
@@ -224,8 +193,8 @@ function DebugUiIndicatorChrome() {
     <div
       ref={rootRef}
       id={AURORA_DEBUG_UI_ROOT_ID}
-      className="aurora-debug-ui-host"
       data-aurora-dev-preview-host="true"
+      className="aurora-debug-ui-host"
       style={{ display: 'contents' }}
     >
       <style id="aurora-debug-ui-runtime-css">{AURORA_DEBUG_UI_RUNTIME_CSS}</style>
@@ -236,9 +205,8 @@ function DebugUiIndicatorChrome() {
         aria-expanded={open}
         aria-haspopup="dialog"
         aria-label={`Development preview: ${debugUiBadgeLabel(override)}`}
-        className="aurora-debug-ui-badge"
+        className={BADGE_CLASS_NAME}
         suppressHydrationWarning
-        style={BADGE_STYLE}
         onClick={() => setOpen((value) => !value)}
       >
         A
@@ -246,18 +214,18 @@ function DebugUiIndicatorChrome() {
       {open ? (
         <div
           data-aurora-dev-preview="panel"
-          className="aurora-debug-ui-panel"
+          className={PANEL_CLASS_NAME}
           role="dialog"
           aria-label="Development preview"
-          style={PANEL_STYLE}
         >
-          <p className="aurora-debug-ui-panel-title">
+          <p className={PANEL_TITLE_CLASS_NAME}>
             Development preview
           </p>
-          <div className="aurora-debug-ui-fields">
-            <label className="aurora-debug-ui-field">
+          <div className="grid gap-2">
+            <label className={FIELD_CLASS_NAME}>
               Surface
               <select
+                className={SELECT_CLASS_NAME}
                 aria-label="Development preview surface"
                 value={override.surface}
                 onChange={(event) => apply({ surface: event.target.value as AuroraDebugUiSurface })}
@@ -267,9 +235,10 @@ function DebugUiIndicatorChrome() {
                 ))}
               </select>
             </label>
-            <label className="aurora-debug-ui-field">
+            <label className={FIELD_CLASS_NAME}>
               Role
               <select
+                className={SELECT_CLASS_NAME}
                 aria-label="Development preview role"
                 value={override.role}
                 onChange={(event) => {
@@ -287,9 +256,10 @@ function DebugUiIndicatorChrome() {
                 ))}
               </select>
             </label>
-            <label className="aurora-debug-ui-field">
+            <label className={FIELD_CLASS_NAME}>
               Runtime
               <select
+                className={SELECT_CLASS_NAME}
                 aria-label="Development preview runtime"
                 value={override.tier}
                 disabled={override.role === 'remote-console'}
@@ -300,9 +270,10 @@ function DebugUiIndicatorChrome() {
                 ))}
               </select>
             </label>
-            <label className="aurora-debug-ui-field">
+            <label className={FIELD_CLASS_NAME}>
               Access
               <select
+                className={SELECT_CLASS_NAME}
                 aria-label="Development preview access"
                 value={override.admin ? 'admin' : 'member'}
                 onChange={(event) => apply({ admin: event.target.value === 'admin' })}
@@ -311,9 +282,10 @@ function DebugUiIndicatorChrome() {
                 <option value="admin">Admin</option>
               </select>
             </label>
-            <label className="aurora-debug-ui-field">
+            <label className={FIELD_CLASS_NAME}>
               Viewport
               <select
+                className={SELECT_CLASS_NAME}
                 aria-label="Development preview viewport"
                 value={override.viewport}
                 onChange={(event) => apply({ viewport: event.target.value as AuroraDebugUiViewport })}
@@ -442,37 +414,10 @@ function visibleDebugUiTiers(override: AuroraDebugUiOverride): readonly AuroraDe
   return ['lightweight-ts']
 }
 
+// Keep preview overrides in the same layer as the authored rules they override.
+// Important declarations reverse layer precedence, including unlayered styles.
 const AURORA_DEBUG_UI_RUNTIME_CSS = `
-.aurora-debug-ui-badge::after {
-  content: "";
-  position: absolute;
-  top: 3px;
-  right: 3px;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #f59e0b;
-  box-shadow: 0 0 0 2px #18181b;
-}
-.aurora-debug-ui-badge { position: relative; }
-.aurora-debug-ui-panel-title {
-  margin: 0 0 0.5rem;
-  color: #a1a1aa;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-.aurora-debug-ui-fields { display: grid; gap: 0.5rem; }
-.aurora-debug-ui-field { display: grid; gap: 0.25rem; font-size: 12px; }
-.aurora-debug-ui-field select {
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 0.45rem;
-  background: #09090b;
-  color: inherit;
-  padding: 0.35rem 0.5rem;
-  font-size: 13px;
-}
+@layer components {
 .aurora-debug-viewport-frame .h-dvh,
 .aurora-debug-viewport-frame .min-h-dvh,
 .aurora-debug-viewport-frame .aui-shell,
@@ -494,7 +439,7 @@ html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-mobile-tabs {
   z-index: 30;
   min-height: 4rem;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-conversation-rail {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-conversation-rail"] {
   display: none !important;
 }
 html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-activity {
@@ -519,7 +464,7 @@ html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant {
   flex-direction: column !important;
   overflow: hidden !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant-grid {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-grid"] {
   display: flex !important;
   flex: 1 1 auto !important;
   grid-template-columns: minmax(0, 1fr) !important;
@@ -528,18 +473,18 @@ html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant-grid
   height: auto !important;
   max-height: none !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant-grid > .aui-chat-workspace {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-grid"] > [data-aurora-part="assistant-workspace"] {
   flex: 1 1 auto !important;
   width: 100% !important;
   min-width: 0 !important;
   min-height: 0 !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-chat-panel {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-thread"] {
   flex: 1 1 auto !important;
   width: 100% !important;
   min-height: 0 !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant-form {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] {
   display: flex !important;
   flex: 0 0 auto !important;
   flex-direction: column !important;
@@ -550,92 +495,95 @@ html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant-form
   margin-top: auto !important;
   grid-template-columns: none !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-composer-toolbar,
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-composer-control-row {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-toolbar"],
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-control-row"] {
   width: 100% !important;
   max-width: none !important;
   min-width: 0 !important;
   box-sizing: border-box !important;
 }
-html[data-aurora-debug-compact="tablet"] .aurora-debug-viewport-frame .aui-assistant-form {
+html[data-aurora-debug-compact="tablet"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] {
   padding: 0.55rem 0.75rem 0.65rem !important;
 }
 html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-content,
 html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-content:has(.aui-assistant),
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-panel,
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-scroller-viewport[data-slot="message-scroller-viewport"] {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-thread"],
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-slot="message-scroller-viewport"] {
   scrollbar-gutter: auto !important;
   scrollbar-width: none !important;
   -ms-overflow-style: none !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-scroller-viewport[data-slot="message-scroller-viewport"]::-webkit-scrollbar {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-slot="message-scroller-viewport"]::-webkit-scrollbar {
   display: none !important;
   width: 0 !important;
   height: 0 !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-assistant-grid > .aui-chat-workspace {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-grid"] > [data-aurora-part="assistant-workspace"] {
   --aui-chat-width: 100%;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-panel {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-thread"] {
   padding-inline: 0 !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-scroller-viewport[data-slot="message-scroller-viewport"] {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-slot="message-scroller-viewport"] {
   width: 100% !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-scroller-content[data-slot="message-scroller-content"] {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-slot="message-scroller-content"] {
   width: 100% !important;
   padding-inline: 0.5rem !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-message-content[data-slot="message-content"] {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-slot="message-content"] {
   max-width: 100% !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-chat-user .aui-chat-message-content {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-slot="message"][data-align="end"] [data-slot="message-content"] {
   max-width: 92% !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-assistant-form {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] {
   padding: 0.45rem 0 0 !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-composer-toolbar {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-toolbar"] {
   padding-inline: 0.75rem !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-composer-control-row {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-control-row"] {
   margin-inline: 0 !important;
   border-radius: 1rem 1rem 0 0 !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-assistant-form > .aui-composer-attachment-preview,
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-assistant-form > .aui-composer-recorder-row,
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-composer-voice-recovery {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] > [data-aurora-part="assistant-composer-attachments"],
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] > [data-aurora-part="assistant-composer-recorder"],
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-voice-recovery"] {
   width: auto !important;
   max-width: none !important;
   margin-inline: 0.75rem !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-composer-control-row {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-control-row"] {
   grid-template-columns: 2.5rem 2.5rem minmax(0, 1fr) 2.5rem 2.5rem !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-composer-control-row > .aui-composer-icon,
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-composer-control-row > .aui-composer-send {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-control-row"][data-aurora-hands-free="available"] {
+  grid-template-columns: 2.5rem 2.5rem minmax(0, 1fr) 2.5rem 2.5rem 2.5rem !important;
+}
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer-control-row"] > [data-aurora-control="button"] {
   width: 2.5rem !important;
   height: 2.5rem !important;
   min-height: 2.5rem !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-mobile-history-host {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-mobile-history-host"] {
   display: flex !important;
   align-items: center !important;
 }
-html[data-aurora-debug-compact] .aurora-debug-viewport-frame .aui-assistant-form .aui-mobile-history-trigger {
+html[data-aurora-debug-compact] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] [data-aurora-part="assistant-mobile-history-trigger"] {
   display: inline-flex !important;
   flex: 0 0 auto !important;
   align-items: center !important;
   gap: 0.35rem !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-mobile-history-trigger > span {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-mobile-history-trigger"] > span {
   display: none !important;
 }
-html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame .aui-assistant-form .aui-mobile-history-trigger {
+html[data-aurora-debug-compact="phone"] .aurora-debug-viewport-frame [data-aurora-part="assistant-composer"] [data-aurora-part="assistant-mobile-history-trigger"] {
   width: 2.15rem !important;
   min-width: 2.15rem !important;
   min-height: 2.15rem !important;
   justify-content: center !important;
   padding: 0 !important;
+}
 }
 `

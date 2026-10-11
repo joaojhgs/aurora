@@ -84,7 +84,7 @@ describe('admin route checkpoint status', () => {
 
     expect(model.state).toBe('degraded')
     expect(model.validationErrors).toEqual(['services.gateway.api.port must be between 1 and 65535'])
-    expect(markup).toContain('Validation errors')
+    expect(markup).toContain('Configuration values need attention')
     expect(markup).toContain('Setting needs attention.')
     expect(markup).not.toContain('services.gateway.api.port')
     expect(markup).toContain('aria-invalid="true"')
@@ -100,7 +100,7 @@ describe('admin route checkpoint status', () => {
     const markup = renderToStaticMarkup(<ConfigEditorView client={client} route={configRoute} initialModel={model} />)
 
     expect(model.state).toBe('degraded')
-    expect(markup).toContain('Validation errors')
+    expect(markup).toContain('Configuration values need attention')
     expect(markup).toContain('Setting needs attention.')
     expect(markup).not.toContain('Config.Validate')
     expect(markup).not.toContain('schema backend exploded')

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-local-inference-engines"
+description = "Enables the aurora_local_inference_engines command without any pre-configured scope."
+commands.allow = ["aurora_local_inference_engines"]
+
+[[permission]]
+identifier = "deny-aurora-local-inference-engines"
+description = "Denies the aurora_local_inference_engines command without any pre-configured scope."
+commands.deny = ["aurora_local_inference_engines"]

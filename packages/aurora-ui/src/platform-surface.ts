@@ -11,7 +11,9 @@ export type AuroraSurfaceFeature =
   | 'desktopCommands'
   | 'desktopOverlay'
   | 'localVoice'
+  | 'localSpeechSetup'
   | 'localSettings'
+  | 'localInference'
   | 'sidecar'
   | 'ios'
   | 'android'
@@ -86,6 +88,14 @@ export interface AuroraSurfaceProfile {
   trustsNativeWebViewOrigin: boolean
   /** Local service configuration is owned by this client, not a remote peer. */
   canManageLocalServiceConfiguration: boolean
+  /** This surface can add a mesh peer through its native membership writer. */
+  canManageMeshInvites: boolean
+  /** Native mesh nodes can manage the speech choices used by their own conversations. */
+  canManageNativeSpeechPolicy: boolean
+  /** Native phones can manage their own offline assistant without changing desktop orchestration. */
+  canManageLocalAssistant: boolean
+  /** Saved opt-in only; native model/session readiness is checked separately. */
+  localInferenceEnabled: boolean
   /** Product role for this surface; independent from its active transport. */
   nodeMode: AuroraNodeMode
   /** Local service tier physically available on this surface. */
@@ -198,6 +208,11 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
   const trustsNativeWebViewOrigin = usesNativeShell
   const ownsLocalNodeState = nodeMode === 'mesh-node'
   const canManageLocalServiceConfiguration = legacyKind === 'mock' || (ownsLocalNodeState && usesLocalSidecar)
+  const canManageMeshInvites = canManageLocalServiceConfiguration
+    || (nativeAndroid && nodeMode === 'mesh-node' && runtimeTier === 'lightweight-ts')
+  const canManageNativeSpeechPolicy = usesNativeShell && ownsLocalNodeState
+  const canManageLocalAssistant = (nativeAndroid || nativeIos) && ownsLocalNodeState && runtimeTier === 'lightweight-ts'
+  const localInferenceEnabled = canManageLocalAssistant && enabledCapabilityPacks.includes('local-inference')
   const isRemoteConsole = !ownsLocalNodeState
   const usesBrowserVoiceRuntime = physicalKind === 'hosted-web' && !usesNativeShell
   const localSpeechPack = resolveAuroraLocalSpeechPack({
@@ -235,6 +250,10 @@ export function getAuroraSurfaceProfile(input: AuroraSurfaceProfileInput = {}): 
     prefersWebRtcTransport,
     trustsNativeWebViewOrigin,
     canManageLocalServiceConfiguration,
+    canManageMeshInvites,
+    canManageNativeSpeechPolicy,
+    canManageLocalAssistant,
+    localInferenceEnabled,
     nodeMode,
     runtimeTier,
     ownsLocalNodeState,
@@ -421,6 +440,12 @@ export function surfaceCanConfigureBackgroundWake(profile: AuroraSurfaceProfile)
   return owner === 'native-desktop' || owner === 'mobile-native' || owner === 'coordinator-daemon'
 }
 
+function surfaceCanUseLocalVoice(profile: AuroraSurfaceProfile): boolean {
+  if (profile.isAndroid && profile.supportsMobileNative) return true
+  return profile.voiceCapture.focusedPushToTalkOwner !== 'unavailable'
+    || profile.voiceCapture.wakewordOwner !== 'unavailable'
+}
+
 export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: AuroraSurfaceFeature): boolean {
   switch (feature) {
     case 'desktopCommands':
@@ -429,10 +454,13 @@ export function shouldShowForSurface(profile: AuroraSurfaceProfile, feature: Aur
       return profile.isDesktop && profile.usesNativeShell
     case 'localSettings':
       return surfaceOwnsLocalSettings(profile)
+    case 'localInference':
+      return profile.canManageLocalAssistant
     case 'localVoice':
-      if (profile.isAndroid && profile.supportsMobileNative) return true
-      return profile.voiceCapture.focusedPushToTalkOwner !== 'unavailable'
-        || profile.voiceCapture.wakewordOwner !== 'unavailable'
+      return surfaceCanUseLocalVoice(profile)
+    case 'localSpeechSetup':
+      return surfaceCanUseLocalVoice(profile)
+        || (profile.supportsIosOnly && profile.canManageNativeSpeechPolicy)
     case 'sidecar':
     case 'localOnly':
       return profile.usesLocalSidecar

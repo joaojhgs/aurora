@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aurora visual component harness</title>
+    <link rel="stylesheet" href="/packages/aurora-ui/src/styles.css" />
+    <style>
+      html, body, #root { min-height: 100%; }
+      body { margin: 0; background: hsl(var(--background)); color: hsl(var(--foreground)); }
+      .visual-harness-shell { min-height: 100vh; padding: 24px; }
+      .visual-harness-panel { margin: 0 auto; max-width: 1120px; }
+      .visual-threshold-target { position: relative; display: grid; width: 320px; height: 180px; place-items: center; overflow: hidden; border: 1px solid hsl(var(--border)); border-radius: 24px; background: hsl(var(--card)); }
+      .visual-threshold-target::before { content: ''; position: absolute; inset: 16px; border-radius: 18px; background: linear-gradient(135deg, hsl(var(--muted)), hsl(var(--accent))); opacity: .72; }
+      .visual-threshold-target > span { position: relative; z-index: 1; font: 600 14px/1.2 system-ui, sans-serif; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/__aurora-ui-visual/component-harness.js"></script>
+  </body>
+</html>

@@ -10,7 +10,7 @@ const primaryNavItems = auroraNavSections.flatMap((section) => section.items)
 const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   assistant: ['Text chat'],
   memory: ['Memory & Knowledge', 'Collections', 'Search conversations'],
-  tools: ['Tools & Plugins', 'Review tool sources', 'Execution approval'],
+  tools: ['Tools & Plugins', 'Review tool sources'],
   mesh: ['Connected devices', 'This device', 'Pending requests', 'Device connections'],
   admin: ['Admin overview', 'Diagnostics'],
   services: ['Services', 'Service health and restart controls'],
@@ -21,11 +21,12 @@ const ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS: Record<string, readonly string[]> = {
   audit: ['Audit log'],
   models: ['Models & Sources', 'Compare at a glance'],
   onboarding: ['Welcome to Aurora', 'Start guided setup'],
-  settings: ['Settings', 'Connection & role'],
+  settings: ['Settings', 'Device connection'],
 }
 
 const screenshotDir = join(process.cwd(), 'reports', 'playwright-routes', 'screenshots')
 const ROUTE_READY_TIMEOUT_MS = 30_000
+const TOOLS_SURFACE_STATE = /Execution approval|Tools unavailable|No tools available/iu
 
 const cockpitScreenshotViewports = [
   { id: 'desktop', width: 1440, height: 1024, expects: { sidebar: true, mobileTabs: false } },
@@ -302,6 +303,10 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
       const bodyText = normalizeText(await page.locator('body').innerText())
       const mainText = normalizeText(await page.locator('main#content').innerText())
 
+      if (route.id === 'tools' && !TOOLS_SURFACE_STATE.test(mainText)) {
+        failures.push(`${route.id} (${route.href}) missing tools availability or approval state`)
+      }
+
       if (!oracle) {
         failures.push(`${route.id} (${route.href}) is missing a production route oracle`)
       }
@@ -342,6 +347,11 @@ test.describe('Aurora Tauri Playwright route crawl', () => {
         expect(oracle, `${route.id} should have production oracle screenshot status`).toBeDefined()
         for (const landmark of ROUTE_SPECIFIC_PLAYWRIGHT_LANDMARKS[route.id] ?? oracle?.renderedLandmarks ?? []) {
           await expect(page.locator('main#content'), `${route.id} should render ${landmark}`).toContainText(landmarkPattern(landmark), {
+            timeout: ROUTE_READY_TIMEOUT_MS,
+          })
+        }
+        if (route.id === 'tools') {
+          await expect(page.locator('main#content'), 'tools should render an availability or approval state').toContainText(TOOLS_SURFACE_STATE, {
             timeout: ROUTE_READY_TIMEOUT_MS,
           })
         }

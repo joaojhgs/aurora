@@ -23,6 +23,11 @@ const MAX_MEMORY_ITEMS: usize = 50_000;
 const MAX_LOCAL_TOOL_STATES: usize = 10_000;
 const MAX_PEER_GRANT_METADATA: usize = 50_000;
 const MAX_LOCAL_AUDIT: usize = 100_000;
+const MAX_TRANSCRIPT_SESSIONS: usize = 5_000;
+const MAX_TRANSCRIPT_SEGMENTS: usize = 100_000;
+const MAX_TRANSCRIPT_SESSION_QUERY: usize = 500;
+const MAX_TRANSCRIPT_SEGMENT_QUERY: usize = 2_000;
+const MAX_TRANSCRIPT_DELETE_LIMIT: usize = 1_000;
 
 const SQLITE_OK: c_int = 0;
 const SQLITE_ROW: c_int = 100;
@@ -92,7 +97,7 @@ extern "C" {
     fn sqlite3_column_text(stmt: *mut sqlite3_stmt, index: c_int) -> *const c_char;
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub(crate) struct LocalDataCommandState {
     inner: Arc<Mutex<LocalDataState>>,
 }
@@ -103,6 +108,256 @@ struct LocalDataState {
     local_node_id: Option<String>,
     schema_version: Option<u32>,
     active_transaction: Option<ActiveTransaction>,
+    recovered_transcript_scopes: HashSet<String>,
+    scope_generation: u64,
+}
+
+impl LocalDataCommandState {
+    /// Native recording owns its selected-profile lease independently of a
+    /// renderer's open/close lifecycle. The caller supplies only identities
+    /// captured by the native policy owner and a typed archive write.
+    pub(crate) fn native_transcript_write(
+        &self,
+        app: &AppHandle,
+        profile_id: &str,
+        local_node_id: &str,
+        write: NativeTranscriptArchiveWrite,
+    ) -> Result<Value, AuroraCommandError> {
+        self.native_transcript_write_at_path(
+            local_data_db_path_without_create(app)?,
+            profile_id,
+            local_node_id,
+            write,
+        )
+    }
+
+    fn native_transcript_write_at_path(
+        &self,
+        db_path: PathBuf,
+        profile_id: &str,
+        local_node_id: &str,
+        write: NativeTranscriptArchiveWrite,
+    ) -> Result<Value, AuroraCommandError> {
+        let mut state = self
+            .inner
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        if state.active_transaction.is_some() {
+            return Err(transaction_scope_error("transaction_active"));
+        }
+        let creating = matches!(&write, NativeTranscriptArchiveWrite::CreateSession { .. });
+        if creating {
+            open_local_data_at_path(db_path.clone(), profile_id, local_node_id)?;
+        } else if !db_path.is_file() {
+            return Err(local_data_error("transcript_archive_unavailable"));
+        }
+        let operation = match write {
+            NativeTranscriptArchiveWrite::CreateSession { record } => {
+                LocalDataRepositoryOperation::TranscriptsCreateSession { record }
+            }
+            NativeTranscriptArchiveWrite::AppendSegment { record } => {
+                LocalDataRepositoryOperation::TranscriptsAppendSegment { record }
+            }
+            NativeTranscriptArchiveWrite::FinalizeSession { input } => {
+                LocalDataRepositoryOperation::TranscriptsFinalizeSession {
+                    profile_id: profile_id.to_owned(),
+                    local_node_id: local_node_id.to_owned(),
+                    input,
+                }
+            }
+        };
+        let scope = format!("{profile_id}\0{local_node_id}");
+        let recover = creating && !state.recovered_transcript_scopes.contains(&scope);
+        let conn = SqliteConnection::open(db_path)?;
+        conn.exec("BEGIN IMMEDIATE;")?;
+        let result = (|| {
+            if recover {
+                recover_transcript_sessions(
+                    &conn,
+                    profile_id,
+                    local_node_id,
+                    now_ms() as i64,
+                    "process_restart",
+                )?;
+            }
+            if creating {
+                run_repository_operation(
+                    &conn,
+                    profile_id,
+                    local_node_id,
+                    LocalDataRepositoryOperation::TranscriptsDeleteExpiredSessions {
+                        profile_id: profile_id.to_owned(),
+                        local_node_id: local_node_id.to_owned(),
+                        now_ms: now_ms() as i64,
+                        limit: MAX_TRANSCRIPT_DELETE_LIMIT,
+                    },
+                )?;
+            }
+            run_repository_operation(&conn, profile_id, local_node_id, operation)
+        })();
+        match result {
+            Ok(value) => {
+                conn.exec("COMMIT;")?;
+                if recover {
+                    state.recovered_transcript_scopes.insert(scope);
+                }
+                Ok(value)
+            }
+            Err(error) => {
+                let _ = conn.exec("ROLLBACK;");
+                Err(error)
+            }
+        }
+    }
+
+    /// Bind a native producer to the profile selected by the native admission
+    /// path. Callers must pass the coordinator-confirmed identity, never a
+    /// renderer-supplied identity.
+    pub(crate) fn native_transcript_archive(
+        &self,
+        app: &AppHandle,
+        selected_profile_id: &str,
+        selected_local_node_id: &str,
+    ) -> Result<NativeTranscriptArchiveHandle, AuroraCommandError> {
+        let state = Arc::clone(&self.inner);
+        let state_guard = state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let (profile_id, local_node_id) = ensure_open_state(&state_guard)?;
+        ensure_scope(
+            &profile_id,
+            &local_node_id,
+            selected_profile_id,
+            selected_local_node_id,
+        )?;
+        let scope_generation = state_guard.scope_generation;
+        drop(state_guard);
+        Ok(NativeTranscriptArchiveHandle {
+            state,
+            db_path: local_data_db_path(app)?,
+            profile_id,
+            local_node_id,
+            scope_generation,
+        })
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) enum NativeTranscriptArchiveWrite {
+    CreateSession {
+        record: TranscriptSessionRecord,
+    },
+    AppendSegment {
+        record: TranscriptSegmentRecord,
+    },
+    FinalizeSession {
+        input: FinalizeTranscriptSessionInput,
+    },
+}
+
+impl NativeTranscriptArchiveHandle {
+    pub(crate) fn create_session(
+        &self,
+        input: NativeTranscriptSessionInput,
+    ) -> Result<TranscriptSessionRecord, AuroraCommandError> {
+        let record = TranscriptSessionRecord {
+            id: input.id,
+            profile_id: self.profile_id.clone(),
+            local_node_id: self.local_node_id.clone(),
+            capture_mode: input.capture_mode,
+            created_at_ms: input.created_at_ms,
+            started_at_ms: input.started_at_ms,
+            ended_at_ms: None,
+            lifecycle: "active".to_owned(),
+            terminal_reason: None,
+            expires_at_ms: input.expires_at_ms,
+            language: input.language,
+            model_provenance: TranscriptModelProvenance {
+                provider: input.model_provenance.provider,
+                model_id: input.model_provenance.model_id,
+                version: input.model_provenance.version,
+            },
+            diarization_state: input.diarization_state,
+        };
+        let value =
+            self.write(LocalDataRepositoryOperation::TranscriptsCreateSession { record })?;
+        serde_json::from_value(value).map_err(|error| local_data_error(error.to_string()))
+    }
+
+    pub(crate) fn append_segment(
+        &self,
+        input: NativeTranscriptSegmentInput,
+    ) -> Result<bool, AuroraCommandError> {
+        let record = TranscriptSegmentRecord {
+            id: input.id,
+            session_id: input.session_id,
+            sequence: input.sequence,
+            start_at_ms: input.start_at_ms,
+            end_at_ms: input.end_at_ms,
+            text_envelope: input.text_envelope,
+            confidence: input.confidence,
+            speaker_id: input.speaker_id,
+            speaker_label: input.speaker_label,
+            created_at_ms: input.created_at_ms,
+        };
+        let value =
+            self.write(LocalDataRepositoryOperation::TranscriptsAppendSegment { record })?;
+        let appended = value
+            .get("appended")
+            .and_then(Value::as_bool)
+            .ok_or_else(|| local_data_error("invalid transcript append result"))?;
+        Ok(appended)
+    }
+
+    pub(crate) fn finalize_session(
+        &self,
+        session_id: String,
+        lifecycle: String,
+        ended_at_ms: i64,
+        terminal_reason: String,
+    ) -> Result<(), AuroraCommandError> {
+        self.write(LocalDataRepositoryOperation::TranscriptsFinalizeSession {
+            profile_id: self.profile_id.clone(),
+            local_node_id: self.local_node_id.clone(),
+            input: FinalizeTranscriptSessionInput {
+                session_id,
+                lifecycle,
+                ended_at_ms,
+                terminal_reason,
+            },
+        })
+        .map(|_| ())
+    }
+
+    fn write(&self, operation: LocalDataRepositoryOperation) -> Result<Value, AuroraCommandError> {
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| local_data_error("local data state lock failed"))?;
+        let (profile_id, local_node_id) = ensure_open_state(&state)?;
+        if state.scope_generation != self.scope_generation
+            || profile_id != self.profile_id
+            || local_node_id != self.local_node_id
+        {
+            return Err(local_data_error("transcript_archive_scope_expired"));
+        }
+        if state.active_transaction.is_some() {
+            return Err(transaction_scope_error("transaction_active"));
+        }
+        let conn = SqliteConnection::open(self.db_path.clone())?;
+        conn.exec("BEGIN IMMEDIATE;")?;
+        match run_repository_operation(&conn, &self.profile_id, &self.local_node_id, operation) {
+            Ok(result) => {
+                conn.exec("COMMIT;")?;
+                Ok(result)
+            }
+            Err(error) => {
+                let _ = conn.exec("ROLLBACK;");
+                Err(error)
+            }
+        }
+    }
 }
 
 struct ActiveTransaction {
@@ -164,6 +419,10 @@ struct LocalDataRecordCounts {
     local_tool_states: usize,
     peer_grant_metadata: usize,
     local_audit: usize,
+    #[serde(default)]
+    transcript_sessions: usize,
+    #[serde(default)]
+    transcript_segments: usize,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -175,6 +434,10 @@ struct LocalDataCollectionHashes {
     local_tool_states: String,
     peer_grant_metadata: String,
     local_audit: String,
+    #[serde(default = "empty_collection_hash")]
+    transcript_sessions: String,
+    #[serde(default = "empty_collection_hash")]
+    transcript_segments: String,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -186,6 +449,10 @@ struct LocalDataRecordCollections {
     local_tool_states: Vec<LocalToolStateRecord>,
     peer_grant_metadata: Vec<PeerGrantMetadataRecord>,
     local_audit: Vec<LocalAuditRecord>,
+    #[serde(default)]
+    transcript_sessions: Vec<TranscriptSessionRecord>,
+    #[serde(default)]
+    transcript_segments: Vec<TranscriptSegmentRecord>,
 }
 
 #[derive(Deserialize)]
@@ -199,23 +466,46 @@ enum LocalDataRepositoryOperation {
     ConversationsAppendMessage { record: ConversationMessageRecord },
     #[serde(rename = "conversations.deleteConversation")]
     ConversationsDeleteConversation { conversation_id: String },
+    #[serde(rename = "conversations.getConversation")]
+    ConversationsGetConversation {
+        profile_id: String,
+        local_node_id: String,
+        conversation_id: String,
+    },
+    #[serde(rename = "conversations.getMessage")]
+    ConversationsGetMessage {
+        profile_id: String,
+        local_node_id: String,
+        conversation_id: String,
+        message_id: String,
+    },
     #[serde(rename = "conversations.listConversations")]
     ConversationsListConversations {
         profile_id: String,
         local_node_id: String,
+        options: Option<ConversationListQuery>,
     },
     #[serde(rename = "conversations.listMessageCounts")]
     ConversationsListMessageCounts {
         profile_id: String,
         local_node_id: String,
+        conversation_ids: Option<Vec<String>>,
     },
     #[serde(rename = "conversations.listFirstUserMessages")]
     ConversationsListFirstUserMessages {
         profile_id: String,
         local_node_id: String,
+        conversation_ids: Option<Vec<String>>,
     },
     #[serde(rename = "conversations.listMessages")]
     ConversationsListMessages {
+        profile_id: String,
+        local_node_id: String,
+        conversation_id: String,
+        options: Option<MessageListQuery>,
+    },
+    #[serde(rename = "conversations.getLatestMessageSequence")]
+    ConversationsGetLatestMessageSequence {
         profile_id: String,
         local_node_id: String,
         conversation_id: String,
@@ -258,6 +548,177 @@ enum LocalDataRepositoryOperation {
         profile_id: String,
         local_node_id: String,
     },
+    #[serde(rename = "transcripts.createSession")]
+    TranscriptsCreateSession { record: TranscriptSessionRecord },
+    #[serde(rename = "transcripts.startSession")]
+    TranscriptsStartSession {
+        profile_id: String,
+        local_node_id: String,
+        session_id: String,
+        started_at_ms: i64,
+    },
+    #[serde(rename = "transcripts.appendSegment")]
+    TranscriptsAppendSegment { record: TranscriptSegmentRecord },
+    #[serde(rename = "transcripts.getSession")]
+    TranscriptsGetSession {
+        profile_id: String,
+        local_node_id: String,
+        session_id: String,
+    },
+    #[serde(rename = "transcripts.listSessions")]
+    TranscriptsListSessions {
+        profile_id: String,
+        local_node_id: String,
+        options: Option<TranscriptSessionListQuery>,
+    },
+    #[serde(rename = "transcripts.listSegments")]
+    TranscriptsListSegments {
+        profile_id: String,
+        local_node_id: String,
+        session_id: String,
+        options: Option<TranscriptSegmentListQuery>,
+    },
+    #[serde(rename = "transcripts.finalizeSession")]
+    TranscriptsFinalizeSession {
+        profile_id: String,
+        local_node_id: String,
+        input: FinalizeTranscriptSessionInput,
+    },
+    #[serde(rename = "transcripts.recoverActiveSessions")]
+    TranscriptsRecoverActiveSessions {
+        profile_id: String,
+        local_node_id: String,
+        now_ms: i64,
+        terminal_reason: Option<String>,
+    },
+    #[serde(rename = "transcripts.deleteSession")]
+    TranscriptsDeleteSession {
+        profile_id: String,
+        local_node_id: String,
+        session_id: String,
+    },
+    #[serde(rename = "transcripts.deleteExpiredSessions")]
+    TranscriptsDeleteExpiredSessions {
+        profile_id: String,
+        local_node_id: String,
+        now_ms: i64,
+        limit: usize,
+    },
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TranscriptSessionRecord {
+    id: String,
+    profile_id: String,
+    local_node_id: String,
+    capture_mode: String,
+    created_at_ms: i64,
+    started_at_ms: i64,
+    ended_at_ms: Option<i64>,
+    lifecycle: String,
+    terminal_reason: Option<String>,
+    expires_at_ms: Option<i64>,
+    language: Option<String>,
+    model_provenance: TranscriptModelProvenance,
+    diarization_state: String,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TranscriptModelProvenance {
+    provider: Option<String>,
+    model_id: Option<String>,
+    version: Option<String>,
+}
+
+/// Metadata for a native-owned archive session. The selected identity is
+/// intentionally omitted; the archive handle supplies it from native state.
+pub(crate) struct NativeTranscriptSessionInput {
+    pub(crate) id: String,
+    pub(crate) capture_mode: String,
+    pub(crate) created_at_ms: i64,
+    pub(crate) started_at_ms: i64,
+    pub(crate) expires_at_ms: Option<i64>,
+    pub(crate) language: Option<String>,
+    pub(crate) model_provenance: NativeTranscriptModelProvenance,
+    pub(crate) diarization_state: String,
+}
+
+pub(crate) struct NativeTranscriptModelProvenance {
+    pub(crate) provider: Option<String>,
+    pub(crate) model_id: Option<String>,
+    pub(crate) version: Option<String>,
+}
+
+pub(crate) struct NativeTranscriptSegmentInput {
+    pub(crate) id: String,
+    pub(crate) session_id: String,
+    pub(crate) sequence: i64,
+    pub(crate) start_at_ms: i64,
+    pub(crate) end_at_ms: i64,
+    pub(crate) text_envelope: Value,
+    pub(crate) confidence: Option<f64>,
+    pub(crate) speaker_id: Option<String>,
+    pub(crate) speaker_label: Option<String>,
+    pub(crate) created_at_ms: i64,
+}
+
+/// Handle for native capture code. Construct only from the selected native
+/// profile receipt; never from WebView command fields. Scope generation makes
+/// a handle unusable after the local-data scope is closed/replaced.
+#[derive(Clone)]
+pub(crate) struct NativeTranscriptArchiveHandle {
+    state: Arc<Mutex<LocalDataState>>,
+    db_path: PathBuf,
+    profile_id: String,
+    local_node_id: String,
+    scope_generation: u64,
+}
+
+#[derive(Clone, Deserialize, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct TranscriptSegmentRecord {
+    id: String,
+    session_id: String,
+    sequence: i64,
+    start_at_ms: i64,
+    end_at_ms: i64,
+    text_envelope: Value,
+    confidence: Option<f64>,
+    speaker_id: Option<String>,
+    speaker_label: Option<String>,
+    created_at_ms: i64,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TranscriptSessionListQuery {
+    limit: Option<usize>,
+    cursor: Option<TranscriptSessionCursor>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TranscriptSessionCursor {
+    created_at_ms: i64,
+    id: String,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TranscriptSegmentListQuery {
+    limit: Option<usize>,
+    after_sequence: Option<i64>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct FinalizeTranscriptSessionInput {
+    session_id: String,
+    lifecycle: String,
+    ended_at_ms: i64,
+    terminal_reason: String,
 }
 
 #[derive(Clone, Deserialize, Serialize)]
@@ -285,6 +746,30 @@ struct ConversationMessageRecord {
     tool_envelope: Option<Value>,
     status: String,
     created_at_ms: i64,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConversationListQuery {
+    limit: Option<usize>,
+    include_archived: Option<bool>,
+    cursor: Option<ConversationCursor>,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ConversationCursor {
+    updated_at_ms: i64,
+    id: String,
+}
+
+#[derive(Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MessageListQuery {
+    limit: Option<usize>,
+    before_sequence: Option<i64>,
+    after_sequence: Option<i64>,
+    direction: Option<String>,
 }
 
 #[derive(Clone)]
@@ -577,11 +1062,36 @@ pub(crate) async fn aurora_local_data_open(
                 return Err(local_data_error("identity_mismatch"));
             }
         }
+        if state.profile_id.is_none() && state.local_node_id.is_none() {
+            state.scope_generation = state
+                .scope_generation
+                .checked_add(1)
+                .ok_or_else(|| local_data_error("transcript_archive_generation_exhausted"))?;
+        }
         let schema_version = open_local_data_at_path(
             local_data_db_path_without_create(&app)?,
             &request.profile_id,
             &request.local_node_id,
         )?;
+        let recovery_scope = format!("{}\0{}", request.profile_id, request.local_node_id);
+        if !state.recovered_transcript_scopes.contains(&recovery_scope) {
+            let conn = SqliteConnection::open(local_data_db_path(&app)?)?;
+            conn.exec("BEGIN IMMEDIATE;")?;
+            match recover_transcript_sessions(
+                &conn,
+                &request.profile_id,
+                &request.local_node_id,
+                now_ms() as i64,
+                "process_restart",
+            ) {
+                Ok(_) => conn.exec("COMMIT;")?,
+                Err(error) => {
+                    let _ = conn.exec("ROLLBACK;");
+                    return Err(error);
+                }
+            }
+            state.recovered_transcript_scopes.insert(recovery_scope);
+        }
         state.profile_id = Some(request.profile_id.clone());
         state.local_node_id = Some(request.local_node_id.clone());
         state.schema_version = Some(schema_version);
@@ -644,6 +1154,10 @@ pub(crate) async fn aurora_local_data_close(
         state.profile_id = None;
         state.local_node_id = None;
         state.schema_version = None;
+        state.scope_generation = state
+            .scope_generation
+            .checked_add(1)
+            .ok_or_else(|| local_data_error("transcript_archive_generation_exhausted"))?;
         Ok(status_value(None, None, None, "idle"))
     })
     .await
@@ -886,6 +1400,34 @@ fn run_repository_operation(
                 return Err(local_data_error("conversation not found for identity"));
             }
             ensure_message_id_available(conn, &record.id, profile_id, local_node_id)?;
+            let existing_message = conn.query(
+                "SELECT conversation_id FROM aurora_messages WHERE id = ? LIMIT 1",
+                &[json!(record.id)],
+            )?;
+            if let Some(row) = existing_message.first() {
+                if row_string(row, "conversation_id")? != record.conversation_id {
+                    return Err(local_data_error_reason(
+                        "message ID belongs to another conversation",
+                        crate::LocalDataReasonCode::DuplicateMessageId,
+                    ));
+                }
+            }
+            let duplicate_sequence = conn.query(
+                "SELECT id FROM aurora_messages WHERE conversation_id = ? AND sequence = ? LIMIT 1",
+                &[json!(record.conversation_id), json!(record.sequence)],
+            )?;
+            if duplicate_sequence
+                .first()
+                .map(|row| row_string(row, "id"))
+                .transpose()?
+                != Some(record.id.clone())
+                && !duplicate_sequence.is_empty()
+            {
+                return Err(local_data_error_reason(
+                    "message sequence already exists",
+                    crate::LocalDataReasonCode::DuplicateMessageSequence,
+                ));
+            }
             conn.execute(
                 "INSERT INTO aurora_messages (id, conversation_id, sequence, role, content_envelope_json, tool_envelope_json, status, created_at_ms)
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -903,9 +1445,10 @@ fn run_repository_operation(
             )?;
             Ok(Value::Null)
         }
-        LocalDataRepositoryOperation::ConversationsListConversations {
+        LocalDataRepositoryOperation::ConversationsGetConversation {
             profile_id: requested_profile,
             local_node_id: requested_node,
+            conversation_id,
         } => {
             ensure_scope(
                 profile_id,
@@ -913,17 +1456,48 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
-            Ok(Value::Array(conn.query(
-                "SELECT id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms
-                 FROM aurora_conversations
-                 WHERE profile_id = ? AND local_node_id = ?
-                 ORDER BY updated_at_ms DESC, id ASC",
-                &[json!(profile_id), json!(local_node_id)],
-            )?.into_iter().map(conversation_from_row).collect::<Result<Vec<_>, _>>()?))
+            validate_id(&conversation_id, "conversation.id")?;
+            Ok(conn.query("SELECT id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms FROM aurora_conversations WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(conversation_id), json!(profile_id), json!(local_node_id)])?.first().map(|row| conversation_from_row(row.clone())).transpose()?.unwrap_or(Value::Null))
+        }
+        LocalDataRepositoryOperation::ConversationsGetMessage {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            conversation_id,
+            message_id,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&conversation_id, "conversation.id")?;
+            validate_id(&message_id, "message.id")?;
+            Ok(conn.query("SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE m.id = ? AND m.conversation_id = ? AND c.profile_id = ? AND c.local_node_id = ? LIMIT 1", &[json!(message_id), json!(conversation_id), json!(profile_id), json!(local_node_id)])?.first().map(|row| message_from_row(row.clone())).transpose()?.unwrap_or(Value::Null))
+        }
+        LocalDataRepositoryOperation::ConversationsListConversations {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            options,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            let (sql, params) = conversation_list_sql(profile_id, local_node_id, options)?;
+            Ok(Value::Array(
+                conn.query(&sql, &params)?
+                    .into_iter()
+                    .map(conversation_from_row)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ))
         }
         LocalDataRepositoryOperation::ConversationsListMessageCounts {
             profile_id: requested_profile,
             local_node_id: requested_node,
+            conversation_ids,
         } => {
             ensure_scope(
                 profile_id,
@@ -931,13 +1505,21 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
+            let (id_sql, id_params) = match validate_id_set(conversation_ids, "conversationIds")? {
+                None => (String::new(), Vec::new()),
+                Some(ids) if ids.is_empty() => return Ok(json!({})),
+                Some(ids) => id_filter(&ids, "m.conversation_id"),
+            };
             let rows = conn.query(
-                "SELECT m.conversation_id, COUNT(*) AS count
+                &format!(
+                    "SELECT m.conversation_id, COUNT(*) AS count
                  FROM aurora_messages m
                  INNER JOIN aurora_conversations c ON c.id = m.conversation_id
-                 WHERE c.profile_id = ? AND c.local_node_id = ?
+                 WHERE c.profile_id = ? AND c.local_node_id = ?{}
                  GROUP BY m.conversation_id",
-                &[json!(profile_id), json!(local_node_id)],
+                    id_sql
+                ),
+                &[vec![json!(profile_id), json!(local_node_id)], id_params].concat(),
             )?;
             let mut result = serde_json::Map::new();
             for row in rows {
@@ -951,6 +1533,7 @@ fn run_repository_operation(
         LocalDataRepositoryOperation::ConversationsListFirstUserMessages {
             profile_id: requested_profile,
             local_node_id: requested_node,
+            conversation_ids,
         } => {
             ensure_scope(
                 profile_id,
@@ -958,24 +1541,28 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
+            let (id_sql, id_params) = match validate_id_set(conversation_ids, "conversationIds")? {
+                None => (String::new(), Vec::new()),
+                Some(ids) if ids.is_empty() => return Ok(json!({})),
+                Some(ids) => id_filter(&ids, "m.conversation_id"),
+            };
             let rows = conn.query(
-                "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
+                &format!("SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
                  FROM aurora_messages m
                  INNER JOIN aurora_conversations c ON c.id = m.conversation_id
-                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.role = ?
+                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.role = ?{}
                    AND NOT EXISTS (
                      SELECT 1 FROM aurora_messages earlier
                      WHERE earlier.conversation_id = m.conversation_id
                        AND earlier.role = ?
                        AND (earlier.sequence < m.sequence OR (earlier.sequence = m.sequence AND earlier.id < m.id))
                    )
-                 ORDER BY m.conversation_id ASC, m.sequence ASC, m.id ASC",
+                ORDER BY m.conversation_id ASC, m.sequence ASC, m.id ASC", id_sql),
                 &[
-                    json!(profile_id),
-                    json!(local_node_id),
-                    json!("user"),
-                    json!("user"),
-                ],
+                    vec![json!(profile_id), json!(local_node_id), json!("user")],
+                    id_params,
+                    vec![json!("user")],
+                ].concat(),
             )?;
             let mut result = serde_json::Map::new();
             for row in rows {
@@ -1014,6 +1601,7 @@ fn run_repository_operation(
             profile_id: requested_profile,
             local_node_id: requested_node,
             conversation_id,
+            options,
         } => {
             ensure_scope(
                 profile_id,
@@ -1021,14 +1609,35 @@ fn run_repository_operation(
                 &requested_profile,
                 &requested_node,
             )?;
-            Ok(Value::Array(conn.query(
-                "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms
-                 FROM aurora_messages m
-                 INNER JOIN aurora_conversations c ON c.id = m.conversation_id
-                 WHERE c.profile_id = ? AND c.local_node_id = ? AND m.conversation_id = ?
-                 ORDER BY m.sequence ASC, m.id ASC",
-                &[json!(profile_id), json!(local_node_id), json!(conversation_id)],
-            )?.into_iter().map(message_from_row).collect::<Result<Vec<_>, _>>()?))
+            validate_id(&conversation_id, "conversation.id")?;
+            let (sql, params) =
+                message_list_sql(profile_id, local_node_id, &conversation_id, options)?;
+            Ok(Value::Array(
+                conn.query(&sql, &params)?
+                    .into_iter()
+                    .map(message_from_row)
+                    .collect::<Result<Vec<_>, _>>()?,
+            ))
+        }
+        LocalDataRepositoryOperation::ConversationsGetLatestMessageSequence {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            conversation_id,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&conversation_id, "conversation.id")?;
+            let rows = conn.query("SELECT MAX(m.sequence) AS latest_sequence FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE m.conversation_id = ? AND c.profile_id = ? AND c.local_node_id = ?", &[json!(conversation_id), json!(profile_id), json!(local_node_id)])?;
+            Ok(rows
+                .first()
+                .and_then(|row| row.get("latest_sequence"))
+                .filter(|v| !v.is_null())
+                .cloned()
+                .unwrap_or(Value::Null))
         }
         LocalDataRepositoryOperation::MemoryUpsertMemoryItem { record } => {
             validate_memory_record(&record)?;
@@ -1248,7 +1857,545 @@ fn run_repository_operation(
                 &[json!(profile_id), json!(local_node_id)],
             )?.into_iter().map(audit_from_row).collect::<Result<Vec<_>, _>>()?))
         }
+        LocalDataRepositoryOperation::TranscriptsCreateSession { record } => {
+            validate_transcript_session(&record)?;
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &record.profile_id,
+                &record.local_node_id,
+            )?;
+            if record.lifecycle != "active" {
+                return Err(local_data_error("transcript_session_must_start_active"));
+            }
+            if select_count(conn, "SELECT COUNT(*) AS count FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ?", &[json!(profile_id), json!(local_node_id)])? >= MAX_TRANSCRIPT_SESSIONS as i64 {
+                return Err(local_data_error("transcript_session_limit"));
+            }
+            let existing = conn.query(
+                "SELECT id FROM aurora_transcript_sessions WHERE id = ? LIMIT 1",
+                &[json!(record.id)],
+            )?;
+            if !existing.is_empty() {
+                return Err(local_data_error("transcript_session_id_conflict"));
+            }
+            insert_transcript_session(conn, &record)?;
+            serde_json::to_value(record).map_err(|error| local_data_error(error.to_string()))
+        }
+        LocalDataRepositoryOperation::TranscriptsStartSession {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            session_id,
+            started_at_ms,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&session_id, "transcript.sessionId")?;
+            validate_safe_int(started_at_ms, "transcript.startedAtMs")?;
+            let rows = conn.query(
+                "SELECT * FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1",
+                &[json!(session_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            let mut record = transcript_session_from_row(
+                rows.first()
+                    .ok_or_else(|| local_data_error("transcript_session_not_found"))?,
+            )?;
+            if record.lifecycle != "active" {
+                return Err(local_data_error("transcript_session_terminal"));
+            }
+            record.started_at_ms = record.started_at_ms.min(started_at_ms);
+            validate_transcript_session(&record)?;
+            insert_transcript_session_replace(conn, &record)?;
+            serde_json::to_value(record).map_err(|error| local_data_error(error.to_string()))
+        }
+        LocalDataRepositoryOperation::TranscriptsAppendSegment { record } => {
+            validate_transcript_segment(&record, profile_id, local_node_id)?;
+            let sessions = conn.query(
+                "SELECT * FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1",
+                &[json!(record.session_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            let session = sessions
+                .first()
+                .ok_or_else(|| local_data_error("transcript_session_not_found"))?;
+            let parent = transcript_session_from_row(session)?;
+            let existing = conn.query(
+                "SELECT * FROM aurora_transcript_segments WHERE id = ? LIMIT 1",
+                &[json!(record.id)],
+            )?;
+            if let Some(row) = existing.first() {
+                let prior = transcript_segment_from_row(row)?;
+                if prior == record {
+                    return Ok(json!({"appended": false, "record": prior}));
+                }
+                return Err(local_data_error("transcript_segment_id_conflict"));
+            }
+            if parent.lifecycle != "active" {
+                return Err(local_data_error("transcript_session_terminal"));
+            }
+            if record.start_at_ms < parent.started_at_ms {
+                return Err(local_data_error("transcript_segment_before_session"));
+            }
+            let duplicate_sequence = conn.query(
+                "SELECT id FROM aurora_transcript_segments WHERE session_id = ? AND sequence = ? LIMIT 1",
+                &[json!(record.session_id), json!(record.sequence)],
+            )?;
+            if !duplicate_sequence.is_empty() {
+                return Err(local_data_error("transcript_segment_sequence_conflict"));
+            }
+            let count = select_count(conn, "SELECT COUNT(*) AS count FROM aurora_transcript_segments segments INNER JOIN aurora_transcript_sessions sessions ON sessions.id = segments.session_id WHERE sessions.profile_id = ? AND sessions.local_node_id = ?", &[json!(profile_id), json!(local_node_id)])?;
+            if count >= MAX_TRANSCRIPT_SEGMENTS as i64 {
+                return Err(local_data_error("transcript_segment_limit"));
+            }
+            insert_transcript_segment(conn, &record)?;
+            Ok(json!({"appended": true, "record": record}))
+        }
+        LocalDataRepositoryOperation::TranscriptsGetSession {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            session_id,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&session_id, "transcript.sessionId")?;
+            let rows = conn.query(
+                "SELECT * FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1",
+                &[json!(session_id), json!(profile_id), json!(local_node_id)],
+            )?;
+            match rows.first() {
+                Some(row) => serde_json::to_value(transcript_session_from_row(row)?)
+                    .map_err(|error| local_data_error(error.to_string())),
+                None => Ok(Value::Null),
+            }
+        }
+        LocalDataRepositoryOperation::TranscriptsListSessions {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            options,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            let (limit, cursor) = transcript_session_query(options)?;
+            let rows = if let Some((created_at_ms, id)) = cursor {
+                conn.query("SELECT * FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? AND (created_at_ms < ? OR (created_at_ms = ? AND id > ?)) ORDER BY created_at_ms DESC, id ASC LIMIT ?", &[json!(profile_id), json!(local_node_id), json!(created_at_ms), json!(created_at_ms), json!(id), json!(limit)])?
+            } else {
+                conn.query("SELECT * FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? ORDER BY created_at_ms DESC, id ASC LIMIT ?", &[json!(profile_id), json!(local_node_id), json!(limit)])?
+            };
+            rows.iter()
+                .map(transcript_session_from_row)
+                .collect::<Result<Vec<_>, _>>()
+                .and_then(|records| {
+                    serde_json::to_value(records)
+                        .map_err(|error| local_data_error(error.to_string()))
+                })
+        }
+        LocalDataRepositoryOperation::TranscriptsListSegments {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            session_id,
+            options,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&session_id, "transcript.sessionId")?;
+            let (limit, after) = transcript_segment_query(options)?;
+            let params = if let Some(after) = after {
+                vec![
+                    json!(session_id),
+                    json!(profile_id),
+                    json!(local_node_id),
+                    json!(after),
+                    json!(limit),
+                ]
+            } else {
+                vec![
+                    json!(session_id),
+                    json!(profile_id),
+                    json!(local_node_id),
+                    json!(limit),
+                ]
+            };
+            let sql = if after.is_some() {
+                "SELECT s.* FROM aurora_transcript_segments s INNER JOIN aurora_transcript_sessions a ON a.id = s.session_id WHERE s.session_id = ? AND a.profile_id = ? AND a.local_node_id = ? AND s.sequence > ? ORDER BY s.sequence ASC, s.id ASC LIMIT ?"
+            } else {
+                "SELECT s.* FROM aurora_transcript_segments s INNER JOIN aurora_transcript_sessions a ON a.id = s.session_id WHERE s.session_id = ? AND a.profile_id = ? AND a.local_node_id = ? ORDER BY s.sequence ASC, s.id ASC LIMIT ?"
+            };
+            let rows = conn.query(sql, &params)?;
+            rows.iter()
+                .map(transcript_segment_from_row)
+                .collect::<Result<Vec<_>, _>>()
+                .and_then(|records| {
+                    serde_json::to_value(records)
+                        .map_err(|error| local_data_error(error.to_string()))
+                })
+        }
+        LocalDataRepositoryOperation::TranscriptsFinalizeSession {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            input,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&input.session_id, "transcript.sessionId")?;
+            validate_safe_int(input.ended_at_ms, "transcript.endedAtMs")?;
+            validate_optional_text(
+                Some(&input.terminal_reason),
+                512,
+                "transcript.terminalReason",
+            )?;
+            if input.terminal_reason.trim().is_empty()
+                || !matches!(
+                    input.lifecycle.as_str(),
+                    "completed" | "interrupted" | "failed"
+                )
+            {
+                return Err(local_data_error("invalid_transcript_terminal"));
+            }
+            let rows = conn.query("SELECT * FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(input.session_id), json!(profile_id), json!(local_node_id)])?;
+            let mut record = transcript_session_from_row(
+                rows.first()
+                    .ok_or_else(|| local_data_error("transcript_session_not_found"))?,
+            )?;
+            if record.lifecycle == input.lifecycle
+                && record.ended_at_ms == Some(input.ended_at_ms)
+                && record.terminal_reason.as_deref() == Some(input.terminal_reason.as_str())
+            {
+                return serde_json::to_value(record)
+                    .map_err(|error| local_data_error(error.to_string()));
+            }
+            if record.lifecycle != "active" {
+                return Err(local_data_error("transcript_session_terminal_conflict"));
+            }
+            if input.ended_at_ms < record.started_at_ms {
+                return Err(local_data_error("transcript_terminal_before_start"));
+            }
+            record.lifecycle = input.lifecycle;
+            record.ended_at_ms = Some(input.ended_at_ms);
+            record.terminal_reason = Some(input.terminal_reason);
+            validate_transcript_session(&record)?;
+            insert_transcript_session_replace(conn, &record)?;
+            serde_json::to_value(record).map_err(|error| local_data_error(error.to_string()))
+        }
+        LocalDataRepositoryOperation::TranscriptsRecoverActiveSessions {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            now_ms,
+            terminal_reason,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            let reason = terminal_reason.as_deref().unwrap_or("process_restart");
+            Ok(
+                json!({"interrupted": recover_transcript_sessions(conn, profile_id, local_node_id, now_ms, reason)?}),
+            )
+        }
+        LocalDataRepositoryOperation::TranscriptsDeleteSession {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            session_id,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_id(&session_id, "transcript.sessionId")?;
+            let rows = conn.query("SELECT id FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(session_id), json!(profile_id), json!(local_node_id)])?;
+            if rows.is_empty() {
+                return Ok(json!({"deleted": false, "deletedSegments": 0}));
+            }
+            let deleted_segments = select_count(
+                conn,
+                "SELECT COUNT(*) AS count FROM aurora_transcript_segments WHERE session_id = ?",
+                &[json!(session_id)],
+            )?;
+            conn.execute("DELETE FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[json!(session_id), json!(profile_id), json!(local_node_id)])?;
+            Ok(json!({"deleted": true, "deletedSegments": deleted_segments}))
+        }
+        LocalDataRepositoryOperation::TranscriptsDeleteExpiredSessions {
+            profile_id: requested_profile,
+            local_node_id: requested_node,
+            now_ms,
+            limit,
+        } => {
+            ensure_scope(
+                profile_id,
+                local_node_id,
+                &requested_profile,
+                &requested_node,
+            )?;
+            validate_delete_now_ms(now_ms)?;
+            if !(1..=MAX_TRANSCRIPT_DELETE_LIMIT).contains(&limit) {
+                return Err(local_data_error("transcript_delete_limit"));
+            }
+            conn.exec("SAVEPOINT transcript_expiry_delete;")?;
+            let result = (|| {
+                let rows = conn.query("SELECT id FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? AND expires_at_ms IS NOT NULL AND expires_at_ms <= ? ORDER BY expires_at_ms ASC, id ASC LIMIT ?", &[json!(profile_id), json!(local_node_id), json!(now_ms), json!(limit)])?;
+                let ids = rows
+                    .iter()
+                    .map(|row| row_string(row, "id"))
+                    .collect::<Result<Vec<_>, _>>()?;
+                let mut deleted_segments = 0i64;
+                for id in &ids {
+                    deleted_segments += select_count(conn, "SELECT COUNT(*) AS count FROM aurora_transcript_segments WHERE session_id = ?", &[json!(id)])?;
+                    conn.execute("DELETE FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[json!(id), json!(profile_id), json!(local_node_id)])?;
+                }
+                Ok(json!({"deletedSessions": ids.len(), "deletedSegments": deleted_segments}))
+            })();
+            match result {
+                Ok(value) => {
+                    conn.exec("RELEASE transcript_expiry_delete;")?;
+                    Ok(value)
+                }
+                Err(error) => {
+                    let _ = conn.exec("ROLLBACK TO transcript_expiry_delete;");
+                    let _ = conn.exec("RELEASE transcript_expiry_delete;");
+                    Err(error)
+                }
+            }
+        }
     }
+}
+
+fn validate_transcript_session(record: &TranscriptSessionRecord) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "transcript.id")?;
+    validate_id(&record.profile_id, "transcript.profileId")?;
+    validate_id(&record.local_node_id, "transcript.localNodeId")?;
+    if !matches!(record.capture_mode.as_str(), "ambient" | "notification") {
+        return Err(local_data_error("invalid_transcript_capture_mode"));
+    }
+    validate_safe_int(record.created_at_ms, "transcript.createdAtMs")?;
+    validate_safe_int(record.started_at_ms, "transcript.startedAtMs")?;
+    validate_optional_safe_int(record.ended_at_ms, "transcript.endedAtMs")?;
+    validate_optional_safe_int(record.expires_at_ms, "transcript.expiresAtMs")?;
+    if record.started_at_ms < record.created_at_ms
+        || record
+            .ended_at_ms
+            .is_some_and(|ended| ended < record.started_at_ms)
+        || record
+            .expires_at_ms
+            .is_some_and(|expires| expires < record.created_at_ms)
+    {
+        return Err(local_data_error("invalid_transcript_session_timestamps"));
+    }
+    match (
+        record.lifecycle.as_str(),
+        record.ended_at_ms,
+        record.terminal_reason.as_deref(),
+    ) {
+        ("active", None, None) => {}
+        ("completed" | "interrupted" | "failed", Some(_), Some(reason))
+            if !reason.trim().is_empty() =>
+        {
+            validate_optional_text(Some(reason), 512, "transcript.terminalReason")?;
+        }
+        _ => return Err(local_data_error("invalid_transcript_lifecycle")),
+    }
+    validate_optional_text(record.language.as_deref(), 64, "transcript.language")?;
+    validate_optional_text(
+        record.model_provenance.provider.as_deref(),
+        256,
+        "transcript.modelProvenance.provider",
+    )?;
+    validate_optional_text(
+        record.model_provenance.model_id.as_deref(),
+        256,
+        "transcript.modelProvenance.modelId",
+    )?;
+    validate_optional_text(
+        record.model_provenance.version.as_deref(),
+        256,
+        "transcript.modelProvenance.version",
+    )?;
+    if !matches!(
+        record.diarization_state.as_str(),
+        "not_requested" | "pending" | "partial" | "available" | "unavailable"
+    ) {
+        return Err(local_data_error("invalid_transcript_diarization_state"));
+    }
+    Ok(())
+}
+
+fn validate_transcript_segment(
+    record: &TranscriptSegmentRecord,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<(), AuroraCommandError> {
+    validate_id(&record.id, "transcriptSegment.id")?;
+    validate_id(&record.session_id, "transcriptSegment.sessionId")?;
+    validate_safe_int(record.sequence, "transcriptSegment.sequence")?;
+    validate_safe_int(record.start_at_ms, "transcriptSegment.startAtMs")?;
+    validate_safe_int(record.end_at_ms, "transcriptSegment.endAtMs")?;
+    validate_safe_int(record.created_at_ms, "transcriptSegment.createdAtMs")?;
+    if record.end_at_ms < record.start_at_ms {
+        return Err(local_data_error("transcript_segment_end_before_start"));
+    }
+    if let Some(confidence) = record.confidence {
+        if !confidence.is_finite()
+            || !(0.0..=1.0).contains(&confidence)
+            || (confidence == 0.0 && confidence.is_sign_negative())
+        {
+            return Err(local_data_error("invalid_transcript_confidence"));
+        }
+    }
+    validate_optional_text(
+        record.speaker_id.as_deref(),
+        256,
+        "transcriptSegment.speakerId",
+    )?;
+    validate_optional_text(
+        record.speaker_label.as_deref(),
+        256,
+        "transcriptSegment.speakerLabel",
+    )?;
+    validate_envelope(
+        &record.text_envelope,
+        profile_id,
+        local_node_id,
+        "transcriptSegment.textEnvelope",
+    )
+}
+
+fn transcript_session_query(
+    query: Option<TranscriptSessionListQuery>,
+) -> Result<(usize, Option<(i64, String)>), AuroraCommandError> {
+    let limit = query.as_ref().and_then(|value| value.limit).unwrap_or(100);
+    if !(1..=MAX_TRANSCRIPT_SESSION_QUERY).contains(&limit) {
+        return Err(local_data_error("transcript_session_query_limit"));
+    }
+    let cursor = query
+        .and_then(|value| value.cursor)
+        .map(|cursor| {
+            validate_safe_int(cursor.created_at_ms, "transcript.cursor.createdAtMs")?;
+            validate_id(&cursor.id, "transcript.cursor.id")?;
+            Ok((cursor.created_at_ms, cursor.id))
+        })
+        .transpose()?;
+    Ok((limit, cursor))
+}
+
+fn transcript_segment_query(
+    query: Option<TranscriptSegmentListQuery>,
+) -> Result<(usize, Option<i64>), AuroraCommandError> {
+    let limit = query.as_ref().and_then(|value| value.limit).unwrap_or(500);
+    if !(1..=MAX_TRANSCRIPT_SEGMENT_QUERY).contains(&limit) {
+        return Err(local_data_error("transcript_segment_query_limit"));
+    }
+    let after = query.and_then(|value| value.after_sequence);
+    validate_optional_safe_int(after, "transcript.afterSequence")?;
+    Ok((limit, after))
+}
+
+fn transcript_session_from_row(row: &Value) -> Result<TranscriptSessionRecord, AuroraCommandError> {
+    let value = json!({
+        "id": row_string(row, "id")?,
+        "profileId": row_string(row, "profile_id")?,
+        "localNodeId": row_string(row, "local_node_id")?,
+        "captureMode": row_string(row, "capture_mode")?,
+        "createdAtMs": row_i64(row, "created_at_ms")?,
+        "startedAtMs": row_i64(row, "started_at_ms")?,
+        "endedAtMs": row.get("ended_at_ms").and_then(Value::as_i64),
+        "lifecycle": row_string(row, "lifecycle")?,
+        "terminalReason": row.get("terminal_reason").and_then(Value::as_str),
+        "expiresAtMs": row.get("expires_at_ms").and_then(Value::as_i64),
+        "language": row.get("language").and_then(Value::as_str),
+        "modelProvenance": parse_json_column(row, "model_provenance_json")?,
+        "diarizationState": row_string(row, "diarization_state")?,
+    });
+    serde_json::from_value(value).map_err(|error| local_data_error(error.to_string()))
+}
+
+fn transcript_segment_from_row(row: &Value) -> Result<TranscriptSegmentRecord, AuroraCommandError> {
+    let value = json!({
+        "id": row_string(row, "id")?,
+        "sessionId": row_string(row, "session_id")?,
+        "sequence": row_i64(row, "sequence")?,
+        "startAtMs": row_i64(row, "start_at_ms")?,
+        "endAtMs": row_i64(row, "end_at_ms")?,
+        "textEnvelope": parse_json_column(row, "text_envelope_json")?,
+        "confidence": row.get("confidence").and_then(Value::as_f64),
+        "speakerId": row.get("speaker_id").and_then(Value::as_str),
+        "speakerLabel": row.get("speaker_label").and_then(Value::as_str),
+        "createdAtMs": row_i64(row, "created_at_ms")?,
+    });
+    serde_json::from_value(value).map_err(|error| local_data_error(error.to_string()))
+}
+
+fn insert_transcript_session(
+    conn: &SqliteConnection,
+    record: &TranscriptSessionRecord,
+) -> Result<(), AuroraCommandError> {
+    conn.execute("INSERT INTO aurora_transcript_sessions (id, profile_id, local_node_id, capture_mode, created_at_ms, started_at_ms, ended_at_ms, lifecycle, terminal_reason, expires_at_ms, language, model_provenance_json, diarization_state) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", &[
+        json!(record.id), json!(record.profile_id), json!(record.local_node_id), json!(record.capture_mode), json!(record.created_at_ms), json!(record.started_at_ms), option_i64(record.ended_at_ms), json!(record.lifecycle), optional_str_value(record.terminal_reason.as_deref()), option_i64(record.expires_at_ms), optional_str_value(record.language.as_deref()), json!(serde_json::to_string(&record.model_provenance).map_err(|error| local_data_error(error.to_string()))?), json!(record.diarization_state),
+    ])
+}
+
+fn insert_transcript_session_replace(
+    conn: &SqliteConnection,
+    record: &TranscriptSessionRecord,
+) -> Result<(), AuroraCommandError> {
+    conn.execute("UPDATE aurora_transcript_sessions SET started_at_ms = ?, ended_at_ms = ?, lifecycle = ?, terminal_reason = ?, expires_at_ms = ?, language = ?, model_provenance_json = ?, diarization_state = ? WHERE id = ? AND profile_id = ? AND local_node_id = ?", &[
+        json!(record.started_at_ms), option_i64(record.ended_at_ms), json!(record.lifecycle), optional_str_value(record.terminal_reason.as_deref()), option_i64(record.expires_at_ms), optional_str_value(record.language.as_deref()), json!(serde_json::to_string(&record.model_provenance).map_err(|error| local_data_error(error.to_string()))?), json!(record.diarization_state), json!(record.id), json!(record.profile_id), json!(record.local_node_id),
+    ])?;
+    if sqlite_changes(conn)? == 0 {
+        return Err(local_data_error("transcript_session_not_found"));
+    }
+    Ok(())
+}
+
+fn insert_transcript_segment(
+    conn: &SqliteConnection,
+    record: &TranscriptSegmentRecord,
+) -> Result<(), AuroraCommandError> {
+    conn.execute("INSERT INTO aurora_transcript_segments (id, session_id, sequence, start_at_ms, end_at_ms, text_envelope_json, confidence, speaker_id, speaker_label, created_at_ms) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", &[
+        json!(record.id), json!(record.session_id), json!(record.sequence), json!(record.start_at_ms), json!(record.end_at_ms), json!(serde_json::to_string(&record.text_envelope).map_err(|error| local_data_error(error.to_string()))?), option_f64(record.confidence), optional_str_value(record.speaker_id.as_deref()), optional_str_value(record.speaker_label.as_deref()), json!(record.created_at_ms),
+    ])
+}
+
+fn recover_transcript_sessions(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+    now_ms: i64,
+    reason: &str,
+) -> Result<i64, AuroraCommandError> {
+    validate_safe_int(now_ms, "transcript.recovery.nowMs")?;
+    validate_optional_text(Some(reason), 512, "transcript.recovery.reason")?;
+    if reason.trim().is_empty() {
+        return Err(local_data_error("transcript_recovery_reason"));
+    }
+    conn.execute("UPDATE aurora_transcript_sessions SET lifecycle = 'interrupted', ended_at_ms = MAX(started_at_ms, ?), terminal_reason = ? WHERE profile_id = ? AND local_node_id = ? AND lifecycle = 'active'", &[json!(now_ms), json!(reason), json!(profile_id), json!(local_node_id)])?;
+    sqlite_changes(conn)
+}
+
+fn optional_str_value(value: Option<&str>) -> Value {
+    value.map_or(Value::Null, |value| json!(value))
+}
+fn option_f64(value: Option<f64>) -> Value {
+    value.map_or(Value::Null, |value| json!(value))
 }
 
 pub(crate) fn persist_native_voice_turn_at_path(
@@ -1352,17 +2499,24 @@ fn persist_native_voice_turn(
         },
     )?;
 
-    let next_sequence_row = conn.query(
-        "SELECT COALESCE(MAX(sequence), -1) + 1 AS next_sequence
-         FROM aurora_messages WHERE conversation_id = ?",
-        &[json!(conversation_id)],
+    let latest = conn.query(
+        "SELECT MAX(m.sequence) AS latest_sequence FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE m.conversation_id = ? AND c.profile_id = ? AND c.local_node_id = ?",
+        &[json!(conversation_id), json!(&request.profile_id), json!(&request.local_node_id)],
     )?;
-    let mut next_sequence = row_i64(
-        next_sequence_row
-            .first()
-            .ok_or_else(|| local_data_error("voice message sequence unavailable"))?,
-        "next_sequence",
-    )?;
+    let next_sequence = match latest
+        .first()
+        .and_then(|row| row.get("latest_sequence"))
+        .and_then(Value::as_i64)
+    {
+        Some(value) => value
+            .checked_add(1)
+            .ok_or_else(|| local_data_error("message sequence exhausted"))?,
+        None => 0,
+    };
+    if next_sequence > MAX_SAFE_INTEGER {
+        return Err(local_data_error("message sequence exhausted"));
+    }
+    let mut next_sequence = next_sequence;
     run_repository_operation(
         conn,
         &request.profile_id,
@@ -1439,6 +2593,10 @@ fn import_records(
         "DELETE FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?",
         &[json!(profile_id), json!(local_node_id)],
     )?;
+    conn.execute(
+        "DELETE FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ?",
+        &[json!(profile_id), json!(local_node_id)],
+    )?;
 
     for record in &document.records.conversations {
         run_repository_operation(
@@ -1500,6 +2658,24 @@ fn import_records(
             },
         )?;
     }
+    for record in &document.records.transcript_sessions {
+        validate_transcript_session(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+        insert_transcript_session(conn, record)?;
+    }
+    for record in &document.records.transcript_segments {
+        validate_transcript_segment(record, profile_id, local_node_id)?;
+        let parent = conn.query("SELECT id FROM aurora_transcript_sessions WHERE id = ? AND profile_id = ? AND local_node_id = ? LIMIT 1", &[json!(record.session_id), json!(profile_id), json!(local_node_id)])?;
+        if parent.is_empty() {
+            return Err(local_data_error("transcript_segment_session_missing"));
+        }
+        insert_transcript_segment(conn, record)?;
+    }
 
     let imported = export_records(conn, profile_id, local_node_id)?;
     Ok(json!({
@@ -1515,13 +2691,41 @@ fn export_records(
     local_node_id: &str,
 ) -> Result<Value, AuroraCommandError> {
     Ok(json!({
-        "conversations": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::ConversationsListConversations { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
+        "conversations": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::ConversationsListConversations { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string(), options: None })?,
         "messages": export_messages(conn, profile_id, local_node_id)?,
         "memoryItems": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::MemoryListMemoryItems { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string(), namespace: None })?,
         "localToolStates": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::LocalToolsListLocalToolStates { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
         "peerGrantMetadata": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::PeerGrantsListPeerGrants { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
         "localAudit": run_repository_operation(conn, profile_id, local_node_id, LocalDataRepositoryOperation::LocalAuditListAudit { profile_id: profile_id.to_string(), local_node_id: local_node_id.to_string() })?,
+        "transcriptSessions": export_transcript_sessions(conn, profile_id, local_node_id)?,
+        "transcriptSegments": export_transcript_segments(conn, profile_id, local_node_id)?,
     }))
+}
+
+fn export_transcript_sessions(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<Value, AuroraCommandError> {
+    let rows = conn.query("SELECT * FROM aurora_transcript_sessions WHERE profile_id = ? AND local_node_id = ? ORDER BY id ASC", &[json!(profile_id), json!(local_node_id)])?;
+    let records = rows
+        .iter()
+        .map(transcript_session_from_row)
+        .collect::<Result<Vec<_>, _>>()?;
+    serde_json::to_value(records).map_err(|error| local_data_error(error.to_string()))
+}
+
+fn export_transcript_segments(
+    conn: &SqliteConnection,
+    profile_id: &str,
+    local_node_id: &str,
+) -> Result<Value, AuroraCommandError> {
+    let rows = conn.query("SELECT s.* FROM aurora_transcript_segments s INNER JOIN aurora_transcript_sessions a ON a.id = s.session_id WHERE a.profile_id = ? AND a.local_node_id = ? ORDER BY s.session_id ASC, s.sequence ASC, s.id ASC", &[json!(profile_id), json!(local_node_id)])?;
+    let records = rows
+        .iter()
+        .map(transcript_segment_from_row)
+        .collect::<Result<Vec<_>, _>>()?;
+    serde_json::to_value(records).map_err(|error| local_data_error(error.to_string()))
 }
 
 fn ensure_import_global_keys_available(
@@ -1572,6 +2776,20 @@ fn ensure_import_global_keys_available(
             profile_id,
             local_node_id,
         )?;
+    }
+    for record in &document.records.transcript_sessions {
+        ensure_scoped_global_key_available(
+            conn,
+            "aurora_transcript_sessions",
+            "id",
+            &record.id,
+            profile_id,
+            local_node_id,
+        )?;
+    }
+    for record in &document.records.transcript_segments {
+        let rows = conn.query("SELECT sessions.profile_id, sessions.local_node_id FROM aurora_transcript_segments segments INNER JOIN aurora_transcript_sessions sessions ON sessions.id = segments.session_id WHERE segments.id = ? LIMIT 1", &[json!(record.id)])?;
+        ensure_existing_row_scope(rows.first(), profile_id, local_node_id)?;
     }
     Ok(())
 }
@@ -1984,7 +3202,7 @@ fn validate_import_document(
     local_node_id: &str,
     current_schema_version: u32,
 ) -> Result<LocalDataExportDocument, AuroraCommandError> {
-    validate_json_safety(&value, 0)?;
+    validate_import_json_safety(&value, 0, ImportJsonSafetyPath::Root)?;
     let document: LocalDataExportDocument =
         serde_json::from_value(value).map_err(|error| local_data_error(error.to_string()))?;
     if document.version != 1 {
@@ -2049,6 +3267,20 @@ fn validate_records(
         records.local_audit.iter().map(|record| record.id.as_str()),
         "duplicate_audit_id",
     )?;
+    let transcript_session_ids = require_unique(
+        records
+            .transcript_sessions
+            .iter()
+            .map(|record| record.id.as_str()),
+        "duplicate_transcript_session_id",
+    )?;
+    let _transcript_segment_ids = require_unique(
+        records
+            .transcript_segments
+            .iter()
+            .map(|record| record.id.as_str()),
+        "duplicate_transcript_segment_id",
+    )?;
     let _tool_keys = require_unique(
         records.local_tool_states.iter().map(|record| {
             format!(
@@ -2105,6 +3337,16 @@ fn validate_records(
         )?;
     }
 
+    for record in &records.transcript_sessions {
+        validate_transcript_session(record)?;
+        ensure_scope(
+            profile_id,
+            local_node_id,
+            &record.profile_id,
+            &record.local_node_id,
+        )?;
+    }
+
     let mut message_sequences = HashSet::new();
     for record in &records.messages {
         validate_message_record(record, profile_id, local_node_id)?;
@@ -2113,6 +3355,16 @@ fn validate_records(
         }
         if !message_sequences.insert(format!("{}\0{}", record.conversation_id, record.sequence)) {
             return Err(local_data_error("duplicate_message_sequence"));
+        }
+    }
+    let mut transcript_sequences = HashSet::new();
+    for record in &records.transcript_segments {
+        validate_transcript_segment(record, profile_id, local_node_id)?;
+        if !transcript_session_ids.contains(&record.session_id) {
+            return Err(local_data_error("transcript_segment_session_missing"));
+        }
+        if !transcript_sequences.insert(format!("{}\0{}", record.session_id, record.sequence)) {
+            return Err(local_data_error("duplicate_transcript_segment_sequence"));
         }
     }
     Ok(())
@@ -2260,6 +3512,8 @@ fn validate_record_counts(document: &LocalDataExportDocument) -> Result<(), Auro
         || counts.local_tool_states != document.records.local_tool_states.len()
         || counts.peer_grant_metadata != document.records.peer_grant_metadata.len()
         || counts.local_audit != document.records.local_audit.len()
+        || counts.transcript_sessions != document.records.transcript_sessions.len()
+        || counts.transcript_segments != document.records.transcript_segments.len()
     {
         return Err(local_data_error("record_count_mismatch"));
     }
@@ -2284,6 +3538,14 @@ fn validate_collection_hashes(
         "hash.peerGrantMetadata",
     )?;
     validate_hash(&document.collection_hashes.local_audit, "hash.localAudit")?;
+    validate_hash(
+        &document.collection_hashes.transcript_sessions,
+        "hash.transcriptSessions",
+    )?;
+    validate_hash(
+        &document.collection_hashes.transcript_segments,
+        "hash.transcriptSegments",
+    )?;
     let records = serde_json::to_value(&document.records)
         .map_err(|error| local_data_error(error.to_string()))?;
     let hashes = collection_hashes(&records)?;
@@ -2295,6 +3557,8 @@ fn validate_collection_hashes(
             "localToolStates": document.collection_hashes.local_tool_states,
             "peerGrantMetadata": document.collection_hashes.peer_grant_metadata,
             "localAudit": document.collection_hashes.local_audit,
+            "transcriptSessions": document.collection_hashes.transcript_sessions,
+            "transcriptSegments": document.collection_hashes.transcript_segments,
         })
     {
         return Err(local_data_error("collection_hash_mismatch"));
@@ -2311,6 +3575,8 @@ fn validate_collection_sizes(
         || records.local_tool_states.len() > MAX_LOCAL_TOOL_STATES
         || records.peer_grant_metadata.len() > MAX_PEER_GRANT_METADATA
         || records.local_audit.len() > MAX_LOCAL_AUDIT
+        || records.transcript_sessions.len() > MAX_TRANSCRIPT_SESSIONS
+        || records.transcript_segments.len() > MAX_TRANSCRIPT_SEGMENTS
     {
         return Err(local_data_error("collection_size_limit"));
     }
@@ -2421,11 +3687,49 @@ fn validate_json_object(value: &Value, context: &str) -> Result<(), AuroraComman
 }
 
 fn validate_json_safety(value: &Value, depth: usize) -> Result<(), AuroraCommandError> {
+    validate_json_safety_at(value, depth, ImportJsonSafetyPath::Other)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ImportJsonSafetyPath {
+    Root,
+    Records,
+    TranscriptSegments,
+    TranscriptSegment,
+    Confidence,
+    Other,
+}
+
+fn validate_import_json_safety(
+    value: &Value,
+    depth: usize,
+    path: ImportJsonSafetyPath,
+) -> Result<(), AuroraCommandError> {
+    validate_json_safety_at(value, depth, path)
+}
+
+fn validate_json_safety_at(
+    value: &Value,
+    depth: usize,
+    path: ImportJsonSafetyPath,
+) -> Result<(), AuroraCommandError> {
     if depth > MAX_JSON_DEPTH {
         return Err(local_data_error("json max depth"));
     }
     match value {
         Value::Null | Value::Bool(_) => Ok(()),
+        Value::Number(number) if path == ImportJsonSafetyPath::Confidence => {
+            let confidence = number
+                .as_f64()
+                .ok_or_else(|| local_data_error("invalid_transcript_confidence"))?;
+            if !confidence.is_finite()
+                || !(0.0..=1.0).contains(&confidence)
+                || (confidence == 0.0 && confidence.is_sign_negative())
+            {
+                return Err(local_data_error("invalid_transcript_confidence"));
+            }
+            Ok(())
+        }
         Value::Number(number) => validate_json_number(number, "json"),
         Value::String(value) => {
             if value.len() > 2 * 1024 * 1024 {
@@ -2438,7 +3742,12 @@ fn validate_json_safety(value: &Value, depth: usize) -> Result<(), AuroraCommand
                 return Err(local_data_error("json array too large"));
             }
             for value in values {
-                validate_json_safety(value, depth + 1)?;
+                let child_path = if path == ImportJsonSafetyPath::TranscriptSegments {
+                    ImportJsonSafetyPath::TranscriptSegment
+                } else {
+                    ImportJsonSafetyPath::Other
+                };
+                validate_json_safety_at(value, depth + 1, child_path)?;
             }
             Ok(())
         }
@@ -2450,7 +3759,17 @@ fn validate_json_safety(value: &Value, depth: usize) -> Result<(), AuroraCommand
                 if key.is_empty() || key.len() > 256 {
                     return Err(local_data_error("json key invalid"));
                 }
-                validate_json_safety(value, depth + 1)?;
+                let child_path = match (path, key.as_str()) {
+                    (ImportJsonSafetyPath::Root, "records") => ImportJsonSafetyPath::Records,
+                    (ImportJsonSafetyPath::Records, "transcriptSegments") => {
+                        ImportJsonSafetyPath::TranscriptSegments
+                    }
+                    (ImportJsonSafetyPath::TranscriptSegment, "confidence") => {
+                        ImportJsonSafetyPath::Confidence
+                    }
+                    _ => ImportJsonSafetyPath::Other,
+                };
+                validate_json_safety_at(value, depth + 1, child_path)?;
             }
             Ok(())
         }
@@ -2620,6 +3939,131 @@ where
     Ok(seen)
 }
 
+fn validate_id_set(
+    ids: Option<Vec<String>>,
+    context: &str,
+) -> Result<Option<Vec<String>>, AuroraCommandError> {
+    let Some(ids) = ids else {
+        return Ok(None);
+    };
+    if ids.len() > 500 {
+        return Err(local_data_error(format!("{context} too large")));
+    }
+    for id in &ids {
+        validate_id(id, &format!("{context}[]"))?;
+    }
+    let mut unique = Vec::with_capacity(ids.len());
+    let mut seen = HashSet::new();
+    for id in ids {
+        if seen.insert(id.clone()) {
+            unique.push(id);
+        }
+    }
+    Ok(Some(unique))
+}
+
+fn id_filter(ids: &[String], column: &str) -> (String, Vec<Value>) {
+    let placeholders = std::iter::repeat("?")
+        .take(ids.len())
+        .collect::<Vec<_>>()
+        .join(", ");
+    (
+        format!(" AND {column} IN ({placeholders})"),
+        ids.iter().map(|id| json!(id)).collect(),
+    )
+}
+
+fn conversation_list_sql(
+    profile_id: &str,
+    local_node_id: &str,
+    options: Option<ConversationListQuery>,
+) -> Result<(String, Vec<Value>), AuroraCommandError> {
+    let mut sql = "SELECT id, profile_id, local_node_id, title_envelope_json, created_at_ms, updated_at_ms, archived_at_ms FROM aurora_conversations WHERE profile_id = ? AND local_node_id = ?".to_string();
+    let mut params = vec![json!(profile_id), json!(local_node_id)];
+    let bounded = options.as_ref().and_then(|query| query.limit).is_some();
+    if let Some(query) = options.as_ref() {
+        if let Some(limit) = query.limit {
+            if limit == 0 || limit > 501 {
+                return Err(local_data_error("conversation limit invalid"));
+            }
+        }
+        if query.include_archived == Some(false) {
+            sql.push_str(" AND archived_at_ms IS NULL");
+        }
+        if let Some(cursor) = query.cursor.as_ref() {
+            validate_safe_int(cursor.updated_at_ms, "conversation.cursor.updatedAtMs")?;
+            validate_id(&cursor.id, "conversation.cursor.id")?;
+            sql.push_str(" AND (updated_at_ms < ? OR (updated_at_ms = ? AND id > ?))");
+            params.extend([
+                json!(cursor.updated_at_ms),
+                json!(cursor.updated_at_ms),
+                json!(cursor.id),
+            ]);
+        }
+        sql.push_str(" ORDER BY updated_at_ms DESC, id COLLATE BINARY ASC");
+        if let Some(limit) = query.limit {
+            if bounded {
+                sql.push_str(" LIMIT ?");
+                params.push(json!(limit as i64));
+            }
+        }
+    } else {
+        sql.push_str(" ORDER BY updated_at_ms DESC, id COLLATE BINARY ASC");
+    }
+    Ok((sql, params))
+}
+
+fn message_list_sql(
+    profile_id: &str,
+    local_node_id: &str,
+    conversation_id: &str,
+    options: Option<MessageListQuery>,
+) -> Result<(String, Vec<Value>), AuroraCommandError> {
+    let mut sql = "SELECT m.id, m.conversation_id, m.sequence, m.role, m.content_envelope_json, m.tool_envelope_json, m.status, m.created_at_ms FROM aurora_messages m INNER JOIN aurora_conversations c ON c.id = m.conversation_id WHERE c.profile_id = ? AND c.local_node_id = ? AND m.conversation_id = ?".to_string();
+    let mut params = vec![
+        json!(profile_id),
+        json!(local_node_id),
+        json!(conversation_id),
+    ];
+    let direction = options
+        .as_ref()
+        .and_then(|q| q.direction.as_deref())
+        .unwrap_or("asc");
+    if let Some(limit) = options.as_ref().and_then(|q| q.limit) {
+        if limit == 0 || limit > 2001 {
+            return Err(local_data_error("message limit invalid"));
+        }
+    }
+    if direction != "asc" && direction != "desc" {
+        return Err(local_data_error("message direction invalid"));
+    }
+    if let Some(query) = options.as_ref() {
+        if query.before_sequence.is_some() && query.after_sequence.is_some() {
+            return Err(local_data_error("message bounds are ambiguous"));
+        }
+        if let Some(sequence) = query.before_sequence {
+            validate_safe_int(sequence, "message.beforeSequence")?;
+            sql.push_str(" AND m.sequence < ?");
+            params.push(json!(sequence));
+        }
+        if let Some(sequence) = query.after_sequence {
+            validate_safe_int(sequence, "message.afterSequence")?;
+            sql.push_str(" AND m.sequence > ?");
+            params.push(json!(sequence));
+        }
+    }
+    sql.push_str(if direction == "desc" {
+        " ORDER BY m.sequence DESC, m.id COLLATE BINARY ASC"
+    } else {
+        " ORDER BY m.sequence ASC, m.id COLLATE BINARY ASC"
+    });
+    if let Some(limit) = options.as_ref().and_then(|q| q.limit) {
+        sql.push_str(" LIMIT ?");
+        params.push(json!(limit as i64));
+    }
+    Ok((sql, params))
+}
+
 fn conversation_from_row(row: Value) -> Result<Value, AuroraCommandError> {
     Ok(json!({
         "id": row_string(&row, "id")?,
@@ -2715,6 +4159,8 @@ fn record_counts(records: &Value) -> Value {
         "localToolStates": records_array_len(records, "localToolStates"),
         "peerGrantMetadata": records_array_len(records, "peerGrantMetadata"),
         "localAudit": records_array_len(records, "localAudit"),
+        "transcriptSessions": records_array_len(records, "transcriptSessions"),
+        "transcriptSegments": records_array_len(records, "transcriptSegments"),
     })
 }
 
@@ -2726,7 +4172,20 @@ fn collection_hashes(records: &Value) -> Result<Value, AuroraCommandError> {
         "localToolStates": hash_json(&sorted_collection(records, "localToolStates", compare_local_tool_state))?,
         "peerGrantMetadata": hash_json(&sorted_collection(records, "peerGrantMetadata", compare_by_grant_id))?,
         "localAudit": hash_json(&sorted_collection(records, "localAudit", compare_audit))?,
+        "transcriptSessions": hash_json(&sorted_collection(records, "transcriptSessions", compare_by_id))?,
+        "transcriptSegments": hash_transcript_segments(&sorted_collection(records, "transcriptSegments", compare_transcript_segments))?,
     }))
+}
+
+fn compare_transcript_segments(a: &Value, b: &Value) -> std::cmp::Ordering {
+    value_string(a, "sessionId")
+        .cmp(&value_string(b, "sessionId"))
+        .then_with(|| value_i64(a, "sequence").cmp(&value_i64(b, "sequence")))
+        .then_with(|| value_string(a, "id").cmp(&value_string(b, "id")))
+}
+
+fn empty_collection_hash() -> String {
+    "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945".to_owned()
 }
 
 fn sorted_collection(
@@ -2787,6 +4246,101 @@ fn hash_json(value: &Value) -> Result<String, AuroraCommandError> {
     let mut hasher = Sha256::new();
     hasher.update(canonical_json(value)?);
     Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn hash_transcript_segments(value: &Value) -> Result<String, AuroraCommandError> {
+    let mut hasher = Sha256::new();
+    hasher.update(canonical_transcript_segments(value)?);
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn canonical_transcript_segments(value: &Value) -> Result<String, AuroraCommandError> {
+    let records = value
+        .as_array()
+        .ok_or_else(|| local_data_error("transcript segments must be an array"))?;
+    let mut result = String::from("[");
+    for (index, record) in records.iter().enumerate() {
+        if index > 0 {
+            result.push(',');
+        }
+        let object = record
+            .as_object()
+            .ok_or_else(|| local_data_error("transcript segment must be an object"))?;
+        let mut keys = object.keys().collect::<Vec<_>>();
+        keys.sort();
+        result.push('{');
+        for (key_index, key) in keys.iter().enumerate() {
+            if key_index > 0 {
+                result.push(',');
+            }
+            result.push_str(
+                &serde_json::to_string(key).map_err(|error| local_data_error(error.to_string()))?,
+            );
+            result.push(':');
+            let field = &object[*key];
+            if key.as_str() == "confidence" {
+                if let Value::Number(number) = field {
+                    result.push_str(&js_confidence_number(number)?);
+                } else {
+                    result.push_str(&canonical_json(field)?);
+                }
+            } else {
+                result.push_str(&canonical_json(field)?);
+            }
+        }
+        result.push('}');
+    }
+    result.push(']');
+    Ok(result)
+}
+
+fn js_confidence_number(number: &Number) -> Result<String, AuroraCommandError> {
+    let value = number
+        .as_f64()
+        .ok_or_else(|| local_data_error("invalid_transcript_confidence"))?;
+    if !value.is_finite()
+        || !(0.0..=1.0).contains(&value)
+        || (value == 0.0 && value.is_sign_negative())
+    {
+        return Err(local_data_error("invalid_transcript_confidence"));
+    }
+    if value == 0.0 {
+        return Ok("0".to_owned());
+    }
+    if value == 1.0 {
+        return Ok("1".to_owned());
+    }
+
+    let scientific = format!("{:e}", value);
+    let (mantissa, exponent) = scientific
+        .split_once('e')
+        .ok_or_else(|| local_data_error("invalid_transcript_confidence"))?;
+    let mantissa = mantissa.trim_end_matches(".0");
+    let exponent = exponent
+        .parse::<i32>()
+        .map_err(|_| local_data_error("invalid_transcript_confidence"))?;
+    if value < 1e-6 {
+        return Ok(format!("{}e{}", mantissa, exponent));
+    }
+
+    let decimal_index = mantissa.find('.').unwrap_or(mantissa.len()) as i32 + exponent;
+    let digits = mantissa.replace('.', "");
+    if decimal_index <= 0 {
+        Ok(format!(
+            "0.{}{}",
+            "0".repeat((-decimal_index) as usize),
+            digits
+        ))
+    } else if decimal_index as usize >= digits.len() {
+        Ok(format!(
+            "{}{}",
+            digits,
+            "0".repeat(decimal_index as usize - digits.len())
+        ))
+    } else {
+        let (whole, fraction) = digits.split_at(decimal_index as usize);
+        Ok(format!("{}.{}", whole, fraction))
+    }
 }
 
 fn canonical_json(value: &Value) -> Result<String, AuroraCommandError> {
@@ -2895,6 +4449,16 @@ fn local_data_error(message: impl Into<String>) -> AuroraCommandError {
     AuroraCommandError::LocalData(message.into())
 }
 
+fn local_data_error_reason(
+    message: impl Into<String>,
+    reason: crate::LocalDataReasonCode,
+) -> AuroraCommandError {
+    AuroraCommandError::LocalDataReason {
+        message: message.into(),
+        reason,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2947,6 +4511,7 @@ mod tests {
             LocalDataRepositoryOperation::ConversationsListConversations {
                 profile_id: "profile-1".to_string(),
                 local_node_id: "node-1".to_string(),
+                options: None,
             },
         )
         .unwrap();
@@ -2959,6 +4524,7 @@ mod tests {
                 profile_id: "profile-1".to_string(),
                 local_node_id: "node-1".to_string(),
                 conversation_id: "voice-conversation-1".to_string(),
+                options: None,
             },
         )
         .unwrap();
@@ -2966,6 +4532,237 @@ mod tests {
         assert_eq!(messages[0]["id"], json!("voice-user-1"));
         assert_eq!(messages[1]["id"], json!("voice-user-2"));
         assert_eq!(messages[2]["id"], json!("voice-assistant-2"));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn history_native_rejects_cross_conversation_message_id_and_paginates() {
+        let (dir, path) = test_db_path("history-pagination");
+        open_local_data_at_path(path.clone(), "profile-1", "node-1").unwrap();
+        let conn = SqliteConnection::open(path).unwrap();
+        for (id, updated, archived) in [
+            ("conversation-a", 10, None),
+            ("conversation-b", 10, None),
+            ("conversation-c", 9, Some(8)),
+        ] {
+            let mut record = test_conversation_for("profile-1", "node-1", id);
+            record.updated_at_ms = updated;
+            record.archived_at_ms = archived;
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::ConversationsUpsertConversation { record },
+            )
+            .unwrap();
+        }
+        for (id, conversation_id, sequence) in [
+            ("message-a1", "conversation-a", 1),
+            ("message-a2", "conversation-a", 2),
+            ("message-b1", "conversation-b", 1),
+        ] {
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::ConversationsAppendMessage {
+                    record: test_message_for_with_sequence(id, conversation_id, sequence),
+                },
+            )
+            .unwrap();
+        }
+        let ordered = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListMessages {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_id: "conversation-a".into(),
+                options: Some(MessageListQuery {
+                    limit: None,
+                    before_sequence: None,
+                    after_sequence: None,
+                    direction: Some("desc".into()),
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            ordered
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|row| row["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["message-a2", "message-a1"]
+        );
+        let before = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListMessages {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_id: "conversation-a".into(),
+                options: Some(MessageListQuery {
+                    limit: Some(1),
+                    before_sequence: Some(2),
+                    after_sequence: None,
+                    direction: Some("asc".into()),
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(before.as_array().unwrap().len(), 1);
+        assert_eq!(before[0]["id"], json!("message-a1"));
+        let after = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListMessages {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_id: "conversation-a".into(),
+                options: Some(MessageListQuery {
+                    limit: None,
+                    before_sequence: None,
+                    after_sequence: Some(1),
+                    direction: Some("asc".into()),
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(after.as_array().unwrap().len(), 1);
+        let conversations = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListConversations {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                options: Some(ConversationListQuery {
+                    limit: Some(1),
+                    include_archived: Some(false),
+                    cursor: None,
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(conversations.as_array().unwrap().len(), 1);
+        assert_eq!(conversations[0]["id"], json!("conversation-a"));
+        let next = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListConversations {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                options: Some(ConversationListQuery {
+                    limit: None,
+                    include_archived: Some(false),
+                    cursor: Some(ConversationCursor {
+                        updated_at_ms: 10,
+                        id: "conversation-a".into(),
+                    }),
+                }),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            next.as_array()
+                .unwrap()
+                .iter()
+                .map(|row| row["id"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["conversation-b"]
+        );
+        let empty = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListMessageCounts {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_ids: Some(Vec::new()),
+            },
+        )
+        .unwrap();
+        assert_eq!(empty, json!({}));
+        let deduped = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsListMessageCounts {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_ids: Some(vec!["conversation-a".into(), "conversation-a".into()]),
+            },
+        )
+        .unwrap();
+        assert_eq!(deduped["conversation-a"], json!(2));
+        let latest = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsGetLatestMessageSequence {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_id: "conversation-a".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(latest, json!(2));
+        let missing_latest = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsGetLatestMessageSequence {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                conversation_id: "conversation-c".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(missing_latest, Value::Null);
+        let update = test_message_for_with_sequence("message-a1", "conversation-a", 3);
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsAppendMessage { record: update },
+        )
+        .unwrap();
+        let duplicate_sequence = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: test_message_for_with_sequence("message-new", "conversation-a", 2),
+            },
+        );
+        assert!(matches!(
+            duplicate_sequence,
+            Err(AuroraCommandError::LocalDataReason {
+                reason: crate::LocalDataReasonCode::DuplicateMessageSequence,
+                ..
+            })
+        ));
+        let duplicate_id = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::ConversationsAppendMessage {
+                record: test_message_for_with_sequence("message-a1", "conversation-b", 3),
+            },
+        );
+        assert!(matches!(
+            duplicate_id,
+            Err(AuroraCommandError::LocalDataReason {
+                reason: crate::LocalDataReasonCode::DuplicateMessageId,
+                ..
+            })
+        ));
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -3055,6 +4852,259 @@ mod tests {
     }
 
     #[test]
+    fn native_transcript_writer_survives_renderer_close_and_refuses_a_cleared_database() {
+        let (dir, path) = test_db_path("native-transcript-owner");
+        let state = LocalDataCommandState::default();
+        let mut record = test_transcript_session("native-recording");
+        record.expires_at_ms = None;
+        state
+            .native_transcript_write_at_path(
+                path.clone(),
+                "profile-1",
+                "node-1",
+                NativeTranscriptArchiveWrite::CreateSession { record },
+            )
+            .unwrap();
+        {
+            let mut renderer = state.inner.lock().unwrap();
+            renderer.profile_id = None;
+            renderer.local_node_id = None;
+            renderer.scope_generation += 1;
+        }
+        let segment = test_transcript_segment("native-segment", "native-recording", 0);
+        let appended = state
+            .native_transcript_write_at_path(
+                path.clone(),
+                "profile-1",
+                "node-1",
+                NativeTranscriptArchiveWrite::AppendSegment {
+                    record: segment.clone(),
+                },
+            )
+            .unwrap();
+        assert_eq!(appended["appended"], json!(true));
+        state
+            .native_transcript_write_at_path(
+                path.clone(),
+                "profile-1",
+                "node-1",
+                NativeTranscriptArchiveWrite::FinalizeSession {
+                    input: FinalizeTranscriptSessionInput {
+                        session_id: "native-recording".into(),
+                        lifecycle: "completed".into(),
+                        ended_at_ms: 20,
+                        terminal_reason: "user_stop".into(),
+                    },
+                },
+            )
+            .unwrap();
+        std::fs::remove_file(&path).unwrap();
+        assert!(state
+            .native_transcript_write_at_path(
+                path.clone(),
+                "profile-1",
+                "node-1",
+                NativeTranscriptArchiveWrite::AppendSegment { record: segment },
+            )
+            .is_err());
+        assert!(!path.exists());
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn native_transcript_restart_recovers_once_without_interrupting_a_live_session() {
+        let (dir, path) = test_db_path("native-transcript-recovery");
+        let create = |state: &LocalDataCommandState, id: &str| {
+            let mut record = test_transcript_session(id);
+            record.expires_at_ms = None;
+            state
+                .native_transcript_write_at_path(
+                    path.clone(),
+                    "profile-1",
+                    "node-1",
+                    NativeTranscriptArchiveWrite::CreateSession { record },
+                )
+                .unwrap()
+        };
+        create(&LocalDataCommandState::default(), "abandoned-recording");
+        let restarted = LocalDataCommandState::default();
+        create(&restarted, "live-recording");
+        create(&restarted, "another-recording");
+        let conn = SqliteConnection::open(path.clone()).unwrap();
+        let read = |id: &str| {
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::TranscriptsGetSession {
+                    profile_id: "profile-1".into(),
+                    local_node_id: "node-1".into(),
+                    session_id: id.into(),
+                },
+            )
+            .unwrap()
+        };
+        assert_eq!(
+            read("abandoned-recording")["lifecycle"],
+            json!("interrupted")
+        );
+        assert_eq!(read("live-recording")["lifecycle"], json!("active"));
+        drop(conn);
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn transcript_archive_replay_terminal_recovery_and_delete_are_scoped() {
+        let conn = migrated_test_connection();
+        let created = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsCreateSession {
+                record: test_transcript_session("transcript-1"),
+            },
+        )
+        .unwrap();
+        assert_eq!(created["lifecycle"], json!("active"));
+        let mut segment = test_transcript_segment("segment-1", "transcript-1", 0);
+        segment.confidence = Some(0.75);
+        let appended = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsAppendSegment {
+                record: segment.clone(),
+            },
+        )
+        .unwrap();
+        assert_eq!(appended["appended"], json!(true));
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsFinalizeSession {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                input: FinalizeTranscriptSessionInput {
+                    session_id: "transcript-1".into(),
+                    lifecycle: "completed".into(),
+                    ended_at_ms: 20,
+                    terminal_reason: "finished".into(),
+                },
+            },
+        )
+        .unwrap();
+        let replay = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsAppendSegment {
+                record: segment.clone(),
+            },
+        )
+        .unwrap();
+        assert_eq!(replay, json!({ "appended": false, "record": segment }));
+        let late_segment = test_transcript_segment("segment-2", "transcript-1", 1);
+        assert!(run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsAppendSegment {
+                record: late_segment
+            },
+        )
+        .is_err());
+
+        run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsCreateSession {
+                record: test_transcript_session("transcript-recovery"),
+            },
+        )
+        .unwrap();
+        let recovered = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsRecoverActiveSessions {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                now_ms: 30,
+                terminal_reason: None,
+            },
+        )
+        .unwrap();
+        assert_eq!(recovered, json!({ "interrupted": 1 }));
+        let recovered_session = run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsGetSession {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                session_id: "transcript-recovery".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(recovered_session["lifecycle"], json!("interrupted"));
+        assert_eq!(
+            recovered_session["terminalReason"],
+            json!("process_restart")
+        );
+        let mut transfer = valid_import_document_value();
+        transfer["records"]["transcriptSessions"] = json!([run_repository_operation(
+            &conn,
+            "profile-1",
+            "node-1",
+            LocalDataRepositoryOperation::TranscriptsGetSession {
+                profile_id: "profile-1".into(),
+                local_node_id: "node-1".into(),
+                session_id: "transcript-1".into()
+            }
+        )
+        .unwrap()]);
+        let mut canonical_one =
+            test_transcript_segment("segment-one-confidence", "transcript-1", 1);
+        canonical_one.confidence = Some(1.0);
+        let canonical_one_value = json!([canonical_one]);
+        let canonical_one_json = canonical_transcript_segments(&canonical_one_value).unwrap();
+        assert!(canonical_one_json.contains("\"confidence\":1"));
+        assert!(!canonical_one_json.contains("\"confidence\":1.0"));
+        transfer["records"]["transcriptSegments"] = json!([segment, canonical_one_value[0]]);
+        refresh_counts_and_hashes(&mut transfer);
+        let document = validate_import_document(
+            transfer,
+            "profile-1",
+            "node-1",
+            generated::local_data_migrations::LOCAL_DATA_LATEST_VERSION,
+        )
+        .unwrap();
+        import_records(&conn, "profile-1", "node-1", &document).unwrap();
+        let exported = export_records(&conn, "profile-1", "node-1").unwrap();
+        assert_eq!(exported["transcriptSegments"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            collection_hashes(&exported).unwrap()["transcriptSegments"],
+            json!(document.collection_hashes.transcript_segments)
+        );
+        assert_eq!(
+            run_repository_operation(
+                &conn,
+                "profile-1",
+                "node-1",
+                LocalDataRepositoryOperation::TranscriptsDeleteSession {
+                    profile_id: "profile-1".into(),
+                    local_node_id: "node-1".into(),
+                    session_id: "transcript-1".into()
+                }
+            )
+            .unwrap(),
+            json!({ "deleted": true, "deletedSegments": 2 })
+        );
+    }
+
+    #[test]
     fn transaction_ids_are_server_owned_and_forgery_checked() {
         let first = new_transaction_id().unwrap();
         let second = new_transaction_id().unwrap();
@@ -3071,6 +5121,8 @@ mod tests {
                 tx_id: first.clone(),
                 conn,
             }),
+            recovered_transcript_scopes: HashSet::new(),
+            scope_generation: 0,
         };
         assert!(
             take_active_transaction(&mut state, "tx-00000000000000000000000000000000").is_err()
@@ -3289,6 +5341,8 @@ mod tests {
                 "localToolStates": 1,
                 "peerGrantMetadata": 1,
                 "localAudit": 1,
+                "transcriptSessions": 0,
+                "transcriptSegments": 0,
             })
         );
     }
@@ -3426,10 +5480,12 @@ mod tests {
                 profile_id,
                 local_node_id,
                 conversation_id,
+                options,
             } => {
                 assert_eq!(profile_id, "profile-1");
                 assert_eq!(local_node_id, "node-1");
                 assert_eq!(conversation_id, "conversation-1");
+                assert!(options.is_none());
             }
             _ => panic!("list messages payload deserialized to the wrong operation"),
         }
@@ -3523,6 +5579,8 @@ mod tests {
                 "localToolStates": 0,
                 "peerGrantMetadata": 0,
                 "localAudit": 0,
+                "transcriptSessions": 0,
+                "transcriptSegments": 0,
             })
         );
         assert_eq!(
@@ -3911,6 +5969,16 @@ mod tests {
         serde_json::from_value(test_message_value(id, conversation_id)).unwrap()
     }
 
+    fn test_message_for_with_sequence(
+        id: &str,
+        conversation_id: &str,
+        sequence: i64,
+    ) -> ConversationMessageRecord {
+        let mut message = test_message_for(id, conversation_id);
+        message.sequence = sequence;
+        message
+    }
+
     fn test_memory_for(profile_id: &str, local_node_id: &str, id: &str) -> LightweightMemoryRecord {
         let mut value = test_memory_value(id);
         value["profileId"] = json!(profile_id);
@@ -3947,6 +6015,47 @@ mod tests {
         value["profileId"] = json!(profile_id);
         value["localNodeId"] = json!(local_node_id);
         serde_json::from_value(value).unwrap()
+    }
+
+    fn test_transcript_session(id: &str) -> TranscriptSessionRecord {
+        TranscriptSessionRecord {
+            id: id.to_owned(),
+            profile_id: "profile-1".to_owned(),
+            local_node_id: "node-1".to_owned(),
+            capture_mode: "ambient".to_owned(),
+            created_at_ms: 10,
+            started_at_ms: 10,
+            ended_at_ms: None,
+            lifecycle: "active".to_owned(),
+            terminal_reason: None,
+            expires_at_ms: Some(100),
+            language: Some("en".to_owned()),
+            model_provenance: TranscriptModelProvenance {
+                provider: Some("local".to_owned()),
+                model_id: Some("stt-small".to_owned()),
+                version: None,
+            },
+            diarization_state: "not_requested".to_owned(),
+        }
+    }
+
+    fn test_transcript_segment(
+        id: &str,
+        session_id: &str,
+        sequence: i64,
+    ) -> TranscriptSegmentRecord {
+        TranscriptSegmentRecord {
+            id: id.to_owned(),
+            session_id: session_id.to_owned(),
+            sequence,
+            start_at_ms: 11 + sequence,
+            end_at_ms: 12 + sequence,
+            text_envelope: envelope_value(),
+            confidence: Some(0.8),
+            speaker_id: None,
+            speaker_label: None,
+            created_at_ms: 13 + sequence,
+        }
     }
 
     fn test_conversation_value(id: &str) -> Value {

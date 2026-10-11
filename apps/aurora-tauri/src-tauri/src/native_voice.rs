@@ -3,13 +3,20 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[cfg(desktop)]
+use crate::native_event_hub::{global_native_event_hub, voice_turn_event};
+
+#[cfg(desktop)]
 use {
     async_trait::async_trait,
+    aurora_voice_core::node_policy::{
+        NullableField, Omitted, RoutingFallback, RoutingPreference, SpeechNetworkKind,
+        SpeechStageConfig, SpeechStages,
+    },
     aurora_voice_core::{
         AudioInput, CancellationToken, CaptureStartReason, Generation, PcmFrame, RedactedSnapshot,
-        RouteRevision, RuntimeEvent, RuntimeEventSink, TimestampMicros, TransitionReason,
-        VoiceCaptureLease, VoiceCoreError, VoiceRuntime, VoiceState, WakeKwsProvider,
-        WakeOrchestrationConfig, WakeVadProvider,
+        RouteRevision, RuntimeEvent, RuntimeEventSink, SpeechLifecycleEventV1, TimestampMicros,
+        TransitionReason, VoiceCaptureLease, VoiceCleanupReport, VoiceCoreError, VoiceRuntime,
+        VoiceState, WakeKwsProvider, WakeOrchestrationConfig, WakeVadProvider,
     },
     aurora_voice_engine::{
         BoundFiniteSttRequest, BoundKwsRequest, BoundStreamSession, BoundTaskRequest,
@@ -24,12 +31,14 @@ use {
     aurora_voice_native::{
         build_installed_kws_provider_from_phrases, build_installed_stt_provider,
         build_installed_tts_provider, build_installed_tts_provider_with_reference,
-        build_installed_vad_provider, CpalAudioInput, CpalAudioOutput, GatewayAuth,
+        build_installed_vad_provider, emit_native_speech_lifecycle,
+        native_speech_lifecycle_observer_enabled, CpalAudioInput, CpalAudioOutput, GatewayAuth,
         MicrophoneAudioPolicy, NativeAudioConfig, NativeCaptureConfig, NativeCaptureControl,
         NativeGatewayCaptureGrant, NativeGatewayCaptureHandoff, NativeGatewayCaptureHandoffConfig,
         NativeGatewayFiniteStt, NativeGatewayFiniteSttConfig, NativeGatewayTransport,
-        NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, SpeechPackManager,
-        SpeechPackManagerConfig, TransportLimits, NATIVE_WAKE_KWS_THRESHOLD,
+        NativeGatewayTtsConfig, NativeGatewayTtsSynthesizer, NativeMeshFiniteStt,
+        NativeMeshFiniteSttConfig, NativeMeshTtsConfig, NativeMeshTtsSynthesizer,
+        SpeechPackManager, SpeechPackManagerConfig, TransportLimits, NATIVE_WAKE_KWS_THRESHOLD,
     },
     aurora_voice_sherpa::{
         NativeKwsBackend, NativeTtsReferenceAudio, NativeVadBackend, SherpaKwsPhraseInput,
@@ -210,7 +219,7 @@ impl NativeVoiceCommandError {
 #[derive(Clone, Default)]
 pub struct NativeVoiceState {
     #[cfg(desktop)]
-    inner: Arc<Mutex<Option<NativeVoiceHandle>>>,
+    inner: Arc<Mutex<NativeVoiceLifecycle>>,
     #[cfg(not(desktop))]
     inner: Arc<Mutex<Option<()>>>,
 }
@@ -224,20 +233,231 @@ impl NativeVoiceState {
         #[cfg(desktop)]
         {
             if let Ok(mut guard) = self.inner.lock() {
-                if guard.is_none() {
-                    *guard = Some(NativeVoiceHandle::spawn(app, sidecar));
+                if matches!(*guard, NativeVoiceLifecycle::Uninitialized) {
+                    *guard = NativeVoiceLifecycle::Running(NativeVoiceHandle::spawn(app, sidecar));
                 }
             }
         }
     }
 
-    pub fn stop(&self) {
+    /// Stop the owned desktop actor and await its local task and thread joins.
+    ///
+    /// On targets without the desktop actor there is no native voice thread to
+    /// stop, so this returns success without claiming platform capture status.
+    pub async fn stop(&self) -> Result<(), NativeVoiceStopError> {
         #[cfg(desktop)]
-        if let Ok(mut guard) = self.inner.lock() {
-            if let Some(handle) = guard.take() {
-                handle.stop();
+        {
+            self.stop_with_timeout(HOST_STOP_WAIT_TIMEOUT).await
+        }
+        #[cfg(not(desktop))]
+        {
+            Ok(())
+        }
+    }
+
+    /// Cancel and drain the current voice turn without shutting down the actor.
+    ///
+    /// Profile replacement uses this to release the old session while keeping
+    /// the native voice service available for the newly installed profile.
+    pub async fn cancel_and_drain_for_profile_change(&self) -> Result<(), NativeVoiceStopError> {
+        #[cfg(desktop)]
+        {
+            let (reply, response) = oneshot::channel();
+            {
+                let guard = self
+                    .inner
+                    .lock()
+                    .map_err(|_| NativeVoiceStopError::Unavailable)?;
+                let NativeVoiceLifecycle::Running(handle) = &*guard else {
+                    return match &*guard {
+                        NativeVoiceLifecycle::Uninitialized => Ok(()),
+                        NativeVoiceLifecycle::Stopping(_) | NativeVoiceLifecycle::Stopped(_) => {
+                            Err(NativeVoiceStopError::Unavailable)
+                        }
+                        NativeVoiceLifecycle::Running(_) => unreachable!(),
+                    };
+                };
+                handle
+                    .tx
+                    .send(ActorCommand::CancelAndDrainForProfileChange { reply })
+                    .map_err(|_| NativeVoiceStopError::Unavailable)?;
+            }
+            timeout(HOST_STOP_WAIT_TIMEOUT, response)
+                .await
+                .map_err(|_| NativeVoiceStopError::TimedOut)?
+                .map_err(|_| NativeVoiceStopError::Unavailable)?
+        }
+        #[cfg(not(desktop))]
+        {
+            Ok(())
+        }
+    }
+
+    #[cfg(desktop)]
+    async fn stop_with_timeout(&self, wait_timeout: Duration) -> Result<(), NativeVoiceStopError> {
+        #[cfg(desktop)]
+        {
+            let operation = {
+                let mut guard = self
+                    .inner
+                    .lock()
+                    .map_err(|_| NativeVoiceStopError::Unavailable)?;
+                match &*guard {
+                    NativeVoiceLifecycle::Stopping(operation) => Arc::clone(operation),
+                    NativeVoiceLifecycle::Stopped(operation) => {
+                        return operation
+                            .result()
+                            .unwrap_or(Err(NativeVoiceStopError::Unavailable))
+                    }
+                    NativeVoiceLifecycle::Uninitialized => {
+                        return Err(NativeVoiceStopError::Unavailable)
+                    }
+                    NativeVoiceLifecycle::Running(_) => {
+                        let NativeVoiceLifecycle::Running(handle) =
+                            std::mem::replace(&mut *guard, NativeVoiceLifecycle::Uninitialized)
+                        else {
+                            unreachable!("lifecycle checked while locked")
+                        };
+                        let operation = handle.begin_shutdown();
+                        *guard = NativeVoiceLifecycle::Stopping(Arc::clone(&operation));
+                        operation
+                    }
+                }
+            };
+            let result = wait_for_shutdown(&operation, wait_timeout).await;
+            if result != Err(NativeVoiceStopError::TimedOut) {
+                if let Ok(mut guard) = self.inner.lock() {
+                    if matches!(&*guard, NativeVoiceLifecycle::Stopping(current) if Arc::ptr_eq(current, &operation))
+                    {
+                        *guard = NativeVoiceLifecycle::Stopped(Arc::clone(&operation));
+                    }
+                }
+            }
+            if operation.result() == Some(Err(NativeVoiceStopError::TimedOut)) {
+                Err(NativeVoiceStopError::TimedOut)
+            } else {
+                result
             }
         }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NativeVoiceStopError {
+    Unavailable,
+    ShutdownFailed,
+    TimedOut,
+    JoinFailed,
+}
+
+#[cfg(desktop)]
+enum NativeVoiceLifecycle {
+    Uninitialized,
+    Running(NativeVoiceHandle),
+    Stopping(Arc<ShutdownOperation>),
+    Stopped(Arc<ShutdownOperation>),
+}
+
+#[cfg(desktop)]
+impl Default for NativeVoiceLifecycle {
+    fn default() -> Self {
+        Self::Uninitialized
+    }
+}
+
+#[cfg(desktop)]
+struct ShutdownOperation {
+    progress: tokio::sync::Mutex<ShutdownProgress>,
+    // One terminal result wins. A queued timeout must remain visible even
+    // after the retained shutdown job later joins successfully.
+    outcome: std::sync::atomic::AtomicU8,
+}
+
+#[cfg(desktop)]
+struct ShutdownProgress {
+    job: tokio::task::JoinHandle<Result<(), NativeVoiceStopError>>,
+}
+
+#[cfg(desktop)]
+const SHUTDOWN_OUTCOME_RUNNING: u8 = 0;
+#[cfg(desktop)]
+const SHUTDOWN_OUTCOME_OK: u8 = 1;
+#[cfg(desktop)]
+const SHUTDOWN_OUTCOME_FAILED: u8 = 2;
+#[cfg(desktop)]
+const SHUTDOWN_OUTCOME_JOIN_FAILED: u8 = 3;
+#[cfg(desktop)]
+const SHUTDOWN_OUTCOME_TIMED_OUT: u8 = 4;
+
+#[cfg(desktop)]
+impl ShutdownOperation {
+    fn result(&self) -> Option<Result<(), NativeVoiceStopError>> {
+        match self.outcome.load(std::sync::atomic::Ordering::SeqCst) {
+            SHUTDOWN_OUTCOME_RUNNING => None,
+            SHUTDOWN_OUTCOME_OK => Some(Ok(())),
+            SHUTDOWN_OUTCOME_FAILED => Some(Err(NativeVoiceStopError::ShutdownFailed)),
+            SHUTDOWN_OUTCOME_JOIN_FAILED => Some(Err(NativeVoiceStopError::JoinFailed)),
+            SHUTDOWN_OUTCOME_TIMED_OUT => Some(Err(NativeVoiceStopError::TimedOut)),
+            _ => Some(Err(NativeVoiceStopError::JoinFailed)),
+        }
+    }
+
+    fn complete(
+        &self,
+        result: Result<(), NativeVoiceStopError>,
+    ) -> Result<(), NativeVoiceStopError> {
+        let value = match result {
+            Ok(()) => SHUTDOWN_OUTCOME_OK,
+            Err(NativeVoiceStopError::TimedOut) => SHUTDOWN_OUTCOME_TIMED_OUT,
+            Err(NativeVoiceStopError::JoinFailed) => SHUTDOWN_OUTCOME_JOIN_FAILED,
+            Err(NativeVoiceStopError::Unavailable | NativeVoiceStopError::ShutdownFailed) => {
+                SHUTDOWN_OUTCOME_FAILED
+            }
+        };
+        let _ = self.outcome.compare_exchange(
+            SHUTDOWN_OUTCOME_RUNNING,
+            value,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        self.result()
+            .unwrap_or(Err(NativeVoiceStopError::JoinFailed))
+    }
+
+    fn time_out(&self) -> Result<(), NativeVoiceStopError> {
+        let _ = self.outcome.compare_exchange(
+            SHUTDOWN_OUTCOME_RUNNING,
+            SHUTDOWN_OUTCOME_TIMED_OUT,
+            std::sync::atomic::Ordering::SeqCst,
+            std::sync::atomic::Ordering::SeqCst,
+        );
+        self.result().unwrap_or(Err(NativeVoiceStopError::TimedOut))
+    }
+}
+
+#[cfg(desktop)]
+async fn wait_for_shutdown(
+    operation: &Arc<ShutdownOperation>,
+    wait_timeout: Duration,
+) -> Result<(), NativeVoiceStopError> {
+    if let Some(result) = operation.result() {
+        return result;
+    }
+    let joined = timeout(wait_timeout, async {
+        let mut progress = operation.progress.lock().await;
+        if let Some(result) = operation.result() {
+            return result;
+        }
+        let result = match (&mut progress.job).await {
+            Ok(result) => result,
+            Err(_) => Err(NativeVoiceStopError::JoinFailed),
+        };
+        operation.complete(result)
+    })
+    .await;
+    match joined {
+        Ok(result) => result,
+        Err(_) => operation.time_out(),
     }
 }
 
@@ -252,14 +472,31 @@ pub async fn aurora_native_voice_status(
 pub async fn aurora_native_voice_start(
     state: State<'_, NativeVoiceState>,
     request: NativeVoiceStartRequest,
+    policy_runtime: State<'_, super::native_node_config::NativeNodeConfigRuntime>,
 ) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
     #[cfg(desktop)]
     {
-        send_actor(&state, |reply| ActorCommand::Start { request, reply }).await
+        let (_admission_guard, generation, speech_stages, config_revision, profile_document) =
+            policy_runtime
+                .inner()
+                .voice_admission_snapshot()
+                .await
+                .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?;
+        let profile_document =
+            profile_document.ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
+        send_actor(&state, |reply| ActorCommand::Start {
+            request,
+            profile_generation: Some(generation),
+            speech_stages,
+            config_revision,
+            confirmed_profile_document: Some(profile_document),
+            reply,
+        })
+        .await
     }
     #[cfg(not(desktop))]
     {
-        let _ = (state, request);
+        let _ = (state, request, policy_runtime);
         Ok(NativeVoiceStatus::unavailable(UNSUPPORTED_REASON))
     }
 }
@@ -298,6 +535,7 @@ pub async fn aurora_native_voice_cancel(
 
 #[tauri::command]
 pub async fn aurora_native_voice_tray_toggle_e2e(
+    app: AppHandle,
     state: State<'_, NativeVoiceState>,
 ) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
     if !cfg!(all(debug_assertions, feature = "desktop-native-voice-e2e"))
@@ -307,11 +545,11 @@ pub async fn aurora_native_voice_tray_toggle_e2e(
     }
     #[cfg(desktop)]
     {
-        tray_toggle_status(&state).await
+        tray_toggle_status(&app, &state).await
     }
     #[cfg(not(desktop))]
     {
-        let _ = state;
+        let _ = (app, state);
         Ok(NativeVoiceStatus::unavailable(UNSUPPORTED_REASON))
     }
 }
@@ -332,6 +570,7 @@ pub async fn request_status(
 
 #[cfg(desktop)]
 async fn tray_toggle_status(
+    app: &AppHandle,
     state: &NativeVoiceState,
 ) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
     let status = request_status(state).await?;
@@ -347,11 +586,26 @@ async fn tray_toggle_status(
             .await;
         }
     } else if matches!(status.phase, NativeVoicePhase::Idle) {
+        let policy_runtime = app
+            .try_state::<super::native_node_config::NativeNodeConfigRuntime>()
+            .map(|runtime| runtime.inner().clone())
+            .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
+        let (_admission_guard, generation, speech_stages, config_revision, profile_document) =
+            policy_runtime
+                .voice_admission_snapshot()
+                .await
+                .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?;
+        let profile_document =
+            profile_document.ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
         return send_actor(state, |reply| ActorCommand::Start {
             request: NativeVoiceStartRequest {
                 trigger: NativeVoiceTrigger::TrayPushToTalk,
                 remote_audio_consent: false,
             },
+            profile_generation: Some(generation),
+            speech_stages,
+            config_revision,
+            confirmed_profile_document: Some(profile_document),
             reply,
         })
         .await;
@@ -365,8 +619,9 @@ pub fn tray_toggle(app: &AppHandle) {
         return;
     };
     let state = state.inner().clone();
+    let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let _ = tray_toggle_status(&state).await;
+        let _ = tray_toggle_status(&app, &state).await;
     });
 }
 
@@ -377,23 +632,30 @@ async fn send_actor(
         oneshot::Sender<Result<NativeVoiceStatus, NativeVoiceCommandError>>,
     ) -> ActorCommand,
 ) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
-    let tx = state
-        .inner
-        .lock()
-        .ok()
-        .and_then(|guard| guard.as_ref().map(|handle| handle.tx.clone()))
-        .ok_or_else(|| NativeVoiceCommandError::unavailable(UNAVAILABLE_REASON))?;
     let (reply, rx) = oneshot::channel();
-    tx.send(build(reply))
-        .map_err(|_| NativeVoiceCommandError::unavailable(UNAVAILABLE_REASON))?;
+    {
+        let guard = state
+            .inner
+            .lock()
+            .map_err(|_| NativeVoiceCommandError::unavailable(UNAVAILABLE_REASON))?;
+        let NativeVoiceLifecycle::Running(handle) = &*guard else {
+            return Err(NativeVoiceCommandError::unavailable(UNAVAILABLE_REASON));
+        };
+        // Sending while holding the admission lock establishes FIFO ordering
+        // with the one Shutdown command that closes this lifecycle.
+        handle
+            .tx
+            .send(build(reply))
+            .map_err(|_| NativeVoiceCommandError::unavailable(UNAVAILABLE_REASON))?;
+    }
     rx.await
         .map_err(|_| NativeVoiceCommandError::unavailable(UNAVAILABLE_REASON))?
 }
 
 #[cfg(desktop)]
-#[derive(Clone)]
 struct NativeVoiceHandle {
     tx: mpsc::UnboundedSender<ActorCommand>,
+    thread: Option<thread::JoinHandle<()>>,
 }
 
 #[cfg(desktop)]
@@ -402,7 +664,7 @@ impl NativeVoiceHandle {
         let (tx, rx) = mpsc::unbounded_channel();
         let thread_tx = tx.clone();
         let builder = thread::Builder::new().name("aurora-native-voice".to_owned());
-        builder
+        let thread = builder
             .spawn(move || {
                 let runtime = TokioRuntimeBuilder::new_current_thread()
                     .enable_time()
@@ -413,13 +675,56 @@ impl NativeVoiceHandle {
                 local.block_on(&runtime, run_actor(app, sidecar, thread_tx, rx));
             })
             .expect("native voice thread");
-        Self { tx }
+        Self {
+            tx,
+            thread: Some(thread),
+        }
     }
 
-    fn stop(self) {
+    #[cfg(test)]
+    fn with_test_actor(
+        run: impl FnOnce(mpsc::UnboundedReceiver<ActorCommand>) + Send + 'static,
+    ) -> Self {
+        let (tx, rx) = mpsc::unbounded_channel();
+        let thread = thread::Builder::new()
+            .name("aurora-native-voice-test".to_owned())
+            .spawn(move || run(rx))
+            .expect("test actor thread");
+        Self {
+            tx,
+            thread: Some(thread),
+        }
+    }
+
+    fn begin_shutdown(mut self) -> Arc<ShutdownOperation> {
         let (reply, rx) = std::sync::mpsc::channel();
-        let _ = self.tx.send(ActorCommand::Shutdown { reply });
-        let _ = rx.recv_timeout(HOST_STOP_WAIT_TIMEOUT);
+        let sent = self.tx.send(ActorCommand::Shutdown { reply }).is_ok();
+        let thread = self.thread.take();
+        let job = tokio::spawn(async move {
+            let blocking = tokio::task::spawn_blocking(move || {
+                let actor_result = if sent {
+                    rx.recv()
+                        .unwrap_or(Err(NativeVoiceStopError::ShutdownFailed))
+                } else {
+                    Err(NativeVoiceStopError::ShutdownFailed)
+                };
+                let thread_result = match thread {
+                    Some(thread) => thread
+                        .join()
+                        .map(|_| ())
+                        .map_err(|_| NativeVoiceStopError::JoinFailed),
+                    None => Err(NativeVoiceStopError::JoinFailed),
+                };
+                actor_result.and(thread_result)
+            });
+            blocking
+                .await
+                .unwrap_or(Err(NativeVoiceStopError::JoinFailed))
+        });
+        Arc::new(ShutdownOperation {
+            progress: tokio::sync::Mutex::new(ShutdownProgress { job }),
+            outcome: std::sync::atomic::AtomicU8::new(SHUTDOWN_OUTCOME_RUNNING),
+        })
     }
 }
 
@@ -430,6 +735,10 @@ enum ActorCommand {
     },
     Start {
         request: NativeVoiceStartRequest,
+        profile_generation: Option<u64>,
+        speech_stages: Option<SpeechStages>,
+        config_revision: Option<u64>,
+        confirmed_profile_document: Option<String>,
         reply: oneshot::Sender<Result<NativeVoiceStatus, NativeVoiceCommandError>>,
     },
     Finish {
@@ -447,10 +756,12 @@ enum ActorCommand {
     },
     TurnFinished {
         ui_generation: u64,
-        reason_code: Option<&'static str>,
     },
     Shutdown {
-        reply: std::sync::mpsc::Sender<()>,
+        reply: std::sync::mpsc::Sender<Result<(), NativeVoiceStopError>>,
+    },
+    CancelAndDrainForProfileChange {
+        reply: oneshot::Sender<Result<(), NativeVoiceStopError>>,
     },
 }
 
@@ -459,41 +770,103 @@ async fn run_actor(
     app: AppHandle,
     sidecar: super::SharedSidecarState,
     tx: mpsc::UnboundedSender<ActorCommand>,
+    rx: mpsc::UnboundedReceiver<ActorCommand>,
+) {
+    run_actor_loop(NativeVoiceActor::new(app, sidecar, tx), rx).await;
+}
+
+#[cfg(desktop)]
+async fn run_actor_loop(
+    mut actor: NativeVoiceActor,
     mut rx: mpsc::UnboundedReceiver<ActorCommand>,
 ) {
-    let mut actor = NativeVoiceActor::new(app, sidecar, tx);
     actor.publish();
     loop {
-        if let Some(deadline) = actor.shutdown_deadline {
-            tokio::select! {
-                command = rx.recv() => {
-                    let Some(command) = command else {
-                        actor.force_shutdown().await;
-                        break;
-                    };
-                    if actor.handle(command).await {
-                        break;
+        let mut active_task = actor.active.as_mut().and_then(|active| active.task.take());
+        let event =
+            wait_for_actor_event(&mut rx, active_task.as_mut(), actor.shutdown_deadline).await;
+
+        match event {
+            ActorLoopEvent::Command(Some(command)) => {
+                if let Some(task) = active_task.take() {
+                    if let Some(active) = actor.active.as_mut() {
+                        active.task = Some(task);
                     }
                 }
-                _ = sleep_until(deadline) => {
-                    actor.force_shutdown().await;
+                if actor.handle(command).await {
                     break;
                 }
             }
-        } else {
-            let Some(command) = rx.recv().await else {
-                break;
-            };
-            if actor.handle(command).await {
-                break;
+            ActorLoopEvent::Command(None) => {
+                if let Some(task) = active_task.take() {
+                    if let Some(active) = actor.active.as_mut() {
+                        active.task = Some(task);
+                    }
+                }
+                actor.force_shutdown();
+                if actor.active.is_none() {
+                    actor.ack_shutdown();
+                    break;
+                }
+            }
+            ActorLoopEvent::TaskFinished(result) => {
+                drop(active_task);
+                if actor.complete_active_task(result) {
+                    break;
+                }
+            }
+            ActorLoopEvent::Deadline => {
+                if let Some(task) = active_task.take() {
+                    if let Some(active) = actor.active.as_mut() {
+                        active.task = Some(task);
+                    }
+                }
+                actor.force_shutdown();
             }
         }
     }
 }
 
 #[cfg(desktop)]
+enum ActorLoopEvent {
+    Command(Option<ActorCommand>),
+    TaskFinished(Result<TurnTaskOutcome, tokio::task::JoinError>),
+    Deadline,
+}
+
+#[cfg(desktop)]
+async fn wait_for_actor_event(
+    rx: &mut mpsc::UnboundedReceiver<ActorCommand>,
+    task: Option<&mut tokio::task::JoinHandle<TurnTaskOutcome>>,
+    deadline: Option<TokioInstant>,
+) -> ActorLoopEvent {
+    match (task, deadline) {
+        (Some(task), Some(deadline)) => {
+            tokio::select! {
+                command = rx.recv() => ActorLoopEvent::Command(command),
+                outcome = &mut *task => ActorLoopEvent::TaskFinished(outcome),
+                _ = sleep_until(deadline) => ActorLoopEvent::Deadline,
+            }
+        }
+        (Some(task), None) => {
+            tokio::select! {
+                command = rx.recv() => ActorLoopEvent::Command(command),
+                outcome = &mut *task => ActorLoopEvent::TaskFinished(outcome),
+            }
+        }
+        (None, Some(deadline)) => {
+            tokio::select! {
+                command = rx.recv() => ActorLoopEvent::Command(command),
+                _ = sleep_until(deadline) => ActorLoopEvent::Deadline,
+            }
+        }
+        (None, None) => ActorLoopEvent::Command(rx.recv().await),
+    }
+}
+
+#[cfg(desktop)]
 struct NativeVoiceActor {
-    app: AppHandle,
+    app: Option<AppHandle>,
     sidecar: super::SharedSidecarState,
     tx: mpsc::UnboundedSender<ActorCommand>,
     status: NativeVoiceStatus,
@@ -502,8 +875,49 @@ struct NativeVoiceActor {
     runtime: Rc<RefCell<Option<RuntimeBundle>>>,
     runtime_profile: Option<RuntimeProfileKey>,
     active: Option<ActiveTurn>,
-    shutdown_reply: Option<std::sync::mpsc::Sender<()>>,
+    shutdown_reply: Option<std::sync::mpsc::Sender<Result<(), NativeVoiceStopError>>>,
+    profile_change_reply: Option<oneshot::Sender<Result<(), NativeVoiceStopError>>>,
     shutdown_deadline: Option<TokioInstant>,
+    shutdown_timeout: Duration,
+    failure: ActorFailureState,
+    #[cfg(test)]
+    test_status_tx: Option<mpsc::UnboundedSender<NativeVoiceStatus>>,
+}
+
+#[cfg(desktop)]
+#[derive(Default)]
+struct ActorFailureState {
+    sticky_shutdown_error: Option<NativeVoiceStopError>,
+}
+
+#[cfg(desktop)]
+impl ActorFailureState {
+    fn record(&mut self, error: NativeVoiceStopError) {
+        if self.sticky_shutdown_error.is_none() {
+            self.sticky_shutdown_error = Some(error);
+        }
+    }
+
+    fn blocks_reuse(&self) -> bool {
+        self.sticky_shutdown_error.is_some()
+    }
+
+    fn shutdown_result(&self) -> Result<(), NativeVoiceStopError> {
+        self.sticky_shutdown_error.map_or(Ok(()), Err)
+    }
+
+    fn completion_phase(
+        &self,
+        cleanup_failed: bool,
+        reason_code: Option<&'static str>,
+        expected_terminal: bool,
+    ) -> NativeVoicePhase {
+        if cleanup_failed || self.blocks_reuse() {
+            NativeVoicePhase::Faulted
+        } else {
+            terminal_phase(reason_code, expected_terminal)
+        }
+    }
 }
 
 #[cfg(desktop)]
@@ -514,7 +928,7 @@ impl NativeVoiceActor {
         tx: mpsc::UnboundedSender<ActorCommand>,
     ) -> Self {
         Self {
-            app,
+            app: Some(app),
             sidecar,
             tx,
             status: NativeVoiceStatus::unavailable(PROFILE_REASON),
@@ -524,8 +938,48 @@ impl NativeVoiceActor {
             runtime_profile: None,
             active: None,
             shutdown_reply: None,
+            profile_change_reply: None,
             shutdown_deadline: None,
+            shutdown_timeout: SHUTDOWN_CLEANUP_TIMEOUT,
+            failure: ActorFailureState::default(),
+            #[cfg(test)]
+            test_status_tx: None,
         }
+    }
+
+    #[cfg(test)]
+    fn new_test(
+        tx: mpsc::UnboundedSender<ActorCommand>,
+        test_status_tx: mpsc::UnboundedSender<NativeVoiceStatus>,
+    ) -> Self {
+        Self {
+            app: None,
+            sidecar: Arc::new(std::sync::Mutex::new(
+                super::SidecarState::new().expect("test sidecar state"),
+            )),
+            tx,
+            status: NativeVoiceStatus::unavailable(PROFILE_REASON),
+            sequence: 0,
+            next_ui_generation: 1,
+            runtime: Rc::new(RefCell::new(None)),
+            runtime_profile: None,
+            active: None,
+            shutdown_reply: None,
+            profile_change_reply: None,
+            shutdown_deadline: None,
+            shutdown_timeout: SHUTDOWN_CLEANUP_TIMEOUT,
+            failure: ActorFailureState::default(),
+            test_status_tx: Some(test_status_tx),
+        }
+    }
+
+    fn quarantine_after_ambiguous_prepare_cleanup_failure(&mut self) {
+        self.failure.record(NativeVoiceStopError::ShutdownFailed);
+        self.set_status(
+            NativeVoicePhase::Faulted,
+            None,
+            Some("handoff_cleanup_failed"),
+        );
     }
 
     async fn handle(&mut self, command: ActorCommand) -> bool {
@@ -537,8 +991,23 @@ impl NativeVoiceActor {
                 let _ = reply.send(Ok(self.status.clone()));
                 false
             }
-            ActorCommand::Start { request, reply } => {
-                let result = self.start(request).await;
+            ActorCommand::Start {
+                request,
+                profile_generation,
+                speech_stages,
+                config_revision,
+                confirmed_profile_document,
+                reply,
+            } => {
+                let result = self
+                    .start(
+                        request,
+                        profile_generation,
+                        speech_stages,
+                        config_revision,
+                        confirmed_profile_document,
+                    )
+                    .await;
                 let _ = reply.send(result);
                 false
             }
@@ -557,128 +1026,332 @@ impl NativeVoiceActor {
                 phase,
                 reason_code,
             } => {
-                if self.active.as_ref().is_some_and(|active| {
-                    active.ui_generation == ui_generation
-                        && late_phase_allowed(active.expected_terminal, phase)
-                }) {
+                if !self.failure.blocks_reuse()
+                    && self.active.as_ref().is_some_and(|active| {
+                        active.ui_generation == ui_generation
+                            && late_phase_allowed(active.expected_terminal, phase)
+                    })
+                {
                     self.set_status(phase, Some(ui_generation), reason_code);
                 }
                 false
             }
-            ActorCommand::TurnFinished {
-                ui_generation,
-                reason_code,
-            } => {
-                if self
-                    .active
-                    .as_ref()
-                    .is_some_and(|active| active.ui_generation == ui_generation)
-                {
-                    let expected_terminal = self
-                        .active
-                        .as_ref()
-                        .is_some_and(|active| active.expected_terminal);
-                    self.active = None;
-                    let phase = terminal_phase(reason_code, expected_terminal);
-                    self.set_status(
-                        phase,
-                        None,
-                        if matches!(phase, NativeVoicePhase::Faulted) {
-                            reason_code
-                        } else {
-                            None
-                        },
-                    );
-                } else {
-                    self.refresh_idle_status();
-                }
-                if self.shutdown_reply.is_some() {
-                    self.ack_shutdown();
-                    return true;
-                }
+            ActorCommand::TurnFinished { ui_generation } => {
+                // This is only a wakeup. The shared actor loop observes and joins the
+                // retained JoinHandle directly before releasing the turn.
+                let _ = ui_generation;
                 false
             }
             ActorCommand::Shutdown { reply } => {
                 if let Some(active) = self.active.as_mut() {
-                    active.cancellation.cancel();
-                    active.control.interrupt(active.core_generation);
-                    active.expected_terminal = true;
+                    active.request_shutdown();
                     let ui_generation = active.ui_generation;
                     self.shutdown_reply = Some(reply);
-                    self.shutdown_deadline = Some(TokioInstant::now() + SHUTDOWN_CLEANUP_TIMEOUT);
+                    self.shutdown_deadline = Some(TokioInstant::now() + self.shutdown_timeout);
                     self.set_status(
-                        NativeVoicePhase::Stopping,
+                        if self.failure.blocks_reuse() {
+                            NativeVoicePhase::Faulted
+                        } else {
+                            NativeVoicePhase::Stopping
+                        },
                         Some(ui_generation),
-                        Some("shutdown"),
+                        Some(if self.failure.blocks_reuse() {
+                            "local_cleanup_failed"
+                        } else {
+                            "shutdown"
+                        }),
                     );
                     return false;
                 }
-                self.set_status(NativeVoicePhase::Stopping, None, Some("shutdown"));
+                self.set_status(
+                    if self.failure.blocks_reuse() {
+                        NativeVoicePhase::Faulted
+                    } else {
+                        NativeVoicePhase::Stopping
+                    },
+                    None,
+                    Some(if self.failure.blocks_reuse() {
+                        "local_cleanup_failed"
+                    } else {
+                        "shutdown"
+                    }),
+                );
                 self.shutdown_reply = Some(reply);
                 self.ack_shutdown();
                 true
             }
+            ActorCommand::CancelAndDrainForProfileChange { reply } => {
+                if self.active.is_none() {
+                    let result = self.failure.shutdown_result();
+                    let _ = reply.send(result);
+                } else if self.profile_change_reply.is_some() {
+                    let _ = reply.send(Err(NativeVoiceStopError::Unavailable));
+                } else {
+                    if let Some(active) = self.active.as_mut() {
+                        active.cancel_for_profile_change();
+                        let ui_generation = active.ui_generation;
+                        self.set_status(
+                            NativeVoicePhase::Stopping,
+                            Some(ui_generation),
+                            Some("profile_changed"),
+                        );
+                    }
+                    self.profile_change_reply = Some(reply);
+                }
+                false
+            }
         }
     }
 
-    async fn force_shutdown(&mut self) {
-        if let Some(active) = self.active.take() {
-            active.cancellation.cancel();
-            active.control.interrupt(active.core_generation);
-            if let Some(reason_code) = release_handoff_slot(&active.handoff_slot, false).await {
-                self.set_status(NativeVoicePhase::Faulted, None, Some(reason_code));
+    fn complete_active_task(
+        &mut self,
+        result: Result<TurnTaskOutcome, tokio::task::JoinError>,
+    ) -> bool {
+        let Some(active) = self.active.as_ref() else {
+            self.failure.record(NativeVoiceStopError::ShutdownFailed);
+            self.set_status(
+                NativeVoicePhase::Faulted,
+                None,
+                Some("turn_task_owner_missing"),
+            );
+            if let Some(reply) = self.profile_change_reply.take() {
+                let _ = reply.send(Err(NativeVoiceStopError::ShutdownFailed));
             }
+            if self.shutdown_reply.is_some() {
+                self.ack_shutdown();
+                return true;
+            }
+            return false;
+        };
+        let expected_terminal = active.expected_terminal;
+        let outcome = match result {
+            Ok(outcome) => outcome,
+            Err(_) => {
+                let active = self.active.as_mut().expect("active task owner");
+                if active.start_panic_cleanup() {
+                    return false;
+                }
+                TurnTaskOutcome::failed()
+            }
+        };
+        if let Some(active) = self.active.as_ref() {
+            active.current_core_generation.set(None);
         }
-        self.ack_shutdown();
+        let cleanup_failed =
+            outcome.cleanup.failed_for_task(outcome.no_core_work) || outcome.handoff_cleanup_failed;
+        let reason_code = outcome
+            .reason_code
+            .or_else(|| cleanup_failed.then_some("local_cleanup_failed"));
+        if cleanup_failed {
+            self.failure.record(NativeVoiceStopError::ShutdownFailed);
+            self.runtime.borrow_mut().take();
+            self.runtime_profile = None;
+        }
+        self.active = None;
+        let phase = self
+            .failure
+            .completion_phase(cleanup_failed, reason_code, expected_terminal);
+        self.set_status(
+            phase,
+            None,
+            if matches!(phase, NativeVoicePhase::Faulted) {
+                reason_code.or(Some("local_cleanup_failed"))
+            } else {
+                None
+            },
+        );
+        if let Some(reply) = self.profile_change_reply.take() {
+            let result = if cleanup_failed || self.failure.blocks_reuse() {
+                Err(NativeVoiceStopError::ShutdownFailed)
+            } else {
+                Ok(())
+            };
+            let _ = reply.send(result);
+        }
+        if self.shutdown_reply.is_some() {
+            self.ack_shutdown();
+            return true;
+        }
+        false
+    }
+
+    fn force_shutdown(&mut self) {
+        if let Some(active) = self.active.as_mut() {
+            active.request_shutdown();
+        }
+        self.failure.record(NativeVoiceStopError::TimedOut);
+        self.shutdown_deadline = None;
+        self.set_status(
+            if self.failure.blocks_reuse() {
+                NativeVoicePhase::Faulted
+            } else {
+                NativeVoicePhase::Stopping
+            },
+            None,
+            Some(if self.failure.blocks_reuse() {
+                "local_cleanup_failed"
+            } else {
+                "shutdown_timeout"
+            }),
+        );
     }
 
     fn ack_shutdown(&mut self) {
         if let Some(reply) = self.shutdown_reply.take() {
-            let _ = reply.send(());
+            let result = self.failure.shutdown_result();
+            let _ = reply.send(result);
         }
         self.shutdown_deadline = None;
     }
 
     fn refresh_idle_status(&mut self) {
+        if self.failure.blocks_reuse() {
+            if !matches!(self.status.phase, NativeVoicePhase::Faulted) {
+                self.set_status(
+                    NativeVoicePhase::Faulted,
+                    None,
+                    Some("local_cleanup_failed"),
+                );
+            }
+            return;
+        }
         match self.resolve_profile(false) {
-            Ok(profile) => self.status = idle_status(&self.app, &profile),
+            Ok(profile) => {
+                self.status = self.app.as_ref().map_or_else(
+                    || NativeVoiceStatus::unavailable(PROFILE_REASON),
+                    |app| idle_status(app, &profile),
+                )
+            }
             Err(reason) => self.status = NativeVoiceStatus::unavailable(reason),
+        }
+    }
+
+    async fn prepare_local_handoff(
+        &mut self,
+        adapter: &mut NativeGatewayCaptureHandoff,
+        cancellation: &CancellationToken,
+    ) -> Result<NativeGatewayCaptureGrant, NativeVoiceCommandError> {
+        match timeout(
+            HANDOFF_OPERATION_TIMEOUT,
+            adapter.prepare(&|| cancellation.is_cancelled()),
+        )
+        .await
+        {
+            Err(_) => {
+                if recover_ambiguous_prepare(adapter).await.is_err() {
+                    self.quarantine_after_ambiguous_prepare_cleanup_failure();
+                    return Err(NativeVoiceCommandError::unavailable(
+                        "handoff_cleanup_failed",
+                    ));
+                }
+                Err(NativeVoiceCommandError::unavailable(
+                    "handoff_prepare_timeout",
+                ))
+            }
+            Ok(Ok(grant)) => Ok(grant),
+            Ok(Err(error)) => {
+                if prepare_error_needs_ambiguous_recovery(&error)
+                    && recover_ambiguous_prepare(adapter).await.is_err()
+                {
+                    self.quarantine_after_ambiguous_prepare_cleanup_failure();
+                    return Err(NativeVoiceCommandError::unavailable(
+                        "handoff_cleanup_failed",
+                    ));
+                }
+                Err(map_core_error(error))
+            }
         }
     }
 
     async fn start(
         &mut self,
         request: NativeVoiceStartRequest,
+        profile_generation: Option<u64>,
+        speech_stages: Option<SpeechStages>,
+        config_revision: Option<u64>,
+        confirmed_profile_document: Option<String>,
     ) -> Result<NativeVoiceStatus, NativeVoiceCommandError> {
+        if self.failure.blocks_reuse() {
+            return Err(NativeVoiceCommandError::unavailable("local_cleanup_failed"));
+        }
         if self.active.is_some() {
             return Err(NativeVoiceCommandError::invalid(ACTIVE_REASON));
         }
-        let document = load_thin_profile_document()
-            .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
-        let profile = resolve_start_profile_from_document(
+        let app = self
+            .app
+            .as_ref()
+            .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?
+            .clone();
+        if let Some(generation) = profile_generation {
+            let policy_runtime = app
+                .try_state::<super::native_node_config::NativeNodeConfigRuntime>()
+                .map(|runtime| runtime.inner().clone())
+                .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?;
+            if !policy_runtime.profile_generation_is_current(generation) {
+                return Err(NativeVoiceCommandError::unavailable(
+                    "speech_stage_unavailable",
+                ));
+            }
+        }
+        let document = match confirmed_profile_document {
+            Some(document) => serde_json::from_str::<ThinProfileDocument>(&document)
+                .map_err(|_| NativeVoiceCommandError::unavailable(PROFILE_REASON))?,
+            None => load_thin_profile_document()
+                .ok_or_else(|| NativeVoiceCommandError::unavailable(PROFILE_REASON))?,
+        };
+        let mut profile = resolve_start_profile_from_document(
             &document,
             request.remote_audio_consent,
             sidecar_running(&self.sidecar),
             load_peer_bearer,
             super::current_unix_ms,
         )?;
+        let mut speech_selection = if let Some(stages) = speech_stages.as_ref() {
+            apply_speech_stages(profile.local_speech_mut(), stages)
+                .map_err(NativeVoiceCommandError::unavailable)?
+        } else {
+            SpeechStageRuntimeSelection::default()
+        };
+        if let Some(mesh_stt) = speech_selection.mesh_stt.as_mut() {
+            if mesh_stt.model_id.is_none() {
+                let mesh_sessions = app
+                    .try_state::<crate::mesh_session::MeshSessionState>()
+                    .ok_or_else(|| {
+                        NativeVoiceCommandError::unavailable("speech_stage_unavailable")
+                    })?;
+                mesh_stt.model_id = Some(
+                    mesh_sessions
+                        .resolve_ready_stt_model(&mesh_stt.peer_id, &mesh_stt.resource_id)
+                        .await
+                        .map_err(|_| {
+                            NativeVoiceCommandError::unavailable("speech_stage_unavailable")
+                        })?,
+                );
+            }
+        }
+        if speech_selection.mesh_stt.is_some() && !request.remote_audio_consent {
+            return Err(NativeVoiceCommandError::invalid(REMOTE_CONSENT_REASON));
+        }
         install_profile(&mut self.status, &profile);
 
-        let profile_key = profile.reusable_key();
+        let mut profile_key = profile.reusable_key();
+        if let Some(key) = profile_key.as_mut() {
+            speech_selection.append_cache_identity(&mut key.identity);
+        }
         if !runtime_cache_matches(self.runtime_profile.as_ref(), profile_key.as_ref()) {
             *self.runtime.borrow_mut() = None;
             self.runtime_profile = profile_key.clone();
         }
-        let app = self.app.clone();
         let mut runtime = match self.runtime.borrow_mut().take() {
             Some(runtime)
                 if runtime_cache_matches(self.runtime_profile.as_ref(), profile_key.as_ref()) =>
             {
                 runtime
             }
-            None => build_runtime(&app, &profile, self.tx.clone())?,
-            Some(_) => build_runtime(&app, &profile, self.tx.clone())?,
+            None => build_runtime(&app, &profile, self.tx.clone(), &speech_selection)?,
+            Some(_) => build_runtime(&app, &profile, self.tx.clone(), &speech_selection)?,
         };
+        runtime.core.set_lifecycle_config_revision(config_revision);
         self.status.background_eligible = runtime.core.wake_background_ready();
 
         let core_generation = runtime
@@ -687,7 +1360,9 @@ impl NativeVoiceActor {
             .map_err(map_core_error)?;
         let ui_generation = self.next_safe_ui_generation()?;
         let cancellation = CancellationToken::new();
+        let shutdown_requested = Rc::new(Cell::new(false));
         let control = runtime.control.clone();
+        let current_core_generation = Rc::clone(&runtime.current_core_generation);
         let start_reason = match request.trigger {
             NativeVoiceTrigger::FocusedPushToTalk => CaptureStartReason::PushToTalk,
             NativeVoiceTrigger::TrayPushToTalk => CaptureStartReason::AssistantRole,
@@ -696,34 +1371,9 @@ impl NativeVoiceActor {
         };
         let handoff = if let RuntimeProfile::Local { .. } = profile {
             let mut adapter = build_handoff(&profile, start_reason.clone())?;
-            let grant = match timeout(
-                HANDOFF_OPERATION_TIMEOUT,
-                adapter.prepare(&|| cancellation.is_cancelled()),
-            )
-            .await
-            {
-                Err(_) => {
-                    if recover_ambiguous_prepare(&mut adapter).await.is_err() {
-                        return Err(NativeVoiceCommandError::unavailable(
-                            "handoff_cleanup_failed",
-                        ));
-                    }
-                    return Err(NativeVoiceCommandError::unavailable(
-                        "handoff_prepare_timeout",
-                    ));
-                }
-                Ok(Ok(grant)) => grant,
-                Ok(Err(error)) => {
-                    if prepare_error_needs_ambiguous_recovery(&error)
-                        && recover_ambiguous_prepare(&mut adapter).await.is_err()
-                    {
-                        return Err(NativeVoiceCommandError::unavailable(
-                            "handoff_cleanup_failed",
-                        ));
-                    }
-                    return Err(map_core_error(error));
-                }
-            };
+            let grant = self
+                .prepare_local_handoff(&mut adapter, &cancellation)
+                .await?;
             Some((adapter, grant))
         } else {
             None
@@ -749,48 +1399,87 @@ impl NativeVoiceActor {
         runtime.ui_generation.set(Some(ui_generation));
         self.active = Some(ActiveTurn {
             ui_generation,
-            core_generation,
             continuous: matches!(request.trigger, NativeVoiceTrigger::BackgroundWake),
             _handoff_generation: handoff_slot
                 .borrow()
                 .as_ref()
                 .map(|(_, grant)| grant.voice_capture_lease(now_micros()).generation),
             control: control.clone(),
+            current_core_generation: Rc::clone(&current_core_generation),
+            shutdown_requested: Rc::clone(&shutdown_requested),
             cancellation: cancellation.clone(),
             handoff_slot: Rc::clone(&handoff_slot),
+            task: None,
+            panic_cleanup_started: false,
             expected_terminal: false,
         });
         self.set_status(NativeVoicePhase::Starting, Some(ui_generation), None);
 
         let tx = self.tx.clone();
         let runtime_slot = Rc::clone(&self.runtime);
-        tokio::task::spawn_local(async move {
+        let shutdown_requested_for_task = Rc::clone(&shutdown_requested);
+        let task = tokio::task::spawn_local(async move {
+            let _completion = TurnFinishedSignal {
+                tx: tx.clone(),
+                ui_generation,
+            };
+            let mut cleanup = CoreCleanupSummary::default();
             let result = match request.trigger {
                 NativeVoiceTrigger::FocusedPushToTalk | NativeVoiceTrigger::TrayPushToTalk => {
-                    runtime
-                        .core
-                        .run_push_to_talk_turn(lease, now_micros(), cancellation.clone())
-                        .await
+                    run_core_generation(
+                        &mut runtime.core,
+                        &current_core_generation,
+                        &mut cleanup,
+                        |core| {
+                            Box::pin(core.run_push_to_talk_turn(
+                                lease,
+                                now_micros(),
+                                cancellation.clone(),
+                            ))
+                        },
+                    )
+                    .await
                 }
                 NativeVoiceTrigger::WakeWord => {
-                    runtime
-                        .core
-                        .run_wake_turn(lease, now_micros(), cancellation.clone())
-                        .await
+                    run_core_generation(
+                        &mut runtime.core,
+                        &current_core_generation,
+                        &mut cleanup,
+                        |core| {
+                            Box::pin(core.run_wake_turn(lease, now_micros(), cancellation.clone()))
+                        },
+                    )
+                    .await
                 }
                 NativeVoiceTrigger::BackgroundWake => {
-                    run_background_session(&mut runtime.core, lease, cancellation.clone()).await
+                    run_background_session(
+                        &mut runtime.core,
+                        lease,
+                        cancellation.clone(),
+                        &current_core_generation,
+                        &mut cleanup,
+                    )
+                    .await
                 }
             };
             let reason_code = result.err().map(|error| reason_from_core_error(&error));
-            let cleanup_reason = release_handoff_slot(&handoff_slot, true).await;
+            let cleanup_reason =
+                release_handoff_slot(&handoff_slot, shutdown_requested_for_task.as_ref()).await;
+            let handoff_cleanup_failed = cleanup_reason.is_some();
+            cleanup.record_handoff_cleanup_failure(handoff_cleanup_failed);
+            let no_core_work = cleanup.invocations == 0 && cancellation.is_cancelled();
             runtime.ui_generation.set(None);
             *runtime_slot.borrow_mut() = Some(runtime);
-            let _ = tx.send(ActorCommand::TurnFinished {
-                ui_generation,
+            TurnTaskOutcome {
                 reason_code: reason_code.or(cleanup_reason),
-            });
+                cleanup,
+                no_core_work,
+                handoff_cleanup_failed,
+            }
         });
+        if let Some(active) = self.active.as_mut() {
+            active.task = Some(task);
+        }
         Ok(self.status.clone())
     }
 
@@ -802,22 +1491,21 @@ impl NativeVoiceActor {
         let Some(active) = self.active.as_mut() else {
             return Err(NativeVoiceCommandError::invalid(STALE_CONTROL_REASON));
         };
-        if request.generation != active.ui_generation {
-            return Err(NativeVoiceCommandError::invalid(STALE_CONTROL_REASON));
-        }
-        if control_requires_terminal_suppression(cancel || active.continuous) {
-            active.expected_terminal = true;
-            active.cancellation.cancel();
-            active.control.interrupt(active.core_generation);
-        } else {
-            active.control.finish(active.core_generation);
-        }
-        let ui_generation = active.ui_generation;
         let reason = stop_reason_code(request.reason);
+        active.apply_control(request, cancel)?;
+        let ui_generation = active.ui_generation;
         self.set_status(
-            NativeVoicePhase::Stopping,
+            if self.failure.blocks_reuse() {
+                NativeVoicePhase::Faulted
+            } else {
+                NativeVoicePhase::Stopping
+            },
             Some(ui_generation),
-            Some(reason),
+            Some(if self.failure.blocks_reuse() {
+                "local_cleanup_failed"
+            } else {
+                reason
+            }),
         );
         Ok(self.status.clone())
     }
@@ -875,20 +1563,279 @@ impl NativeVoiceActor {
             sequence: self.sequence,
             status: self.status.clone(),
         };
-        let _ = self.app.emit(STATUS_EVENT, event);
+        if let Some(app) = self.app.as_ref() {
+            let _ = app.emit(STATUS_EVENT, event);
+            self.publish_native_event();
+        }
+        #[cfg(test)]
+        if let Some(publisher) = self.test_status_tx.as_ref() {
+            let _ = publisher.send(self.status.clone());
+        }
+    }
+
+    fn publish_native_event(&self) {
+        let Ok(status) = serde_json::to_value(&self.status) else {
+            return;
+        };
+        let draft = voice_turn_event(
+            voice_turn_kind_for_phase(self.status.phase),
+            self.status.generation,
+            status,
+            self.status.reason_code.clone(),
+        )
+        .status(voice_turn_status_for_phase(self.status.phase));
+        global_native_event_hub().publish_now(draft);
+    }
+}
+
+#[cfg(desktop)]
+fn voice_turn_kind_for_phase(phase: NativeVoicePhase) -> &'static str {
+    match phase {
+        NativeVoicePhase::Starting => "voice.turn.started",
+        NativeVoicePhase::Listening => "voice.turn.transcribing",
+        NativeVoicePhase::Processing => "voice.turn.requesting",
+        NativeVoicePhase::Speaking => "voice.turn.speaking",
+        NativeVoicePhase::Idle | NativeVoicePhase::Stopping => "voice.turn.finalized",
+        NativeVoicePhase::Unavailable | NativeVoicePhase::Faulted => "voice.turn.failed",
+    }
+}
+
+#[cfg(desktop)]
+fn voice_turn_status_for_phase(phase: NativeVoicePhase) -> &'static str {
+    match phase {
+        NativeVoicePhase::Starting
+        | NativeVoicePhase::Listening
+        | NativeVoicePhase::Processing
+        | NativeVoicePhase::Speaking
+        | NativeVoicePhase::Stopping => "active",
+        NativeVoicePhase::Idle => "ok",
+        NativeVoicePhase::Unavailable | NativeVoicePhase::Faulted => "error",
     }
 }
 
 #[cfg(desktop)]
 struct ActiveTurn {
     ui_generation: u64,
-    core_generation: Generation,
     continuous: bool,
     _handoff_generation: Option<Generation>,
     control: DesktopCaptureControl,
+    current_core_generation: Rc<Cell<Option<Generation>>>,
+    shutdown_requested: Rc<Cell<bool>>,
     cancellation: CancellationToken,
     handoff_slot: HandoffSlot,
+    task: Option<tokio::task::JoinHandle<TurnTaskOutcome>>,
+    panic_cleanup_started: bool,
     expected_terminal: bool,
+}
+
+#[cfg(desktop)]
+struct TurnTaskOutcome {
+    reason_code: Option<&'static str>,
+    cleanup: CoreCleanupSummary,
+    no_core_work: bool,
+    handoff_cleanup_failed: bool,
+}
+
+#[cfg(desktop)]
+impl TurnTaskOutcome {
+    fn failed() -> Self {
+        Self {
+            reason_code: Some("turn_task_failed"),
+            cleanup: CoreCleanupSummary {
+                failed: true,
+                ..CoreCleanupSummary::default()
+            },
+            no_core_work: false,
+            handoff_cleanup_failed: true,
+        }
+    }
+}
+
+#[cfg(desktop)]
+impl ActiveTurn {
+    fn start_panic_cleanup(&mut self) -> bool {
+        if self.panic_cleanup_started {
+            return false;
+        }
+        self.panic_cleanup_started = true;
+        let handoff_slot = Rc::clone(&self.handoff_slot);
+        let shutdown_requested = Rc::clone(&self.shutdown_requested);
+        self.task = Some(tokio::task::spawn_local(async move {
+            let _ = release_handoff_slot(&handoff_slot, shutdown_requested.as_ref()).await;
+            TurnTaskOutcome::failed()
+        }));
+        true
+    }
+
+    fn apply_control(
+        &mut self,
+        request: NativeVoiceControlRequest,
+        cancel: bool,
+    ) -> Result<(), NativeVoiceCommandError> {
+        if request.generation != self.ui_generation {
+            return Err(NativeVoiceCommandError::invalid(STALE_CONTROL_REASON));
+        }
+        if control_requires_terminal_suppression(cancel || self.continuous) {
+            self.expected_terminal = true;
+            self.cancellation.cancel();
+            self.interrupt_current_capture();
+        } else {
+            self.finish_current_capture();
+        }
+        Ok(())
+    }
+
+    fn request_shutdown(&mut self) {
+        self.cancellation.cancel();
+        self.shutdown_requested.set(true);
+        self.interrupt_current_capture();
+        self.expected_terminal = true;
+    }
+
+    fn cancel_for_profile_change(&mut self) {
+        self.expected_terminal = true;
+        self.cancellation.cancel();
+        self.interrupt_current_capture();
+    }
+
+    fn take_task_for_completion(
+        &mut self,
+        ui_generation: u64,
+    ) -> Option<Option<tokio::task::JoinHandle<TurnTaskOutcome>>> {
+        (self.ui_generation == ui_generation).then(|| self.task.take())
+    }
+
+    fn finish_current_capture(&self) -> Option<Generation> {
+        let generation = self.current_core_generation.get()?;
+        self.control.finish(generation);
+        Some(generation)
+    }
+
+    fn interrupt_current_capture(&self) -> Option<Generation> {
+        let generation = self.current_core_generation.get()?;
+        self.control.interrupt(generation);
+        Some(generation)
+    }
+}
+
+#[cfg(all(desktop, test))]
+async fn join_active_turn(task: tokio::task::JoinHandle<TurnTaskOutcome>) -> TurnTaskOutcome {
+    task.await.unwrap_or_else(|_| TurnTaskOutcome::failed())
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Default)]
+struct CoreCleanupSummary {
+    invocations: u64,
+    last_generation: Option<Generation>,
+    capture_start_attempted: bool,
+    assistant_transport_attempted: bool,
+    failed: bool,
+}
+
+#[cfg(desktop)]
+impl CoreCleanupSummary {
+    fn failed_for_task(&self, no_core_work: bool) -> bool {
+        self.failed
+            || (self.invocations == 0
+                && (!no_core_work
+                    || self.capture_start_attempted
+                    || self.assistant_transport_attempted))
+            || (self.invocations > 0 && no_core_work)
+    }
+
+    fn record(
+        &mut self,
+        expected: Generation,
+        report: Option<VoiceCleanupReport>,
+        generation_failed: bool,
+    ) {
+        let Some(report) = report.filter(|report| report.generation() == expected) else {
+            self.record_values(
+                expected,
+                false,
+                false,
+                generation_failed,
+                [aurora_voice_core::CleanupCallbackOutcome::NotAttempted; 8],
+            );
+            self.failed = true;
+            return;
+        };
+        self.record_values(
+            expected,
+            report.capture_start_attempted(),
+            report.assistant_transport_attempted(),
+            generation_failed,
+            [
+                report.wake_cancel(),
+                report.stt_cancel(),
+                report.tts_cancel(),
+                report.transport_cancel(),
+                report.output_stop(),
+                report.capture_stop(),
+                report.capture_lease_release(),
+                report.state_reset(),
+            ],
+        );
+    }
+
+    fn record_handoff_cleanup_failure(&mut self, failed: bool) {
+        self.failed |= failed;
+    }
+
+    fn record_values(
+        &mut self,
+        expected: Generation,
+        capture_start_attempted: bool,
+        assistant_transport_attempted: bool,
+        generation_failed: bool,
+        outcomes: [aurora_voice_core::CleanupCallbackOutcome; 8],
+    ) {
+        let Some(next_count) = self.invocations.checked_add(1) else {
+            self.failed = true;
+            return;
+        };
+        self.invocations = next_count;
+        if self
+            .last_generation
+            .is_some_and(|previous| expected.0 <= previous.0)
+        {
+            self.failed = true;
+        }
+        self.last_generation = Some(expected);
+        self.capture_start_attempted |= capture_start_attempted;
+        self.assistant_transport_attempted |= assistant_transport_attempted;
+        if outcomes
+            .iter()
+            .any(|outcome| *outcome == aurora_voice_core::CleanupCallbackOutcome::ReturnedError)
+            || outcomes[6] != aurora_voice_core::CleanupCallbackOutcome::ReturnedOk
+            || (capture_start_attempted
+                && outcomes[5] != aurora_voice_core::CleanupCallbackOutcome::ReturnedOk)
+            || (!capture_start_attempted
+                && outcomes[5] != aurora_voice_core::CleanupCallbackOutcome::NotAttempted)
+            || (generation_failed
+                && outcomes[7] != aurora_voice_core::CleanupCallbackOutcome::ReturnedOk)
+            || (!generation_failed
+                && outcomes[7] != aurora_voice_core::CleanupCallbackOutcome::NotAttempted)
+        {
+            self.failed = true;
+        }
+    }
+}
+
+#[cfg(desktop)]
+struct TurnFinishedSignal {
+    tx: mpsc::UnboundedSender<ActorCommand>,
+    ui_generation: u64,
+}
+
+#[cfg(desktop)]
+impl Drop for TurnFinishedSignal {
+    fn drop(&mut self) {
+        let _ = self.tx.send(ActorCommand::TurnFinished {
+            ui_generation: self.ui_generation,
+        });
+    }
 }
 
 #[cfg(desktop)]
@@ -984,6 +1931,7 @@ struct RuntimeBundle {
     core: RuntimeCore,
     control: DesktopCaptureControl,
     ui_generation: Rc<Cell<Option<u64>>>,
+    current_core_generation: Rc<Cell<Option<Generation>>>,
 }
 
 #[cfg(desktop)]
@@ -1054,6 +2002,8 @@ enum DesktopCaptureControl {
     Production(NativeCaptureControl),
     #[cfg(feature = "desktop-native-voice-e2e")]
     Deterministic(DeterministicE2eCaptureControl),
+    #[cfg(test)]
+    Test(Arc<Mutex<Vec<(&'static str, u64)>>>),
 }
 
 #[cfg(desktop)]
@@ -1063,6 +2013,11 @@ impl DesktopCaptureControl {
             Self::Production(control) => control.finish(generation),
             #[cfg(feature = "desktop-native-voice-e2e")]
             Self::Deterministic(control) => control.finish(generation),
+            #[cfg(test)]
+            Self::Test(events) => events
+                .lock()
+                .expect("test capture events")
+                .push(("finish", generation.0)),
         }
     }
 
@@ -1071,6 +2026,11 @@ impl DesktopCaptureControl {
             Self::Production(control) => control.interrupt(generation),
             #[cfg(feature = "desktop-native-voice-e2e")]
             Self::Deterministic(control) => control.interrupt(generation),
+            #[cfg(test)]
+            Self::Test(events) => events
+                .lock()
+                .expect("test capture events")
+                .push(("interrupt", generation.0)),
         }
     }
 }
@@ -1086,6 +2046,8 @@ struct DeterministicE2eAudioInput {
     shared: Arc<DeterministicE2eCaptureShared>,
     active: Option<DeterministicE2eCaptureSession>,
     route_revision: RouteRevision,
+    frame_limit: Option<u64>,
+    pause_next_frame: Rc<RefCell<Option<(u64, oneshot::Sender<u64>, oneshot::Receiver<()>)>>>,
 }
 
 #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
@@ -1095,7 +2057,24 @@ impl DeterministicE2eAudioInput {
             shared: Arc::new(DeterministicE2eCaptureShared::default()),
             active: None,
             route_revision: RouteRevision(0),
+            frame_limit: None,
+            pause_next_frame: Rc::new(RefCell::new(None)),
         }
+    }
+
+    fn with_frame_limit(mut self, frame_limit: u64) -> Self {
+        self.frame_limit = Some(frame_limit);
+        self
+    }
+
+    fn pause_next_frame(
+        self,
+        generation: u64,
+        entered: oneshot::Sender<u64>,
+        release: oneshot::Receiver<()>,
+    ) -> Self {
+        *self.pause_next_frame.borrow_mut() = Some((generation, entered, release));
+        self
     }
 
     fn control(&self) -> DeterministicE2eCaptureControl {
@@ -1138,6 +2117,11 @@ impl AudioInput for DeterministicE2eAudioInput {
             .active_generation
             .store(lease.generation.0, std::sync::atomic::Ordering::SeqCst);
         self.shared
+            .started_generations
+            .lock()
+            .expect("deterministic capture generations")
+            .push(lease.generation.0);
+        self.shared
             .finished
             .store(false, std::sync::atomic::Ordering::SeqCst);
         self.shared
@@ -1159,6 +2143,22 @@ impl AudioInput for DeterministicE2eAudioInput {
 
     async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
         tokio::time::sleep(E2E_AUDIO_FRAME_DURATION).await;
+        let active_generation = self.active.as_ref().map(|session| session.generation.0);
+        let pause = {
+            let mut pending = self.pause_next_frame.borrow_mut();
+            if pending
+                .as_ref()
+                .is_some_and(|(generation, _, _)| Some(*generation) == active_generation)
+            {
+                pending.take()
+            } else {
+                None
+            }
+        };
+        if let Some((generation, entered, release)) = pause {
+            let _ = entered.send(generation);
+            let _ = release.await;
+        }
         if self
             .shared
             .interrupted
@@ -1174,6 +2174,12 @@ impl AudioInput for DeterministicE2eAudioInput {
             return Ok(None);
         }
         let session = self.active.as_mut().ok_or(VoiceCoreError::NoOwnerActive)?;
+        if self
+            .frame_limit
+            .is_some_and(|limit| session.sequence >= limit)
+        {
+            return Ok(None);
+        }
         let samples = (0..E2E_AUDIO_FRAME_SAMPLES)
             .map(|offset| {
                 if (session.sequence as usize * E2E_AUDIO_FRAME_SAMPLES + offset) % 32 < 16 {
@@ -1211,6 +2217,8 @@ struct DeterministicE2eCaptureShared {
     active_generation: std::sync::atomic::AtomicU64,
     finished: std::sync::atomic::AtomicBool,
     interrupted: std::sync::atomic::AtomicBool,
+    started_generations: std::sync::Mutex<Vec<u64>>,
+    control_events: std::sync::Mutex<Vec<(&'static str, u64)>>,
 }
 
 #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
@@ -1224,6 +2232,11 @@ impl DeterministicE2eCaptureControl {
     fn finish(&self, generation: Generation) {
         if self.active(generation) {
             self.shared
+                .control_events
+                .lock()
+                .expect("deterministic capture events")
+                .push(("finish", generation.0));
+            self.shared
                 .finished
                 .store(true, std::sync::atomic::Ordering::SeqCst);
         }
@@ -1231,6 +2244,11 @@ impl DeterministicE2eCaptureControl {
 
     fn interrupt(&self, generation: Generation) {
         if self.active(generation) {
+            self.shared
+                .control_events
+                .lock()
+                .expect("deterministic capture events")
+                .push(("interrupt", generation.0));
             self.shared
                 .interrupted
                 .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -1337,6 +2355,12 @@ impl RuntimeProfile {
         }
     }
 
+    fn local_speech_mut(&mut self) -> &mut LocalSpeechSelection {
+        match self {
+            Self::Local { local_speech, .. } | Self::Remote { local_speech, .. } => local_speech,
+        }
+    }
+
     fn permits_remote_audio(&self) -> bool {
         match self {
             Self::Local { .. } => true,
@@ -1398,29 +2422,145 @@ fn runtime_cache_matches(
 }
 
 #[cfg(desktop)]
-async fn run_background_session(
-    core: &mut RuntimeCore,
+async fn run_background_session<A, E, P, T, O, S>(
+    core: &mut VoiceRuntime<A, E, P, T, O, S>,
     lease: VoiceCaptureLease,
     cancellation: CancellationToken,
-) -> Result<String, VoiceCoreError> {
+    current_generation: &Rc<Cell<Option<Generation>>>,
+    cleanup: &mut CoreCleanupSummary,
+) -> Result<String, VoiceCoreError>
+where
+    A: AudioInput,
+    E: FiniteSttPort,
+    P: TtsSynthesisPort,
+    T: aurora_voice_core::SpeechTransport,
+    O: aurora_voice_core::AudioOutput,
+    S: RuntimeEventSink,
+{
+    run_background_session_with_iteration_boundary(
+        core,
+        lease,
+        cancellation,
+        current_generation,
+        cleanup,
+        no_background_iteration_pause,
+    )
+    .await
+}
+
+#[cfg(desktop)]
+fn no_background_iteration_pause() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>> {
+    Box::pin(std::future::ready(()))
+}
+
+#[cfg(desktop)]
+async fn run_background_session_with_iteration_boundary<A, E, P, T, O, S, F>(
+    core: &mut VoiceRuntime<A, E, P, T, O, S>,
+    lease: VoiceCaptureLease,
+    cancellation: CancellationToken,
+    current_generation: &Rc<Cell<Option<Generation>>>,
+    cleanup: &mut CoreCleanupSummary,
+    mut after_generation: F,
+) -> Result<String, VoiceCoreError>
+where
+    A: AudioInput,
+    E: FiniteSttPort,
+    P: TtsSynthesisPort,
+    T: aurora_voice_core::SpeechTransport,
+    O: aurora_voice_core::AudioOutput,
+    S: RuntimeEventSink,
+    F: FnMut() -> std::pin::Pin<Box<dyn std::future::Future<Output = ()>>>,
+{
     loop {
         cancellation.check()?;
-        match core
-            .run_background_turn(lease.clone(), now_micros(), cancellation.clone())
-            .await
-        {
+        let result = run_core_generation(core, current_generation, cleanup, |core| {
+            Box::pin(core.run_background_turn(lease.clone(), now_micros(), cancellation.clone()))
+        })
+        .await;
+        after_generation().await;
+        match result {
             Ok(_) => {
                 if cancellation.is_cancelled() {
                     return Err(VoiceCoreError::Cancelled);
                 }
             }
-            Err(VoiceCoreError::WakeNotDetected)
-            | Err(VoiceCoreError::SpeechNotDetected)
-            | Err(VoiceCoreError::SpeechTimeout)
-                if !cancellation.is_cancelled() => {}
+            Err(
+                VoiceCoreError::WakeNotDetected
+                | VoiceCoreError::SpeechNotDetected
+                | VoiceCoreError::SpeechTimeout,
+            ) => {
+                if cancellation.is_cancelled() {
+                    // These outcomes normally start another background iteration.
+                    // If cancellation arrived after this generation completed, report
+                    // the expected stop. Cleanup failures remain sticky in `cleanup`
+                    // and still fault the actor when the owned task is joined.
+                    return Err(VoiceCoreError::Cancelled);
+                }
+            }
             Err(error) => return Err(error),
         }
     }
+}
+
+#[cfg(desktop)]
+trait CoreGenerationSource {
+    fn next_generation(&self) -> Result<Generation, VoiceCoreError>;
+
+    fn cleanup_report(&self, generation: Generation) -> Option<VoiceCleanupReport>;
+}
+
+#[cfg(desktop)]
+impl<A, E, P, T, O, S> CoreGenerationSource for VoiceRuntime<A, E, P, T, O, S>
+where
+    A: AudioInput,
+    E: FiniteSttPort,
+    P: TtsSynthesisPort,
+    T: aurora_voice_core::SpeechTransport,
+    O: aurora_voice_core::AudioOutput,
+    S: RuntimeEventSink,
+{
+    fn next_generation(&self) -> Result<Generation, VoiceCoreError> {
+        self.next_capture_generation()
+    }
+
+    fn cleanup_report(&self, generation: Generation) -> Option<VoiceCleanupReport> {
+        self.cleanup_report_for_generation(generation)
+    }
+}
+
+#[cfg(desktop)]
+async fn run_core_generation<C, F>(
+    core: &mut C,
+    current_generation: &Rc<Cell<Option<Generation>>>,
+    cleanup: &mut CoreCleanupSummary,
+    invoke: F,
+) -> Result<String, VoiceCoreError>
+where
+    C: CoreGenerationSource,
+    F: for<'a> FnOnce(
+        &'a mut C,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<String, VoiceCoreError>> + 'a>,
+    >,
+{
+    let generation = match core.next_generation() {
+        Ok(generation) => generation,
+        Err(error) => {
+            cleanup.failed = true;
+            return Err(error);
+        }
+    };
+    current_generation.set(Some(generation));
+    let result = invoke(core).await;
+    // The core retains only its most recent generation report, so copy and
+    // validate it immediately before another invocation can clear it.
+    cleanup.record(generation, core.cleanup_report(generation), result.is_err());
+    if current_generation.get() == Some(generation) {
+        current_generation.set(None);
+    } else {
+        cleanup.failed = true;
+    }
+    result
 }
 
 #[cfg(desktop)]
@@ -1448,8 +2588,10 @@ fn build_runtime(
     app: &AppHandle,
     profile: &RuntimeProfile,
     tx: mpsc::UnboundedSender<ActorCommand>,
+    speech_selection: &SpeechStageRuntimeSelection,
 ) -> Result<RuntimeBundle, NativeVoiceCommandError> {
     let ui_generation = Rc::new(Cell::new(None));
+    let current_core_generation = Rc::new(Cell::new(None));
     let local_speech = profile.local_speech();
     let manager = if local_speech.vad.is_some()
         || local_speech.kws.is_some()
@@ -1460,102 +2602,165 @@ fn build_runtime(
     } else {
         None
     };
-    let stt = match profile.local_speech().stt.as_ref() {
-        Some(selection) => DesktopFiniteStt::new(
-            build_installed_stt_provider(
-                manager.as_ref().ok_or_else(|| {
-                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
-                })?,
-                &selection.pack_id,
-            )
-            .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?,
-        ),
-        None => {
-            if profile.requires_remote_audio_consent() {
-                return Err(NativeVoiceCommandError::invalid(REMOTE_CONSENT_REASON));
-            }
-            let policy = match profile {
-                RuntimeProfile::Local { .. } => MicrophoneAudioPolicy::LoopbackOnly,
-                RuntimeProfile::Remote { .. } => MicrophoneAudioPolicy::ExplicitRemoteConsent,
-            };
-            let scope = match profile {
-                RuntimeProfile::Local { .. } => FiniteSttRouteScope::LoopbackSidecar,
-                RuntimeProfile::Remote { .. } => FiniteSttRouteScope::RemoteGateway,
-            };
-            let stt_route = RouteFiniteSttBinding::new(
-                "gateway.default",
-                scope,
-                VAD_SAMPLE_RATE_HZ,
-                MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
-                ROUTE_REVISION,
-            )
-            .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
-            DesktopFiniteStt::new(
-                NativeGatewayFiniteStt::new(
-                    transport_for_profile(profile)?,
-                    NativeGatewayFiniteSttConfig::realtime(stt_route, policy)
-                        .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+    let stt = if let Some(mesh) = speech_selection.mesh_stt.as_ref() {
+        let route = RouteFiniteSttBinding::new(
+            "mesh.stt",
+            FiniteSttRouteScope::RemoteGateway,
+            VAD_SAMPLE_RATE_HZ,
+            MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+            ROUTE_REVISION,
+        )
+        .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?;
+        let limits = TransportLimits {
+            microphone_audio_policy: MicrophoneAudioPolicy::ExplicitRemoteConsent,
+            ..TransportLimits::default()
+        };
+        let config = NativeMeshFiniteSttConfig::new(
+            route,
+            mesh.peer_id.clone(),
+            mesh.resource_id.clone(),
+            mesh.model_id.clone(),
+            mesh.language.clone(),
+            true,
+            limits,
+        )
+        .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?;
+        DesktopFiniteStt::new(
+            NativeMeshFiniteStt::new(config)
+                .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?,
+        )
+    } else {
+        match profile.local_speech().stt.as_ref() {
+            Some(selection) => DesktopFiniteStt::new(
+                build_installed_stt_provider(
+                    manager.as_ref().ok_or_else(|| {
+                        NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                    })?,
+                    &selection.pack_id,
                 )
-                .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
-            )
+                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?,
+            ),
+            None => {
+                if profile.requires_remote_audio_consent() {
+                    return Err(NativeVoiceCommandError::invalid(REMOTE_CONSENT_REASON));
+                }
+                let policy = match profile {
+                    RuntimeProfile::Local { .. } => MicrophoneAudioPolicy::LoopbackOnly,
+                    RuntimeProfile::Remote { .. } => MicrophoneAudioPolicy::ExplicitRemoteConsent,
+                };
+                let scope = match profile {
+                    RuntimeProfile::Local { .. } => FiniteSttRouteScope::LoopbackSidecar,
+                    RuntimeProfile::Remote { .. } => FiniteSttRouteScope::RemoteGateway,
+                };
+                let stt_route = RouteFiniteSttBinding::new(
+                    "gateway.default",
+                    scope,
+                    VAD_SAMPLE_RATE_HZ,
+                    MAX_FINITE_STT_SAMPLES.min(16_000 * 30),
+                    ROUTE_REVISION,
+                )
+                .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
+                DesktopFiniteStt::new(
+                    NativeGatewayFiniteStt::new(
+                        transport_for_profile(profile)?,
+                        NativeGatewayFiniteSttConfig::new(
+                            stt_route,
+                            speech_selection
+                                .gateway_stt_model_id
+                                .as_deref()
+                                .unwrap_or("realtime")
+                                .to_owned(),
+                            policy,
+                        )
+                        .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+                    )
+                    .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+                )
+            }
         }
     };
-    let tts = match profile.local_speech().tts.as_ref() {
-        Some(selection) => {
-            let voice_id = selection
-                .voice_id
-                .as_deref()
-                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
-            let voice_catalog = TtsVoiceCatalog::runtime()
-                .map_err(|_| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
-            let voice = voice_catalog
-                .voice(voice_id)
-                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
-            let manager = manager
-                .as_ref()
-                .ok_or_else(|| NativeVoiceCommandError::unavailable("local_speech_unavailable"))?;
-            let provider = match voice.model_family.as_str() {
-                "vits_piper" => build_installed_tts_provider(manager, voice_id),
-                "pockettts" if voice.requires_reference_profile() => {
-                    let reference_profile_id =
-                        selection.reference_profile_id.as_deref().ok_or_else(|| {
-                            NativeVoiceCommandError::unavailable("local_speech_unavailable")
-                        })?;
-                    let reference_profile =
-                        load_desktop_tts_reference_profile(app, reference_profile_id, voice_id)?;
-                    build_installed_tts_provider_with_reference(
-                        manager,
-                        voice_id,
-                        Some(reference_profile.to_native()?),
-                        optional_desktop_tts_reference_text(
-                            reference_profile.reference_text.as_deref(),
-                        ),
-                    )
-                }
-                "pockettts" => {
-                    build_installed_tts_provider_with_reference(manager, voice_id, None, None)
-                }
-                _ => Err(EngineError::InvalidRequest),
-            };
-            DesktopTts::new(
-                provider.map_err(|_| {
+    let tts = if let Some(mesh) = speech_selection.mesh_tts.as_ref() {
+        let route = RouteTtsBinding::new(
+            "mesh.tts",
+            "mesh.default",
+            VAD_SAMPLE_RATE_HZ,
+            ROUTE_REVISION,
+        )
+        .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?;
+        let config = NativeMeshTtsConfig::new(
+            route,
+            mesh.peer_id.clone(),
+            mesh.resource_id.clone(),
+            mesh.model_id.clone(),
+            None,
+            mesh.language.clone(),
+            TransportLimits::default(),
+            TTS_MAX_AUDIO_SAMPLES,
+        )
+        .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?;
+        DesktopTts::new(
+            NativeMeshTtsSynthesizer::new(config)
+                .map_err(|_| NativeVoiceCommandError::unavailable("speech_stage_unavailable"))?,
+        )
+    } else {
+        match profile.local_speech().tts.as_ref() {
+            Some(selection) => {
+                let voice_id = selection.voice_id.as_deref().ok_or_else(|| {
                     NativeVoiceCommandError::unavailable("local_speech_unavailable")
-                })?,
-            )
-        }
-        None => {
-            let tts_route = RouteTtsBinding::new(
-                "gateway.default",
-                "voice.default",
-                VAD_SAMPLE_RATE_HZ,
-                ROUTE_REVISION,
-            )
-            .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
-            DesktopTts::new(NativeGatewayTtsSynthesizer::new(
-                transport_for_profile(profile)?,
-                NativeGatewayTtsConfig::new(tts_route, None, 1.0, TTS_MAX_AUDIO_SAMPLES)
-                    .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
-            ))
+                })?;
+                let voice_catalog = TtsVoiceCatalog::runtime().map_err(|_| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?;
+                let voice = voice_catalog.voice(voice_id).ok_or_else(|| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?;
+                let manager = manager.as_ref().ok_or_else(|| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?;
+                let provider = match voice.model_family.as_str() {
+                    "vits_piper" => build_installed_tts_provider(manager, voice_id),
+                    "pockettts" if voice.requires_reference_profile() => {
+                        let reference_profile_id =
+                            selection.reference_profile_id.as_deref().ok_or_else(|| {
+                                NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                            })?;
+                        let reference_profile = load_desktop_tts_reference_profile(
+                            app,
+                            reference_profile_id,
+                            voice_id,
+                        )?;
+                        build_installed_tts_provider_with_reference(
+                            manager,
+                            voice_id,
+                            Some(reference_profile.to_native()?),
+                            optional_desktop_tts_reference_text(
+                                reference_profile.reference_text.as_deref(),
+                            ),
+                        )
+                    }
+                    "pockettts" => {
+                        build_installed_tts_provider_with_reference(manager, voice_id, None, None)
+                    }
+                    _ => Err(EngineError::InvalidRequest),
+                };
+                DesktopTts::new(provider.map_err(|_| {
+                    NativeVoiceCommandError::unavailable("local_speech_unavailable")
+                })?)
+            }
+            None => {
+                let tts_route = RouteTtsBinding::new(
+                    "gateway.default",
+                    "voice.default",
+                    VAD_SAMPLE_RATE_HZ,
+                    ROUTE_REVISION,
+                )
+                .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?;
+                DesktopTts::new(NativeGatewayTtsSynthesizer::new(
+                    transport_for_profile(profile)?,
+                    NativeGatewayTtsConfig::new(tts_route, None, 1.0, TTS_MAX_AUDIO_SAMPLES)
+                        .map_err(|_| NativeVoiceCommandError::unavailable("route_unavailable"))?,
+                ))
+            }
         }
     };
     let transport = transport_for_profile(profile)?;
@@ -1586,6 +2791,7 @@ fn build_runtime(
         core,
         control,
         ui_generation,
+        current_core_generation,
     })
 }
 
@@ -2043,16 +3249,18 @@ fn build_handoff(
 #[cfg(desktop)]
 async fn release_handoff_slot(
     handoff_slot: &HandoffSlot,
-    restart_capture: bool,
+    shutdown_requested: &Cell<bool>,
 ) -> Option<&'static str> {
     let handoff = handoff_slot.borrow_mut().take();
     let (mut adapter, grant) = handoff?;
+    let restart_capture = !shutdown_requested.get();
     let release_failed = timeout(
         HANDOFF_OPERATION_TIMEOUT,
         adapter.release(&grant, restart_capture, &|| false),
     )
     .await
     .map_or(true, |release| release.is_err());
+    let restart_capture = !shutdown_requested.get();
     let cleanup_failed = timeout(HANDOFF_OPERATION_TIMEOUT, adapter.cleanup(restart_capture))
         .await
         .map_or(true, |cleanup| cleanup.is_err());
@@ -2145,6 +3353,25 @@ struct StatusOnlySink {
 #[cfg(desktop)]
 #[async_trait(?Send)]
 impl RuntimeEventSink for StatusOnlySink {
+    fn wants_speech_lifecycle(&self) -> bool {
+        native_speech_lifecycle_observer_enabled()
+    }
+
+    fn speech_lifecycle_callback(
+        &self,
+    ) -> Option<std::sync::Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync>> {
+        if !native_speech_lifecycle_observer_enabled() {
+            return None;
+        }
+        let callback: std::sync::Arc<dyn Fn(SpeechLifecycleEventV1) + Send + Sync> =
+            std::sync::Arc::new(emit_native_speech_lifecycle);
+        Some(callback)
+    }
+
+    fn speech_lifecycle(&mut self, event: SpeechLifecycleEventV1) {
+        emit_native_speech_lifecycle(event);
+    }
+
     async fn snapshot(&mut self, _snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
         Ok(())
     }
@@ -2289,10 +3516,245 @@ struct LocalSpeechSelection {
 }
 
 #[cfg(desktop)]
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MeshSpeechStageRuntime {
+    peer_id: String,
+    resource_id: String,
+    model_id: Option<String>,
+    language: Option<String>,
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct SpeechStageRuntimeSelection {
+    gateway_stt_model_id: Option<String>,
+    mesh_stt: Option<MeshSpeechStageRuntime>,
+    mesh_tts: Option<MeshSpeechStageRuntime>,
+}
+
+#[cfg(desktop)]
+impl SpeechStageRuntimeSelection {
+    fn append_cache_identity(&self, identity: &mut String) {
+        for (stage, route) in [("stt", &self.mesh_stt), ("tts", &self.mesh_tts)] {
+            if let Some(route) = route {
+                identity.push_str("|mesh-");
+                identity.push_str(stage);
+                identity.push('=');
+                identity.push_str(&route.peer_id);
+                identity.push('/');
+                identity.push_str(&route.resource_id);
+                identity.push('/');
+                identity.push_str(route.model_id.as_deref().unwrap_or(""));
+                identity.push('/');
+                identity.push_str(route.language.as_deref().unwrap_or(""));
+            }
+        }
+        if let Some(model) = &self.gateway_stt_model_id {
+            identity.push_str("|gateway-stt-model=");
+            identity.push_str(model);
+        }
+    }
+}
+
+#[cfg(desktop)]
 impl LocalSpeechSelection {
     fn cache_identity(&self) -> String {
         serde_json::to_string(self).unwrap_or_else(|_| "{}".to_owned())
     }
+}
+
+#[cfg(desktop)]
+fn apply_speech_stages(
+    selection: &mut LocalSpeechSelection,
+    stages: &SpeechStages,
+) -> Result<SpeechStageRuntimeSelection, &'static str> {
+    let mut selected = SpeechStageRuntimeSelection::default();
+    match select_speech_backend(&stages.stt, selection.stt.is_some())? {
+        SpeechStageBackend::Local => validate_local_stage(&stages.stt)?,
+        SpeechStageBackend::Gateway => {
+            validate_gateway_stage(&stages.stt)?;
+            selection.stt = None;
+            selected.gateway_stt_model_id = match &stages.stt.model_id {
+                NullableField::Value(model) => Some(model.clone()),
+                NullableField::Missing | NullableField::Null => None,
+            };
+        }
+        SpeechStageBackend::Mesh => {
+            selected.mesh_stt = Some(mesh_stage_runtime(&stages.stt)?);
+            selection.stt = None;
+        }
+    }
+
+    match select_speech_backend(&stages.tts, selection.tts.is_some())? {
+        SpeechStageBackend::Local => validate_local_stage(&stages.tts)?,
+        SpeechStageBackend::Gateway => {
+            validate_gateway_stage(&stages.tts)?;
+            // The existing Gateway TTS port has no model-selection field.
+            if matches!(&stages.tts.model_id, NullableField::Value(_)) {
+                return Err("speech_stage_unavailable");
+            }
+            selection.tts = None;
+        }
+        SpeechStageBackend::Mesh => {
+            selected.mesh_tts = Some(mesh_stage_runtime(&stages.tts)?);
+            selection.tts = None;
+        }
+    }
+
+    for (stage, configured) in [
+        (&stages.kws, selection.kws.is_some()),
+        (&stages.vad, selection.vad.is_some()),
+    ] {
+        let local = stage_uses_local(stage, configured, false, true)?;
+        if local {
+            validate_local_stage(stage)?;
+        }
+        if !local && configured {
+            return Err("speech_stage_unavailable");
+        }
+    }
+    Ok(selected)
+}
+
+#[cfg(desktop)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SpeechStageBackend {
+    Local,
+    Gateway,
+    Mesh,
+}
+
+#[cfg(desktop)]
+fn select_speech_backend(
+    stage: &SpeechStageConfig,
+    local_available: bool,
+) -> Result<SpeechStageBackend, &'static str> {
+    match stage.routing.prefer {
+        RoutingPreference::LocalOnly => local_available
+            .then_some(SpeechStageBackend::Local)
+            .ok_or("speech_stage_unavailable"),
+        RoutingPreference::Local if local_available => Ok(SpeechStageBackend::Local),
+        RoutingPreference::Local if stage.routing.fallback == RoutingFallback::Network => {
+            selected_network_backend(stage)
+        }
+        RoutingPreference::Local => Err("speech_stage_unavailable"),
+        RoutingPreference::NetworkOnly | RoutingPreference::Network => {
+            selected_network_backend(stage)
+        }
+    }
+}
+
+#[cfg(desktop)]
+fn selected_network_backend(stage: &SpeechStageConfig) -> Result<SpeechStageBackend, &'static str> {
+    match stage.network_kind {
+        Omitted::Value(SpeechNetworkKind::Mesh) => Ok(SpeechStageBackend::Mesh),
+        Omitted::Missing | Omitted::Value(SpeechNetworkKind::Gateway) => {
+            Ok(SpeechStageBackend::Gateway)
+        }
+    }
+}
+
+#[cfg(desktop)]
+fn mesh_stage_runtime(stage: &SpeechStageConfig) -> Result<MeshSpeechStageRuntime, &'static str> {
+    let target = match &stage.target {
+        NullableField::Value(target) => target,
+        NullableField::Missing | NullableField::Null => return Err("speech_stage_unavailable"),
+    };
+    let resource_id = match &target.resource_id {
+        NullableField::Value(resource_id) if !resource_id.trim().is_empty() => resource_id.clone(),
+        NullableField::Missing | NullableField::Null | NullableField::Value(_) => {
+            return Err("speech_stage_unavailable")
+        }
+    };
+    let target_model = match &target.model_id {
+        NullableField::Value(model) => Some(model.clone()),
+        NullableField::Missing | NullableField::Null => None,
+    };
+    let stage_model = match &stage.model_id {
+        NullableField::Value(model) => Some(model.clone()),
+        NullableField::Missing | NullableField::Null => None,
+    };
+    if target_model.is_some() && stage_model.is_some() && target_model != stage_model {
+        return Err("speech_stage_unavailable");
+    }
+    let language = match &stage.language {
+        NullableField::Value(language) => Some(language.clone()),
+        NullableField::Missing | NullableField::Null => None,
+    };
+    Ok(MeshSpeechStageRuntime {
+        peer_id: target.peer_id.clone(),
+        resource_id,
+        model_id: stage_model.or(target_model),
+        language,
+    })
+}
+
+#[cfg(desktop)]
+fn stage_uses_local(
+    stage: &SpeechStageConfig,
+    local_available: bool,
+    gateway_supported: bool,
+    optional_local_absence: bool,
+) -> Result<bool, &'static str> {
+    match stage.routing.prefer {
+        RoutingPreference::LocalOnly => {
+            if local_available {
+                Ok(true)
+            } else if optional_local_absence {
+                Ok(false)
+            } else {
+                Err("speech_stage_unavailable")
+            }
+        }
+        RoutingPreference::Local => {
+            if local_available {
+                Ok(true)
+            } else if stage.routing.fallback == RoutingFallback::Network && gateway_supported {
+                Ok(false)
+            } else {
+                Err("speech_stage_unavailable")
+            }
+        }
+        RoutingPreference::NetworkOnly => {
+            if gateway_supported {
+                Ok(false)
+            } else {
+                Err("speech_stage_unavailable")
+            }
+        }
+        RoutingPreference::Network => {
+            if gateway_supported {
+                Ok(false)
+            } else if stage.routing.fallback == RoutingFallback::Local && local_available {
+                Ok(true)
+            } else {
+                Err("speech_stage_unavailable")
+            }
+        }
+    }
+}
+
+#[cfg(desktop)]
+fn validate_gateway_stage(stage: &SpeechStageConfig) -> Result<(), &'static str> {
+    if matches!(&stage.network_kind, Omitted::Value(SpeechNetworkKind::Mesh))
+        || matches!(&stage.target, NullableField::Value(_))
+        || matches!(&stage.language, NullableField::Value(_))
+    {
+        return Err("speech_stage_unavailable");
+    }
+    Ok(())
+}
+
+#[cfg(desktop)]
+fn validate_local_stage(stage: &SpeechStageConfig) -> Result<(), &'static str> {
+    if !matches!(&stage.network_kind, Omitted::Missing)
+        || matches!(&stage.target, NullableField::Value(_))
+        || matches!(&stage.model_id, NullableField::Value(_))
+        || matches!(&stage.language, NullableField::Value(_))
+    {
+        return Err("speech_stage_unavailable");
+    }
+    Ok(())
 }
 
 #[cfg(desktop)]
@@ -2807,6 +4269,170 @@ fn reason_from_core_error(error: &VoiceCoreError) -> &'static str {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[cfg(desktop)]
+    async fn blocking_release_handoff() -> (
+        HandoffSlot,
+        oneshot::Receiver<()>,
+        std::sync::mpsc::Sender<()>,
+        std::sync::mpsc::Receiver<bool>,
+        std::thread::JoinHandle<()>,
+    ) {
+        use std::io::{Read, Write};
+        use std::net::{TcpListener, TcpStream};
+
+        fn read_request(stream: &mut TcpStream) -> Vec<u8> {
+            let mut header = Vec::new();
+            while !header.ends_with(b"\r\n\r\n") {
+                let mut byte = [0_u8; 1];
+                stream.read_exact(&mut byte).expect("request header");
+                header.push(byte[0]);
+            }
+            let headers = String::from_utf8(header).expect("HTTP header");
+            let content_length = headers
+                .lines()
+                .find_map(|line| {
+                    line.to_ascii_lowercase()
+                        .strip_prefix("content-length: ")
+                        .map(str::to_owned)
+                })
+                .and_then(|value| value.parse::<usize>().ok())
+                .unwrap_or(0);
+            let mut body = vec![0; content_length];
+            stream.read_exact(&mut body).expect("request body");
+            body
+        }
+
+        fn respond(stream: &mut TcpStream, body: &str) {
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            )
+            .expect("HTTP response");
+        }
+
+        let listener = TcpListener::bind("127.0.0.1:0").expect("local fixture listener");
+        let address = listener.local_addr().expect("fixture address");
+        let (release_started_tx, release_started_rx) = oneshot::channel();
+        let (release_continue_tx, release_continue_rx) = std::sync::mpsc::channel();
+        let (release_restart_tx, release_restart_rx) = std::sync::mpsc::channel();
+        let server = std::thread::spawn(move || {
+            let (mut prepare, _) = listener.accept().expect("prepare connection");
+            let _ = read_request(&mut prepare);
+            respond(
+                &mut prepare,
+                r#"{"generation":1,"granted":true,"lease_id":"host-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa","message":"granted","owner":"native","python_capture_active":false,"redacted":true,"status":"granted","stopped_python_capture":true}"#,
+            );
+
+            let (mut release, _) = listener.accept().expect("release connection");
+            let release_body = read_request(&mut release);
+            let _ = release_restart_tx.send(
+                String::from_utf8_lossy(&release_body).contains("\"restart_python_capture\":true"),
+            );
+            let _ = release_started_tx.send(());
+            let _ = release_continue_rx.recv();
+            respond(
+                &mut release,
+                r#"{"generation":1,"message":"invalid release acknowledgement","owner":"none","python_capture_active":false,"redacted":true,"released":true,"restarted_python_capture":true,"status":"released"}"#,
+            );
+            let (mut cleanup, _) = listener.accept().expect("cleanup connection");
+            let cleanup_body = read_request(&mut cleanup);
+            let _ = release_restart_tx.send(
+                String::from_utf8_lossy(&cleanup_body).contains("\"restart_python_capture\":true"),
+            );
+            respond(
+                &mut cleanup,
+                r#"{"generation":2,"message":"released","owner":"none","python_capture_active":false,"redacted":true,"released":true,"restarted_python_capture":false,"status":"released"}"#,
+            );
+        });
+
+        let transport = NativeGatewayTransport::new(
+            Url::parse(&format!("http://{address}/")).expect("loopback URL"),
+            GatewayAuth::None,
+            TransportLimits {
+                allow_loopback_http: true,
+                microphone_audio_policy: MicrophoneAudioPolicy::LoopbackOnly,
+                ..TransportLimits::default()
+            },
+        )
+        .expect("loopback transport");
+        let config = NativeGatewayCaptureHandoffConfig::new(
+            "tauri-native-voice",
+            "host-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "desktop",
+            "default",
+        )
+        .expect("handoff config");
+        let mut adapter =
+            NativeGatewayCaptureHandoff::new(transport, config).expect("loopback handoff");
+        let grant = adapter.prepare(&|| false).await.expect("prepare lease");
+        (
+            Rc::new(RefCell::new(Some((adapter, grant)))),
+            release_started_rx,
+            release_continue_tx,
+            release_restart_rx,
+            server,
+        )
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn mesh_speech_stage_keeps_exact_peer_resource_and_rejects_mismatch() {
+        let stage: SpeechStageConfig = serde_json::from_value(json!({
+            "routing": { "prefer": "network_only", "fallback": "error" },
+            "networkKind": "mesh",
+            "target": {
+                "peerId": "peer-123",
+                "resourceId": "remote:local-456:Transcription",
+                "modelId": "model-789"
+            },
+            "modelId": "model-789",
+            "language": "en-us"
+        }))
+        .expect("valid mesh stage");
+        assert_eq!(
+            select_speech_backend(&stage, false),
+            Ok(SpeechStageBackend::Mesh)
+        );
+        assert_eq!(
+            mesh_stage_runtime(&stage),
+            Ok(MeshSpeechStageRuntime {
+                peer_id: "peer-123".to_owned(),
+                resource_id: "remote:local-456:Transcription".to_owned(),
+                model_id: Some("model-789".to_owned()),
+                language: Some("en-us".to_owned()),
+            })
+        );
+
+        let mismatch: SpeechStageConfig = serde_json::from_value(json!({
+            "routing": { "prefer": "network_only", "fallback": "error" },
+            "networkKind": "mesh",
+            "target": {
+                "peerId": "peer-123",
+                "resourceId": "remote:local-456:Transcription",
+                "modelId": "bound-model"
+            },
+            "modelId": "other-model"
+        }))
+        .expect("well-shaped conflicting stage");
+        assert_eq!(
+            mesh_stage_runtime(&mismatch),
+            Err("speech_stage_unavailable")
+        );
+
+        let missing_resource: SpeechStageConfig = serde_json::from_value(json!({
+            "routing": { "prefer": "network_only", "fallback": "error" },
+            "networkKind": "mesh",
+            "target": { "peerId": "peer-123" }
+        }))
+        .expect("well-shaped stage without selected resource");
+        assert_eq!(
+            mesh_stage_runtime(&missing_resource),
+            Err("speech_stage_unavailable")
+        );
+    }
 
     #[cfg(desktop)]
     fn unique_test_dir(name: &str) -> PathBuf {
@@ -3758,17 +5384,6 @@ mod tests {
     }
 
     #[test]
-    fn stale_ui_generation_controls_are_rejected_by_reducer() {
-        let active = ActiveTurnSnapshot {
-            ui_generation: 7,
-            core_generation: Generation(3),
-        };
-        assert!(control_matches(&active, 7));
-        assert!(!control_matches(&active, 3));
-        assert!(!control_matches(&active, 8));
-    }
-
-    #[test]
     fn requested_cancel_terminal_path_returns_idle_not_faulted() {
         assert_eq!(
             terminal_phase(Some("cancelled"), true),
@@ -3936,6 +5551,89 @@ mod tests {
         assert!(!accepted.background_eligible);
     }
 
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn profile_change_cancel_waits_for_turn_settlement_and_keeps_actor_live() {
+        LocalSet::new()
+            .run_until(async {
+                let (tx, rx) = mpsc::unbounded_channel();
+                let (status_tx, mut status_rx) = mpsc::unbounded_channel();
+                let (entered_tx, entered_rx) = oneshot::channel();
+                let (release_tx, release_rx) = oneshot::channel();
+                let cancellation = CancellationToken::new();
+                let task_cancellation = cancellation.clone();
+                let task = tokio::task::spawn_local(async move {
+                    let _ = entered_tx.send(());
+                    release_rx.await.expect("release drained turn");
+                    assert!(task_cancellation.is_cancelled());
+                    TurnTaskOutcome {
+                        reason_code: None,
+                        cleanup: CoreCleanupSummary::default(),
+                        no_core_work: true,
+                        handoff_cleanup_failed: false,
+                    }
+                });
+
+                let mut actor = NativeVoiceActor::new_test(tx.clone(), status_tx);
+                actor.status.phase = NativeVoicePhase::Listening;
+                actor.status.generation = Some(17);
+                actor.active = Some(ActiveTurn {
+                    ui_generation: 17,
+                    continuous: false,
+                    _handoff_generation: None,
+                    control: DesktopCaptureControl::Test(Arc::new(Mutex::new(Vec::new()))),
+                    current_core_generation: Rc::new(Cell::new(None)),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation,
+                    handoff_slot: Rc::new(RefCell::new(None)),
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                });
+                let actor_task = tokio::task::spawn_local(run_actor_loop(actor, rx));
+                entered_rx.await.expect("turn is running");
+
+                let (release_reply, mut release_result) = oneshot::channel();
+                tx.send(ActorCommand::CancelAndDrainForProfileChange {
+                    reply: release_reply,
+                })
+                .expect("profile release reaches running actor");
+                loop {
+                    let status = status_rx.recv().await.expect("actor status");
+                    if status.phase == NativeVoicePhase::Stopping && status.generation == Some(17) {
+                        break;
+                    }
+                }
+                assert!(
+                    matches!(
+                        release_result.try_recv(),
+                        Err(oneshot::error::TryRecvError::Empty)
+                    ),
+                    "release waits for actual turn-task settlement"
+                );
+                release_tx.send(()).expect("allow task cleanup to finish");
+                assert_eq!(release_result.await, Ok(Ok(())));
+
+                let (status_reply, status_result) = oneshot::channel();
+                tx.send(ActorCommand::Status {
+                    reply: status_reply,
+                })
+                .expect("actor remains available after profile release");
+                status_result
+                    .await
+                    .expect("actor answers after profile release")
+                    .expect("status remains readable");
+                assert!(!actor_task.is_finished());
+
+                let (idle_reply, idle_result) = oneshot::channel();
+                tx.send(ActorCommand::CancelAndDrainForProfileChange { reply: idle_reply })
+                    .expect("later profile release reaches retained actor");
+                assert_eq!(idle_result.await, Ok(Ok(())));
+                actor_task.abort();
+            })
+            .await;
+    }
+
     #[test]
     fn prepare_error_path_requires_cleanup_before_start_failure() {
         assert_eq!(
@@ -3961,26 +5659,7 @@ mod tests {
     }
 
     #[test]
-    fn shutdown_waits_for_terminal_cleanup_before_ack() {
-        let active = ShutdownSnapshot {
-            active_turn: true,
-            cleanup_finished: false,
-            forced_timeout: false,
-        };
-        assert!(!active.can_ack_shutdown());
-        let finished = ShutdownSnapshot {
-            active_turn: false,
-            cleanup_finished: true,
-            forced_timeout: false,
-        };
-        assert!(finished.can_ack_shutdown());
-        assert!(finished.restart_python_capture_after_cleanup());
-        let timed_out = ShutdownSnapshot {
-            active_turn: true,
-            cleanup_finished: false,
-            forced_timeout: true,
-        };
-        assert!(!timed_out.restart_python_capture_after_cleanup());
+    fn host_stop_wait_covers_nested_cleanup_deadlines() {
         assert!(
             HANDOFF_OPERATION_TIMEOUT > HANDOFF_REQUEST_TIMEOUT,
             "outer operation timeout must not race transport request timeout"
@@ -3995,6 +5674,2038 @@ mod tests {
                 > worst_case_queued_shutdown_before_stop_wait() + Duration::from_secs(1),
             "host wait must cover queued prepare, recovery cleanup, shutdown wait, forced release, and forced cleanup"
         );
+    }
+
+    #[cfg(desktop)]
+    fn voice_state_with_test_actor(
+        run: impl FnOnce(mpsc::UnboundedReceiver<ActorCommand>) + Send + 'static,
+    ) -> NativeVoiceState {
+        let state = NativeVoiceState::default();
+        *state.inner.lock().expect("native voice lifecycle lock") =
+            NativeVoiceLifecycle::Running(NativeVoiceHandle::with_test_actor(run));
+        state
+    }
+
+    #[cfg(desktop)]
+    async fn wait_until_stopping(state: &NativeVoiceState) -> Arc<ShutdownOperation> {
+        for _ in 0..256 {
+            if let NativeVoiceLifecycle::Stopping(operation) =
+                &*state.inner.lock().expect("native voice lifecycle lock")
+            {
+                return Arc::clone(operation);
+            }
+            tokio::task::yield_now().await;
+        }
+        panic!("stop did not close actor admission");
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn actor_admission_orders_shutdown_and_waits_for_os_thread_join() {
+        let (status_started_tx, status_started_rx) = tokio::sync::oneshot::channel();
+        let (release_status_tx, release_status_rx) = std::sync::mpsc::channel();
+        let (shutdown_ack_tx, shutdown_ack_rx) = tokio::sync::oneshot::channel();
+        let (release_exit_tx, release_exit_rx) = std::sync::mpsc::channel();
+        let (thread_exit_tx, thread_exit_rx) = tokio::sync::oneshot::channel();
+        let shutdown_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let actor_shutdown_count = Arc::clone(&shutdown_count);
+        let state = voice_state_with_test_actor(move |mut rx| {
+            let mut status_started_tx = Some(status_started_tx);
+            while let Some(command) = rx.blocking_recv() {
+                match command {
+                    ActorCommand::Status { reply } => {
+                        if let Some(started_tx) = status_started_tx.take() {
+                            let _ = started_tx.send(());
+                        }
+                        let _ = release_status_rx.recv();
+                        let _ = reply.send(Ok(NativeVoiceStatus::unavailable("test")));
+                    }
+                    ActorCommand::Shutdown { reply } => {
+                        actor_shutdown_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                        let _ = reply.send(Ok(()));
+                        let _ = shutdown_ack_tx.send(());
+                        let _ = release_exit_rx.recv();
+                        let _ = thread_exit_tx.send(());
+                        break;
+                    }
+                    _ => panic!("unexpected actor command in shutdown-order test"),
+                }
+            }
+        });
+
+        let status_state = state.clone();
+        let status = tokio::spawn(async move { request_status(&status_state).await });
+        status_started_rx
+            .await
+            .expect("status admitted before stop");
+
+        let stop_state = state.clone();
+        let stop = tokio::spawn(async move { stop_state.stop().await });
+        let _operation = wait_until_stopping(&state).await;
+        assert!(request_status(&state).await.is_err());
+
+        release_status_tx.send(()).expect("release admitted status");
+        assert!(status.await.expect("status task").is_ok());
+        shutdown_ack_rx
+            .await
+            .expect("shutdown follows admitted status");
+        tokio::task::yield_now().await;
+        assert!(
+            !stop.is_finished(),
+            "ack must not replace the OS-thread join"
+        );
+
+        release_exit_tx
+            .send(())
+            .expect("allow actor thread to exit");
+        thread_exit_rx
+            .await
+            .expect("actor thread reached its exit path");
+        stop.await.expect("stop task").expect("joined actor");
+        assert_eq!(shutdown_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn concurrent_stop_waiters_share_job_after_one_is_dropped() {
+        let (shutdown_ack_tx, shutdown_ack_rx) = tokio::sync::oneshot::channel();
+        let (release_exit_tx, release_exit_rx) = std::sync::mpsc::channel();
+        let (thread_exit_tx, thread_exit_rx) = tokio::sync::oneshot::channel();
+        let shutdown_count = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let actor_shutdown_count = Arc::clone(&shutdown_count);
+        let state = voice_state_with_test_actor(move |mut rx| {
+            while let Some(command) = rx.blocking_recv() {
+                if let ActorCommand::Shutdown { reply } = command {
+                    actor_shutdown_count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let _ = reply.send(Ok(()));
+                    let _ = shutdown_ack_tx.send(());
+                    let _ = release_exit_rx.recv();
+                    let _ = thread_exit_tx.send(());
+                    break;
+                }
+            }
+        });
+
+        let first_state = state.clone();
+        let first = tokio::spawn(async move { first_state.stop().await });
+        let original_operation = wait_until_stopping(&state).await;
+        let second_state = state.clone();
+        let (second_started_tx, second_started_rx) = tokio::sync::oneshot::channel();
+        let second = tokio::spawn(async move {
+            let _ = second_started_tx.send(());
+            second_state.stop().await
+        });
+        second_started_rx.await.expect("second stop waiter started");
+        let retained_operation = wait_until_stopping(&state).await;
+        assert!(Arc::ptr_eq(&original_operation, &retained_operation));
+        shutdown_ack_rx
+            .await
+            .expect("one shutdown job acknowledged");
+        assert_eq!(shutdown_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+        assert!(!first.is_finished());
+        assert!(!second.is_finished(), "the actor thread is still owned");
+        first.abort();
+        let _ = first.await;
+
+        release_exit_tx
+            .send(())
+            .expect("allow actor thread to exit");
+        thread_exit_rx.await.expect("actor thread exit");
+        second
+            .await
+            .expect("second waiter task")
+            .expect("shared result");
+        assert_eq!(shutdown_count.load(std::sync::atomic::Ordering::SeqCst), 1);
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn queued_short_stop_deadline_quarantines_shared_shutdown_job() {
+        let (shutdown_ack_tx, shutdown_ack_rx) = oneshot::channel();
+        let (release_exit_tx, release_exit_rx) = std::sync::mpsc::channel();
+        let state = voice_state_with_test_actor(move |mut rx| {
+            while let Some(command) = rx.blocking_recv() {
+                if let ActorCommand::Shutdown { reply } = command {
+                    let _ = reply.send(Ok(()));
+                    let _ = shutdown_ack_tx.send(());
+                    let _ = release_exit_rx.recv();
+                    break;
+                }
+            }
+        });
+
+        let first_state = state.clone();
+        let first = tokio::spawn(async move { first_state.stop().await });
+        let operation = wait_until_stopping(&state).await;
+        shutdown_ack_rx
+            .await
+            .expect("actor ack precedes blocked join");
+        for _ in 0..256 {
+            if operation.progress.try_lock().is_err() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            operation.progress.try_lock().is_err(),
+            "first waiter owns progress gate"
+        );
+
+        let second_state = state.clone();
+        let second = tokio::spawn(async move {
+            second_state
+                .stop_with_timeout(Duration::from_millis(10))
+                .await
+        });
+        assert_eq!(
+            second.await.expect("short waiter"),
+            Err(NativeVoiceStopError::TimedOut)
+        );
+        assert_eq!(
+            operation.result(),
+            Some(Err(NativeVoiceStopError::TimedOut)),
+            "the waiter timeout wins the shared shutdown outcome"
+        );
+
+        release_exit_tx.send(()).expect("allow thread join");
+        assert_eq!(
+            first.await.expect("first waiter"),
+            Err(NativeVoiceStopError::TimedOut)
+        );
+        assert_eq!(
+            state.stop_with_timeout(Duration::from_secs(1)).await,
+            Err(NativeVoiceStopError::TimedOut),
+            "a later waiter cannot turn completed cleanup into a clean stop"
+        );
+        assert!(matches!(
+            &*state.inner.lock().expect("native voice lifecycle lock"),
+            NativeVoiceLifecycle::Stopping(_)
+        ));
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn timed_out_stop_keeps_lifecycle_quarantined_after_job_finishes() {
+        let (shutdown_ack_tx, shutdown_ack_rx) = tokio::sync::oneshot::channel();
+        let (release_exit_tx, release_exit_rx) = std::sync::mpsc::channel();
+        let (thread_exit_tx, thread_exit_rx) = tokio::sync::oneshot::channel();
+        let state = voice_state_with_test_actor(move |mut rx| {
+            while let Some(command) = rx.blocking_recv() {
+                if let ActorCommand::Shutdown { reply } = command {
+                    let _ = reply.send(Ok(()));
+                    let _ = shutdown_ack_tx.send(());
+                    let _ = release_exit_rx.recv();
+                    let _ = thread_exit_tx.send(());
+                    break;
+                }
+            }
+        });
+
+        let result = state.stop_with_timeout(Duration::ZERO).await;
+        assert_eq!(result, Err(NativeVoiceStopError::TimedOut));
+        let operation = wait_until_stopping(&state).await;
+        shutdown_ack_rx
+            .await
+            .expect("actor acknowledged before thread join");
+        assert!(request_status(&state).await.is_err());
+        assert_eq!(
+            operation.result(),
+            Some(Err(NativeVoiceStopError::TimedOut)),
+            "timeout is sticky while the retained job is still running"
+        );
+
+        release_exit_tx
+            .send(())
+            .expect("allow the retained job to finish");
+        thread_exit_rx.await.expect("actor thread exit");
+        for _ in 0..256 {
+            if operation.progress.lock().await.job.is_finished() {
+                break;
+            }
+            tokio::task::yield_now().await;
+        }
+        assert!(operation.progress.lock().await.job.is_finished());
+        assert_eq!(
+            state.stop_with_timeout(Duration::from_secs(1)).await,
+            Err(NativeVoiceStopError::TimedOut)
+        );
+        assert!(matches!(
+            &*state.inner.lock().expect("native voice lifecycle lock"),
+            NativeVoiceLifecycle::Stopping(_)
+        ));
+    }
+
+    #[cfg(desktop)]
+    fn successful_test_turn() -> TurnTaskOutcome {
+        TurnTaskOutcome {
+            reason_code: None,
+            cleanup: CoreCleanupSummary::default(),
+            no_core_work: true,
+            handoff_cleanup_failed: false,
+        }
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn actor_failure_quarantine_survives_clean_completion_and_inactive_shutdown() {
+        let mut failure = ActorFailureState::default();
+        assert!(!failure.blocks_reuse());
+        assert_eq!(failure.shutdown_result(), Ok(()));
+        failure.record(NativeVoiceStopError::ShutdownFailed);
+
+        assert!(failure.blocks_reuse(), "new turns remain rejected");
+        assert_eq!(
+            failure.completion_phase(false, None, false),
+            NativeVoicePhase::Faulted,
+            "a later clean task cannot publish Idle after cleanup failure"
+        );
+        assert_eq!(
+            failure.shutdown_result(),
+            Err(NativeVoiceStopError::ShutdownFailed),
+            "an inactive shutdown still returns the retained failure"
+        );
+
+        failure.record(NativeVoiceStopError::TimedOut);
+        assert_eq!(
+            failure.shutdown_result(),
+            Err(NativeVoiceStopError::ShutdownFailed),
+            "later outcomes do not erase the first quarantine reason"
+        );
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn ambiguous_prepare_cleanup_failure_stays_quarantined_through_actor_dispatch() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let listener = std::net::TcpListener::bind("127.0.0.1:0")
+                    .expect("loopback handoff fixture listener");
+                let address = listener.local_addr().expect("fixture address");
+                let (request_count_tx, request_count_rx) = std::sync::mpsc::channel();
+                let server = std::thread::spawn(move || {
+                    for _ in 0..2 {
+                        let (stream, _) = listener.accept().expect("prepare/recovery request");
+                        drop(stream);
+                        request_count_tx.send(()).expect("record accepted request");
+                    }
+                });
+                let transport = NativeGatewayTransport::new(
+                    Url::parse(&format!("http://{address}/")).expect("loopback transport URL"),
+                    GatewayAuth::None,
+                    TransportLimits {
+                        allow_loopback_http: true,
+                        microphone_audio_policy: MicrophoneAudioPolicy::LoopbackOnly,
+                        ..TransportLimits::default()
+                    },
+                )
+                .expect("loopback transport");
+                let config = NativeGatewayCaptureHandoffConfig::new(
+                    "tauri-native-voice",
+                    "host-token-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    "desktop",
+                    "default",
+                )
+                .expect("handoff config");
+                let mut adapter = NativeGatewayCaptureHandoff::new(transport, config)
+                    .expect("controlled Gateway handoff");
+                let (command_tx, command_rx) = mpsc::unbounded_channel();
+                let (status_tx, mut status_rx) = mpsc::unbounded_channel();
+                let mut actor = NativeVoiceActor::new_test(command_tx.clone(), status_tx);
+                let prepare_error = actor
+                    .prepare_local_handoff(&mut adapter, &CancellationToken::new())
+                    .await
+                    .expect_err("prepare and ambiguous recovery both fail");
+                assert_eq!(prepare_error.reason_code, "handoff_cleanup_failed");
+                assert!(actor.failure.blocks_reuse());
+                assert_eq!(request_count_rx.try_iter().count(), 2);
+                server.join().expect("join handoff fixture");
+                let actor_task = tokio::task::spawn_local(run_actor_loop(actor, command_rx));
+
+                let (start_reply, start_result) = oneshot::channel();
+                command_tx
+                    .send(ActorCommand::Start {
+                        request: NativeVoiceStartRequest {
+                            trigger: NativeVoiceTrigger::FocusedPushToTalk,
+                            remote_audio_consent: false,
+                        },
+                        profile_generation: None,
+                        speech_stages: None,
+                        config_revision: None,
+                        confirmed_profile_document: None,
+                        reply: start_reply,
+                    })
+                    .expect("dispatch start after ambiguous prepare recovery failure");
+                assert_eq!(
+                    start_result
+                        .await
+                        .expect("start result")
+                        .unwrap_err()
+                        .reason_code,
+                    "local_cleanup_failed"
+                );
+
+                let (status_reply, status_result) = oneshot::channel();
+                command_tx
+                    .send(ActorCommand::RuntimePhase {
+                        ui_generation: 1,
+                        phase: NativeVoicePhase::Listening,
+                        reason_code: None,
+                    })
+                    .expect("dispatch stale runtime event");
+                command_tx
+                    .send(ActorCommand::Status {
+                        reply: status_reply,
+                    })
+                    .expect("read quarantined actor status");
+                let status = status_result.await.expect("status reply").expect("status");
+                assert_eq!(status.phase, NativeVoicePhase::Faulted);
+                assert_eq!(
+                    status.reason_code.as_deref(),
+                    Some("handoff_cleanup_failed")
+                );
+
+                let (shutdown_reply, shutdown_result) = std::sync::mpsc::channel();
+                command_tx
+                    .send(ActorCommand::Shutdown {
+                        reply: shutdown_reply,
+                    })
+                    .expect("dispatch inactive shutdown after failed recovery");
+                actor_task.await.expect("headless actor loop exits");
+                assert_eq!(
+                    shutdown_result
+                        .try_recv()
+                        .expect("shutdown acknowledgement"),
+                    Err(NativeVoiceStopError::ShutdownFailed)
+                );
+                let mut published = Vec::new();
+                while let Ok(status) = status_rx.try_recv() {
+                    published.push(status);
+                }
+                assert!(published.iter().all(|status| {
+                    status.phase == NativeVoicePhase::Faulted
+                        && matches!(
+                            status.reason_code.as_deref(),
+                            Some("handoff_cleanup_failed" | "local_cleanup_failed")
+                        )
+                }));
+            })
+            .await;
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn headless_actor_dispatch_keeps_failure_sticky_through_start_status_and_completion() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (command_tx, command_rx) = mpsc::unbounded_channel();
+                let (status_tx, mut status_rx) = mpsc::unbounded_channel();
+                let (release_task_tx, release_task_rx) = oneshot::channel();
+                let task = tokio::task::spawn_local(async move {
+                    release_task_rx.await.expect("release scripted turn");
+                    let mut cleanup = CoreCleanupSummary::default();
+                    cleanup.record_values(
+                        Generation(17),
+                        true,
+                        false,
+                        false,
+                        [
+                            aurora_voice_core::CleanupCallbackOutcome::NotAttempted,
+                            aurora_voice_core::CleanupCallbackOutcome::NotAttempted,
+                            aurora_voice_core::CleanupCallbackOutcome::NotAttempted,
+                            aurora_voice_core::CleanupCallbackOutcome::NotAttempted,
+                            aurora_voice_core::CleanupCallbackOutcome::NotAttempted,
+                            aurora_voice_core::CleanupCallbackOutcome::ReturnedOk,
+                            aurora_voice_core::CleanupCallbackOutcome::ReturnedOk,
+                            aurora_voice_core::CleanupCallbackOutcome::NotAttempted,
+                        ],
+                    );
+                    assert!(
+                        !cleanup.failed_for_task(false),
+                        "the later assigned generation has a clean cleanup summary"
+                    );
+                    TurnTaskOutcome {
+                        reason_code: None,
+                        cleanup,
+                        no_core_work: false,
+                        handoff_cleanup_failed: false,
+                    }
+                });
+                let capture_events = Arc::new(Mutex::new(Vec::new()));
+                let mut actor = NativeVoiceActor::new_test(command_tx.clone(), status_tx);
+                actor.quarantine_after_ambiguous_prepare_cleanup_failure();
+                actor.status.generation = Some(93);
+                actor.active = Some(ActiveTurn {
+                    ui_generation: 93,
+                    continuous: false,
+                    _handoff_generation: None,
+                    control: DesktopCaptureControl::Test(Arc::clone(&capture_events)),
+                    current_core_generation: Rc::new(Cell::new(Some(Generation(17)))),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation: CancellationToken::new(),
+                    handoff_slot: Rc::new(RefCell::new(None)),
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                });
+                let actor_task = tokio::task::spawn_local(run_actor_loop(actor, command_rx));
+
+                let (start_reply, start_result) = oneshot::channel();
+                command_tx
+                    .send(ActorCommand::Start {
+                        request: NativeVoiceStartRequest {
+                            trigger: NativeVoiceTrigger::FocusedPushToTalk,
+                            remote_audio_consent: false,
+                        },
+                        profile_generation: None,
+                        speech_stages: None,
+                        config_revision: None,
+                        confirmed_profile_document: None,
+                        reply: start_reply,
+                    })
+                    .expect("dispatch start through actor loop");
+                let start_error = start_result.await.expect("start reply").unwrap_err();
+                assert_eq!(start_error.reason_code, "local_cleanup_failed");
+
+                let (phase_reply, phase_result) = oneshot::channel();
+                command_tx
+                    .send(ActorCommand::RuntimePhase {
+                        ui_generation: 93,
+                        phase: NativeVoicePhase::Listening,
+                        reason_code: None,
+                    })
+                    .expect("dispatch late runtime phase");
+                command_tx
+                    .send(ActorCommand::Status { reply: phase_reply })
+                    .expect("dispatch status after late phase");
+                let status = phase_result.await.expect("status reply").expect("status");
+                assert_eq!(status.phase, NativeVoicePhase::Faulted);
+                assert_eq!(
+                    status.reason_code.as_deref(),
+                    Some("handoff_cleanup_failed")
+                );
+
+                let (finish_reply, finish_result) = oneshot::channel();
+                command_tx
+                    .send(ActorCommand::Finish {
+                        request: NativeVoiceControlRequest {
+                            generation: 93,
+                            reason: NativeVoiceStopReason::UserRequest,
+                        },
+                        reply: finish_reply,
+                    })
+                    .expect("dispatch finish through actor loop");
+                let finish_status = finish_result.await.expect("finish reply").expect("finish");
+                assert_eq!(finish_status.phase, NativeVoicePhase::Faulted);
+                assert_eq!(
+                    &*capture_events.lock().expect("test capture events"),
+                    &[("finish", 17)]
+                );
+
+                while status_rx.try_recv().is_ok() {}
+                release_task_tx
+                    .send(())
+                    .expect("complete actual owned task");
+                let mut completed = false;
+                while !completed {
+                    match status_rx.recv().await.expect("actor status event") {
+                        status
+                            if status.phase == NativeVoicePhase::Faulted
+                                && status.generation.is_none() =>
+                        {
+                            completed = true;
+                        }
+                        _ => {}
+                    }
+                }
+
+                let (post_completion_reply, post_completion_result) = oneshot::channel();
+                command_tx
+                    .send(ActorCommand::Status {
+                        reply: post_completion_reply,
+                    })
+                    .expect("dispatch status after completion");
+                assert_eq!(
+                    post_completion_result
+                        .await
+                        .expect("post-completion status")
+                        .expect("status")
+                        .phase,
+                    NativeVoicePhase::Faulted
+                );
+
+                let (shutdown_reply, shutdown_result) = std::sync::mpsc::channel();
+                command_tx
+                    .send(ActorCommand::Shutdown {
+                        reply: shutdown_reply,
+                    })
+                    .expect("dispatch shutdown after failed generation");
+                actor_task.await.expect("actor loop exits after shutdown");
+                assert_eq!(
+                    shutdown_result.try_recv().expect("shutdown result"),
+                    Err(NativeVoiceStopError::ShutdownFailed)
+                );
+            })
+            .await;
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn stale_turn_completion_preserves_task_and_latest_capture_generation() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let input = CpalAudioInput::new(NativeCaptureConfig::default());
+                let binding = Rc::new(Cell::new(Some(Generation(1))));
+                let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+                let task = tokio::task::spawn_local(async move {
+                    let _ = release_rx.await;
+                    successful_test_turn()
+                });
+                let mut active = ActiveTurn {
+                    ui_generation: 41,
+                    continuous: false,
+                    _handoff_generation: None,
+                    control: DesktopCaptureControl::Production(input.control()),
+                    current_core_generation: Rc::clone(&binding),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation: CancellationToken::new(),
+                    handoff_slot: Rc::new(RefCell::new(None)),
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                };
+
+                assert_eq!(active.interrupt_current_capture(), Some(Generation(1)));
+                binding.set(Some(Generation(2)));
+                assert_eq!(active.finish_current_capture(), Some(Generation(2)));
+                assert_eq!(binding.get(), Some(Generation(2)));
+
+                assert!(active.take_task_for_completion(40).is_none());
+                assert!(active.task.as_ref().is_some_and(|task| !task.is_finished()));
+                assert_eq!(binding.get(), Some(Generation(2)));
+
+                let task = active
+                    .take_task_for_completion(41)
+                    .expect("matching UI generation")
+                    .expect("owned task remains present");
+                release_tx.send(()).expect("finish matching task");
+                let outcome = join_active_turn(task).await;
+                assert!(!outcome.cleanup.failed_for_task(outcome.no_core_work));
+            })
+            .await;
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[tokio::test(flavor = "current_thread")]
+    async fn second_core_generation_remains_bound_for_controls_and_stale_completion() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (mut core, cancelled, entered, release, control) =
+                    paused_report_test_e2e_runtime([false, false], 2);
+                let binding = Rc::new(Cell::new(None));
+                let mut first_summary = CoreCleanupSummary::default();
+                let first_cancellation = CancellationToken::new();
+                first_cancellation.cancel();
+                assert!(
+                    run_core_generation(&mut core, &binding, &mut first_summary, |core| {
+                        Box::pin(core.run_push_to_talk_transcription(
+                            e2e_transcription_lease(),
+                            TimestampMicros(1),
+                            first_cancellation,
+                        ))
+                    })
+                    .await
+                    .is_err()
+                );
+                assert_eq!(first_summary.last_generation, Some(Generation(1)));
+                assert_eq!(
+                    binding.get(),
+                    None,
+                    "cancellation between turns clears binding"
+                );
+
+                let task_binding = Rc::clone(&binding);
+                let task_cancellation = CancellationToken::new();
+                let invocation_cancellation = task_cancellation.clone();
+                let task = tokio::task::spawn_local(async move {
+                    let mut summary = CoreCleanupSummary::default();
+                    let result =
+                        run_core_generation(&mut core, &task_binding, &mut summary, |core| {
+                            Box::pin(core.run_push_to_talk_transcription(
+                                e2e_transcription_lease(),
+                                TimestampMicros(2),
+                                invocation_cancellation,
+                            ))
+                        })
+                        .await;
+                    TurnTaskOutcome {
+                        reason_code: result.err().map(|error| reason_from_core_error(&error)),
+                        cleanup: summary,
+                        no_core_work: false,
+                        handoff_cleanup_failed: false,
+                    }
+                });
+
+                for _ in 0..256 {
+                    if control.active(Generation(2)) {
+                        break;
+                    }
+                    tokio::task::yield_now().await;
+                }
+                assert!(
+                    control.active(Generation(2)),
+                    "the second actual core generation owns its capture"
+                );
+                assert_eq!(binding.get(), Some(Generation(2)));
+
+                let mut active = ActiveTurn {
+                    ui_generation: 47,
+                    continuous: true,
+                    _handoff_generation: None,
+                    control: DesktopCaptureControl::Deterministic(control.clone()),
+                    current_core_generation: Rc::clone(&binding),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation: task_cancellation,
+                    handoff_slot: Rc::new(RefCell::new(None)),
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                };
+
+                assert!(active.take_task_for_completion(46).is_none());
+                assert_eq!(binding.get(), Some(Generation(2)));
+                assert!(active.task.as_ref().is_some_and(|task| !task.is_finished()));
+
+                assert_eq!(active.finish_current_capture(), Some(Generation(2)));
+                assert!(control
+                    .shared
+                    .finished
+                    .load(std::sync::atomic::Ordering::SeqCst));
+                assert_eq!(entered.await.expect("second actual core callback"), 2);
+                // Cancel, shutdown and deadline all route to the same current
+                // generation-bound interruption path while that actual core
+                // generation is finishing its cleanup callback.
+                active.cancellation.cancel();
+                assert_eq!(active.interrupt_current_capture(), Some(Generation(2)));
+                active.shutdown_requested.set(true);
+                assert_eq!(active.interrupt_current_capture(), Some(Generation(2)));
+                assert_eq!(active.interrupt_current_capture(), Some(Generation(2)));
+                assert!(control
+                    .shared
+                    .interrupted
+                    .load(std::sync::atomic::Ordering::SeqCst));
+
+                release
+                    .send(())
+                    .expect("allow second core cleanup to report");
+                let task = active
+                    .take_task_for_completion(47)
+                    .expect("matching outer UI generation")
+                    .expect("retained actual generation task");
+                let outcome = join_active_turn(task).await;
+                assert_eq!(outcome.cleanup.invocations, 1);
+                assert_eq!(outcome.cleanup.last_generation, Some(Generation(2)));
+                assert!(!outcome.cleanup.failed_for_task(outcome.no_core_work));
+                assert!(outcome.cleanup.capture_start_attempted);
+                assert_eq!(binding.get(), None);
+                assert_eq!(&*cancelled.borrow(), &[1, 2]);
+            })
+            .await;
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[tokio::test(flavor = "current_thread")]
+    async fn background_session_keeps_second_real_core_generation_bound_through_shutdown() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (mut core, control, second_capture_entered, release_second_capture) =
+                    paused_background_test_runtime(2, false);
+                let current_generation = Rc::new(Cell::new(None));
+                let task_generation = Rc::clone(&current_generation);
+                let cancellation = CancellationToken::new();
+                let task_cancellation = cancellation.clone();
+                let captured_summary = Rc::new(RefCell::new(None));
+                let captured_summary_from_task = Rc::clone(&captured_summary);
+                let task = tokio::task::spawn_local(async move {
+                    let mut cleanup = CoreCleanupSummary::default();
+                    let result = run_background_session(
+                        &mut core,
+                        VoiceCaptureLease {
+                            background_eligible: true,
+                            ..cancelled_transcription_lease()
+                        },
+                        task_cancellation,
+                        &task_generation,
+                        &mut cleanup,
+                    )
+                    .await;
+                    *captured_summary_from_task.borrow_mut() = Some(cleanup.clone());
+                    TurnTaskOutcome {
+                        reason_code: result.err().map(|error| reason_from_core_error(&error)),
+                        cleanup,
+                        no_core_work: false,
+                        handoff_cleanup_failed: false,
+                    }
+                });
+
+                assert_eq!(
+                    second_capture_entered
+                        .await
+                        .expect("second generation capture"),
+                    2
+                );
+                assert_eq!(
+                    current_generation.get(),
+                    Some(Generation(2)),
+                    "one continuous background session has entered its second core generation"
+                );
+                assert!(control.active(Generation(2)), "capture is still active");
+                assert_eq!(current_generation.get(), Some(Generation(2)));
+
+                let (tx, rx) = mpsc::unbounded_channel();
+                let (status_tx, mut status_rx) = mpsc::unbounded_channel();
+                let mut actor = NativeVoiceActor::new_test(tx.clone(), status_tx);
+                actor.shutdown_timeout = Duration::ZERO;
+                actor.status.phase = NativeVoicePhase::Listening;
+                actor.status.generation = Some(91);
+                actor.active = Some(ActiveTurn {
+                    ui_generation: 91,
+                    continuous: true,
+                    _handoff_generation: None,
+                    control: DesktopCaptureControl::Deterministic(control.clone()),
+                    current_core_generation: Rc::clone(&current_generation),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation,
+                    handoff_slot: Rc::new(RefCell::new(None)),
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                });
+                let actor_task = tokio::task::spawn_local(run_actor_loop(actor, rx));
+
+                tx.send(ActorCommand::TurnFinished { ui_generation: 90 })
+                    .expect("stale completion wakeup enters actual actor queue");
+                let (stale_reply, stale_result) = oneshot::channel();
+                tx.send(ActorCommand::Status { reply: stale_reply })
+                    .expect("query after stale completion wakeup");
+                let stale_status = stale_result
+                    .await
+                    .expect("status after stale completion")
+                    .expect("status");
+                assert_eq!(stale_status.generation, Some(91));
+                assert!(control.active(Generation(2)));
+                assert_eq!(current_generation.get(), Some(Generation(2)));
+
+                tx.send(ActorCommand::TurnFinished { ui_generation: 91 })
+                    .expect("early completion wakeup enters actual actor queue");
+                let (status_reply, status_result) = oneshot::channel();
+                tx.send(ActorCommand::Status {
+                    reply: status_reply,
+                })
+                .expect("query while actual second capture is blocked");
+                let status = status_result
+                    .await
+                    .expect("active status reply")
+                    .expect("status");
+                assert_eq!(status.generation, Some(91));
+                assert!(control.active(Generation(2)));
+                assert_eq!(current_generation.get(), Some(Generation(2)));
+
+                let (start_reply, start_result) = oneshot::channel();
+                tx.send(ActorCommand::Start {
+                    request: NativeVoiceStartRequest {
+                        trigger: NativeVoiceTrigger::FocusedPushToTalk,
+                        remote_audio_consent: false,
+                    },
+                    profile_generation: None,
+                    speech_stages: None,
+                    config_revision: None,
+                    confirmed_profile_document: None,
+                    reply: start_reply,
+                })
+                .expect("dispatch restart attempt during live second capture");
+                assert_eq!(
+                    start_result
+                        .await
+                        .expect("start result")
+                        .unwrap_err()
+                        .reason_code,
+                    ACTIVE_REASON
+                );
+
+                let (finish_reply, finish_result) = oneshot::channel();
+                tx.send(ActorCommand::Finish {
+                    request: NativeVoiceControlRequest {
+                        generation: 91,
+                        reason: NativeVoiceStopReason::UserRequest,
+                    },
+                    reply: finish_reply,
+                })
+                .expect("dispatch finish through actor loop");
+                assert_eq!(
+                    finish_result
+                        .await
+                        .expect("finish result")
+                        .expect("finish")
+                        .phase,
+                    NativeVoicePhase::Stopping
+                );
+                assert!(control.active(Generation(2)));
+                assert!(control
+                    .shared
+                    .interrupted
+                    .load(std::sync::atomic::Ordering::SeqCst));
+
+                let (cancel_reply, cancel_result) = oneshot::channel();
+                tx.send(ActorCommand::Cancel {
+                    request: NativeVoiceControlRequest {
+                        generation: 91,
+                        reason: NativeVoiceStopReason::UserRequest,
+                    },
+                    reply: cancel_reply,
+                })
+                .expect("dispatch cancel through actor loop");
+                assert_eq!(
+                    cancel_result
+                        .await
+                        .expect("cancel result")
+                        .expect("cancel")
+                        .phase,
+                    NativeVoicePhase::Stopping
+                );
+                assert!(control.active(Generation(2)));
+
+                let (shutdown_reply, shutdown_result) = std::sync::mpsc::channel();
+                tx.send(ActorCommand::Shutdown {
+                    reply: shutdown_reply,
+                })
+                .expect("dispatch shutdown through actor loop");
+                assert_eq!(current_generation.get(), Some(Generation(2)));
+
+                let timeout_status = loop {
+                    let status = status_rx.recv().await.expect("actor deadline status");
+                    if status.reason_code.as_deref() == Some("local_cleanup_failed")
+                        && status.generation.is_none()
+                    {
+                        break status;
+                    }
+                };
+                assert_eq!(timeout_status.phase, NativeVoicePhase::Faulted);
+                assert!(control.active(Generation(2)));
+                assert!(matches!(
+                    shutdown_result.try_recv(),
+                    Err(std::sync::mpsc::TryRecvError::Empty)
+                ));
+
+                release_second_capture
+                    .send(())
+                    .expect("allow live capture to finish after deadline");
+                actor_task.await.expect("headless actor loop exits");
+                assert_eq!(
+                    shutdown_result.try_recv().expect("actor shutdown result"),
+                    Err(NativeVoiceStopError::TimedOut)
+                );
+
+                let cleanup = captured_summary.borrow();
+                let cleanup = cleanup.as_ref().expect("actor-owned task cleanup report");
+                assert_eq!(cleanup.invocations, 2);
+                assert_eq!(cleanup.last_generation, Some(Generation(2)));
+                assert!(cleanup.capture_start_attempted);
+                assert_eq!(current_generation.get(), None);
+                assert!(!control.active(Generation(2)));
+                assert_eq!(
+                    *control
+                        .shared
+                        .started_generations
+                        .lock()
+                        .expect("captured core generations"),
+                    vec![1, 2]
+                );
+                assert_eq!(
+                    *control
+                        .shared
+                        .control_events
+                        .lock()
+                        .expect("generation-scoped control calls"),
+                    vec![
+                        ("interrupt", 2),
+                        ("interrupt", 2),
+                        ("interrupt", 2),
+                        ("interrupt", 2)
+                    ]
+                );
+            })
+            .await;
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[tokio::test(flavor = "current_thread")]
+    async fn background_cancel_between_iterations_prevents_next_capture() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (mut core, control, _unused_pause_entered, _unused_pause_release) =
+                    paused_background_test_runtime(99, false);
+                let (boundary_entered_tx, boundary_entered_rx) = oneshot::channel();
+                let (release_between_iterations, release_between_iterations_rx) =
+                    oneshot::channel();
+                let boundary_gate = Rc::new(RefCell::new(Some((
+                    boundary_entered_tx,
+                    release_between_iterations_rx,
+                ))));
+                let current_generation = Rc::new(Cell::new(None));
+                let task_generation = Rc::clone(&current_generation);
+                let cancellation = CancellationToken::new();
+                let task_cancellation = cancellation.clone();
+                let captured_summary = Rc::new(RefCell::new(None));
+                let captured_summary_from_task = Rc::clone(&captured_summary);
+                let task = tokio::task::spawn_local(async move {
+                    let mut cleanup = CoreCleanupSummary::default();
+                    let boundary_gate = Rc::clone(&boundary_gate);
+                    let result = run_background_session_with_iteration_boundary(
+                        &mut core,
+                        VoiceCaptureLease {
+                            background_eligible: true,
+                            ..cancelled_transcription_lease()
+                        },
+                        task_cancellation,
+                        &task_generation,
+                        &mut cleanup,
+                        move || {
+                            let gate = boundary_gate.borrow_mut().take();
+                            Box::pin(async move {
+                                if let Some((entered, release)) = gate {
+                                    let _ = entered.send(());
+                                    let _ = release.await;
+                                }
+                            })
+                        },
+                    )
+                    .await;
+                    *captured_summary_from_task.borrow_mut() = Some(cleanup.clone());
+                    TurnTaskOutcome {
+                        reason_code: result.err().map(|error| reason_from_core_error(&error)),
+                        cleanup,
+                        no_core_work: false,
+                        handoff_cleanup_failed: false,
+                    }
+                });
+
+                boundary_entered_rx
+                    .await
+                    .expect("first generation fully cleaned up");
+                assert_eq!(current_generation.get(), None);
+                assert!(!control.active(Generation(1)));
+                assert_eq!(
+                    *control
+                        .shared
+                        .started_generations
+                        .lock()
+                        .expect("first generation started"),
+                    vec![1]
+                );
+
+                let (tx, rx) = mpsc::unbounded_channel();
+                let (status_tx, mut status_rx) = mpsc::unbounded_channel();
+                let mut actor = NativeVoiceActor::new_test(tx.clone(), status_tx);
+                actor.status.phase = NativeVoicePhase::Listening;
+                actor.status.generation = Some(92);
+                actor.active = Some(ActiveTurn {
+                    ui_generation: 92,
+                    continuous: true,
+                    _handoff_generation: None,
+                    control: DesktopCaptureControl::Deterministic(control.clone()),
+                    current_core_generation: Rc::clone(&current_generation),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation,
+                    handoff_slot: Rc::new(RefCell::new(None)),
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                });
+                let actor_task = tokio::task::spawn_local(run_actor_loop(actor, rx));
+
+                let (cancel_reply, cancel_result) = oneshot::channel();
+                tx.send(ActorCommand::Cancel {
+                    request: NativeVoiceControlRequest {
+                        generation: 92,
+                        reason: NativeVoiceStopReason::UserRequest,
+                    },
+                    reply: cancel_reply,
+                })
+                .expect("cancel between background iterations through actor");
+                assert_eq!(
+                    cancel_result
+                        .await
+                        .expect("cancel response")
+                        .expect("cancel")
+                        .phase,
+                    NativeVoicePhase::Stopping
+                );
+                release_between_iterations
+                    .send(())
+                    .expect("allow completed generation loop to observe cancellation");
+
+                let completed = loop {
+                    let status = status_rx.recv().await.expect("actor completion status");
+                    if status.generation.is_none() {
+                        break status;
+                    }
+                };
+                assert_eq!(completed.phase, NativeVoicePhase::Idle);
+                assert_eq!(
+                    *control
+                        .shared
+                        .started_generations
+                        .lock()
+                        .expect("background generation list"),
+                    vec![1],
+                    "cancellation before the next loop iteration prevents another capture"
+                );
+                let cleanup = captured_summary.borrow();
+                let cleanup = cleanup.as_ref().expect("actual actor-owned task report");
+                assert_eq!(cleanup.invocations, 1);
+                assert_eq!(cleanup.last_generation, Some(Generation(1)));
+                assert_eq!(current_generation.get(), None);
+
+                let (shutdown_reply, shutdown_result) = std::sync::mpsc::channel();
+                tx.send(ActorCommand::Shutdown {
+                    reply: shutdown_reply,
+                })
+                .expect("stop headless actor after background task completion");
+                actor_task.await.expect("actor exits after shutdown");
+                assert_eq!(shutdown_result.try_recv().expect("shutdown result"), Ok(()));
+            })
+            .await;
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn multi_generation_summary_keeps_missing_reports_sticky() {
+        let mut summary = CoreCleanupSummary::default();
+        summary.record(Generation(1), None, true);
+        assert_eq!(summary.invocations, 1);
+        assert_eq!(summary.last_generation, Some(Generation(1)));
+        assert!(summary.failed_for_task(false));
+
+        summary.record(Generation(2), None, true);
+        assert_eq!(summary.invocations, 2);
+        assert_eq!(summary.last_generation, Some(Generation(2)));
+        assert!(summary.failed_for_task(false));
+    }
+
+    #[cfg(desktop)]
+    #[test]
+    fn later_clean_generation_does_not_erase_earlier_cleanup_failure() {
+        use aurora_voice_core::CleanupCallbackOutcome::{ReturnedError, ReturnedOk};
+
+        let mut summary = CoreCleanupSummary::default();
+        let mut first = [ReturnedOk; 8];
+        first[1] = ReturnedError;
+        first[7] = aurora_voice_core::CleanupCallbackOutcome::NotAttempted;
+        let mut second = [ReturnedOk; 8];
+        second[7] = aurora_voice_core::CleanupCallbackOutcome::NotAttempted;
+        summary.record_values(Generation(1), true, true, false, first);
+        summary.record_values(Generation(2), true, true, false, second);
+
+        assert_eq!(summary.invocations, 2);
+        assert_eq!(summary.last_generation, Some(Generation(2)));
+        assert!(summary.capture_start_attempted);
+        assert!(summary.assistant_transport_attempted);
+        assert!(summary.failed_for_task(false));
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestAudio {
+        start_fails: bool,
+    }
+
+    #[cfg(desktop)]
+    #[async_trait::async_trait(?Send)]
+    impl AudioInput for ReportTestAudio {
+        async fn start(&mut self, _lease: VoiceCaptureLease) -> Result<(), VoiceCoreError> {
+            if self.start_fails {
+                Err(VoiceCoreError::TransportFault {
+                    code: "scripted_capture_start_failure".to_owned(),
+                })
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn stop(&mut self, _reason: TransitionReason) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+
+        async fn next_frame(&mut self) -> Result<Option<PcmFrame>, VoiceCoreError> {
+            Ok(None)
+        }
+
+        fn current_route_revision(&self) -> RouteRevision {
+            RouteRevision(1)
+        }
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    struct BackgroundTestVad {
+        binding: TaskPackBinding,
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[async_trait::async_trait(?Send)]
+    impl TaskProvider for BackgroundTestVad {
+        fn capabilities(&self) -> Vec<TaskCapability> {
+            vec![TaskCapability::new(self.binding.clone()).streaming(true)]
+        }
+
+        fn resource_report(&self) -> ResourceReport {
+            ResourceReport {
+                loaded_tasks: vec![aurora_voice_engine::VoiceTask::VoiceActivityDetection],
+                memory_bytes: 0,
+                active_streams: 0,
+                readiness: aurora_voice_engine::TaskReadiness::Ready,
+            }
+        }
+
+        async fn warm_task(&mut self, _request: BoundTaskRequest) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn unload_task(&mut self, _binding: TaskPackBinding) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn cancel_generation(&mut self, _generation: u64) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[async_trait::async_trait(?Send)]
+    impl VadStreamProvider for BackgroundTestVad {
+        async fn start_vad_session(
+            &mut self,
+            request: BoundVadRequest,
+        ) -> Result<BoundStreamSession, EngineError> {
+            BoundStreamSession::new(
+                aurora_voice_engine::StreamSessionId(request.request().request().generation),
+                request.request(),
+            )
+        }
+
+        async fn push_vad_frame(
+            &mut self,
+            _session: &BoundStreamSession,
+            _frame: aurora_voice_engine::StreamingAudioFrame<'_>,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<VadAcceptResult, EngineError> {
+            Ok(VadAcceptResult::new(false, Vec::new(), None))
+        }
+
+        async fn flush_vad_session(
+            &mut self,
+            _session: &BoundStreamSession,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<Vec<SpeechSegment>, EngineError> {
+            Ok(Vec::new())
+        }
+
+        async fn reset_vad_session(
+            &mut self,
+            _session: &BoundStreamSession,
+            _reason: StreamResetReason,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    struct BackgroundTestKws {
+        binding: TaskPackBinding,
+        config: KwsConfig,
+        cooldown: aurora_voice_engine::KwsCooldownState,
+        pause: Rc<RefCell<Option<ReportTestPause>>>,
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[async_trait::async_trait(?Send)]
+    impl TaskProvider for BackgroundTestKws {
+        fn capabilities(&self) -> Vec<TaskCapability> {
+            vec![TaskCapability::new(self.binding.clone()).streaming(true)]
+        }
+
+        fn resource_report(&self) -> ResourceReport {
+            ResourceReport {
+                loaded_tasks: vec![aurora_voice_engine::VoiceTask::KeywordSpotting],
+                memory_bytes: 0,
+                active_streams: 0,
+                readiness: aurora_voice_engine::TaskReadiness::Ready,
+            }
+        }
+
+        async fn warm_task(&mut self, _request: BoundTaskRequest) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn unload_task(&mut self, _binding: TaskPackBinding) -> Result<(), EngineError> {
+            Ok(())
+        }
+
+        async fn cancel_generation(&mut self, _generation: u64) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    #[async_trait::async_trait(?Send)]
+    impl KwsStreamProvider for BackgroundTestKws {
+        async fn start_kws_session(
+            &mut self,
+            request: BoundKwsRequest,
+        ) -> Result<BoundStreamSession, EngineError> {
+            BoundStreamSession::new(
+                aurora_voice_engine::StreamSessionId(request.request().request().generation),
+                request.request(),
+            )
+        }
+
+        async fn push_kws_frame(
+            &mut self,
+            _session: &BoundStreamSession,
+            _frame: aurora_voice_engine::StreamingAudioFrame<'_>,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<KwsFrameResult, EngineError> {
+            KwsFrameResult::new(&self.config, &mut self.cooldown, Vec::new(), None)
+        }
+
+        async fn reset_kws_session(
+            &mut self,
+            session: &BoundStreamSession,
+            _reason: StreamResetReason,
+        ) -> Result<(), EngineError> {
+            let pending = {
+                let mut pause = self.pause.borrow_mut();
+                if pause
+                    .as_ref()
+                    .is_some_and(|pause| pause.generation == session.generation())
+                {
+                    pause.take()
+                } else {
+                    None
+                }
+            };
+            if let Some(pause) = pending {
+                let generation = session.generation();
+                let _ = pause.entered.send(generation);
+                let _ = pause.release.await;
+            }
+            Ok(())
+        }
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestStt {
+        cancel_results: Rc<RefCell<std::collections::VecDeque<bool>>>,
+        cancelled: Rc<RefCell<Vec<u64>>>,
+        pause: Rc<RefCell<Option<ReportTestPause>>>,
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestPause {
+        generation: u64,
+        entered: oneshot::Sender<u64>,
+        release: oneshot::Receiver<()>,
+    }
+
+    #[cfg(desktop)]
+    #[async_trait::async_trait(?Send)]
+    impl FiniteSttPort for ReportTestStt {
+        fn finite_stt_binding(&self) -> Result<FiniteSttProviderBinding, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn warm_finite_stt(
+            &mut self,
+            _binding: FiniteSttProviderBinding,
+        ) -> Result<(), EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn transcribe_finite(
+            &mut self,
+            _request: BoundFiniteSttRequest,
+            _audio: FiniteSttAudio,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<FiniteSttResult, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn cancel_finite_stt_generation(
+            &mut self,
+            generation: u64,
+        ) -> Result<(), EngineError> {
+            self.cancelled.borrow_mut().push(generation);
+            let pause = {
+                let mut pending = self.pause.borrow_mut();
+                if pending
+                    .as_ref()
+                    .is_some_and(|pause| pause.generation == generation)
+                {
+                    pending.take()
+                } else {
+                    None
+                }
+            };
+            if let Some(pause) = pause {
+                let _ = pause.entered.send(generation);
+                let _ = pause.release.await;
+            }
+            if self
+                .cancel_results
+                .borrow_mut()
+                .pop_front()
+                .unwrap_or(false)
+            {
+                Err(EngineError::InvalidRequest)
+            } else {
+                Ok(())
+            }
+        }
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestTts;
+
+    #[cfg(desktop)]
+    #[async_trait::async_trait(?Send)]
+    impl TtsSynthesisPort for ReportTestTts {
+        fn synthesis_binding(&self) -> Result<TtsSynthesisProviderBinding, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn warm_synthesis(
+            &mut self,
+            _binding: TtsSynthesisProviderBinding,
+        ) -> Result<(), EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn synthesize_text(
+            &mut self,
+            _request: BoundTtsSynthesisRequest,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<TtsSynthesisResult, EngineError> {
+            Err(EngineError::InvalidRequest)
+        }
+
+        async fn cancel_synthesis_generation(
+            &mut self,
+            _generation: u64,
+        ) -> Result<(), EngineError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestTransport;
+
+    #[cfg(desktop)]
+    #[async_trait::async_trait(?Send)]
+    impl aurora_voice_core::SpeechTransport for ReportTestTransport {
+        async fn assistant_turn(
+            &mut self,
+            _request: aurora_voice_core::AssistantTurnRequest,
+            _cancellation: CancellationToken,
+        ) -> Result<aurora_voice_core::AssistantTurnResponse, VoiceCoreError> {
+            Err(VoiceCoreError::Cancelled)
+        }
+
+        async fn cancel_session(&mut self, _generation: Generation) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestOutput;
+
+    #[cfg(desktop)]
+    #[async_trait::async_trait(?Send)]
+    impl aurora_voice_core::AudioOutput for ReportTestOutput {
+        async fn play(
+            &mut self,
+            _context: aurora_voice_core::AudioPlaybackContext,
+            _audio: TtsSynthesisResult,
+            _cancellation: &dyn Fn() -> bool,
+        ) -> Result<aurora_voice_core::AudioPlaybackReceipt, VoiceCoreError> {
+            Err(VoiceCoreError::Cancelled)
+        }
+
+        async fn stop(
+            &mut self,
+            _generation: Generation,
+            _reason: TransitionReason,
+        ) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(desktop)]
+    struct ReportTestSink;
+
+    #[cfg(desktop)]
+    #[async_trait::async_trait(?Send)]
+    impl RuntimeEventSink for ReportTestSink {
+        async fn snapshot(&mut self, _snapshot: RedactedSnapshot) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+
+        async fn event(&mut self, _event: RuntimeEvent) -> Result<(), VoiceCoreError> {
+            Ok(())
+        }
+    }
+
+    #[cfg(desktop)]
+    type ReportTestRuntime = VoiceRuntime<
+        ReportTestAudio,
+        ReportTestStt,
+        ReportTestTts,
+        ReportTestTransport,
+        ReportTestOutput,
+        ReportTestSink,
+    >;
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    type BackgroundTestRuntime = VoiceRuntime<
+        DeterministicE2eAudioInput,
+        ReportTestStt,
+        ReportTestTts,
+        ReportTestTransport,
+        ReportTestOutput,
+        ReportTestSink,
+    >;
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    fn paused_background_test_runtime(
+        pause_generation: u64,
+        pause_kws_reset: bool,
+    ) -> (
+        BackgroundTestRuntime,
+        DeterministicE2eCaptureControl,
+        oneshot::Receiver<u64>,
+        oneshot::Sender<()>,
+    ) {
+        let (entered_tx, entered_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let audio = DeterministicE2eAudioInput::new().with_frame_limit(1);
+        let (audio, kws_pause) = if pause_kws_reset {
+            (
+                audio,
+                Some(ReportTestPause {
+                    generation: pause_generation,
+                    entered: entered_tx,
+                    release: release_rx,
+                }),
+            )
+        } else {
+            (
+                audio.pause_next_frame(pause_generation, entered_tx, release_rx),
+                None,
+            )
+        };
+        let control = audio.control();
+        let catalog = SpeechModelCatalog::embedded().expect("embedded speech catalog");
+        let vad_entry = catalog
+            .models_for_task(SpeechCatalogTask::VoiceActivityDetection)
+            .into_iter()
+            .next()
+            .expect("catalog VAD entry");
+        let kws_entry = catalog
+            .models_for_task(SpeechCatalogTask::KeywordSpotting)
+            .into_iter()
+            .next()
+            .expect("catalog KWS entry");
+        let vad_binding = TaskPackBinding::from_speech_catalog_entry(
+            catalog,
+            vad_entry,
+            aurora_voice_engine::RuntimeTarget::Desktop,
+            aurora_voice_engine::TargetOs::Linux,
+            aurora_voice_engine::TargetArch::X86_64,
+        )
+        .expect("catalog VAD binding");
+        let kws_binding = TaskPackBinding::from_speech_catalog_entry(
+            catalog,
+            kws_entry,
+            aurora_voice_engine::RuntimeTarget::Desktop,
+            aurora_voice_engine::TargetOs::Linux,
+            aurora_voice_engine::TargetArch::X86_64,
+        )
+        .expect("catalog KWS binding");
+        let kws_config =
+            KwsConfig::new(["wake.test"], "phrases:test", 0.5, 0, 1).expect("wake KWS config");
+        let wake_config = WakeOrchestrationConfig::new(
+            vad_binding.clone(),
+            kws_binding.clone(),
+            VadConfig::default(),
+            kws_config.clone(),
+            2,
+            2,
+        )
+        .expect("wake orchestration config");
+        let core = VoiceRuntime::new(
+            audio,
+            ReportTestStt {
+                cancel_results: Rc::new(RefCell::new(std::collections::VecDeque::new())),
+                cancelled: Rc::new(RefCell::new(Vec::new())),
+                pause: Rc::new(RefCell::new(None)),
+            },
+            ReportTestTts,
+            ReportTestTransport,
+            ReportTestOutput,
+            ReportTestSink,
+            "desktop",
+            "native-background-report-test",
+        )
+        .expect("scripted background runtime")
+        .with_wake_providers(
+            Box::new(BackgroundTestVad {
+                binding: vad_binding,
+            }),
+            Box::new(BackgroundTestKws {
+                binding: kws_binding,
+                config: kws_config,
+                cooldown: aurora_voice_engine::KwsCooldownState::new(),
+                pause: Rc::new(RefCell::new(kws_pause)),
+            }),
+            wake_config,
+        )
+        .expect("scripted wake providers");
+        (core, control, entered_rx, release_tx)
+    }
+
+    #[cfg(desktop)]
+    fn report_test_runtime(
+        cancel_errors: impl IntoIterator<Item = bool>,
+    ) -> (ReportTestRuntime, Rc<RefCell<Vec<u64>>>) {
+        let cancelled = Rc::new(RefCell::new(Vec::new()));
+        let core = VoiceRuntime::new(
+            ReportTestAudio { start_fails: false },
+            ReportTestStt {
+                cancel_results: Rc::new(RefCell::new(cancel_errors.into_iter().collect())),
+                cancelled: Rc::clone(&cancelled),
+                pause: Rc::new(RefCell::new(None)),
+            },
+            ReportTestTts,
+            ReportTestTransport,
+            ReportTestOutput,
+            ReportTestSink,
+            "desktop",
+            "native-voice-report-test",
+        )
+        .expect("scripted public runtime ports are valid");
+        (core, cancelled)
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    fn paused_report_test_runtime(
+        cancel_errors: impl IntoIterator<Item = bool>,
+        pause_generation: u64,
+    ) -> (
+        ReportTestRuntime,
+        Rc<RefCell<Vec<u64>>>,
+        oneshot::Receiver<u64>,
+        oneshot::Sender<()>,
+    ) {
+        let cancelled = Rc::new(RefCell::new(Vec::new()));
+        let (entered_tx, entered_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let core = VoiceRuntime::new(
+            ReportTestAudio { start_fails: false },
+            ReportTestStt {
+                cancel_results: Rc::new(RefCell::new(cancel_errors.into_iter().collect())),
+                cancelled: Rc::clone(&cancelled),
+                pause: Rc::new(RefCell::new(Some(ReportTestPause {
+                    generation: pause_generation,
+                    entered: entered_tx,
+                    release: release_rx,
+                }))),
+            },
+            ReportTestTts,
+            ReportTestTransport,
+            ReportTestOutput,
+            ReportTestSink,
+            "desktop",
+            "native-voice-report-test",
+        )
+        .expect("scripted public runtime ports are valid");
+        (core, cancelled, entered_rx, release_tx)
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    type ReportTestE2eRuntime = VoiceRuntime<
+        DeterministicE2eAudioInput,
+        ReportTestStt,
+        ReportTestTts,
+        ReportTestTransport,
+        ReportTestOutput,
+        ReportTestSink,
+    >;
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    fn paused_report_test_e2e_runtime(
+        cancel_errors: impl IntoIterator<Item = bool>,
+        pause_generation: u64,
+    ) -> (
+        ReportTestE2eRuntime,
+        Rc<RefCell<Vec<u64>>>,
+        oneshot::Receiver<u64>,
+        oneshot::Sender<()>,
+        DeterministicE2eCaptureControl,
+    ) {
+        let cancelled = Rc::new(RefCell::new(Vec::new()));
+        let (entered_tx, entered_rx) = oneshot::channel();
+        let (release_tx, release_rx) = oneshot::channel();
+        let audio = DeterministicE2eAudioInput::new();
+        let control = audio.control();
+        let core = VoiceRuntime::new(
+            audio,
+            ReportTestStt {
+                cancel_results: Rc::new(RefCell::new(cancel_errors.into_iter().collect())),
+                cancelled: Rc::clone(&cancelled),
+                pause: Rc::new(RefCell::new(Some(ReportTestPause {
+                    generation: pause_generation,
+                    entered: entered_tx,
+                    release: release_rx,
+                }))),
+            },
+            ReportTestTts,
+            ReportTestTransport,
+            ReportTestOutput,
+            ReportTestSink,
+            "desktop",
+            "native-voice-report-test",
+        )
+        .expect("scripted public runtime ports are valid");
+        (core, cancelled, entered_rx, release_tx, control)
+    }
+
+    #[cfg(desktop)]
+    fn cancelled_transcription_lease() -> VoiceCaptureLease {
+        VoiceCaptureLease {
+            owner: aurora_voice_core::CaptureOwnerKind::Native,
+            surface: "desktop".to_owned(),
+            device_route: "default".to_owned(),
+            start_reason: CaptureStartReason::PushToTalk,
+            generation: Generation(0),
+            created_at: TimestampMicros(1),
+            route_revision: RouteRevision(1),
+            background_eligible: false,
+            consent_revision: 0,
+            heartbeat_at: TimestampMicros(1),
+            stop_deadline: None,
+        }
+    }
+
+    #[cfg(all(desktop, feature = "desktop-native-voice-e2e"))]
+    fn e2e_transcription_lease() -> VoiceCaptureLease {
+        let mut lease = cancelled_transcription_lease();
+        lease.device_route = DEVICE_ROUTE.to_owned();
+        lease
+    }
+
+    #[cfg(desktop)]
+    async fn run_scripted_cancelled_generation(
+        core: &mut ReportTestRuntime,
+        current_generation: &Rc<Cell<Option<Generation>>>,
+        summary: &mut CoreCleanupSummary,
+    ) -> Result<String, VoiceCoreError> {
+        run_core_generation(core, current_generation, summary, |core| {
+            let cancellation = CancellationToken::new();
+            cancellation.cancel();
+            Box::pin(core.run_push_to_talk_transcription(
+                cancelled_transcription_lease(),
+                TimestampMicros(1),
+                cancellation,
+            ))
+        })
+        .await
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn actual_core_reports_aggregate_across_generations_and_keep_early_failure_sticky() {
+        use aurora_voice_core::CleanupCallbackOutcome::{ReturnedError, ReturnedOk};
+
+        let (mut core, cancelled) = report_test_runtime([true, false]);
+        let binding = Rc::new(Cell::new(None));
+        let mut summary = CoreCleanupSummary::default();
+
+        assert!(
+            run_scripted_cancelled_generation(&mut core, &binding, &mut summary)
+                .await
+                .is_err()
+        );
+        let first = core
+            .cleanup_report_for_generation(Generation(1))
+            .expect("VoiceRuntime produced generation one cleanup report");
+        assert_eq!(first.generation(), Generation(1));
+        assert_eq!(first.stt_cancel(), ReturnedError);
+        assert_eq!(first.capture_lease_release(), ReturnedOk);
+        assert_eq!(first.state_reset(), ReturnedOk);
+        assert_eq!(
+            first.capture_stop(),
+            aurora_voice_core::CleanupCallbackOutcome::NotAttempted
+        );
+
+        assert!(
+            run_scripted_cancelled_generation(&mut core, &binding, &mut summary)
+                .await
+                .is_err()
+        );
+        let second = core
+            .cleanup_report_for_generation(Generation(2))
+            .expect("VoiceRuntime produced generation two cleanup report");
+        assert_eq!(second.generation(), Generation(2));
+        assert_eq!(second.stt_cancel(), ReturnedOk);
+        assert_eq!(second.capture_lease_release(), ReturnedOk);
+        assert_eq!(
+            second.state_reset(),
+            aurora_voice_core::CleanupCallbackOutcome::ReturnedOk
+        );
+        assert_eq!(&*cancelled.borrow(), &[1, 2]);
+        assert_eq!(summary.invocations, 2);
+        assert_eq!(summary.last_generation, Some(Generation(2)));
+        assert!(summary.failed_for_task(false));
+
+        summary.record_handoff_cleanup_failure(false);
+        assert!(summary.failed_for_task(false));
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn actual_core_report_mismatch_missing_report_and_handoff_failure_fail_closed() {
+        let (mut core, _) = report_test_runtime([false, false]);
+        let binding = Rc::new(Cell::new(None));
+        let mut actual_summary = CoreCleanupSummary::default();
+
+        assert!(
+            run_scripted_cancelled_generation(&mut core, &binding, &mut actual_summary)
+                .await
+                .is_err()
+        );
+        let actual = core
+            .cleanup_report_for_generation(Generation(1))
+            .expect("actual core report");
+        assert!(!actual_summary.failed_for_task(false));
+
+        let mut mismatched = CoreCleanupSummary::default();
+        mismatched.record(Generation(2), Some(actual), true);
+        assert_eq!(mismatched.last_generation, Some(Generation(2)));
+        assert!(mismatched.failed_for_task(false));
+
+        let mut missing = CoreCleanupSummary::default();
+        missing.record(Generation(1), None, true);
+        assert!(missing.failed_for_task(false));
+
+        let mut missing_state_reset = [aurora_voice_core::CleanupCallbackOutcome::ReturnedOk; 8];
+        missing_state_reset[7] = aurora_voice_core::CleanupCallbackOutcome::NotAttempted;
+        let mut failed_state_reset = CoreCleanupSummary::default();
+        failed_state_reset.record_values(Generation(1), true, false, true, missing_state_reset);
+        assert!(failed_state_reset.failed_for_task(false));
+
+        assert!(
+            run_scripted_cancelled_generation(&mut core, &binding, &mut actual_summary)
+                .await
+                .is_err()
+        );
+        assert!(!actual_summary.failed_for_task(false));
+        actual_summary.record_handoff_cleanup_failure(true);
+        assert!(actual_summary.failed_for_task(false));
+        actual_summary.record_handoff_cleanup_failure(false);
+        assert!(actual_summary.failed_for_task(false));
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn attempted_capture_without_a_successful_stop_is_not_a_clean_summary() {
+        use aurora_voice_core::CleanupCallbackOutcome::ReturnedOk;
+
+        let core = VoiceRuntime::new(
+            ReportTestAudio { start_fails: true },
+            ReportTestStt {
+                cancel_results: Rc::new(RefCell::new(std::collections::VecDeque::new())),
+                cancelled: Rc::new(RefCell::new(Vec::new())),
+                pause: Rc::new(RefCell::new(None)),
+            },
+            ReportTestTts,
+            ReportTestTransport,
+            ReportTestOutput,
+            ReportTestSink,
+            "desktop",
+            "native-voice-start-failure-test",
+        )
+        .expect("scripted public runtime ports are valid");
+        let mut core = core;
+        let binding = Rc::new(Cell::new(None));
+        let mut summary = CoreCleanupSummary::default();
+        let result = run_core_generation(&mut core, &binding, &mut summary, |core| {
+            Box::pin(core.run_push_to_talk_transcription(
+                cancelled_transcription_lease(),
+                TimestampMicros(1),
+                CancellationToken::new(),
+            ))
+        })
+        .await;
+
+        assert!(result.is_err());
+        let report = core
+            .cleanup_report_for_generation(Generation(1))
+            .expect("VoiceRuntime report for attempted capture");
+        assert!(report.capture_start_attempted());
+        assert_eq!(
+            report.capture_stop(),
+            aurora_voice_core::CleanupCallbackOutcome::NotAttempted
+        );
+        assert_eq!(report.capture_lease_release(), ReturnedOk);
+        assert!(summary.failed_for_task(false));
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn matching_completion_message_does_not_replace_owned_task_join() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (tx, mut rx) = mpsc::unbounded_channel();
+                let (release_tx, release_rx) = tokio::sync::oneshot::channel();
+                let task_tx = tx.clone();
+                let mut task = tokio::task::spawn_local(async move {
+                    let _ = task_tx.send(ActorCommand::TurnFinished { ui_generation: 17 });
+                    let _ = release_rx.await;
+                    successful_test_turn()
+                });
+                let first = wait_for_actor_event(&mut rx, Some(&mut task), None).await;
+                assert!(matches!(
+                    first,
+                    ActorLoopEvent::Command(Some(ActorCommand::TurnFinished { ui_generation: 17 }))
+                ));
+                assert!(!task.is_finished());
+                let deadline = TokioInstant::now();
+                assert!(matches!(
+                    wait_for_actor_event(&mut rx, Some(&mut task), Some(deadline)).await,
+                    ActorLoopEvent::Deadline
+                ));
+                assert!(
+                    !task.is_finished(),
+                    "deadline must not detach or drop the task"
+                );
+                release_tx.send(()).expect("finish owned turn");
+                let result = wait_for_actor_event(&mut rx, Some(&mut task), None).await;
+                assert!(matches!(
+                    result,
+                    ActorLoopEvent::TaskFinished(Ok(TurnTaskOutcome { .. }))
+                ));
+            })
+            .await;
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn actor_observes_task_panic_without_completion_message() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (tx, mut rx) = mpsc::unbounded_channel();
+                let task_tx = tx.clone();
+                let mut task = tokio::task::spawn_local(async move {
+                    drop(task_tx);
+                    panic_in_test_turn().await
+                });
+                assert!(matches!(
+                    wait_for_actor_event(&mut rx, Some(&mut task), None).await,
+                    ActorLoopEvent::TaskFinished(Err(_))
+                ));
+                assert!(rx.try_recv().is_err(), "no completion message was sent");
+            })
+            .await;
+    }
+
+    #[cfg(desktop)]
+    #[tokio::test(flavor = "current_thread")]
+    async fn panic_handoff_recovery_stays_actor_polled_across_shutdown_and_deadline() {
+        tokio::task::LocalSet::new()
+            .run_until(async {
+                let (handoff_slot, release_started, release_continue, restart_requests, server) =
+                    blocking_release_handoff().await;
+                let binding = Rc::new(Cell::new(None));
+                let task = tokio::task::spawn_local(panic_in_test_turn());
+                let (tx, rx) = mpsc::unbounded_channel();
+                let (status_tx, mut status_rx) = mpsc::unbounded_channel();
+                let mut actor = NativeVoiceActor::new_test(tx.clone(), status_tx);
+                actor.shutdown_timeout = Duration::ZERO;
+                actor.status.phase = NativeVoicePhase::Speaking;
+                actor.status.generation = Some(71);
+                actor.active = Some(ActiveTurn {
+                    ui_generation: 71,
+                    continuous: false,
+                    _handoff_generation: Some(Generation(1)),
+                    control: DesktopCaptureControl::Test(Arc::new(Mutex::new(Vec::new()))),
+                    current_core_generation: Rc::clone(&binding),
+                    shutdown_requested: Rc::new(Cell::new(false)),
+                    cancellation: CancellationToken::new(),
+                    handoff_slot,
+                    task: Some(task),
+                    panic_cleanup_started: false,
+                    expected_terminal: false,
+                });
+                tx.send(ActorCommand::TurnFinished { ui_generation: 71 })
+                    .expect("early completion wakeup arrives before task join");
+                let actor_task = tokio::task::spawn_local(run_actor_loop(actor, rx));
+                release_started
+                    .await
+                    .expect("actual Gateway handoff release started");
+
+                let (shutdown_reply, shutdown_result) = std::sync::mpsc::channel();
+                tx.send(ActorCommand::Shutdown {
+                    reply: shutdown_reply,
+                })
+                .expect("dispatch shutdown while actual actor cleanup is pending");
+                let deadline_status = loop {
+                    let status = status_rx.recv().await.expect("actor status");
+                    if status.phase == NativeVoicePhase::Faulted && status.generation.is_none() {
+                        break status;
+                    }
+                };
+                assert_eq!(
+                    deadline_status.reason_code.as_deref(),
+                    Some("local_cleanup_failed")
+                );
+                assert!(matches!(
+                    shutdown_result.try_recv(),
+                    Err(std::sync::mpsc::TryRecvError::Empty)
+                ));
+
+                release_continue
+                    .send(())
+                    .expect("finish actual release response");
+                actor_task
+                    .await
+                    .expect("actor loop exits after owned cleanup");
+                assert_eq!(
+                    shutdown_result.try_recv().expect("actor shutdown result"),
+                    Err(NativeVoiceStopError::TimedOut)
+                );
+                assert_eq!(
+                    [
+                        restart_requests.recv().expect("initial release mode"),
+                        restart_requests.recv().expect("retry cleanup mode"),
+                    ],
+                    [true, false],
+                    "shutdown during release disables the subsequent cleanup restart"
+                );
+                server.join().expect("join local Gateway fixture");
+            })
+            .await;
+    }
+
+    #[cfg(desktop)]
+    async fn panic_in_test_turn() -> TurnTaskOutcome {
+        panic!("controlled native turn panic");
     }
 
     #[test]
@@ -4111,19 +7822,6 @@ fn test_runtime_profile_document(mode: &str, home_peer_id: Option<&str>) -> Thin
 }
 
 #[cfg(test)]
-#[derive(Debug)]
-struct ActiveTurnSnapshot {
-    ui_generation: u64,
-    core_generation: Generation,
-}
-
-#[cfg(test)]
-fn control_matches(active: &ActiveTurnSnapshot, ui_generation: u64) -> bool {
-    let _ = active.core_generation;
-    active.ui_generation == ui_generation
-}
-
-#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 enum TrayDecision {
     Start,
@@ -4186,24 +7884,6 @@ fn prepare_timeout_outcome(cleanup_failed: bool) -> PrepareTimeoutOutcome {
         PrepareTimeoutOutcome::ReturnCleanupError
     } else {
         PrepareTimeoutOutcome::ReturnPrepareTimeout
-    }
-}
-
-#[cfg(test)]
-struct ShutdownSnapshot {
-    active_turn: bool,
-    cleanup_finished: bool,
-    forced_timeout: bool,
-}
-
-#[cfg(test)]
-impl ShutdownSnapshot {
-    fn can_ack_shutdown(&self) -> bool {
-        !self.active_turn && self.cleanup_finished
-    }
-
-    fn restart_python_capture_after_cleanup(&self) -> bool {
-        !self.forced_timeout && self.cleanup_finished
     }
 }
 

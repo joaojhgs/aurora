@@ -10,6 +10,8 @@
     "barcode-scanner:allow-cancel",
     "barcode-scanner:allow-check-permissions",
     "barcode-scanner:allow-request-permissions",
-    "aurora-mobile-native-actions"
+    "aurora-mobile-native-actions",
+    "aurora-local-inference",
+    "aurora-native-speech-host"
   ]
 }

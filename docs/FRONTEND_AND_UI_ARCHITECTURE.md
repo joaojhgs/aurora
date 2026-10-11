@@ -28,6 +28,39 @@ Production UI files must stay on the SDK side of this boundary. Tests in `packag
 
 See [`PRODUCTION_UI_CONTRACTS.md`](PRODUCTION_UI_CONTRACTS.md).
 
+## Shared features and state ownership
+
+`packages/aurora-ui/src/feature-manifest.tsx` owns feature identity, navigation,
+mobile-tab membership, capability policy, product copy, and lazy component
+loaders. Web routing and the Tauri page registry project that manifest. Host
+adapters supply their runtime dependencies and chrome; they must not maintain a
+second list of supported features. A hidden or removed definition must also
+disappear from the corresponding navigation and host projection.
+
+Both hosts mount `AuroraQueryProvider` around the shared shell. TanStack Query
+owns server and peer reads; query keys include an opaque client/auth/profile/peer
+scope rather than credentials. Capabilities are fresh for five minutes, lists
+for thirty seconds, and volatile data has no freshness window. Mobile surfaces
+disable focus refetch. Query functions forward their `AbortSignal` through SDK
+reads. Caller cancellation remains cancellation; an internal transport timeout
+keeps the SDK's normal timeout result.
+
+The zustand stores under `packages/aurora-ui/src/state/` hold client state:
+connection status, surface/profile selection, and the active assistant text
+buffer. They do not mirror server catalogs, history, or configuration. Streaming
+messages select their own buffer so token updates do not redraw the conversation
+or composer. Identity changes discard the previous scope's cache and transient
+state.
+
+The shell consumes health and configuration subscriptions and patches its
+snapshot without remounting the active view. Confirmed subscriptions suppress
+fallback refetch while connected. Mesh roster, pairing, and diagnostics do not
+yet have confirmed resource-event emitters and therefore retain explicit
+15-second query intervals. Terminal permission/privacy failures stop automatic
+retry and interval refetch; a denied entry inside an otherwise useful partial
+snapshot does not stop the entire query. Use the shared query and event helpers
+instead of adding per-view timers or raw subscriptions.
+
 ## SDK transports
 
 | Transport | Purpose |

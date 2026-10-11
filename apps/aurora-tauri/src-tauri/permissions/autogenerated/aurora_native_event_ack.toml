@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-native-event-ack"
+description = "Enables the aurora_native_event_ack command without any pre-configured scope."
+commands.allow = ["aurora_native_event_ack"]
+
+[[permission]]
+identifier = "deny-aurora-native-event-ack"
+description = "Denies the aurora_native_event_ack command without any pre-configured scope."
+commands.deny = ["aurora_native_event_ack"]

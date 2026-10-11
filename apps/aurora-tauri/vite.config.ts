@@ -11,22 +11,29 @@ const leaderRepoRoot = repoRoot.includes(omxWorktreeMarker)
   ? repoRoot.slice(0, repoRoot.indexOf(omxWorktreeMarker))
   : repoRoot
 const webviewTarget = process.env.VITE_AURORA_WEBVIEW_TARGET?.trim()
+const reactProfilingEnabled = process.env.AURORA_REACT_PROFILING === '1'
 
 /** Keep optional route/tooling payloads out of the initial WebView parse path. */
 export function auroraManualChunk(moduleId: string): string | undefined {
   const id = moduleId.replaceAll('\\', '/').toLowerCase()
   if (id.includes('@sqlite.org/sqlite-wasm') || id.includes('/browser-sqlite-worker')) return 'sqlite-wasm'
-  if (id.includes('@assistant-ui/react-markdown') || id.includes('remark-gfm') || id.includes('/react-markdown/') || id.includes('/unified/') || id.includes('/micromark/')) return 'markdown'
-  if (id.includes('react-shiki') || id.includes('react-syntax-highlighter') || id.includes('/shiki/')) return 'syntax-highlight'
+  if (id.includes('@assistant-ui/react-markdown') || id.includes('/react-markdown/') || id.includes('/unified/') || id.includes('/micromark/')) return 'markdown'
   if (id.includes('/qrcode/')) return 'qrcode'
-  if (id.includes('/beautiful-mermaid/') || id.includes('/mermaid/') || id.includes('/parse-diff/') || id.includes('/heat-graph/') || id.includes('/node_modules/diff/')) return 'visualization'
+  if (id.includes('/beautiful-mermaid/') || id.includes('/mermaid/')) return 'visualization'
   return undefined
 }
 
 export default defineConfig(({ command }) => ({
   plugins: [react()],
+  resolve: {
+    alias: reactProfilingEnabled ? [
+      { find: /^react-dom$/, replacement: 'react-dom/profiling' },
+      { find: /^react-dom\/client$/, replacement: 'react-dom/profiling' },
+    ] : [],
+  },
   clearScreen: false,
   define: {
+    'import.meta.env.VITE_AURORA_REACT_PROFILING': JSON.stringify(reactProfilingEnabled ? '1' : '0'),
     // Unified monorepo version (repo-root VERSION file); dev servers add a
     // branch-derived suffix. Read by @aurora/ui version helpers.
     __AURORA_VERSION_LABEL__: JSON.stringify(

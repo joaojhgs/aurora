@@ -5,6 +5,7 @@ Current durable workflow lanes:
 - `quality.yml` — Ruff, generated config, TypeScript typechecks.
 - `python-tests.yml` — consolidated unit, integration, Redis-backed process-mode, and Python E2E tests, including both mesh harnesses.
 - `frontend-sdk.yml` — SDK/UI/web/Tauri-frontend tests and builds.
+- `rust-voice.yml` — Rust 1.88 native/WASM voice checks and Rust-flagged coverage.
 - `webrtc-interop.yml` — one live-interoperability check covering encrypted browser persistence plus the cross-engine direct/STUN/TURN matrix.
 - `sdk-backend-contract-conformance.yml` — backend inventory and SDK fixture/type conformance.
 - `tauri-desktop.yml` — desktop-local sidecar and Python-free desktop-client build/runtime checks, including separate Linux AppImage/DEB/RPM artifacts.

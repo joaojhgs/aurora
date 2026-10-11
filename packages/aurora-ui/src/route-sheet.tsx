@@ -11,6 +11,7 @@ import type {
   RoutePolicyInput,
   RoutePolicyEvaluation
 } from '@aurora/client'
+import { cn } from '#lib/utils'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 
@@ -65,16 +66,23 @@ export interface RouteSheetViewModel {
 }
 
 const scopeOptions: Array<{ scope: RouteSheetScope; label: string; description: string }> = [
-  { scope: 'request', label: 'Request', description: 'Use this route once.' },
+  { scope: 'request', label: 'Request', description: 'Use this destination for this request.' },
   { scope: 'session', label: 'Session', description: 'Reuse while this session stays valid.' },
-  { scope: 'feature', label: 'Feature', description: 'Apply to this feature surface.' },
-  { scope: 'global', label: 'Global', description: 'Requires backend policy and admin confirmation.' }
+  { scope: 'feature', label: 'Feature', description: 'Remember this choice for this feature.' },
+  { scope: 'global', label: 'Global', description: 'Apply everywhere, with administrator approval.' }
 ]
+
+const ROUTE_SHEET_CLASS = '@container/route-sheet grid gap-5 m-0 border-t-0 px-5 pt-4 pb-5'
+const ROUTE_COPY_WRAP_CLASS = 'min-w-0 [overflow-wrap:anywhere]'
+const ROUTE_PREVIEW_LABEL_CLASS = 'text-[0.72rem] font-[750] uppercase text-[var(--aui-muted)]'
+const ROUTE_PREVIEW_VALUE_CLASS = `m-0 min-w-0 text-[0.84rem] ${ROUTE_COPY_WRAP_CLASS}`
+const ROUTE_POLICY_ROW_CLASS = 'grid gap-[0.12rem] rounded-[0.45rem] border border-[var(--aui-border)] bg-[var(--aui-surface)] p-[0.5rem]'
+const ROUTE_SCOPE_BUTTON_CLASS = 'inline-flex min-h-[2.15rem] min-w-0 items-center justify-center gap-1 rounded-[0.45rem] border border-[var(--aui-border)] bg-[var(--aui-surface)] px-[0.55rem] py-[0.45rem] !text-[0.8rem] !font-[750] text-[var(--aui-muted)] disabled:cursor-not-allowed disabled:opacity-[0.56]'
 
 export function RouteSheet({
   client,
-  title = 'Route and privacy',
-  description = 'Review destination, privacy class, hidden sensitive values, policy reason, and account history before data leaves this surface.',
+  title = 'Destination and privacy',
+  description = 'Choose where this request goes and review how your data is protected.',
   topic = null,
   method = null,
   routeRequest,
@@ -215,12 +223,12 @@ export function RouteSheet({
   }
 
   return (
-    <section className="aui-route-sheet" aria-labelledby={titleId} data-state={model.loadState}>
-      <header className="aui-route-sheet-header">
+    <section className={ROUTE_SHEET_CLASS} aria-labelledby={titleId} data-state={model.loadState}>
+      <header className="grid gap-[0.65rem]">
         <div>
-          <p className="aui-kicker">Route guard</p>
-          <h2 id={titleId}>{title}</h2>
-          <p>{description}</p>
+          <p className="mx-0 mt-1 mb-0 text-[0.86rem] font-[750] uppercase tracking-[0.13em] text-primary opacity-90">Before you continue</p>
+          <h2 id={titleId} className="mt-1 mb-0 text-lg font-semibold">{title}</h2>
+          <p className="mt-1 text-sm leading-relaxed text-[var(--aui-muted)]">{description}</p>
         </div>
         <RouteSheetDecision model={model} />
       </header>
@@ -236,29 +244,28 @@ export function RouteSheet({
           <RouteCandidateList evaluation={model.evaluation} />
           <RoutePolicySignals evaluation={model.evaluation} adminActionState={model.adminActionState} />
           <RouteScopeChooser selectedScope={selectedScope} canChoose={model.canConfirm} onChoose={chooseScope} />
-          <div className="aui-route-policy">
-            <div>
-              <strong>Policy</strong>
-              <span>{model.primaryReason}</span>
-            </div>
-            <div>
-              <strong>Admin approval</strong>
-              <span>{adminActionLabel(model.adminActionState)}</span>
-            </div>
-            <div>
-              <strong>Retry</strong>
-              <span>{model.canConfirm ? 'Selection can be retried or changed before dispatch.' : 'Dispatch remains blocked until policy is repaired.'}</span>
-            </div>
+          <div className="grid gap-[0.4rem] in-[.aui-assistant]:gap-2 in-[.aui-assistant]:rounded-[0.65rem] in-[.aui-assistant]:border in-[.aui-assistant]:border-[var(--aui-border)] in-[.aui-assistant]:bg-[color-mix(in_srgb,var(--aui-surface-3)_26%,transparent)] in-[.aui-assistant]:p-3">
+            <RoutePolicyRow label="Policy" value={model.primaryReason} />
+            <RoutePolicyRow label="Admin approval" value={adminActionLabel(model.adminActionState)} />
+            <RoutePolicyRow
+              label="Retry"
+              value={model.canConfirm ? 'You can change this choice before continuing.' : 'Resolve the items above before continuing.'}
+            />
           </div>
         </>
       ) : null}
 
-      <footer className="aui-route-sheet-footer">
-        <button type="button" className="aui-button" disabled={!model.canConfirm} onClick={confirmRoute}>
+      <footer className="grid gap-[0.45rem]">
+        <button
+          type="button"
+          className="inline-flex min-h-[2.45rem] w-fit items-center justify-center gap-[0.4rem] rounded-[0.42rem] border border-[var(--aui-border)] bg-muted/60 px-[0.8rem] py-[0.6rem] !text-[0.68rem] !font-[750] tracking-[0.005em] text-[var(--aui-ink)] disabled:cursor-not-allowed disabled:opacity-[0.58] enabled:hover:border-[rgb(94_234_212_/_0.45)] enabled:hover:text-[var(--aui-primary)]"
+          disabled={!model.canConfirm}
+          onClick={confirmRoute}
+        >
           <ShieldCheck size={16} aria-hidden />
           <span>Use selected route</span>
         </button>
-        {!model.canConfirm ? <p role="alert">{model.primaryReason}</p> : null}
+        {!model.canConfirm && model.loadState !== 'loading' ? <p className="text-[0.84rem] text-[var(--aui-danger)]" role="alert">{model.primaryReason}</p> : null}
       </footer>
     </section>
   )
@@ -299,7 +306,7 @@ function RouteSheetDecision({ model }: { model: RouteSheetViewModel }) {
   if (model.loadState === 'error') return <StatusBadge state="unsupported" />
   if (!model.evaluation) return <StatusBadge state="unsupported" />
   return (
-    <div className="aui-route-sheet-decision">
+    <div className="flex flex-wrap gap-[0.35rem] in-[.aui-assistant]:items-center in-[.aui-assistant]:justify-end in-[.aui-assistant]:gap-[0.4rem]">
       <StatusBadge state={model.evaluation.availability} />
       <PrivacyBadge privacy={model.evaluation.privacyClass} />
       <EvidenceBadge label={routeSheetDecisionLabel(model.evaluation)} />
@@ -310,14 +317,23 @@ function RouteSheetDecision({ model }: { model: RouteSheetViewModel }) {
 function RoutePreviewGrid({ evaluation, primaryReason }: { evaluation: RoutePolicyEvaluation; primaryReason: string }) {
   const preview = evaluation.preview
   return (
-    <dl className="aui-route-preview">
-      <div><dt>Target</dt><dd>{previewTarget(preview)}</dd></div>
-      <div><dt>Privacy class</dt><dd>{privacyClassLabel(preview.privacyClass)}</dd></div>
-      <div><dt>Request details</dt><dd>{payloadPreviewCopy(preview.payloadPreview)}</dd></div>
-      <div><dt>Policy reason</dt><dd>{primaryReason}</dd></div>
-      <div><dt>Account history</dt><dd>{accountHistoryCopy(preview.auditReceiptTarget)}</dd></div>
-      <div><dt>Sensitive values</dt><dd>{preview.secretsRedacted ? 'Hidden before review' : 'No hidden-value status reported'}</dd></div>
+    <dl className="m-0 grid gap-2 @min-[30rem]/route-sheet:grid-cols-2">
+      <RoutePreviewItem label="Destination" value={previewTarget(preview)} />
+      <RoutePreviewItem label="Data type" value={privacyClassLabel(preview.privacyClass)} />
+      <RoutePreviewItem label="Request details" value={payloadPreviewCopy(preview.payloadPreview)} />
+      <RoutePreviewItem label="Status" value={primaryReason} />
+      <RoutePreviewItem label="Account history" value={accountHistoryCopy(preview.auditReceiptTarget)} />
+      <RoutePreviewItem label="Sensitive values" value={preview.secretsRedacted ? 'Hidden before review' : 'No hidden-value status reported'} />
     </dl>
+  )
+}
+
+function RoutePreviewItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="grid min-w-0 gap-[0.15rem] rounded-[0.45rem] border border-[var(--aui-border)] bg-[color-mix(in_srgb,var(--aui-surface-2)_45%,var(--aui-bg))] p-2">
+      <dt className={ROUTE_PREVIEW_LABEL_CLASS}>{label}</dt>
+      <dd className={ROUTE_PREVIEW_VALUE_CLASS}>{value}</dd>
+    </div>
   )
 }
 
@@ -325,22 +341,27 @@ function RouteCandidateList({ evaluation }: { evaluation: RoutePolicyEvaluation 
   const candidates = evaluation.route.candidates
   if (candidates.length === 0) {
     return (
-      <div className="aui-route-empty">
+      <div className="flex items-start gap-[0.45rem] rounded-[0.45rem] border border-[var(--aui-border)] p-[0.55rem] text-[0.84rem] text-[var(--aui-muted)]">
         <X size={16} aria-hidden />
         <span>No destinations are available right now.</span>
       </div>
     )
   }
   return (
-    <ul className="aui-route-candidates" aria-label="Route candidates">
+    <ul className="m-0 grid list-none gap-[0.65rem] p-0 [&_span]:min-w-0 [&_span]:[overflow-wrap:anywhere] [&_span]:text-[0.78rem] [&_span]:text-[var(--aui-muted)]" aria-label="Route candidates">
       {candidates.map((candidate) => (
-        <li key={`${candidate.provider_id}:${candidate.service_instance_id}`}>
-          <div>
-            <strong>{candidateTitle(candidate)}</strong>
-            <span>{candidateKindCopy(candidate)}</span>
+        <li
+          key={`${candidate.provider_id}:${candidate.service_instance_id}`}
+          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-[0.45rem] gap-y-[0.2rem] rounded-[0.45rem] border border-[var(--aui-border)] bg-[var(--aui-surface)] p-[0.55rem]"
+        >
+          <div className="flex min-w-0 flex-col gap-1">
+            <strong className={`text-sm font-semibold ${ROUTE_COPY_WRAP_CLASS}`}>{candidateTitle(candidate)}</strong>
+            <span className={`text-[0.78rem] text-[var(--aui-muted)] ${ROUTE_COPY_WRAP_CLASS}`}>{candidateKindCopy(candidate)}</span>
           </div>
           <EvidenceBadge label={candidateStateCopy(candidate)} />
-          <small>{routeSheetReasonCopy(candidate.reason || candidate.reason_code)}</small>
+          <small className={`col-span-full text-[0.78rem] text-[var(--aui-muted)] ${ROUTE_COPY_WRAP_CLASS}`}>
+            {routeSheetReasonCopy(candidate.reason || candidate.reason_code)}
+          </small>
         </li>
       ))}
     </ul>
@@ -357,18 +378,25 @@ function RoutePolicySignals({
 }) {
   const signals = routeSheetPolicySignals(evaluation, adminActionState)
   return (
-    <dl className="aui-route-policy-signals" aria-label="Distinct route policy states">
+    <dl className="m-0 grid gap-3" aria-label="Permissions and privacy">
       {signals.map((signal) => (
-        <div key={signal.id} data-signal={signal.id} data-state={signal.state}>
-          <dt>{signal.label}</dt>
-          <dd>
-            <EvidenceBadge label={signal.state} />
-            <span>{signal.detail}</span>
-          </dd>
+        <div className="grid min-w-0 gap-1.5 border-b border-[var(--aui-border)] pb-3 last:border-0 last:pb-0" key={signal.id} data-signal={signal.id} data-state={signal.state}>
+          <dt className="flex flex-wrap items-center justify-between gap-2 text-sm font-medium">
+            <span>{signal.label}</span>
+            <EvidenceBadge label={routeSignalLabel(signal.state)} />
+          </dt>
+          <dd className={`m-0 text-xs leading-relaxed text-[var(--aui-muted)] ${ROUTE_COPY_WRAP_CLASS}`}>{signal.detail}</dd>
         </div>
       ))}
     </dl>
   )
+}
+
+function routeSignalLabel(state: RouteSheetPolicySignalState): string {
+  if (state === 'not-required') return 'Not needed'
+  if (state === 'preference') return 'Your choice'
+  if (state === 'satisfied') return 'Confirmed'
+  return 'Action needed'
 }
 
 export function routeSheetPolicySignals(
@@ -389,39 +417,39 @@ export function routeSheetPolicySignals(
   return [
     {
       id: 'selector',
-      label: 'Privacy selector',
+      label: 'Device choice',
       state: selectorState,
       detail: selectorState === 'preference'
-	          ? 'A local destination preference is set; this route remains available.'
-	        : selectorState === 'blocked'
-	          ? 'Choose the device or resource before continuing.'
-	          : 'Aurora does not require an explicit selection for this route.'
+        ? 'A local destination preference is set; this route remains available.'
+        : selectorState === 'blocked'
+          ? 'Choose the device or resource before continuing.'
+          : 'Aurora does not require an explicit selection for this route.'
     },
     {
       id: 'consent',
       label: 'Consent',
       state: consentBlocked ? 'blocked' : 'not-required',
       detail: consentBlocked
-	        ? 'Consent is missing and must be collected before this request can leave this device.'
-	        : 'No missing consent blocker is present.'
+        ? 'Consent is missing and must be collected before this request can leave this device.'
+        : 'No additional consent is needed.'
     },
     {
       id: 'privacy-indicator',
       label: 'Privacy indicator',
       state: privacyIndicatorBlocked ? 'blocked' : 'not-required',
       detail: privacyIndicatorBlocked
-	        ? 'The required privacy indicator has not been shown yet.'
-	        : 'No missing privacy-indicator blocker is present.'
+        ? 'The required privacy indicator has not been shown yet.'
+        : 'No additional privacy notice is needed.'
     },
     {
       id: 'native-permission',
-	      label: 'Device permission',
-	      state: nativeBlocker ? 'blocked' : 'not-required',
-	      detail: nativeBlocker ? 'A device permission is missing.' : 'No missing device permission is present.'
+      label: 'Device permission',
+      state: nativeBlocker ? 'blocked' : 'not-required',
+      detail: nativeBlocker ? 'A device permission is missing.' : 'No additional device permission is needed.'
     },
     {
       id: 'admin-action',
-	      label: 'Admin approval',
+      label: 'Admin approval',
       state: adminActionSignalState(adminActionState),
       detail: adminActionSignalDetail(adminActionState)
     }
@@ -461,14 +489,17 @@ function RouteScopeChooser({
   onChoose: (scope: RouteSheetScope) => void
 }) {
   return (
-    <fieldset className="aui-route-scope">
-      <legend>Apply preference to</legend>
-      <div>
+    <fieldset className="m-0 min-w-0 border-0 p-0">
+      <legend className="mb-[0.4rem] text-[0.72rem] font-[750] uppercase text-[var(--aui-muted)]">Apply preference to</legend>
+      <div className="grid grid-cols-2 gap-[0.4rem]">
         {scopeOptions.map((option) => (
           <button
             key={option.scope}
             type="button"
-            className={option.scope === selectedScope ? 'active' : ''}
+            className={cn(
+              ROUTE_SCOPE_BUTTON_CLASS,
+              option.scope === selectedScope && 'border-[color-mix(in_srgb,var(--aui-primary)_38%,var(--aui-border))] bg-[color-mix(in_srgb,var(--aui-primary)_7%,var(--aui-bg))] text-[var(--aui-primary)]'
+            )}
             disabled={!canChoose}
             aria-pressed={option.scope === selectedScope}
             title={option.description}
@@ -485,9 +516,26 @@ function RouteScopeChooser({
 
 function RouteSheetNotice({ icon, message, role }: { icon: 'loading' | 'error'; message: string; role?: 'alert' }) {
   return (
-    <div className={`aui-route-notice ${icon}`} role={role}>
+    <div
+      className={cn(
+        'flex items-center gap-[0.45rem] rounded-[0.62rem] border p-[0.68rem_0.75rem] text-[0.76rem] shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]',
+        icon === 'error'
+          ? 'border-[color-mix(in_srgb,var(--aui-danger)_35%,var(--aui-border))] bg-[color-mix(in_srgb,var(--aui-danger)_7%,var(--aui-bg))] text-[var(--aui-danger)]'
+          : 'border-border bg-card text-[var(--aui-muted)]'
+      )}
+      role={role}
+    >
       {icon === 'loading' ? <Clock size={16} aria-hidden /> : <RotateCcw size={16} aria-hidden />}
       <span>{message}</span>
+    </div>
+  )
+}
+
+function RoutePolicyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className={ROUTE_POLICY_ROW_CLASS}>
+      <strong className="text-[0.72rem] uppercase text-[var(--aui-muted)] in-[.aui-assistant]:text-[0.76rem]">{label}</strong>
+      <span className={`text-[0.83rem] in-[.aui-assistant]:text-[0.72rem] in-[.aui-assistant]:leading-[1.4] in-[.aui-assistant]:text-[var(--aui-muted)] ${ROUTE_COPY_WRAP_CLASS}`}>{value}</span>
     </div>
   )
 }

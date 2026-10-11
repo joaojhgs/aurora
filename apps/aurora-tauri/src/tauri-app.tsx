@@ -1,13 +1,14 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ComponentProps,
   ComponentType,
+  Dispatch,
   ReactElement,
   ReactNode,
+  SetStateAction,
 } from "react";
 import { AppShell, RouteMatrix } from "@aurora/ui/shell";
 import {
-  buildShellSnapshot,
   errorShellSnapshot,
   loadingShellSnapshot,
   retainThinShellSnapshot,
@@ -15,34 +16,43 @@ import {
   type RouteAvailability,
 } from "@aurora/ui/shell-data";
 import {
+  AuroraQueryProvider,
+  createAuroraQueryScopeId,
+  getAuroraQueryClient,
+  useAuroraQueryScopeKey,
+  useAuroraStateScopeId,
+  type AuroraQueryScopeInput,
+} from "@aurora/ui/query";
+import {
+  invalidateAuroraQueriesForShellEvent,
+  patchShellSnapshotForEvent,
+  shouldRefreshShellSnapshot,
+  useAuroraLiveShellEvents,
+} from "@aurora/ui/live-shell-events";
+import { fetchAuroraShellSnapshot } from "@aurora/ui/query-hooks";
+import {
   AURORA_OWL_LOADER_STAGES,
   AuroraOwlLoader,
   type AuroraOwlLoaderStageId,
 } from "@aurora/ui/owl-loader";
-import { AssistantView } from "@aurora/ui/assistant-view";
-import { AdminOverviewContent } from "@aurora/ui/admin-overview-view";
-import { MeshDiagnosticsResource } from "@aurora/ui/mesh-diagnostics-resource";
 import { Button } from "@aurora/ui/primitives";
+import { LocalInferenceSettingsView } from "@aurora/ui/local-inference-settings-view";
+import { resolveNativeLocalInferenceSelection } from "./tauri-local-inference";
 import { EvidenceBadge } from "@aurora/ui/status-badges";
 import {
   type OnboardingModePreferenceStore,
   type OnboardingProductModeId,
-  OnboardingView,
 } from "@aurora/ui/onboarding-view";
 import { PageHeader, StateSurface } from "@aurora/ui/state-surface";
-import { SettingsPermissionsView } from "@aurora/ui/settings-permissions-view";
-import { SettingsView } from "@aurora/ui/settings-view";
-import { VoiceSettingsView } from "@aurora/ui/voice-settings-view";
-import {
-  LightweightToolApprovalPanel,
-  ToolApprovalPanel,
-} from "@aurora/ui/tool-approval-panel";
+import { useSurfaceStore } from "@aurora/ui/state/surface-store";
+import { useConnectionStore } from "@aurora/ui/state/connection-store";
+import { useNativePeerEvents, type NativePeerConnectionStorePort } from "@aurora/ui/use-native-peer-events";
 import {
   type AuroraLocalSpeechLanguagePrefs,
   type AuroraLocalSpeechSelectionProfile,
   type AuroraDesktopOverlayPreferences,
 } from "@aurora/ui/runtime-profile";
-import { WebThinConnectionPanel, type WebThinRoomSecret } from "@aurora/ui/web-thin-connection-panel";
+import type { WebThinRoomSecret } from "@aurora/ui/web-thin-connection-panel";
 import {
   getAuroraSurfaceProfile,
   shouldShowForSurface,
@@ -50,8 +60,12 @@ import {
 import {
   auroraEmbeddedNavItems,
   auroraNavSections,
+  auroraRoutedFeatureDefinitions,
   getAuroraNavItem,
   navItemSnapshot,
+  type AuroraFeatureComponentLoader,
+  type AuroraFeatureDefinition,
+  type AuroraFeatureId,
   type AuroraNavItem,
 } from "@aurora/ui/nav";
 import { thinConnectionProfileWithManualAddress } from "@aurora/ui/thin-connection-profile";
@@ -121,6 +135,36 @@ const LazyMeshServiceSharingResource = lazy(async () => ({
 }));
 const LazyMemoryView = lazy(async () => ({
   default: (await import("@aurora/ui/memory-view")).MemoryView,
+}));
+const LazyAssistantView = lazy(async () => ({
+  default: (await import("@aurora/ui/assistant-view")).AssistantView,
+}));
+const LazyAdminOverviewContent = lazy(async () => ({
+  default: (await import("@aurora/ui/admin-overview-view")).AdminOverviewContent,
+}));
+const LazyMeshDiagnosticsResource = lazy(async () => ({
+  default: (await import("@aurora/ui/mesh-diagnostics-resource")).MeshDiagnosticsResource,
+}));
+const LazyOnboardingView = lazy(async () => ({
+  default: (await import("@aurora/ui/onboarding-view")).OnboardingView,
+}));
+const LazySettingsPermissionsView = lazy(async () => ({
+  default: (await import("@aurora/ui/settings-permissions-view")).SettingsPermissionsView,
+}));
+const LazySettingsView = lazy(async () => ({
+  default: (await import("@aurora/ui/settings-view")).SettingsView,
+}));
+const LazyVoiceSettingsView = lazy(async () => ({
+  default: (await import("@aurora/ui/voice-settings-view")).VoiceSettingsView,
+}));
+const LazyLightweightToolApprovalPanel = lazy(async () => ({
+  default: (await import("@aurora/ui/tool-approval-panel")).LightweightToolApprovalPanel,
+}));
+const LazyToolApprovalPanel = lazy(async () => ({
+  default: (await import("@aurora/ui/tool-approval-panel")).ToolApprovalPanel,
+}));
+const LazyWebThinConnectionPanel = lazy(async () => ({
+  default: (await import("@aurora/ui/web-thin-connection-panel")).WebThinConnectionPanel,
 }));
 import { GATEWAY_METHODS } from "@aurora/client";
 import {
@@ -195,41 +239,12 @@ type TauriRouteRenderer = (input: {
   assistantNativeCapabilities: Array<{ name: string; enabled: boolean }>;
 }) => ReactElement;
 
-const primaryTauriRouteIds = [
-  "assistant",
-  "memory",
-  "tools",
-  "mesh",
-  "admin",
-  "services",
-  "access",
-  "config",
-  "tokens",
-  "backups",
-  "scheduler",
-  "audit",
-  "spoken-replies",
-  "settings",
-  "models",
-] as const;
+type TauriRouteId = AuroraFeatureId;
 
-const embeddedTauriRouteIds = [
-  "devices",
-  "contracts",
-  "plugins",
-  "pairing",
-  "diagnostics",
-  "data",
-  "native",
-  "onboarding",
-] as const;
-
-const tauriRouteIds = [
-  ...primaryTauriRouteIds,
-  ...embeddedTauriRouteIds,
-] as const;
-
-type TauriRouteId = (typeof tauriRouteIds)[number];
+type TauriRouteProjectionDefinition<TId extends string = string> = Pick<
+  AuroraFeatureDefinition<TId>,
+  "id" | "component" | "hostHints" | "productCopy"
+>;
 
 type TauriRouteLoadingCopy = {
   title: string;
@@ -237,8 +252,16 @@ type TauriRouteLoadingCopy = {
   message?: string;
 };
 
-const tauriRouteLoadingCopy: Partial<
-  Record<TauriRouteId, TauriRouteLoadingCopy>
+type TauriRouteProjection<TId extends string = string> = {
+  primaryRouteIds: readonly TId[];
+  embeddedRouteIds: readonly TId[];
+  routeIds: readonly TId[];
+  componentLoadersById: ReadonlyMap<TId, AuroraFeatureComponentLoader>;
+  loadingCopyById: ReadonlyMap<TId, TauriRouteLoadingCopy>;
+};
+
+const tauriRouteLoadingCopyOverrides: Partial<
+  Record<string, Partial<TauriRouteLoadingCopy>>
 > = {
   mesh: {
     title: "Connected devices",
@@ -264,6 +287,105 @@ const tauriRouteLoadingCopy: Partial<
   },
 };
 
+export function projectTauriRouteDefinitions<const TDefinition extends TauriRouteProjectionDefinition>(
+  definitions: readonly TDefinition[],
+): TauriRouteProjection<TDefinition["id"]> {
+  const primaryRouteIds = definitions
+    .filter((definition) => definition.hostHints?.tauriEmbedded !== true)
+    .map((definition) => definition.id);
+  const embeddedRouteIds = definitions
+    .filter((definition) => definition.hostHints?.tauriEmbedded === true)
+    .map((definition) => definition.id);
+  const routeIds = [...primaryRouteIds, ...embeddedRouteIds];
+  return {
+    primaryRouteIds: Object.freeze(primaryRouteIds),
+    embeddedRouteIds: Object.freeze(embeddedRouteIds),
+    routeIds: Object.freeze(routeIds),
+    componentLoadersById: new Map(
+      definitions.map((definition) => [definition.id, definition.component]),
+    ),
+    loadingCopyById: new Map(
+      definitions.map((definition) => {
+        const override = tauriRouteLoadingCopyOverrides[definition.id] ?? {};
+        const title = override.title ?? definition.productCopy.title;
+        return [
+          definition.id,
+          {
+            title,
+            description: override.description ?? definition.productCopy.description,
+            message: override.message ?? `Loading ${title}…`,
+          },
+        ];
+      }),
+    ),
+  };
+}
+
+const tauriRouteProjection = projectTauriRouteDefinitions(
+  auroraRoutedFeatureDefinitions,
+);
+
+export const primaryTauriRouteIds = tauriRouteProjection.primaryRouteIds;
+export const embeddedTauriRouteIds = tauriRouteProjection.embeddedRouteIds;
+export const tauriRouteIds = tauriRouteProjection.routeIds;
+
+type TauriGenericRouteComponent = ComponentType<{
+  client: AuroraTauriClient;
+  route: RouteAvailability;
+}>;
+
+function createTauriManifestRouteRenderer(
+  component: AuroraFeatureComponentLoader,
+): TauriRouteRenderer {
+  const LazyRouteComponent = lazy(async () => {
+    const module = (await component.load()) as Record<string, unknown>;
+    return {
+      default: module[component.exportName] as TauriGenericRouteComponent,
+    };
+  });
+  return ({ client, route }) => (
+    <LazyRouteComponent client={client} route={route} />
+  );
+}
+
+function createTauriManifestRouteRegistry<TId extends string>(
+  componentLoadersById: ReadonlyMap<TId, AuroraFeatureComponentLoader>,
+): ReadonlyMap<string, TauriRouteRenderer> {
+  return new Map(
+    [...componentLoadersById].map(([id, component]) => [
+      id,
+      createTauriManifestRouteRenderer(component),
+    ]),
+  );
+}
+
+interface TauriRouteHostProjection<TId extends string = string>
+  extends TauriRouteProjection<TId> {
+  routeIdSet: ReadonlySet<string>;
+  registryRouteIds: readonly TId[];
+  rendererFor: (routeId: string) => TauriRouteRenderer | undefined;
+}
+
+export function createTauriRouteHostProjection<const TDefinition extends TauriRouteProjectionDefinition>(
+  definitions: readonly TDefinition[],
+  routeOverrides: Readonly<Record<string, TauriRouteRenderer | undefined>> = {},
+): TauriRouteHostProjection<TDefinition["id"]> {
+  const projection = projectTauriRouteDefinitions(definitions);
+  const routeIdSet = new Set<string>(projection.routeIds);
+  const manifestRouteRegistry = createTauriManifestRouteRegistry(
+    projection.componentLoadersById,
+  );
+  return {
+    ...projection,
+    routeIdSet,
+    registryRouteIds: projection.primaryRouteIds,
+    rendererFor: (routeId: string) => {
+      if (!routeIdSet.has(routeId)) return undefined;
+      return routeOverrides[routeId] ?? manifestRouteRegistry.get(routeId);
+    },
+  };
+}
+
 export const tauriRouteRegistry = {
   assistant: ({
     route,
@@ -273,7 +395,7 @@ export const tauriRouteRegistry = {
     assistantNativePermissions,
     assistantNativeCapabilities,
   }) => (
-    <AssistantView
+    <LazyAssistantView
       client={client}
       route={route}
       cancellationRoute={snapshot.assistantCancellationRoute ?? undefined}
@@ -318,7 +440,7 @@ export const tauriRouteRegistry = {
     const localSharing = nativeContext.localFeatureSharing;
     if (nativeContext.surfaceProfile.ownsLocalNodeState) {
       return (
-        <LightweightToolApprovalPanel
+        <LazyLightweightToolApprovalPanel
           client={client}
           route={route}
           localTools={localProvider?.localToolRegistry.publicTools() ?? []}
@@ -331,7 +453,7 @@ export const tauriRouteRegistry = {
     return (
       <div className="ata-page-stack">
         <p className="text-xs font-medium text-muted-foreground">Sources</p>
-        <ToolApprovalPanel
+        <LazyToolApprovalPanel
           client={client}
           route={route}
           nativePlatform={snapshot.nativePlatform}
@@ -372,6 +494,7 @@ export const tauriRouteRegistry = {
           route={route}
           surfaceProfile={nativeContext.surfaceProfile}
           thinPeer={nativeContext.thinPeer}
+          nativeProfileController={nativeContext.thinProfileController}
           initialInviteText={inviteParam}
           localFeatureSharing={nativeContext.localFeatureSharing}
           localNode={localNode}
@@ -424,7 +547,7 @@ export const tauriRouteRegistry = {
   ),
   "spoken-replies": ({ nativeContext, client }) => (
     <section aria-label="Spoken replies">
-      <VoiceSettingsView
+      <LazyVoiceSettingsView
         client={client}
         runtimeProfile={nativeContext.runtimeProfile ?? null}
         surfaceProfile={nativeContext.surfaceProfile}
@@ -473,11 +596,19 @@ export const tauriRouteRegistry = {
     applyModePreference,
     navigate,
   }) => (
-    <OnboardingView
+    <LazyOnboardingView
       client={client}
       snapshot={snapshot}
       modePreferenceStore={modePreferenceStore}
       onApplyModePreference={applyModePreference}
+      {...(isMobileTauriShell() && nativeContext.createOfflineProfile
+        ? {
+            onUseOfflineProfile: async () => {
+              await nativeContext.createOfflineProfile?.();
+              navigate("/assistant");
+            },
+          }
+        : {})}
       {...(nativeContext.thinPeer && nativeContext.thinProfileController
         ? {
             setupRequired: true,
@@ -488,7 +619,7 @@ export const tauriRouteRegistry = {
               navigate("/mesh");
             },
             renderThinConnectionPanel: (modeId: OnboardingProductModeId) => (
-              <WebThinConnectionPanel
+              <LazyWebThinConnectionPanel
                 peer={nativeContext.thinPeer!}
                 mode={nativeContext.thinConnectionMode}
                 transportKind={client.transport.kind}
@@ -512,12 +643,17 @@ export const tauriRouteRegistry = {
         : {})}
     />
   ),
-} satisfies Record<TauriRouteId, TauriRouteRenderer>;
+} satisfies Partial<Record<TauriRouteId, TauriRouteRenderer>>;
 
-const tauriRouteIdSet = new Set<string>(tauriRouteIds);
+const tauriRouteHostProjection = createTauriRouteHostProjection(
+  auroraRoutedFeatureDefinitions,
+  tauriRouteRegistry,
+);
+
+const tauriRouteIdSet = tauriRouteHostProjection.routeIdSet;
 
 export const tauriRouteRegistryRouteIds = Object.freeze([
-  ...primaryTauriRouteIds,
+  ...tauriRouteHostProjection.registryRouteIds,
 ]);
 
 export async function rebuildAuroraThinRuntime(
@@ -617,6 +753,25 @@ export function AuroraTauriApp({
   const [snapshot, setSnapshot] = useState<AuroraShellSnapshot>(
     initialSnapshotOverride ?? loadingShellSnapshot,
   );
+  const queryScope = useMemo(() => {
+    const peerSnapshot = runtime.thinPeer?.snapshot();
+    return {
+      backend: runtime.client.transport.kind,
+      peerId:
+        peerSnapshot?.connectedStablePeerId
+        ?? peerSnapshot?.expectedStablePeerId
+        ?? runtime.client.auth.snapshot().peerId
+        ?? null,
+      profileId:
+        runtime.thinProfile?.id
+        ?? runtime.runtimeProfile?.id
+        ?? runtime.mode,
+    };
+  }, [runtime, thinPeerReadyRevision]);
+  const queryClient = useMemo(
+    () => getAuroraQueryClient({ isMobile: isMobileTauriShell() }),
+    [queryScope, runtime.client],
+  );
   const [loadingStage, setLoadingStage] =
     useState<AuroraOwlLoaderStageId>("boot");
   const [loadingProgressPct, setLoadingProgressPct] = useState<number | null>(
@@ -646,6 +801,20 @@ export function AuroraTauriApp({
     useState(false);
   const [nativeSpeechReadiness, setNativeSpeechReadiness] =
     useState<TauriNativeSpeechCatalogReadiness | null>(null);
+
+  useEffect(() => {
+    if (import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST !== "1") return;
+    let active = true;
+    let unregister: (() => void) | undefined;
+    void import("./ios-voice-main-flow").then(({ registerIosVoiceMainFlowRuntimeDisposer }) => {
+      if (!active) return;
+      unregister = registerIosVoiceMainFlowRuntimeDisposer(() => runtime.dispose());
+    });
+    return () => {
+      active = false;
+      unregister?.();
+    };
+  }, [runtime]);
 
   useEffect(() => {
     const nativeVoice = runtime.nativeMobileVoice ?? runtime.nativeVoice;
@@ -758,6 +927,15 @@ export function AuroraTauriApp({
       ),
     [rebuildThinRuntime],
   );
+  const createOfflineProfile = useCallback(
+    () => rebuildThinRuntime((controller) => {
+      if (!controller.createOfflineProfile) {
+        throw new Error("On-device answers are unavailable for this device setup");
+      }
+      return controller.createOfflineProfile();
+    }),
+    [rebuildThinRuntime],
+  );
 
   const saveLocalSpeechSelection = useCallback(
     (
@@ -781,6 +959,15 @@ export function AuroraTauriApp({
         }
         return controller.updateActiveDesktopOverlay(overlay);
       }),
+    [rebuildThinRuntime],
+  );
+  const saveLocalInference = useCallback(
+    (enabled: boolean) => rebuildThinRuntime((controller) => {
+      if (!controller.updateActiveLocalInference) {
+        throw new Error("Offline answers are unavailable for this device setup");
+      }
+      return controller.updateActiveLocalInference(enabled);
+    }),
     [rebuildThinRuntime],
   );
 
@@ -864,16 +1051,29 @@ export function AuroraTauriApp({
       };
     }
 
+    let peerIdentityKey: string | null = null;
     const onPeerSnapshot = (peerSnapshot: ReturnType<typeof peer.snapshot>) => {
       const nextReady =
         peerSnapshot.status === "authorized" ||
         peerSnapshot.status === "fallback-http";
-      if (nextReady && !ready) {
+      const nextPeerIdentityKey = nextReady ? peerSnapshotIdentityKey(peerSnapshot) : null;
+      if (nextReady && (!ready || nextPeerIdentityKey !== peerIdentityKey)) {
+        const becameReady = !ready;
+        const identityChanged = ready && nextPeerIdentityKey !== peerIdentityKey;
         ready = true;
+        peerIdentityKey = nextPeerIdentityKey;
         setThinPeerReadyRevision((revision) => revision + 1);
-        if (runtime.nodeMode === "mesh-node" || runtime.localAssistant || runtime.localToolProvider) void refreshRemoteTools();
+        if (identityChanged) {
+          refreshEpoch += 1;
+          stopProjectionInvalidations();
+          remoteToolsByPeer = new Map();
+          remoteProjectionSnapshots = new Map();
+          setAssistantRemoteTools([]);
+        }
+        if ((becameReady || identityChanged) && (runtime.nodeMode === "mesh-node" || runtime.localAssistant || runtime.localToolProvider)) void refreshRemoteTools();
       } else if (!nextReady && ready) {
         ready = false;
+        peerIdentityKey = null;
         refreshEpoch += 1;
         stopProjectionInvalidations();
         remoteToolsByPeer = new Map();
@@ -943,6 +1143,7 @@ export function AuroraTauriApp({
               detail,
             ),
         );
+        const authIdentityReady = runtime.client.authApi.whoAmI().catch(() => null);
         const [
           nextSnapshot,
           nextSidecar,
@@ -966,6 +1167,8 @@ export function AuroraTauriApp({
               runtime.client,
               runtime.mode === "desktop-local",
               runtime.nativeCapabilityManifest,
+              queryClient,
+              queryScope,
             ),
           ),
           trackModelsProgress(
@@ -1002,7 +1205,7 @@ export function AuroraTauriApp({
         ]);
         modelsPhaseActive = false;
         reportStage("assistant");
-        await runtime.client.authApi.whoAmI().catch(() => null);
+        await authIdentityReady;
         if (!cancelled) {
           reportStage("workspace");
           setSnapshot((current) =>
@@ -1049,7 +1252,7 @@ export function AuroraTauriApp({
     return () => {
       cancelled = true;
     };
-  }, [runtime, thinPeerReadyRevision]);
+  }, [queryClient, queryScope, runtime, thinPeerReadyRevision]);
 
   const refreshNativeAccessState = useCallback(async () => {
     const [nextSnapshot, nextNativePermissions, nextAndroidBaseline] =
@@ -1058,6 +1261,8 @@ export function AuroraTauriApp({
           runtime.client,
           false,
           runtime.nativeCapabilityManifest,
+          queryClient,
+          queryScope,
         ),
         runtime.nativePermissionStatus().catch(() => null),
         runtime.androidBaselineStatus().catch(() => null),
@@ -1071,7 +1276,7 @@ export function AuroraTauriApp({
     );
     setNativePermissions(nextNativePermissions);
     setAndroidBaseline(nextAndroidBaseline);
-  }, [runtime]);
+  }, [queryClient, queryScope, runtime]);
 
   useEffect(() => {
     if (
@@ -1201,12 +1406,15 @@ export function AuroraTauriApp({
     nativeVoice: runtime.nativeVoice,
     nativeMobileVoice: runtime.nativeMobileVoice,
     localSpeechCatalog: runtime.localSpeechCatalog,
+    localInference: runtime.localInference,
     thinProfile: runtime.thinProfile,
     thinProfileController: runtime.thinProfileController,
     saveThinProfile,
+    createOfflineProfile,
     selectThinProfile,
     saveLocalSpeechSelection,
     saveDesktopOverlay,
+    saveLocalInference,
     requestNativeAccess,
   };
 
@@ -1227,41 +1435,62 @@ export function AuroraTauriApp({
     runtime.thinProfileController
   ) {
     return (
-      <OnboardingView
-        client={runtime.client}
-        snapshot={snapshot}
-        modePreferenceStore={runtime.modePreferenceStore}
-        setupRequired
-        onUseManualAddress={async (address) => {
-          await saveThinProfile(
-            thinConnectionProfileWithManualAddress(runtime.thinProfile, address),
-          );
-          navigate("/mesh");
-        }}
-        renderThinConnectionPanel={(modeId: OnboardingProductModeId) => (
-          <WebThinConnectionPanel
-            peer={runtime.thinPeer!}
-            mode={runtime.thinConnectionMode}
-            transportKind={runtime.client.transport.kind}
-            nativePlatform={snapshot.nativePlatform}
-            initialInviteText={
-              runtime.pendingThinInviteText ?? initialThinInviteFromUrl()
-            }
-            profile={runtime.thinProfile}
-            profiles={runtime.thinProfileController!.document.profiles}
-            profileStoreEvidence={runtime.thinProfileController!.evidence}
-            localFeatureSharing={runtime.localFeatureSharing}
-            setupIntent={modeId}
-            onSaveProfile={async (profile, roomSecret) => {
-              await saveThinProfile(profile, roomSecret);
-              navigate("/mesh");
-            }}
-            onSelectProfile={selectThinProfile}
-            configureOnly
-            {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
+      <RouteChunkErrorBoundary>
+        <Suspense
+          fallback={
+            <AuroraOwlLoader
+              owlSrc={owlSrc}
+              stageId="boot"
+              progressPct={null}
+              detail="Loading the device connection profile"
+            />
+          }
+        >
+          <LazyOnboardingView
+          client={runtime.client}
+          snapshot={snapshot}
+          modePreferenceStore={runtime.modePreferenceStore}
+          setupRequired
+          {...(isMobileTauriShell() && runtime.thinProfileController?.createOfflineProfile
+            ? {
+                onUseOfflineProfile: async () => {
+                  await createOfflineProfile();
+                  navigate("/assistant");
+                },
+              }
+            : {})}
+          onUseManualAddress={async (address) => {
+            await saveThinProfile(
+              thinConnectionProfileWithManualAddress(runtime.thinProfile, address),
+            );
+            navigate("/mesh");
+          }}
+          renderThinConnectionPanel={(modeId: OnboardingProductModeId) => (
+            <LazyWebThinConnectionPanel
+              peer={runtime.thinPeer!}
+              mode={runtime.thinConnectionMode}
+              transportKind={runtime.client.transport.kind}
+              nativePlatform={snapshot.nativePlatform}
+              initialInviteText={
+                runtime.pendingThinInviteText ?? initialThinInviteFromUrl()
+              }
+              profile={runtime.thinProfile}
+              profiles={runtime.thinProfileController!.document.profiles}
+              profileStoreEvidence={runtime.thinProfileController!.evidence}
+              localFeatureSharing={runtime.localFeatureSharing}
+              setupIntent={modeId}
+              onSaveProfile={async (profile, roomSecret) => {
+                await saveThinProfile(profile, roomSecret);
+                navigate("/mesh");
+              }}
+              onSelectProfile={selectThinProfile}
+              configureOnly
+              {...(isMobileTauriShell() ? { onScanQr: scanMeshInviteQr } : {})}
+            />
+          )}
           />
-        )}
-      />
+        </Suspense>
+      </RouteChunkErrorBoundary>
     );
   }
 
@@ -1277,30 +1506,185 @@ export function AuroraTauriApp({
   }
 
   return (
-    <>
-      <AppShell
-        snapshot={snapshot}
-        currentPath={currentPath}
-        onNavigate={navigate}
-        sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
-        runtimeMode={runtime.mode}
-        nodeMode={runtime.nodeMode}
-        localNodeAvailable={runtime.localNodeProviderStatus?.available}
-      >
-        <TauriRouteContent
-          path={currentPath}
-          snapshot={snapshot}
-          nativeContext={nativeContext}
-          client={runtime.client}
-          modePreferenceStore={runtime.modePreferenceStore}
-          applyModePreference={applyModePreference}
-          navigate={navigate}
-          shutdown={runtime.shutdown}
+    <AuroraQueryProvider
+      client={runtime.client}
+      surfaceProfile={surfaceProfile}
+      queryClient={queryClient}
+      queryScope={queryScope}
+      nativeSpeechPolicyPort={runtime.nativeSpeechPolicyPort}
+    >
+      <>
+        <TauriRuntimeStateBridge surfaceProfile={surfaceProfile} />
+        <TauriShellStateBridge
+          runtime={runtime}
+          queryClient={queryClient}
+          queryScope={queryScope}
+          enabled={profileBootstrapReady && !runtime.requiresOnboarding}
+          setSnapshot={setSnapshot}
         />
-      </AppShell>
-      <LocalFeatureApprovalPrompt controller={runtime.localToolApprovals} />
-    </>
+        <AppShell
+          snapshot={snapshot}
+          currentPath={currentPath}
+          onNavigate={navigate}
+          sessionIsAdmin={runtime.client.auth.snapshot().isAdmin}
+          runtimeMode={runtime.mode}
+          nodeMode={runtime.nodeMode}
+          localNodeAvailable={runtime.localNodeProviderStatus?.available}
+        >
+          <TauriRouteContent
+            path={currentPath}
+            snapshot={snapshot}
+            nativeContext={nativeContext}
+            client={runtime.client}
+            modePreferenceStore={runtime.modePreferenceStore}
+            applyModePreference={applyModePreference}
+            navigate={navigate}
+            shutdown={runtime.shutdown}
+          />
+        </AppShell>
+        <LocalFeatureApprovalPrompt controller={runtime.localToolApprovals} />
+      </>
+    </AuroraQueryProvider>
   );
+}
+
+function TauriRuntimeStateBridge({
+  surfaceProfile,
+}: {
+  surfaceProfile: ReturnType<typeof getAuroraSurfaceProfile>;
+}) {
+  const stateScopeId = useAuroraStateScopeId();
+  useEffect(() => {
+    useSurfaceStore.getState().setSurface(
+      {
+        kind: surfaceProfile.physicalKind,
+        isMobile: surfaceProfile.isMobile,
+        isNative: surfaceProfile.usesNativeShell,
+      },
+      { scopeId: stateScopeId },
+    );
+  }, [
+    stateScopeId,
+    surfaceProfile.isMobile,
+    surfaceProfile.physicalKind,
+    surfaceProfile.usesNativeShell,
+  ]);
+  return null;
+}
+
+
+function peerSnapshotIdentityKey(peerSnapshot: {
+  connectedStablePeerId?: string | null | undefined;
+  expectedStablePeerId?: string | null | undefined;
+}): string {
+  return [
+    peerSnapshot.connectedStablePeerId ?? "",
+    peerSnapshot.expectedStablePeerId ?? "",
+  ].join("|");
+}
+
+function TauriShellStateBridge({
+  runtime,
+  queryClient,
+  queryScope,
+  enabled,
+  setSnapshot,
+}: {
+  runtime: AuroraTauriRuntime;
+  queryClient: ReturnType<typeof getAuroraQueryClient>;
+  queryScope: AuroraQueryScopeInput;
+  enabled: boolean;
+  setSnapshot: Dispatch<SetStateAction<AuroraShellSnapshot>>;
+}) {
+  const stateScopeId = useAuroraStateScopeId();
+  const scopeKey = useAuroraQueryScopeKey();
+  const refreshSequenceRef = useMemo(() => ({ current: 0, controller: null as AbortController | null }), []);
+  const peerSnapshot = runtime.thinPeer?.snapshot();
+  const peerId = peerSnapshot?.connectedStablePeerId
+    ?? peerSnapshot?.expectedStablePeerId
+    ?? runtime.client.auth.snapshot().peerId
+    ?? null;
+  const peerConnectionStore = useMemo<NativePeerConnectionStorePort>(() => ({
+    getState: () => {
+      const state = useConnectionStore.getState();
+      return {
+        // Peer event observation owns its own scope; health/config scope changes must not reset this badge.
+        peerConnectionScopeId: (state as { peerConnectionScopeId?: string | null }).peerConnectionScopeId ?? null,
+        setPeerState: state.setPeerState,
+      };
+    },
+  }), []);
+
+  const refreshShellSnapshot = useCallback(async () => {
+    refreshSequenceRef.controller?.abort();
+    const controller = new AbortController();
+    const sequence = refreshSequenceRef.current + 1;
+    refreshSequenceRef.current = sequence;
+    refreshSequenceRef.controller = controller;
+    const nextSnapshot = await fetchAuroraShellSnapshot({
+      client: runtime.client,
+      queryClient,
+      scopeKey,
+      nativeManifest: runtime.nativeCapabilityManifest,
+      signal: controller.signal,
+    });
+    if (controller.signal.aborted || refreshSequenceRef.current !== sequence) return null;
+    return nextSnapshot;
+  }, [queryClient, refreshSequenceRef, runtime.client, runtime.nativeCapabilityManifest, scopeKey]);
+
+  const handleLiveShellEvent = useCallback(
+    (event: Parameters<typeof patchShellSnapshotForEvent>[1]) => {
+      setSnapshot((current) => patchShellSnapshotForEvent(current, event).snapshot);
+      invalidateAuroraQueriesForShellEvent(queryClient, event, scopeKey);
+      if (shouldRefreshShellSnapshot(event)) {
+        void refreshShellSnapshot()
+          .then((nextSnapshot) => {
+            if (!nextSnapshot) return;
+            setSnapshot((current) => retainThinShellSnapshot(current, nextSnapshot, runtime.thinPeer?.snapshot()));
+          })
+          .catch(() => undefined);
+      }
+    },
+    [queryClient, refreshShellSnapshot, runtime.thinPeer, scopeKey, setSnapshot],
+  );
+
+  useEffect(() => {
+    return () => {
+      refreshSequenceRef.current += 1;
+      refreshSequenceRef.controller?.abort();
+      refreshSequenceRef.controller = null;
+    };
+  }, [refreshSequenceRef, runtime.client, scopeKey]);
+
+  useEffect(() => {
+    if (!enabled) return;
+    void refreshShellSnapshot()
+      .then((nextSnapshot) => {
+        if (!nextSnapshot) return;
+        setSnapshot((current) => retainThinShellSnapshot(current, nextSnapshot, runtime.thinPeer?.snapshot()));
+      })
+      .catch(() => undefined);
+  }, [enabled, refreshShellSnapshot, runtime.thinPeer, setSnapshot]);
+
+  useAuroraLiveShellEvents({
+    client: runtime.client,
+    enabled,
+    scopeId: stateScopeId,
+    queryScope,
+    onEvent: handleLiveShellEvent,
+  });
+
+  useNativePeerEvents({
+    client: runtime.client,
+    enabled,
+    nativeEventsSupported: true,
+    peerId,
+    scopeId: stateScopeId,
+    runtimePeer: runtime.thinPeer ?? null,
+    connectionStore: peerConnectionStore,
+  });
+
+  return null;
 }
 
 const EMPTY_LOCAL_APPROVAL_SNAPSHOT: ProviderLocalApprovalSnapshot = {
@@ -1652,18 +2036,26 @@ function registryPollDetail(services: ServiceInfo[]): string {
 async function buildRuntimeShellSnapshot(
   client: AuroraClient,
   retryTransientError: boolean,
-  nativeManifest?: AuroraTauriRuntime["nativeCapabilityManifest"],
+  nativeManifest: AuroraTauriRuntime["nativeCapabilityManifest"] | undefined,
+  queryClient: ReturnType<typeof getAuroraQueryClient>,
+  queryScope: AuroraQueryScopeInput,
 ): Promise<AuroraShellSnapshot> {
-  const options = nativeManifest ? { nativeManifest } : undefined;
-  if (!retryTransientError) return buildShellSnapshot(client, options);
+  const scopeKey = ["aurora", createAuroraQueryScopeId(client, queryScope)] as const;
+  const readSnapshot = () => fetchAuroraShellSnapshot({
+    client,
+    queryClient,
+    scopeKey,
+    nativeManifest,
+  });
+  if (!retryTransientError) return await readSnapshot();
 
-  let snapshot = await buildShellSnapshot(client, options);
+  let snapshot = await readSnapshot();
   if (snapshot.loadState !== "error") return snapshot;
 
   const deadline = Date.now() + DESKTOP_LOCAL_SNAPSHOT_READY_TIMEOUT_MS;
   while (Date.now() <= deadline) {
     await delay(DESKTOP_LOCAL_GATEWAY_RETRY_DELAY_MS);
-    snapshot = await buildShellSnapshot(client, options);
+    snapshot = await readSnapshot();
     if (snapshot.loadState !== "error") return snapshot;
   }
   return snapshot;
@@ -1709,8 +2101,10 @@ interface NativeContext {
   nativeVoice?: AuroraTauriRuntime["nativeVoice"];
   nativeMobileVoice?: AuroraTauriRuntime["nativeMobileVoice"];
   localSpeechCatalog?: AuroraTauriRuntime["localSpeechCatalog"];
+  localInference?: AuroraTauriRuntime["localInference"];
   thinProfile?: AuroraThinConnectionProfile | undefined;
   thinProfileController?: AuroraTauriRuntime["thinProfileController"];
+  createOfflineProfile?: (() => Promise<void>) | undefined;
   saveThinProfile: (
     profile: AuroraThinConnectionProfile,
     roomSecret?: WebThinRoomSecret,
@@ -1723,6 +2117,7 @@ interface NativeContext {
   saveDesktopOverlay: (
     overlay: AuroraDesktopOverlayPreferences,
   ) => Promise<void>;
+  saveLocalInference: (enabled: boolean) => Promise<void>;
   nativePermissions: TauriNativePermissionStatus | null;
   nativeFeatures: Record<string, TauriNativeFeatureStatus | null>;
   iosInvocationStatus: TauriIosInvocationStatus | null;
@@ -1744,6 +2139,13 @@ function localMeshNodeIdentity(
   return { peerId, nodeName };
 }
 
+const NO_LOCAL_ASSISTANT_TOOLS: NonNullable<LightweightAssistantDependencies["tools"]> = {
+  prepareExecution: async () => { throw new Error("No tools are available for this assistant."); },
+  requestApproval: async () => { throw new Error("No tools are available for this assistant."); },
+  confirmExecution: async () => { throw new Error("No tools are available for this assistant."); },
+  execute: async () => { throw new Error("No tools are available for this assistant."); },
+};
+
 function tauriLocalAssistant(
   nativeContext: NativeContext,
   client: AuroraClient,
@@ -1751,15 +2153,20 @@ function tauriLocalAssistant(
   const localData = nativeContext.localData;
   const localToolProvider = nativeContext.localToolProvider;
   const localAssistant = nativeContext.localAssistant;
-  if (
-    nativeContext.thinFeatures?.lightweightOrchestratorEnabled !== true
-    || !localData
-    || !localData.ownerAvailable
-    || !localToolProvider
-    || !localAssistant
-  ) {
-    return null;
+  const enabledCapabilityPacks = nativeContext.runtimeProfile?.localNode.enabledCapabilityPacks ?? [];
+  if (!localData || !localData.ownerAvailable || !localAssistant) return null;
+  if (!localToolProvider) {
+    if (!enabledCapabilityPacks.includes("local-inference") || enabledCapabilityPacks.includes("native-actions")) return null;
+    return {
+      provider: localAssistant.provider,
+      tools: NO_LOCAL_ASSISTANT_TOOLS,
+      localData: localData.session,
+      envelopeCrypto: localData.crypto,
+      scope: { profileId: localData.session.profileId, localNodeId: localData.session.localNodeId },
+      availableTools: [],
+    };
   }
+  if (nativeContext.thinFeatures?.lightweightOrchestratorEnabled !== true) return null;
   const localTools = localToolProvider.localToolRegistry.publicTools();
   const availableTools = mergeLightweightAssistantTools(
     localTools,
@@ -1857,25 +2264,78 @@ function TauriRouteContent({
   );
   if (!renderRoute) return <MissingTauriRoute route={route} />;
   return (
-    <Suspense fallback={<TauriRouteLoading route={route} />}>
-      {renderRoute({
-        route,
-        snapshot,
-        nativeContext,
-        client,
-        shutdown,
-        modePreferenceStore,
-        applyModePreference,
-        navigate,
-        assistantNativePermissions,
-        assistantNativeCapabilities,
-      })}
-    </Suspense>
+    <RouteChunkErrorBoundary key={route.item.id} route={route}>
+      <Suspense fallback={<TauriRouteLoading route={route} />}>
+        {renderRoute({
+          route,
+          snapshot,
+          nativeContext,
+          client,
+          shutdown,
+          modePreferenceStore,
+          applyModePreference,
+          navigate,
+          assistantNativePermissions,
+          assistantNativeCapabilities,
+        })}
+      </Suspense>
+    </RouteChunkErrorBoundary>
   );
 }
 
+interface RouteChunkErrorBoundaryProps {
+  route?: RouteAvailability;
+  children: ReactNode;
+  onReload?: () => void;
+}
+
+interface RouteChunkErrorBoundaryState {
+  hasError: boolean;
+}
+
+export class RouteChunkErrorBoundary extends Component<
+  RouteChunkErrorBoundaryProps,
+  RouteChunkErrorBoundaryState
+> {
+  state: RouteChunkErrorBoundaryState = { hasError: false };
+
+  static getDerivedStateFromError(): RouteChunkErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      const title = this.props.route?.item.label ?? "Aurora";
+      return (
+        <section className="ata-panel" role="alert" aria-live="assertive">
+          <h1 className="text-xl font-semibold">{title} could not be opened</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Reload Aurora and try again.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4"
+            onClick={() => {
+              if (this.props.onReload) {
+                this.props.onReload();
+              } else if (typeof window !== "undefined") {
+                window.location.reload();
+              }
+            }}
+          >
+            Reload Aurora
+          </Button>
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 function TauriRouteLoading({ route }: { route: RouteAvailability }) {
-  const routeLoadingCopy = tauriRouteLoadingCopy[route.item.id as TauriRouteId];
+  const loadingCopyById: ReadonlyMap<string, TauriRouteLoadingCopy> = tauriRouteProjection.loadingCopyById;
+  const routeLoadingCopy = loadingCopyById.get(route.item.id);
   const title = routeLoadingCopy?.title ?? route.item.label;
   const description =
     routeLoadingCopy?.description ?? `Loading ${title} from Aurora.`;
@@ -1974,7 +2434,7 @@ function TauriNativeSettingsPage({
   );
   return (
     <div className="ata-page-stack">
-      <SettingsPermissionsView
+      <LazySettingsPermissionsView
         snapshot={snapshot}
         surface="native"
         currentPath="/settings/native"
@@ -2019,7 +2479,8 @@ function TauriNativeSettingsPage({
 }
 
 function routeRendererFor(routeId: string): TauriRouteRenderer | undefined {
-  return isTauriRouteId(routeId) ? tauriRouteRegistry[routeId] : undefined;
+  if (!isTauriRouteId(routeId)) return undefined;
+  return tauriRouteHostProjection.rendererFor(routeId);
 }
 
 function isTauriRouteId(routeId: string): routeId is TauriRouteId {
@@ -2104,7 +2565,7 @@ function TauriAdminOverviewPage({
         hidden={activeTab !== "overview"}
         className="aui-tab-panel"
       >
-        <AdminOverviewContent
+        <LazyAdminOverviewContent
           manifest={manifest}
           transportKind={client.transport.kind}
           error={error}
@@ -2140,8 +2601,8 @@ interface TauriSettingsHostSlots {
   connectionRoleContent?: ReactNode;
 }
 
-const SettingsViewWithHostSlots = SettingsView as ComponentType<
-  ComponentProps<typeof SettingsView> & TauriSettingsHostSlots
+const SettingsViewWithHostSlots = LazySettingsView as ComponentType<
+  ComponentProps<typeof LazySettingsView> & TauriSettingsHostSlots
 >;
 
 function TauriSettingsPage({
@@ -2159,6 +2620,19 @@ function TauriSettingsPage({
   navigate: (href: string) => void;
   onChangeDeviceSetup: () => void;
 }) {
+  const [offlineAssistantModelId, setOfflineAssistantModelId] = useState<string | null>(null);
+  useEffect(() => {
+    const inference = nativeContext.localInference;
+    let current = true;
+    setOfflineAssistantModelId(null);
+    if (inference) {
+      void resolveNativeLocalInferenceSelection(inference).then(
+        (selection) => { if (current) setOfflineAssistantModelId(selection.chatModelId); },
+        () => { if (current) setOfflineAssistantModelId(null); },
+      );
+    }
+    return () => { current = false; };
+  }, [nativeContext.localInference]);
   const configRoute = embeddedRoute("config", snapshot) ?? route;
   const dataRoute = embeddedRoute("data", snapshot) ?? route;
   return (
@@ -2216,6 +2690,14 @@ function TauriSettingsPage({
             </section>
           ) : null
         }
+        localAssistantContent={nativeContext.localInference && offlineAssistantModelId ? (
+          <LocalInferenceSettingsView
+            client={nativeContext.localInference}
+            modelId={offlineAssistantModelId}
+            enabled={nativeContext.surfaceProfile.localInferenceEnabled}
+            onEnabledChange={nativeContext.saveLocalInference}
+          />
+        ) : null}
       />
     </div>
   );
@@ -2262,7 +2744,7 @@ function TauriDiagnosticsPage({
   return (
     <div className="ata-page-stack">
       {nativeContext.thinPeer ? (
-        <WebThinConnectionPanel
+        <LazyWebThinConnectionPanel
           peer={nativeContext.thinPeer}
           mode={nativeContext.thinConnectionMode}
           transportKind={client.transport.kind}
@@ -2476,7 +2958,7 @@ function TauriDiagnosticsPage({
         </button>
       </section>
       <RouteMatrix routes={snapshot.routes} />
-      <MeshDiagnosticsResource
+      <LazyMeshDiagnosticsResource
         client={client}
         route={route}
         thinPeer={nativeContext.thinPeer}

@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Activity, Download, Lock, Search, ShieldCheck } from 'lucide-react'
+import { useQuery } from '@tanstack/react-query'
+import { Download, Search, ShieldCheck } from 'lucide-react'
 import {
   AuroraError,
   type AuditLogEntry,
@@ -11,10 +12,12 @@ import {
   type JsonObject,
   type JsonValue
 } from '@aurora/client'
-import { Alert, AlertDescription } from '#components/ui/alert'
 import { Input } from '#components/ui/input'
 import { EvidenceBadge, StatusBadge } from './status-badges'
+import { EmptyState, RouteStateNotice } from './state-surface'
 import { Button, Card, DataTable, MetaGrid, type DataColumn } from './primitives'
+import { AURORA_QUERY_STALE_TIMES, AuroraQueryProvider, useAuroraQueryScope } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 import { adminActionLabel, adminErrorTitle, adminReasonText, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
 
 const filterLabelClass = 'flex flex-col gap-1 text-xs text-muted-foreground'
@@ -153,20 +156,27 @@ const secretKeyPattern = /(token|secret|password|credential|api[_-]?key|authoriz
 const sensitivePayloadKeyPattern = /(payload|raw)/i
 const safeHashKeyPattern = /(hash|digest|checksum|receipt|redacted)/i
 
-export function AdminAuditResource({ client }: AdminAuditResourceProps) {
-  const [filters, setFilters] = useState<AdminAuditFilters>(emptyFilters)
-  const [snapshot, setSnapshot] = useState<AdminAuditSnapshot>(loadingSnapshot)
+export function AdminAuditResource(props: AdminAuditResourceProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <AdminAuditResourceQuery {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <AdminAuditResourceQuery {...props} />
+    </AuroraQueryProvider>
+  )
+}
 
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot((current) => ({ ...loadingSnapshot, filters: current.filters }))
-    void buildAdminAuditSnapshot(client, filters).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client, filters])
+function AdminAuditResourceQuery({ client }: AdminAuditResourceProps) {
+  const [filters, setFilters] = useState<AdminAuditFilters>(emptyFilters)
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const auditQuery = useQuery<AdminAuditSnapshot, unknown>({
+    queryKey: queryKeys.admin('audit', filters),
+    queryFn: () => buildAdminAuditSnapshot(client, filters),
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
+  const snapshot = auditQuery.data ?? { ...loadingSnapshot, filters }
 
   return (
     <AdminAuditView
@@ -358,7 +368,7 @@ export function AdminAuditView({
             rows={visibleRows}
             getRowKey={(row) => row.id}
             onRowClick={(row) => setSelectedRowId(row.id)}
-            empty={<p>No audit events match the current filters.</p>}
+            empty={<EmptyState title="No audit events" message="No audit events match the current filters." />}
           />
         </Card>
         {selectedRow ? <AuditDetailDrawer row={selectedRow} /> : null}
@@ -531,26 +541,29 @@ function AuditDetailDrawer({ row }: { row: AdminAuditRow }) {
 function AuditStatusPanel({ snapshot }: { snapshot: AdminAuditSnapshot }) {
   if (snapshot.loadState === 'loading') {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-2.5 text-sm" aria-live="polite">
-        <Activity size={18} aria-hidden />
-        <span>Loading audit events and redaction metadata through Aurora.</span>
-      </div>
+      <RouteStateNotice
+        title="Loading audit events"
+        state="loading"
+        message="Loading audit events and redaction metadata through Aurora."
+      />
     )
   }
   if (snapshot.loadState === 'ready') return null
   if (snapshot.loadState === 'empty') {
     return (
-      <div className="flex items-start gap-2 rounded-lg border border-border bg-card p-2.5 text-sm" role="status">
-        <ShieldCheck size={18} aria-hidden />
-        <span>No audit rows match the active search and trace filters.</span>
-      </div>
+      <RouteStateNotice
+        title="No audit rows"
+        state="empty"
+        message="No audit rows match the active search and trace filters."
+      />
     )
   }
   return (
-    <Alert variant="destructive">
-      <Lock size={18} aria-hidden />
-      <AlertDescription>{productAdminReasonCopy(snapshot.error, 'Audit status needs attention. Export remains disabled until protected data is present.')}</AlertDescription>
-    </Alert>
+    <RouteStateNotice
+      title="Audit status needs attention"
+      state={snapshot.loadState === 'denied' ? 'permission' : snapshot.loadState === 'degraded' ? 'offline' : 'error'}
+      message={productAdminReasonCopy(snapshot.error, 'Audit status needs attention. Export remains disabled until protected data is present.')}
+    />
   )
 }
 

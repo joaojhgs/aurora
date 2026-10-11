@@ -17,8 +17,6 @@ export default async function Page() {
       {!route ? (
         <AuroraRoutePage
           routeId="assistant"
-          title="Assistant"
-          description="The assistant is unavailable until Aurora confirms this device can start a conversation."
         />
       ) : null}
     </>

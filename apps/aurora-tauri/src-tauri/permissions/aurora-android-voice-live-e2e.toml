@@ -1,4 +1,11 @@
 [[permission]]
 identifier = "aurora-android-voice-live-e2e"
-description = "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue."
-commands.allow = ["aurora_android_voice_live_test_inject_pcm"]
+description = "Allow debug-only Android voice live acceptance to inject bounded PCM, read passive playback counters, and verify native event privacy boundaries."
+commands.allow = [
+  "aurora_android_voice_live_test_inject_pcm",
+  "aurora_android_voice_live_test_playback_counters",
+  "aurora_mesh_session_live_privacy_prepare",
+  "aurora_mesh_session_live_privacy_verify_peer_boundary",
+  "aurora_mesh_session_live_privacy_verify_fresh_rebind",
+  "aurora_mesh_session_live_privacy_verify_profile_reset",
+]

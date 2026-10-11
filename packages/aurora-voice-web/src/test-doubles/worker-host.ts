@@ -54,6 +54,8 @@ function defaultResponse(command: AuroraVoiceWorkerCommand): AuroraVoiceWorkerRe
       return { type: 'ack', sessionId: command.sessionId, generation: command.generation, sequence: null }
     case 'synthesize_tts':
       return { type: 'tts_result', generation: command.generation, audio: synthesizedAudio(command.generation, [0, 1024, -1024]) }
+    case 'transcribe_stt':
+      return { type: 'stt_result', generation: command.generation, text: '' }
     case 'cancel':
       return { type: 'ack', sessionId: command.sessionId ?? '', generation: command.generation, sequence: null }
     case 'shutdown':

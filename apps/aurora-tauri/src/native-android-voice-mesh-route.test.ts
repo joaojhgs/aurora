@@ -19,7 +19,7 @@ describe('Android native assistant mesh route', () => {
   it('derives assistant mode and preferred peer from the persisted runtime profile', () => {
     const source = readSource(servicePath);
 
-    expect(source).toContain('activeVoiceRouteProfile(context)');
+    expect(source).toContain('activeVoiceRouteProfile(context, confirmedProfileDocumentJson)');
     expect(source).toContain('home?.optString("mode")');
     expect(source).toContain('profile.optString("mode")');
     expect(source).toContain('mode !in setOf("http-only", "webrtc-preferred", "webrtc-only")');
@@ -56,8 +56,13 @@ describe('Android native assistant mesh route', () => {
       kotlin.indexOf('private fun createNativeVoiceSession('),
       kotlin.indexOf('private fun attachNativeVoiceSession('),
     );
-    expect(createSession).toContain('if (sttModelId != null && ttsVoiceId != null && sttReady && ttsReady');
-    expect(createSession).toMatch(/if \(sttModelId[\s\S]*return AuroraNativeVoiceSessionBridge\([\s\S]*return null/);
+    expect(createSession).toContain('val localSttReady = sttModelId != null && sttReady');
+    expect(createSession).toContain('val localTtsReady = ttsVoiceId != null && ttsReady');
+    expect(createSession).toContain('localSttReady || localTtsReady || backgroundPacksReady');
+    expect(createSession).toContain('sttModelId?.takeIf { sttReady }');
+    expect(createSession).toContain('ttsVoiceId?.takeIf { ttsReady }');
+    expect(createSession).toContain('speechStagesJson,');
+    expect(createSession).toMatch(/if \(!backgroundSession \|\| backgroundPacksReady\)[\s\S]*return AuroraNativeVoiceSessionBridge\([\s\S]*return null/);
     expect(createSession).not.toContain('nativeConfig.assistantRouteMode in setOf');
     expect(rust).toContain('AndroidAssistantRouteMode::WebRtcOnly');
   });

@@ -183,6 +183,12 @@
           "markdownDescription": "Enables the aurora_activate_subscription command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_android_background_transcription_sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-background-transcription-sync",
+          "markdownDescription": "Enables the aurora_android_background_transcription_sync command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_android_baseline_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-android-baseline-status",
@@ -229,6 +235,12 @@
           "type": "string",
           "const": "allow-aurora-android-voice-live-test-inject-pcm",
           "markdownDescription": "Enables the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_android_voice_live_test_playback_counters command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-live-test-playback-counters",
+          "markdownDescription": "Enables the aurora_android_voice_live_test_playback_counters command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_android_voice_pack_activate command without any pre-configured scope.",
@@ -405,6 +417,66 @@
           "markdownDescription": "Enables the aurora_local_file_write command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_local_inference_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-cancel",
+          "markdownDescription": "Enables the aurora_local_inference_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-catalog",
+          "markdownDescription": "Enables the aurora_local_inference_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_complete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-complete",
+          "markdownDescription": "Enables the aurora_local_inference_complete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_delete_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-delete-model",
+          "markdownDescription": "Enables the aurora_local_inference_delete_model command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_download_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-download-model",
+          "markdownDescription": "Enables the aurora_local_inference_download_model command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_engines command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-engines",
+          "markdownDescription": "Enables the aurora_local_inference_engines command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_model_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-model-status",
+          "markdownDescription": "Enables the aurora_local_inference_model_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_session_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-session-create",
+          "markdownDescription": "Enables the aurora_local_inference_session_create command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_session_destroy command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-session-destroy",
+          "markdownDescription": "Enables the aurora_local_inference_session_destroy command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_local_inference_session_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-local-inference-session-reset",
+          "markdownDescription": "Enables the aurora_local_inference_session_reset command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_log_tail command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-log-tail",
@@ -501,6 +573,30 @@
           "markdownDescription": "Enables the aurora_mesh_session_bind command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-prepare",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-verify-fresh-rebind",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-verify-peer-boundary",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-verify-profile-reset",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_mesh_session_set_lifecycle command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-mesh-session-set-lifecycle",
@@ -525,6 +621,18 @@
           "markdownDescription": "Enables the aurora_native_capability_manifest command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_native_event_ack command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-event-ack",
+          "markdownDescription": "Enables the aurora_native_event_ack command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_event_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-event-snapshot",
+          "markdownDescription": "Enables the aurora_native_event_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_native_open_deep_link command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-native-open-deep-link",
@@ -541,6 +649,12 @@
           "type": "string",
           "const": "allow-aurora-native-show-notification",
           "markdownDescription": "Enables the aurora_native_show_notification command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_speech_host_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-speech-host-snapshot",
+          "markdownDescription": "Enables the aurora_native_speech_host_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_native_voice_cancel command without any pre-configured scope.",
@@ -571,6 +685,42 @@
           "type": "string",
           "const": "allow-aurora-native-voice-tray-toggle-e2e",
           "markdownDescription": "Enables the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_policy_compare_and_swap command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-policy-compare-and-swap",
+          "markdownDescription": "Enables the aurora_node_config_policy_compare_and_swap command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_policy_read command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-policy-read",
+          "markdownDescription": "Enables the aurora_node_config_policy_read command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_peer_host_local_speech_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-peer-host-local-speech-cancel",
+          "markdownDescription": "Enables the aurora_peer_host_local_speech_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_peer_host_local_speech_stage command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-peer-host-local-speech-stage",
+          "markdownDescription": "Enables the aurora_peer_host_local_speech_stage command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_peer_host_local_speech_synthesize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-peer-host-local-speech-synthesize",
+          "markdownDescription": "Enables the aurora_peer_host_local_speech_synthesize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_peer_host_local_speech_transcribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-peer-host-local-speech-transcribe",
+          "markdownDescription": "Enables the aurora_peer_host_local_speech_transcribe command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
@@ -717,10 +867,10 @@
           "markdownDescription": "Allow Android client/mobile runtime to read bounded native status, control the foreground voice session, and use narrow Android Keystore-backed inbound verifier storage. Generic secure storage is granted separately."
         },
         {
-          "description": "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue.",
+          "description": "Allow debug-only Android voice live acceptance to inject bounded PCM, read passive playback counters, and verify native event privacy boundaries.",
           "type": "string",
           "const": "aurora-android-voice-live-e2e",
-          "markdownDescription": "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue."
+          "markdownDescription": "Allow debug-only Android voice live acceptance to inject bounded PCM, read passive playback counters, and verify native event privacy boundaries."
         },
         {
           "description": "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript.",
@@ -771,6 +921,12 @@
           "markdownDescription": "Allow iOS foreground voice status and explicit start/stop controls without granting background listening or system assistant ownership."
         },
         {
+          "description": "DEBUG-only iOS fixture PCM ingress for the protected foreground voice session.",
+          "type": "string",
+          "const": "aurora-ios-voice-live-test",
+          "markdownDescription": "DEBUG-only iOS fixture PCM ingress for the protected foreground voice session."
+        },
+        {
           "description": "Allow the private local-data adapter to encrypt, decrypt, and rotate structured-data envelopes through platform key handles with guarantee os_protected_opaque_to_webview. Raw key material is never returned.",
           "type": "string",
           "const": "aurora-local-data-envelope-crypto",
@@ -787,6 +943,12 @@
           "type": "string",
           "const": "aurora-local-file",
           "markdownDescription": "Allow local-file helper commands to return structured native-permission-missing responses without granting broad filesystem access."
+        },
+        {
+          "description": "Allow explicit model preparation and profile-scoped offline answers on this device.",
+          "type": "string",
+          "const": "aurora-local-inference",
+          "markdownDescription": "Allow explicit model preparation and profile-scoped offline answers on this device."
         },
         {
           "description": "Allow the frontend SDK adapter to query non-secret sidecar log-tail availability without reading arbitrary files.",
@@ -825,6 +987,12 @@
           "markdownDescription": "Allow the frontend SDK adapter to read the Aurora desktop native permission and capability status without granting denied OS surfaces."
         },
         {
+          "description": "Allow foreground locally admitted peer speech without granting microphone capture or playback controls.",
+          "type": "string",
+          "const": "aurora-native-speech-host",
+          "markdownDescription": "Allow foreground locally admitted peer speech without granting microphone capture or playback controls."
+        },
+        {
           "description": "Allow desktop Aurora surfaces to control the redacted native voice host.",
           "type": "string",
           "const": "aurora-native-voice",
@@ -841,6 +1009,12 @@
           "type": "string",
           "const": "aurora-native-webrtc",
           "markdownDescription": "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
+        },
+        {
+          "description": "Allow read and compare-and-swap access to the selected local profile's node policy. Caller-bound handles and native profile state select the app-private storage namespace.",
+          "type": "string",
+          "const": "aurora-node-config",
+          "markdownDescription": "Allow read and compare-and-swap access to the selected local profile's node policy. Caller-bound handles and native profile state select the app-private storage namespace."
         },
         {
           "description": "Allow notification status checks and structured denied send responses without granting notification delivery by default.",
@@ -903,10 +1077,10 @@
           "markdownDescription": "Allow the frontend SDK adapter to stop the Rust-supervised local Aurora Python sidecar after sidecar-session token proof."
         },
         {
-          "description": "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route.",
+          "description": "Allow the frontend SDK adapter to observe Aurora events through Gateway or native subscriptions and recover native state snapshots.",
           "type": "string",
           "const": "aurora-subscribe",
-          "markdownDescription": "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route."
+          "markdownDescription": "Allow the frontend SDK adapter to observe Aurora events through Gateway or native subscriptions and recover native state snapshots."
         },
         {
           "description": "Allow thin WebView runtimes to store/delete/status opaque peer reconnect credentials, request challenge-bound reconnect proofs without returning raw bearer tokens, and store/retrieve the separately scoped room secret required to rebuild an approved WebRTC session.",
@@ -931,6 +1105,12 @@
           "type": "string",
           "const": "deny-aurora-activate-subscription",
           "markdownDescription": "Denies the aurora_activate_subscription command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_background_transcription_sync command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-background-transcription-sync",
+          "markdownDescription": "Denies the aurora_android_background_transcription_sync command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_android_baseline_status command without any pre-configured scope.",
@@ -979,6 +1159,12 @@
           "type": "string",
           "const": "deny-aurora-android-voice-live-test-inject-pcm",
           "markdownDescription": "Denies the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_live_test_playback_counters command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-live-test-playback-counters",
+          "markdownDescription": "Denies the aurora_android_voice_live_test_playback_counters command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_android_voice_pack_activate command without any pre-configured scope.",
@@ -1155,6 +1341,66 @@
           "markdownDescription": "Denies the aurora_local_file_write command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_local_inference_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-cancel",
+          "markdownDescription": "Denies the aurora_local_inference_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_catalog command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-catalog",
+          "markdownDescription": "Denies the aurora_local_inference_catalog command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_complete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-complete",
+          "markdownDescription": "Denies the aurora_local_inference_complete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_delete_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-delete-model",
+          "markdownDescription": "Denies the aurora_local_inference_delete_model command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_download_model command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-download-model",
+          "markdownDescription": "Denies the aurora_local_inference_download_model command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_engines command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-engines",
+          "markdownDescription": "Denies the aurora_local_inference_engines command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_model_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-model-status",
+          "markdownDescription": "Denies the aurora_local_inference_model_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_session_create command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-session-create",
+          "markdownDescription": "Denies the aurora_local_inference_session_create command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_session_destroy command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-session-destroy",
+          "markdownDescription": "Denies the aurora_local_inference_session_destroy command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_local_inference_session_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-local-inference-session-reset",
+          "markdownDescription": "Denies the aurora_local_inference_session_reset command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_log_tail command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-log-tail",
@@ -1251,6 +1497,30 @@
           "markdownDescription": "Denies the aurora_mesh_session_bind command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-prepare",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-verify-fresh-rebind",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-verify-peer-boundary",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-verify-profile-reset",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_mesh_session_set_lifecycle command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-mesh-session-set-lifecycle",
@@ -1275,6 +1545,18 @@
           "markdownDescription": "Denies the aurora_native_capability_manifest command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_native_event_ack command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-event-ack",
+          "markdownDescription": "Denies the aurora_native_event_ack command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_event_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-event-snapshot",
+          "markdownDescription": "Denies the aurora_native_event_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_native_open_deep_link command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-native-open-deep-link",
@@ -1291,6 +1573,12 @@
           "type": "string",
           "const": "deny-aurora-native-show-notification",
           "markdownDescription": "Denies the aurora_native_show_notification command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_speech_host_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-speech-host-snapshot",
+          "markdownDescription": "Denies the aurora_native_speech_host_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_native_voice_cancel command without any pre-configured scope.",
@@ -1321,6 +1609,42 @@
           "type": "string",
           "const": "deny-aurora-native-voice-tray-toggle-e2e",
           "markdownDescription": "Denies the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_policy_compare_and_swap command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-policy-compare-and-swap",
+          "markdownDescription": "Denies the aurora_node_config_policy_compare_and_swap command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_policy_read command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-policy-read",
+          "markdownDescription": "Denies the aurora_node_config_policy_read command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_peer_host_local_speech_cancel command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-peer-host-local-speech-cancel",
+          "markdownDescription": "Denies the aurora_peer_host_local_speech_cancel command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_peer_host_local_speech_stage command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-peer-host-local-speech-stage",
+          "markdownDescription": "Denies the aurora_peer_host_local_speech_stage command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_peer_host_local_speech_synthesize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-peer-host-local-speech-synthesize",
+          "markdownDescription": "Denies the aurora_peer_host_local_speech_synthesize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_peer_host_local_speech_transcribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-peer-host-local-speech-transcribe",
+          "markdownDescription": "Denies the aurora_peer_host_local_speech_transcribe command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",

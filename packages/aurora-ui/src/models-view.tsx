@@ -1,28 +1,29 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
-import { Cloud, Cpu, Download, Gauge, HardDrive, Network, RefreshCcw, Route, Terminal } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Cloud, Cpu, Download, Gauge, Network, Route, Terminal } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import type {
   AuroraClient,
   AvailabilityState,
   CapabilityGraph,
   CapabilityProviderCandidate,
   ConfigFieldMetadata,
-  JsonValue,
   ModelRuntimeCatalogResponse,
   ModelRuntimeProviderInfo,
   NativeCapabilityManifest,
   PrivacyClass
 } from '@aurora/client'
 import { cn } from '#lib/utils'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '#components/ui/select'
-import { Input } from '#components/ui/input'
 import { Badge } from '#components/ui/badge'
-import { PageHeader } from './state-surface'
+import { PageHeader, RouteStateNotice } from './state-surface'
 import { PageTabs } from './shared-components'
-import { AdminConfirmDialog, Button, Card, Checkbox, DataTable, FormField, type DataColumn } from './primitives'
+import { AdminConfirmDialog, Button, Card, Checkbox, DataTable, type DataColumn } from './primitives'
 import { ToneBadge, type BadgeTone } from './status-badges'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
+import { AuroraQueryProvider, AURORA_QUERY_STALE_TIMES, useAuroraQueryScope, useAuroraQueryScopeKey } from './query'
+import { modelErrorCopy, modelProductCopy, modelStatusCopy } from './models-product-copy'
+import { ConfigureProviderDialog, configureFieldInitialValue, parseConfigureFieldValue, providerConfigSection, type ConfigureLoadState } from './models-configure-provider-dialog'
 
 export interface ModelsViewProps {
   client: AuroraClient
@@ -109,6 +110,9 @@ export interface ModelsViewModel {
   warnings: string[]
 }
 
+const modelsCatalogRequest = { include_unavailable: true, include_operations: true } as const
+const modelCapabilityGraphRequest = { include_unavailable: true, include_internal: true } as const
+
 const emptyModel: ModelsViewModel = {
   loadState: 'loading',
   generatedAt: null,
@@ -129,34 +133,17 @@ const emptyModel: ModelsViewModel = {
   warnings: []
 }
 
-const MODEL_INTERNAL_TERM_PATTERN = new RegExp(
-  `\\b(?:${[
-    'run' + 'time',
-    'back' + 'end',
-    'pro' + 'viders?',
-    'sche' + 'ma',
-    'configuration ' + 'sche' + 'ma',
-    'active ' + 'pro' + 'vider',
-    'currently selected ' + 'pro' + 'vider',
-    'Admin' + 'Action',
-    'con' + 'tracts?',
-    'pro' + 'of',
-    'fix' + 'tures?',
-    'assert' + 'ions?'
-  ].join('|')})\\b`,
-  'iu'
-)
+export function ModelsView(props: ModelsViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <ModelsViewWithQuery {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <ModelsViewWithQuery {...props} />
+    </AuroraQueryProvider>
+  )
+}
 
-const MODEL_INTERNAL_IDENTIFIER_PATTERN = new RegExp([
-  '(?:^|\\s)services\\.[a-z0-9_.]+',
-  '[A-Z][A-Za-z]+\\.[A-Z][A-Za-z0-9]+',
-  '[a-z0-9_]*(?:back' + 'end|pro' + 'vider|sche' + 'ma|pro' + 'of)[a-z0-9_]*',
-  '[a-z]+:[^\\s,;]+'
-].join('|'), 'u')
-
-type ConfigureLoadState = 'idle' | 'loading' | 'ready' | 'error'
-
-export function ModelsView({
+function ModelsViewWithQuery({
   client,
   initialCatalog = null,
   initialGraph = null,
@@ -164,13 +151,67 @@ export function ModelsView({
   initialError = null,
   initialTab = 'providers'
 }: ModelsViewProps) {
-  const [catalog, setCatalog] = useState<ModelRuntimeCatalogResponse | null>(initialCatalog)
-  const [graph, setGraph] = useState<CapabilityGraph | null>(initialGraph)
-  const [nativeManifest, setNativeManifest] = useState<NativeCapabilityManifest | null>(initialNativeManifest)
-  const [loadState, setLoadState] = useState<ModelsViewModel['loadState']>(
-    initialError ? 'error' : initialCatalog ? 'ready' : 'loading'
-  )
-  const [error, setError] = useState<string | null>(initialError)
+  const scopeKey = useAuroraQueryScopeKey()
+  const scopeId = scopeKey[1]
+  const initialScopeIdRef = useRef(scopeId)
+  const activeScopeIdRef = useRef(scopeId)
+  const mountedRef = useRef(false)
+  const lifecycleGenerationRef = useRef(0)
+  const configureAbortRef = useRef<AbortController | null>(null)
+  activeScopeIdRef.current = scopeId
+  const [localScopeId, setLocalScopeId] = useState(scopeId)
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval()
+  const modelsQueryKey = queryKeys.admin('models', modelsCatalogRequest)
+  const graphQueryKey = queryKeys.capabilityGraph(modelCapabilityGraphRequest)
+  const nativeManifestQueryKey = queryKeys.admin('models-native-manifest')
+  const canUseInitialData = initialScopeIdRef.current === scopeId
+  const effectiveInitialError = canUseInitialData ? initialError : null
+  const catalogQuery = useQuery({
+    queryKey: modelsQueryKey,
+    queryFn: ({ signal }) => abortAwareModelsPromise(
+      () => client.models.listCatalog(modelsCatalogRequest),
+      signal
+    ),
+    initialData: canUseInitialData ? initialCatalog ?? undefined : undefined,
+    enabled: effectiveInitialError === null,
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
+  const graphQuery = useQuery({
+    queryKey: graphQueryKey,
+    queryFn: ({ signal }) => client.capabilities.getGraph(modelCapabilityGraphRequest, { ...(signal ? { signal } : {}) }).catch((error) => {
+      if (isModelsAbortError(error)) throw error
+      return null
+    }),
+    initialData: canUseInitialData ? initialGraph ?? undefined : undefined,
+    enabled: effectiveInitialError === null,
+    staleTime: AURORA_QUERY_STALE_TIMES.capabilities,
+    refetchInterval: fallbackInterval
+  })
+  const nativeManifestQuery = useQuery({
+    queryKey: nativeManifestQueryKey,
+    queryFn: ({ signal }) => abortAwareModelsPromise(
+      () => client.native.getManifest().catch(() => null),
+      signal
+    ),
+    initialData: canUseInitialData ? initialNativeManifest ?? undefined : undefined,
+    enabled: effectiveInitialError === null,
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
+  const catalog = catalogQuery.data ?? null
+  const graph = graphQuery.data ?? null
+  const nativeManifest = nativeManifestQuery.data ?? null
+  const loadState: ModelsViewModel['loadState'] = effectiveInitialError
+    ? 'error'
+    : catalogQuery.isError
+      ? 'error'
+      : catalog
+        ? catalog.providers.length > 0 ? 'ready' : 'empty'
+        : 'loading'
+  const error = effectiveInitialError ?? (catalogQuery.error ? modelErrorMessage(catalogQuery.error) : null)
   const [selectingProviderId, setSelectingProviderId] = useState<string | null>(null)
   const [selectionMessage, setSelectionMessage] = useState<string | null>(null)
   const [pendingProvider, setPendingProvider] = useState<ModelProviderViewModel | null>(null)
@@ -184,48 +225,82 @@ export function ModelsView({
   const [configureLoadState, setConfigureLoadState] = useState<ConfigureLoadState>('idle')
   const [configureError, setConfigureError] = useState<string | null>(null)
   const [configureSaving, setConfigureSaving] = useState(false)
+  const localStateCurrent = localScopeId === scopeId
+  const effectiveSelectingProviderId = localStateCurrent ? selectingProviderId : null
+  const effectiveSelectionMessage = localStateCurrent ? selectionMessage : null
+  const effectivePendingProvider = localStateCurrent ? pendingProvider : null
+  const effectiveReason = localStateCurrent ? reason : ''
+  const effectiveReauthConfirmed = localStateCurrent ? reauthConfirmed : false
+  const effectivePreferredMeshPeerId = localStateCurrent ? preferredMeshPeerId : null
+  const effectiveConfigureProvider = localStateCurrent ? configureProvider : null
+  const effectiveConfigureFields = localStateCurrent ? configureFields : []
+  const effectiveConfigureValues = localStateCurrent ? configureValues : {}
+  const effectiveConfigureLoadState = localStateCurrent ? configureLoadState : 'idle'
+  const effectiveConfigureError = localStateCurrent ? configureError : null
+  const effectiveConfigureSaving = localStateCurrent ? configureSaving : false
 
   useEffect(() => {
-    if (initialCatalog || initialError) return
-    let cancelled = false
-    setLoadState('loading')
-    setError(null)
-    Promise.all([
-      client.models.listCatalog({ include_unavailable: true, include_operations: true }),
-      client.capabilities.getGraph({ include_unavailable: true, include_internal: true }).catch(() => null),
-      client.native.getManifest().catch(() => null)
-    ]).then(
-      ([nextCatalog, nextGraph, nextNativeManifest]) => {
-        if (cancelled) return
-        setCatalog(nextCatalog)
-        setGraph(nextGraph)
-        setNativeManifest(nextNativeManifest)
-        setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
-      },
-      (nextError) => {
-        if (cancelled) return
-        setError(modelErrorMessage(nextError))
-        setLoadState('error')
-      }
-    )
+    mountedRef.current = true
     return () => {
-      cancelled = true
+      mountedRef.current = false
+      lifecycleGenerationRef.current += 1
+      configureAbortRef.current?.abort()
+      configureAbortRef.current = null
     }
-  }, [client, initialCatalog, initialError])
+  }, [])
+
+  useEffect(() => {
+    lifecycleGenerationRef.current += 1
+    configureAbortRef.current?.abort()
+    configureAbortRef.current = null
+    setLocalScopeId(scopeId)
+    setSelectingProviderId(null)
+    setSelectionMessage(null)
+    setPendingProvider(null)
+    setReason('')
+    setReauthConfirmed(false)
+    setPreferredMeshPeerId(null)
+    setConfigureProvider(null)
+    setConfigureFields([])
+    setConfigureValues({})
+    setConfigureLoadState('idle')
+    setConfigureError(null)
+    setConfigureSaving(false)
+  }, [scopeId])
 
   const model = useMemo(
     () => buildModelsViewModel({ catalog, graph, nativeManifest, loadState, error }),
     [catalog, graph, nativeManifest, loadState, error]
   )
 
-  const preferredMeshPeer = preferredMeshPeerId
-    ? (model.providers.find((provider) => provider.id === preferredMeshPeerId) ?? null)
+  const preferredMeshPeer = effectivePreferredMeshPeerId
+    ? (model.providers.find((provider) => provider.id === effectivePreferredMeshPeerId) ?? null)
     : (model.providers.find((provider) => provider.selected && provider.providerType === 'mesh') ?? null)
   const preferredMeshPeerLabel = preferredMeshPeer ? preferredMeshPeer.name : 'None selected'
 
+  async function invalidateModelsConfigQueries() {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: modelsQueryKey }),
+      queryClient.invalidateQueries({ queryKey: graphQueryKey }),
+      queryClient.invalidateQueries({ queryKey: nativeManifestQueryKey }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin('config-editor') }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.capabilities({ include_unavailable: true, include_internal: true }) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.services() }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.toolCatalog({ include_unavailable: true }) }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin('plugins') }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.admin('service-routing') })
+    ])
+  }
+
+  function isCurrentLifecycle(targetScopeId: string, generation: number): boolean {
+    return mountedRef.current && activeScopeIdRef.current === targetScopeId && lifecycleGenerationRef.current === generation
+  }
+
   async function confirmProviderSelection() {
-    const provider = pendingProvider
-    if (!provider?.canSelect || !provider.selectConfigValue || selectingProviderId) return
+    const provider = effectivePendingProvider
+    if (!provider?.canSelect || !provider.selectConfigValue || effectiveSelectingProviderId) return
+    const mutationScopeId = scopeId
+    const mutationGeneration = lifecycleGenerationRef.current
     setSelectingProviderId(provider.id)
     setSelectionMessage(null)
     try {
@@ -234,26 +309,27 @@ export function ModelsView({
           key_path: 'services.orchestrator.llm.provider',
           value: provider.selectConfigValue
         },
-        reason: reason.trim() || `Select model source ${provider.name}`,
-        reauthConfirmed
+        reason: effectiveReason.trim() || `Select model source ${provider.name}`,
+        reauthConfirmed: effectiveReauthConfirmed
       })
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       if (!result.data.success) throw new Error(result.data.error ?? 'Aurora did not accept the model source selection')
-      const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
-      setCatalog(nextCatalog)
-      setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
+      await invalidateModelsConfigQueries()
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setSelectionMessage('Model source selection applied.')
       setPendingProvider(null)
       setReason('')
       setReauthConfirmed(false)
     } catch (nextError) {
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setSelectionMessage(`Model source selection failed: ${modelErrorMessage(nextError)}`)
     } finally {
-      setSelectingProviderId(null)
+      if (isCurrentLifecycle(mutationScopeId, mutationGeneration)) setSelectingProviderId(null)
     }
   }
 
   function requestProviderSelection(provider: ModelProviderViewModel) {
-    if (!provider.canSelect || provider.selected || selectingProviderId) return
+    if (!provider.canSelect || provider.selected || effectiveSelectingProviderId) return
     setReason(`Select model source ${provider.name}`)
     setReauthConfirmed(false)
     setPendingProvider(provider)
@@ -266,6 +342,11 @@ export function ModelsView({
   async function openConfigureProvider(provider: ModelProviderViewModel) {
     const configValue = provider.selectConfigValue
     if (!configValue) return
+    const mutationScopeId = scopeId
+    const mutationGeneration = lifecycleGenerationRef.current
+    configureAbortRef.current?.abort()
+    const controller = new AbortController()
+    configureAbortRef.current = controller
     setConfigureProvider(provider)
     setConfigureFields([])
     setConfigureValues({})
@@ -275,7 +356,8 @@ export function ModelsView({
       const result = await client.config.getSchemaMetadata({
         section: providerConfigSection(configValue),
         include_values: true
-      })
+      }, { signal: controller.signal })
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       if (!result.ok) throw new Error(result.error.message)
       setConfigureFields(result.data.fields)
       setConfigureValues(
@@ -283,12 +365,16 @@ export function ModelsView({
       )
       setConfigureLoadState('ready')
     } catch (nextError) {
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
+      if (isModelsAbortError(nextError)) return
       setConfigureError(modelErrorMessage(nextError))
       setConfigureLoadState('error')
     }
   }
 
   function closeConfigureProvider() {
+    configureAbortRef.current?.abort()
+    configureAbortRef.current = null
     setConfigureProvider(null)
     setConfigureFields([])
     setConfigureValues({})
@@ -301,15 +387,17 @@ export function ModelsView({
   }
 
   async function saveConfigureProvider() {
-    const provider = configureProvider
-    if (!provider || configureSaving) return
+    const provider = effectiveConfigureProvider
+    if (!provider || effectiveConfigureSaving) return
+    const mutationScopeId = scopeId
+    const mutationGeneration = lifecycleGenerationRef.current
     setConfigureSaving(true)
     setConfigureError(null)
     try {
       const receipts: string[] = []
-      for (const field of configureFields) {
+      for (const field of effectiveConfigureFields) {
         if (field.type === 'dict' || field.type === 'list') continue
-        const raw = configureValues[field.key_path] ?? ''
+        const raw = effectiveConfigureValues[field.key_path] ?? ''
         if (field.secret) {
           if (raw.trim().length === 0) continue
         } else if (raw === configureFieldInitialValue(field)) {
@@ -320,12 +408,12 @@ export function ModelsView({
           reason: `Configure model source ${provider.name}`,
           reauthConfirmed: true
         })
+        if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
         if (!result.data.success) throw new Error(result.data.error ?? `Aurora did not accept ${field.key_path}`)
         receipts.push(result.confirmation.audit_receipt)
       }
-      const nextCatalog = await client.models.listCatalog({ include_unavailable: true, include_operations: true })
-      setCatalog(nextCatalog)
-      setLoadState(nextCatalog.providers.length > 0 ? 'ready' : 'empty')
+      await invalidateModelsConfigQueries()
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setSelectionMessage(
         receipts.length > 0
           ? 'Model source settings applied.'
@@ -333,9 +421,10 @@ export function ModelsView({
       )
       closeConfigureProvider()
     } catch (nextError) {
+      if (!isCurrentLifecycle(mutationScopeId, mutationGeneration)) return
       setConfigureError(modelErrorMessage(nextError))
     } finally {
-      setConfigureSaving(false)
+      if (isCurrentLifecycle(mutationScopeId, mutationGeneration)) setConfigureSaving(false)
     }
   }
 
@@ -348,25 +437,25 @@ export function ModelsView({
         description="Local, cloud, and connected model sources, and which one handles requests by default."
       />
 
-      {model.loadState === 'loading' ? <ModelNotice icon="loading" message="Loading model sources from Aurora." /> : null}
+      {model.loadState === 'loading' ? <RouteStateNotice state="loading" title="Loading model sources" message="Loading model sources from Aurora." /> : null}
       {model.loadState === 'error' ? (
-        <ModelNotice icon="error" message={model.error ?? 'Model sources could not be loaded.'} role="alert" />
+        <RouteStateNotice state="error" title="Model sources need attention" message={model.error ?? 'Model sources could not be loaded.'} />
       ) : null}
       {model.loadState === 'empty' ? (
-        <ModelNotice icon="empty" message="No model sources were returned by Aurora." />
+        <RouteStateNotice state="empty" title="No model sources" message="No model sources were returned by Aurora." />
       ) : null}
-      {selectionMessage ? (
+      {effectiveSelectionMessage ? (
         <p
           className={cn(
             'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm',
-            selectionMessage.startsWith('Model source selection failed')
+            effectiveSelectionMessage.startsWith('Model source selection failed')
               ? 'border-destructive/30 bg-destructive/5 text-destructive'
               : 'border-border bg-muted/30 text-muted-foreground'
           )}
-          role={selectionMessage.startsWith('Model source selection failed') ? 'alert' : 'status'}
+          role={effectiveSelectionMessage.startsWith('Model source selection failed') ? 'alert' : 'status'}
         >
           <Route size={16} aria-hidden="true" />
-          <span>{selectionMessage}</span>
+          <span>{effectiveSelectionMessage}</span>
         </p>
       ) : null}
       {model.providers.length > 0 ? (
@@ -382,7 +471,7 @@ export function ModelsView({
                   <ModelActiveProviderStrip activeProviderLabel={model.activeProviderLabel} preferredMeshPeerLabel={preferredMeshPeerLabel} />
                   <ModelProviderGroups
                     groups={model.providerGroups}
-                    selectingProviderId={selectingProviderId}
+                    selectingProviderId={effectiveSelectingProviderId}
                     preferredMeshPeerId={preferredMeshPeer?.id ?? null}
                     onSelect={requestProviderSelection}
                     onSetPreferredPeer={setPreferredMeshPeer}
@@ -412,12 +501,12 @@ export function ModelsView({
       ) : null}
 
       <ConfigureProviderDialog
-        provider={configureProvider}
-        fields={configureFields}
-        values={configureValues}
-        loadState={configureLoadState}
-        error={configureError}
-        saving={configureSaving}
+        provider={effectiveConfigureProvider}
+        fields={effectiveConfigureFields}
+        values={effectiveConfigureValues}
+        loadState={effectiveConfigureLoadState}
+        productModelErrorCopy={effectiveConfigureError}
+        saving={effectiveConfigureSaving}
         onChange={onConfigureFieldChange}
         onCancel={closeConfigureProvider}
         onSave={() => {
@@ -425,31 +514,31 @@ export function ModelsView({
         }}
       />
 
-      {pendingProvider ? (
+      {effectivePendingProvider ? (
         <AdminConfirmDialog
           open
-          title={`Select ${pendingProvider.name}`}
+          title={`Select ${effectivePendingProvider.name}`}
           description="Apply this source as the selected model source."
           methodId="Config.Set"
           actionLabel="Select model source"
           severity="standard"
-          affected={[pendingProvider.name || 'Selected model source']}
+          affected={[effectivePendingProvider.name || 'Selected model source']}
           requireReason
-          reasonValue={reason}
+          reasonValue={effectiveReason}
           onReasonChange={setReason}
-          confirmLabel={`Select ${pendingProvider.name}`}
+          confirmLabel={`Select ${effectivePendingProvider.name}`}
           onConfirm={() => { void confirmProviderSelection() }}
           onCancel={() => {
             setPendingProvider(null)
             setReason('')
             setReauthConfirmed(false)
           }}
-          busy={selectingProviderId === pendingProvider.id}
-          extraValid={reauthConfirmed}
+          busy={effectiveSelectingProviderId === effectivePendingProvider.id}
+          extraValid={effectiveReauthConfirmed}
           extraInvalidReason="Confirm recent admin unlock before selecting a model source."
         >
           <Checkbox
-            checked={reauthConfirmed}
+            checked={effectiveReauthConfirmed}
             onChange={setReauthConfirmed}
             label="I confirm recent admin unlock for model source changes."
           />
@@ -457,6 +546,44 @@ export function ModelsView({
       ) : null}
     </div>
   )
+}
+
+
+function abortAwareModelsPromise<T>(read: () => Promise<T>, signal: AbortSignal | undefined): Promise<T> {
+  if (!signal) return read()
+  if (signal.aborted) return Promise.reject(modelsRequestAbortError())
+  return new Promise<T>((resolve, reject) => {
+    let settled = false
+    const cleanup = () => signal.removeEventListener('abort', onAbort)
+    const settle = (callback: () => void) => {
+      if (settled) return
+      settled = true
+      cleanup()
+      callback()
+    }
+    const onAbort = () => settle(() => reject(modelsRequestAbortError()))
+    signal.addEventListener('abort', onAbort, { once: true })
+    let promise: Promise<T>
+    try {
+      promise = read()
+    } catch (error) {
+      settle(() => reject(error))
+      return
+    }
+    promise.then(
+      (value) => settle(() => resolve(value)),
+      (error) => settle(() => reject(error))
+    )
+    if (signal.aborted) onAbort()
+  })
+}
+
+function modelsRequestAbortError(): DOMException {
+  return new DOMException('Models request was cancelled', 'AbortError')
+}
+
+function isModelsAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === 'AbortError'
 }
 
 export function buildModelsViewModel(input: {
@@ -513,17 +640,16 @@ function ModelActiveProviderStrip({
 }) {
   return (
     <div
-      className="flex flex-wrap items-center gap-5 rounded-xl border border-border bg-card px-4 py-3.5"
+      className="grid grid-cols-1 gap-3 rounded-xl border border-border bg-card px-4 py-3.5 sm:grid-cols-2 sm:gap-4"
       aria-label="Selected source and preferred connected device"
     >
-      <div>
-        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Selected source (chat)</p>
-        <p className="mt-0.5 text-sm font-semibold">{activeProviderLabel}</p>
+      <div className="min-w-0">
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Chat source</p>
+        <p className="mt-0.5 break-words text-sm font-semibold">{activeProviderLabel}</p>
       </div>
-      <div className="h-7 w-px bg-border" aria-hidden="true" />
-      <div>
-        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Preferred mesh peer (optional)</p>
-        <p className="mt-0.5 text-sm font-semibold">{preferredMeshPeerLabel}</p>
+      <div className="min-w-0 border-t border-border pt-3 sm:border-t-0 sm:border-l sm:pt-0 sm:pl-4">
+        <p className="text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">Preferred device (optional)</p>
+        <p className="mt-0.5 break-words text-sm font-semibold">{preferredMeshPeerLabel}</p>
       </div>
     </div>
   )
@@ -794,198 +920,6 @@ function ModelAction({
   )
 }
 
-function ModelNotice({ icon, message, role = 'status' }: { icon: 'loading' | 'error' | 'empty'; message: string; role?: 'status' | 'alert' }) {
-  const Icon = icon === 'loading' ? RefreshCcw : icon === 'empty' ? HardDrive : Route
-  return (
-    <p
-      className={cn(
-        'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm',
-        icon === 'error' ? 'border-destructive/30 bg-destructive/5 text-destructive' : 'border-border bg-muted/30 text-muted-foreground'
-      )}
-      role={role}
-    >
-      <Icon size={16} aria-hidden="true" />
-      <span>{message}</span>
-    </p>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Configure source dialog - fields generated from Aurora settings details.
-// ---------------------------------------------------------------------------
-
-function providerConfigSection(configValue: string): string {
-  if (configValue === 'openai') return 'services.orchestrator.llm.third_party.openai.options'
-  if (configValue === 'huggingface_endpoint') return 'services.orchestrator.llm.third_party.huggingface_endpoint.options'
-  if (configValue === 'huggingface_pipeline') return 'services.orchestrator.llm.local.huggingface_pipeline.options'
-  return 'services.orchestrator.llm.local.llama_cpp.options'
-}
-
-function configureFieldInitialValue(field: ConfigFieldMetadata): string {
-  if (field.secret) return ''
-  const value = field.current_value ?? field.default
-  if (value === undefined || value === null) return ''
-  return typeof value === 'object' ? JSON.stringify(value) : String(value)
-}
-
-function parseConfigureFieldValue(raw: string, type: string): JsonValue {
-  if (type === 'int') return Number.parseInt(raw, 10)
-  if (type === 'float') return Number(raw)
-  if (type === 'bool') return raw === 'true'
-  return raw
-}
-
-function configureNumericBound(field: ConfigFieldMetadata, key: 'minimum' | 'maximum'): number | undefined {
-  const value = field.constraints[key]
-  return typeof value === 'number' ? value : undefined
-}
-
-function modelFieldLabel(field: ConfigFieldMetadata): string {
-  return modelStrictProductCopy(field.title, 'Model setting')
-}
-
-function modelFieldHelper(field: ConfigFieldMetadata): string | undefined {
-  if (!field.description) return undefined
-  return modelStrictProductCopy(field.description, 'Update this setting only if you know the expected value.')
-}
-
-function ConfigureProviderDialog({
-  provider,
-  fields,
-  values,
-  loadState,
-  error,
-  saving,
-  onChange,
-  onCancel,
-  onSave
-}: {
-  provider: ModelProviderViewModel | null
-  fields: ConfigFieldMetadata[]
-  values: Record<string, string>
-  loadState: ConfigureLoadState
-  error: string | null
-  saving: boolean
-  onChange: (keyPath: string, value: string) => void
-  onCancel: () => void
-  onSave: () => void
-}) {
-  if (!provider) return null
-  const visibleFields = fields.filter((field) => field.type !== 'dict' && field.type !== 'list')
-  return (
-    <Dialog
-      open
-      onOpenChange={(next: boolean) => {
-        if (!next) onCancel()
-      }}
-    >
-      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Configure {provider.name}</DialogTitle>
-          <DialogDescription>Fields are generated from Aurora settings details for this model source.</DialogDescription>
-        </DialogHeader>
-        {loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading settings details.</p> : null}
-        {loadState === 'error' ? (
-          <p className="text-sm text-destructive" role="alert">
-            {productModelStatusCopy(error, 'Model settings need attention.')}
-          </p>
-        ) : null}
-        {loadState === 'ready' ? (
-          <div className="flex flex-col gap-3">
-            {visibleFields.map((field) => (
-              <FormField
-                key={field.key_path}
-                label={modelFieldLabel(field)}
-                htmlFor={field.key_path}
-                helper={modelFieldHelper(field)}
-              >
-                <ConfigureFieldInput field={field} value={values[field.key_path] ?? ''} onChange={(value) => onChange(field.key_path, value)} />
-              </FormField>
-            ))}
-            {error ? (
-              <p className="text-sm text-destructive" role="alert">
-                {productModelStatusCopy(error, 'Model settings need attention.')}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-        <DialogFooter>
-          <Button variant="outline" onClick={onCancel} disabled={saving}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={onSave} disabled={loadState !== 'ready' || saving} busy={saving}>
-            Save &amp; test
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
-function ConfigureFieldInput({
-  field,
-  value,
-  onChange
-}: {
-  field: ConfigFieldMetadata
-  value: string
-  onChange: (value: string) => void
-}) {
-  if (field.choices && field.choices.length > 0) {
-    return (
-      <Select value={value} onValueChange={(next) => onChange(next ?? '')}>
-        <SelectTrigger className="w-full" id={field.key_path}>
-          <SelectValue placeholder="Select…" />
-        </SelectTrigger>
-        <SelectContent>
-          {field.choices.map((choice) => {
-            const option = String(choice)
-            return (
-              <SelectItem key={option} value={option}>
-                {option}
-              </SelectItem>
-            )
-          })}
-        </SelectContent>
-      </Select>
-    )
-  }
-  if (field.type === 'bool') {
-    return (
-      <Select value={value || 'false'} onValueChange={(next) => onChange(next ?? 'false')}>
-        <SelectTrigger className="w-full" id={field.key_path}>
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="true">Enabled</SelectItem>
-          <SelectItem value="false">Disabled</SelectItem>
-        </SelectContent>
-      </Select>
-    )
-  }
-  if (field.type === 'int' || field.type === 'float') {
-    return (
-      <Input
-        id={field.key_path}
-        type="number"
-        min={configureNumericBound(field, 'minimum')}
-        max={configureNumericBound(field, 'maximum')}
-        step={field.type === 'float' ? 0.1 : 1}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    )
-  }
-  return (
-    <Input
-      id={field.key_path}
-      type={field.secret ? 'password' : 'text'}
-      value={value}
-      placeholder={field.secret ? 'Unchanged (leave blank to keep current value)' : undefined}
-      onChange={(event) => onChange(event.target.value)}
-    />
-  )
-}
 
 function providerCandidates(graph: CapabilityGraph | null): Map<string, CapabilityProviderCandidate> {
   const result = new Map<string, CapabilityProviderCandidate>()
@@ -1229,72 +1163,6 @@ function connectedSourceRouteLabel(providerType: string): string {
   if (providerType === 'cloud' || providerType === 'remote') return 'Cloud source'
   if (providerType.includes('mobile')) return 'This device'
   return 'Connected source'
-}
-
-function productModelStatusCopy(value: string | null | undefined, defaultCopy: string): string {
-  return modelStrictProductCopy(value, defaultCopy)
-}
-
-function modelStatusCopy(value: string | null | undefined, defaultCopy: string): string {
-  return productModelStatusCopy(value, defaultCopy)
-}
-
-function modelErrorCopy(error: unknown, defaultCopy = 'Aurora could not complete the model source request.'): string {
-  const sourceMessage = error instanceof Error && error.message ? error.message : null
-  return modelStrictProductCopy(sourceMessage, defaultCopy, { includeReference: Boolean(sourceMessage) })
-}
-
-function modelStrictProductCopy(
-  value: string | null | undefined,
-  defaultCopy: string,
-  options: { includeReference?: boolean } = {}
-): string {
-  const sourceText = value?.trim()
-  if (!sourceText) return defaultCopy
-  if (hasInternalModelCopy(sourceText)) {
-    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(sourceText)}.` : defaultCopy
-  }
-  return modelProductCopy(sourceText, defaultCopy, options)
-}
-
-function modelProductCopy(
-  value: string | null | undefined,
-  defaultCopy: string,
-  options: { includeReference?: boolean } = {}
-): string {
-  const sourceText = value?.trim()
-  if (!sourceText) return defaultCopy
-  const softened = softenInternalModelCopy(sourceText)
-  if (hasInternalModelCopy(softened)) {
-    return options.includeReference ? `${defaultCopy} Reference ${modelCopyReference(sourceText)}.` : defaultCopy
-  }
-  return softened
-}
-
-function softenInternalModelCopy(value: string): string {
-  return value
-    .replace(/\bruntime\b/giu, 'source')
-    .replace(/\bproviders?\b/giu, 'sources')
-    .replace(/\bbackend\b/giu, 'Aurora')
-    .replace(/\bschemas?\b/giu, 'settings details')
-    .replace(/\bAdminAction\b/gu, 'admin approval')
-    .replace(/\bcontracts?\b/giu, 'features')
-    .replace(/\bproof\b/giu, 'status')
-    .replace(/\bfixtures?\b/giu, 'sample data')
-    .replace(/\bassertions?\b/giu, 'checks')
-    .replace(/\bcapability catalog\b/giu, 'Aurora')
-}
-
-function hasInternalModelCopy(value: string): boolean {
-  return MODEL_INTERNAL_TERM_PATTERN.test(value) || MODEL_INTERNAL_IDENTIFIER_PATTERN.test(value)
-}
-
-function modelCopyReference(value: string): string {
-  let hash = 0
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) - hash + value.charCodeAt(index)) | 0
-  }
-  return `M${Math.abs(hash).toString(36).toUpperCase().padStart(6, '0').slice(0, 6)}`
 }
 
 function availabilityForProvider(provider: ModelRuntimeProviderInfo, candidate: CapabilityProviderCandidate | undefined): AvailabilityState {

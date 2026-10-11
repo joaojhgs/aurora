@@ -1,12 +1,11 @@
 //! Authenticated metadata for user-selected STT, VAD, and KWS downloads.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 use thiserror::Error;
 
-use crate::{canonical_json, sha256_hex};
+use crate::{canonical_json, json_text::parse_json_value, sha256_hex};
 
 const EMBEDDED_CATALOG: &str = include_str!("../resources/sherpa_onnx_speech_catalog.json");
 const CATALOG_SCHEMA_VERSION: u32 = 1;
@@ -88,8 +87,7 @@ impl SpeechModelCatalog {
         if payload.len() > MAX_CATALOG_BYTES {
             return Err(SpeechCatalogError::ResourceLimit);
         }
-        let value: Value =
-            serde_json::from_str(payload).map_err(|_| SpeechCatalogError::Invalid)?;
+        let value = parse_json_value(payload).map_err(|_| SpeechCatalogError::Invalid)?;
         let entries = value.get("entries").ok_or(SpeechCatalogError::Invalid)?;
         let entries_json = canonical_json(entries).map_err(|_| SpeechCatalogError::Invalid)?;
         if sha256_hex(entries_json.as_bytes()) != ENTRIES_SHA256 {
@@ -544,6 +542,7 @@ fn safe_path_segment(value: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serde_json::Value;
 
     #[test]
     fn embedded_catalog_is_pinned_metadata_only() {

@@ -156,11 +156,11 @@ export interface BackupAdminConfirmation {
 export class BackupClient {
   constructor(private readonly client: AuroraClient) {}
 
-  list(request: BackupListRequest = {}): Promise<AuroraResponse<BackupListResponse>> {
+  list(request: BackupListRequest = {}, options: { signal?: AbortSignal } = {}): Promise<AuroraResponse<BackupListResponse>> {
     return this.client.requestResult<BackupListResponse, BackupListRequest>(
       BACKUP_METHODS.list,
       request,
-      { path: routePath('Backup', 'List') }
+      { path: routePath('Backup', 'List'), ...(options.signal ? { signal: options.signal } : {}) }
     )
   }
 

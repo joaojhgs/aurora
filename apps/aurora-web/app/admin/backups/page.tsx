@@ -17,8 +17,6 @@ export default async function Page() {
   return (
     <AuroraRoutePage
       routeId="backups"
-      title="Backups"
-      description="Backup and restore controls appear when Aurora confirms this device can manage saved copies."
     />
   )
 }

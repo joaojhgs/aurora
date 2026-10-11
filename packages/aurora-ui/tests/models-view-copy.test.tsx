@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   buildCapabilityGraph,
@@ -10,11 +11,42 @@ import {
   modelRuntimeCatalogFixture,
 } from '@aurora/client'
 import { buildModelsViewModel, ModelsView } from '../src/models-view'
+import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 
 ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 describe('models view product copy', () => {
+  it('renders an initial catalog directly for static markup without an explicit query provider', () => {
+    const markup = renderToStaticMarkup(
+      <ModelsView
+        client={client(vi.fn())}
+        initialCatalog={selectableModelCatalog()}
+        initialGraph={buildCapabilityGraph({
+          catalog: capabilityGraphCatalogFixture,
+          registry: gatewayRegistryFixture,
+          transportKind: 'mock',
+        })}
+      />
+    )
+
+    expect(markup).toContain('Models &amp; Sources')
+    expect(markup).toContain('OpenAI-compatible gateway')
+
+    const model = buildModelsViewModel({
+      catalog: modelRuntimeCatalogFixture,
+      graph: buildCapabilityGraph({
+        catalog: capabilityGraphCatalogFixture,
+        registry: gatewayRegistryFixture,
+        transportKind: 'mock',
+      }),
+      nativeManifest: null,
+      loadState: 'ready',
+    })
+    expect(model.providers.find((provider) => provider.id === 'cloud:openai:Orchestrator')?.name)
+      .toBe('OpenAI-compatible gateway')
+  })
+
   afterEach(() => {
     document.body.innerHTML = ''
   })
@@ -39,6 +71,9 @@ describe('models view product copy', () => {
 
     const text = copySurface(document.body)
     expect(text).toContain('Model source')
+    expect(text).not.toContain('Runtime backend provider Config.GetSchemaMetadata')
+    expect(text).not.toContain('Disabled backend provider runtime')
+    expect(text).not.toContain('Mesh backend provider runtime')
     expect(text).toContain('Model import is in progress.')
     expect(text).toContain('Model download is in progress.')
     expect(text).toContain('Benchmark is running through Aurora.')
@@ -51,6 +86,9 @@ describe('models view product copy', () => {
       nativeManifest: hostileNativeManifest(),
       loadState: 'ready',
     })
+    const providerNames = model.providers.map((provider) => provider.name).join(' ')
+    expect(providerNames).toContain('Model source')
+    expect(providerNames).not.toMatch(/Runtime backend provider Config\.GetSchemaMetadata|Disabled backend provider runtime|Mesh backend provider runtime/u)
     const derivedCopy = [
       ...model.providers.flatMap((provider) => [
         provider.name,
@@ -100,7 +138,7 @@ describe('models view product copy', () => {
 
     await act(async () => {
       root.render(
-        <ModelsView
+        <ModelsViewInQuery
           client={client(getSchemaMetadata)}
           initialCatalog={selectableModelCatalog()}
           initialGraph={buildCapabilityGraph({
@@ -119,11 +157,15 @@ describe('models view product copy', () => {
     await act(async () => {
       configure!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await waitForText(document.body, 'Model setting')
 
-    expect(getSchemaMetadata).toHaveBeenCalledWith({
-      section: 'services.orchestrator.llm.local.llama_cpp.options',
-      include_values: true,
-    })
+    expect(getSchemaMetadata).toHaveBeenCalledWith(
+      {
+        section: 'services.orchestrator.llm.local.llama_cpp.options',
+        include_values: true,
+      },
+      expect.objectContaining({ signal: expect.any(AbortSignal) })
+    )
     expect(document.body.textContent).toContain('Fields are generated from Aurora settings details for this model source.')
     expect(document.body.textContent).toContain('Model setting')
     expect(document.body.textContent).toContain('Update this setting only if you know the expected value.')
@@ -160,7 +202,7 @@ describe('models view product copy', () => {
 
     await act(async () => {
       root.render(
-        <ModelsView
+        <ModelsViewInQuery
           client={client(getSchemaMetadata)}
           initialCatalog={modelRuntimeCatalogFixture}
           initialGraph={hostileGraph()}
@@ -175,6 +217,7 @@ describe('models view product copy', () => {
     await act(async () => {
       configure!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
+    await waitForText(document.body, 'Aurora model source request failed. Reference M')
 
     expect(document.body.textContent).toContain('Aurora model source request failed. Reference M')
     expect(copySurface(document.body)).not.toMatch(MODEL_FORBIDDEN_PRODUCT_TERMS)
@@ -200,7 +243,7 @@ describe('models view product copy', () => {
 
     await act(async () => {
       root.render(
-        <ModelsView
+        <ModelsViewInQuery
           client={client(vi.fn(), {
             downloadModel,
             listCatalog: vi.fn().mockResolvedValue(catalog),
@@ -253,7 +296,7 @@ describe('models view product copy', () => {
 
     await act(async () => {
       root.render(
-        <ModelsView
+        <ModelsViewInQuery
           client={client(vi.fn(), {
             downloadModel,
             listCatalog: vi.fn().mockResolvedValue(catalog),
@@ -309,7 +352,7 @@ describe('models view product copy', () => {
 
     await act(async () => {
       root.render(
-        <ModelsView
+        <ModelsViewInQuery
           client={client(vi.fn(), {
             downloadModel,
             importModel,
@@ -351,11 +394,193 @@ describe('models view product copy', () => {
       root.unmount()
     })
   })
+
+  it('dedupes concurrent scoped model catalog reads', async () => {
+    const listCatalog = vi.fn().mockResolvedValue(selectableModelCatalog())
+    const viewClient = client(vi.fn(), { listCatalog })
+    const rootNode = document.createElement('div')
+    document.body.append(rootNode)
+    const root = createRoot(rootNode)
+
+    await act(async () => {
+      root.render(
+        <ModelsQueryScope client={viewClient}>
+          <ModelsView client={viewClient} />
+          <ModelsView client={viewClient} />
+        </ModelsQueryScope>
+      )
+      await flushQueryRender()
+    })
+
+    expect(listCatalog).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('keeps model catalog query data isolated by explicit query scope', async () => {
+    const profileACatalog = selectableModelCatalog()
+    profileACatalog.providers = profileACatalog.providers.map((provider, index) => index === 0
+      ? { ...provider, display_name: 'Profile A source' }
+      : provider)
+    const profileBCatalog = selectableModelCatalog()
+    profileBCatalog.providers = profileBCatalog.providers.map((provider, index) => index === 0
+      ? { ...provider, display_name: 'Profile B source' }
+      : provider)
+    const listCatalog = vi.fn()
+      .mockResolvedValueOnce(profileACatalog)
+      .mockResolvedValueOnce(profileBCatalog)
+    const viewClient = client(vi.fn(), { listCatalog })
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const rootNode = document.createElement('div')
+    document.body.append(rootNode)
+    const root = createRoot(rootNode)
+
+    await act(async () => {
+      root.render(<ModelsViewInQuery client={viewClient} queryClient={queryClient} queryScope={{ profileId: 'profile-a' }} />)
+      await flushQueryRender()
+    })
+    await waitForText(document.body, 'Profile A source')
+    const setActive = findButtonByText(document.body, 'Set as active')
+    expect(setActive).toBeTruthy()
+    await act(async () => {
+      setActive!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushQueryRender()
+    })
+    expect(document.body.querySelector('[role="alertdialog"]')).not.toBeNull()
+
+    await act(async () => {
+      root.render(<ModelsViewInQuery client={viewClient} queryClient={queryClient} queryScope={{ profileId: 'profile-b' }} />)
+      await flushQueryRender()
+    })
+    await waitForText(document.body, 'Profile B source')
+    expect(document.body.textContent).not.toContain('Profile A source')
+    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('invalidates scoped model, config, capability, service, plugin, and routing queries after selection', async () => {
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries')
+    const applyChange = vi.fn().mockResolvedValue({
+      data: { success: true, previous_value: 'local', error: null },
+      confirmation: { audit_receipt: 'audit-model-source' },
+    })
+    const viewClient = client(vi.fn(), {}, { applyChange })
+    const rootNode = document.createElement('div')
+    document.body.append(rootNode)
+    const root = createRoot(rootNode)
+
+    await act(async () => {
+      root.render(
+        <ModelsViewInQuery
+          client={viewClient}
+          queryClient={queryClient}
+          initialCatalog={selectableModelCatalog()}
+          initialGraph={buildCapabilityGraph({
+            catalog: capabilityGraphCatalogFixture,
+            registry: gatewayRegistryFixture,
+            transportKind: 'mock',
+          })}
+        />
+      )
+    })
+
+    const setActive = findButtonByText(document.body, 'Set as active')
+    expect(setActive).toBeTruthy()
+    await act(async () => {
+      setActive!.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushQueryRender()
+    })
+
+    const unlock = document.body.querySelector('[role="alertdialog"] input[type="checkbox"]') as HTMLInputElement | null
+    expect(unlock).not.toBeNull()
+    await act(async () => {
+      unlock!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+    })
+
+    const confirm = findButtonByText(document.body, 'Select')
+    expect(confirm).toBeTruthy()
+    await act(async () => {
+      confirm!.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
+      await flushQueryRender()
+    })
+
+    expect(applyChange).toHaveBeenCalledWith(expect.objectContaining({
+      change: expect.objectContaining({ key_path: 'services.orchestrator.llm.provider' })
+    }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'models']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['capability-graph']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'models-native-manifest']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'config-editor']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['capabilities']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['services']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['tool-catalog']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'plugins']) }))
+    expect(invalidateQueries).toHaveBeenCalledWith(expect.objectContaining({ queryKey: expect.arrayContaining(['admin', 'service-routing']) }))
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
 })
 
-function client(getSchemaMetadata: ReturnType<typeof vi.fn>, modelOverrides: Record<string, unknown> = {}) {
+function ModelsViewInQuery({
+  queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } }),
+  queryScope = {},
+  ...props
+}: ComponentProps<typeof ModelsView> & {
+  queryClient?: ReturnType<typeof createAuroraQueryClient>
+  queryScope?: { profileId?: string }
+}) {
+  return (
+    <AuroraQueryProvider client={props.client} queryClient={queryClient} queryScope={queryScope}>
+      <ModelsView {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function ModelsQueryScope({
+  client,
+  queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } }),
+  queryScope = {},
+  children
+}: {
+  client: ComponentProps<typeof ModelsView>['client']
+  queryClient?: ReturnType<typeof createAuroraQueryClient>
+  queryScope?: { profileId?: string }
+  children: ReactNode
+}) {
+  return (
+    <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={queryScope}>
+      {children}
+    </AuroraQueryProvider>
+  )
+}
+
+function client(
+  getSchemaMetadata: ReturnType<typeof vi.fn>,
+  modelOverrides: Record<string, unknown> = {},
+  configOverrides: Record<string, unknown> = {}
+) {
   return {
     transport: { kind: 'http' },
+    auth: {
+      snapshot: vi.fn(() => ({
+        state: 'authenticated',
+        principalId: 'principal-models',
+        deviceId: 'device-models',
+        peerId: null,
+        credentialKind: 'bearer_token',
+        isAdmin: true,
+        effectivePermissions: []
+      })),
+      subscribe: vi.fn(() => () => undefined),
+    },
     models: {
       listCatalog: vi.fn().mockResolvedValue(modelRuntimeCatalogFixture),
       getOperation: vi.fn(),
@@ -365,16 +590,44 @@ function client(getSchemaMetadata: ReturnType<typeof vi.fn>, modelOverrides: Rec
       ...modelOverrides,
     },
     capabilities: {
-      getGraph: vi.fn(),
+      getGraph: vi.fn().mockResolvedValue(buildCapabilityGraph({
+        catalog: capabilityGraphCatalogFixture,
+        registry: gatewayRegistryFixture,
+        transportKind: 'mock',
+      })),
     },
     native: {
-      getManifest: vi.fn(),
+      getManifest: vi.fn().mockResolvedValue(null),
     },
     config: {
       getSchemaMetadata,
-      applyChange: vi.fn(),
+      applyChange: vi.fn().mockResolvedValue({
+        data: { success: true, previous_value: null, error: null },
+        confirmation: { audit_receipt: 'audit-model-source' },
+      }),
+      ...configOverrides,
     },
   } as never
+}
+
+async function flushQueryRender(): Promise<void> {
+  await Promise.resolve()
+  await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+}
+
+async function waitForText(container: ParentNode, text: string): Promise<void> {
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    if (container.textContent?.includes(text)) return
+    await act(async () => {
+      await flushQueryRender()
+    })
+  }
+  expect(container.textContent).toContain(text)
+}
+
+function findButtonByText(container: ParentNode, text: string): HTMLButtonElement | null {
+  return Array.from(container.querySelectorAll('button'))
+    .find((button) => button.textContent?.includes(text)) ?? null
 }
 
 function selectableModelCatalog() {

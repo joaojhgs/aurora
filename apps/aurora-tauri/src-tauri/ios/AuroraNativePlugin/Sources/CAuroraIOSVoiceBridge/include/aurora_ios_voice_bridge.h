@@ -146,6 +146,14 @@ int32_t aurora_ios_voice_session_start_background(
 int32_t aurora_ios_voice_session_finish(
     AuroraIosVoiceSession *session,
     uint64_t generation);
+// Finishes the matching foreground generation and returns its native
+// transcript as an owned UTF-8 string through out_transcript. The caller must
+// release a non-null result with aurora_ios_voice_transcript_free.
+int32_t aurora_ios_voice_session_finish_with_transcript(
+    AuroraIosVoiceSession *session,
+    uint64_t generation,
+    char **out_transcript);
+void aurora_ios_voice_transcript_free(char *value);
 int32_t aurora_ios_voice_session_cancel(
     AuroraIosVoiceSession *session,
     uint64_t generation);

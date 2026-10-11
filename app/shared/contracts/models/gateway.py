@@ -34,6 +34,7 @@ from app.shared.contracts.models.speech import (
     SpeechLanguageRequirement,
     SpeechMethodConstraints,
 )
+from app.shared.contracts.models.speech_runtime import SpeechStageCapabilityExportV1
 from app.shared.contracts.models.tooling import (
     ToolingGetExportCatalogRequest,
     ToolingGetExportCatalogResponse,
@@ -76,6 +77,7 @@ class GatewayMethods:
     EXPLAIN_ROUTE = f"{GatewayModule.NAME}.ExplainRoute"
     GET_WEBRTC_DIAGNOSTICS = f"{GatewayModule.NAME}.GetWebRTCDiagnostics"
     EVENT_STREAM = AuroraMethods.EVENT_STREAM
+    STATUS_CHANGED = f"{GatewayModule.NAME}.StatusChanged"
     LIST_EVENTS = f"{GatewayModule.NAME}.ListEvents"
     GET_SUPPORT_BUNDLE = f"{GatewayModule.NAME}.GetSupportBundle"
     ADMIN_ACTION_DRAFT = f"{GatewayModule.NAME}.AdminActionDraft"
@@ -140,6 +142,7 @@ class ServiceAnnouncement(IOModel):
     summary: str = ""
     capabilities: list[str] = Field(default_factory=list)
     callable_features: list[CallableFeatureContract] = Field(default_factory=list)
+    speech_stage_capabilities: list[SpeechStageCapabilityExportV1] = Field(default_factory=list)
     methods: list[MethodInfo] = Field(default_factory=list)
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
     # Unique instance ID (for multiple instances of same service)
@@ -167,6 +170,28 @@ class ServiceHeartbeat(IOModel):
     module: str
     instance_id: str | None = None
     timestamp: str = Field(default_factory=lambda: datetime.utcnow().isoformat())
+
+
+class GatewayStatusChangedEvent(IOModel):
+    """Whitelisted live status/config projection for authorized peers."""
+
+    event_id: str = Field(min_length=1, max_length=128)
+    timestamp: str = Field(min_length=1, max_length=64)
+    kind: Literal[
+        "health.updated",
+        "health.stale",
+        "service.announced",
+        "service.stale",
+        "config.updated",
+        "config.validation_failed",
+    ]
+    status: Literal[
+        "healthy", "degraded", "unhealthy", "connected", "disconnected", "updated", "failed"
+    ]
+    freshness: Literal["current", "stale"] = "current"
+    service_id: str | None = Field(
+        default=None, min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$"
+    )
 
 
 # =============================================================================

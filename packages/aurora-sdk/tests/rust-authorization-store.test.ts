@@ -135,7 +135,55 @@ describe('Rust-backed peer host authorization store', () => {
     // The hydrate payload must match the camelCase shape the Rust command
     // deserializes; the Rust side asserts the same shape in its own tests.
     expect(calls[0]?.args).toEqual({ request: { verifiers: [], grants: [GRANT] } })
-    expect(calls[1]?.args).toEqual({ request: AUTHORIZE_REQUEST })
+    expect(calls[1]?.args).toEqual({ requestJson: JSON.stringify(AUTHORIZE_REQUEST) })
+    expect(calls[1]?.args).not.toHaveProperty('request')
+  })
+
+  it('bounds the UTF-8 request text and sends an exact-limit request', async () => {
+    const invoke = vi.fn(async () => ({ allowed: true }))
+    const port = createTauriAuthorityPort(invoke)
+    const base = { ...AUTHORIZE_REQUEST, methodId: '' }
+    const baseJson = JSON.stringify(base)
+    const paddingBytes = 65_536 - new TextEncoder().encode(baseJson).byteLength
+    const exactRequest = { ...base, methodId: 'x'.repeat(paddingBytes) }
+    const exactJson = JSON.stringify(exactRequest)
+    expect(new TextEncoder().encode(exactJson).byteLength).toBe(65_536)
+
+    await expect(port.authorize(exactRequest)).resolves.toEqual({ allowed: true })
+    expect(invoke).toHaveBeenCalledOnce()
+    expect(invoke).toHaveBeenCalledWith(MESH_AUTHORITY_COMMANDS.authorize, {
+      requestJson: exactJson
+    })
+
+    invoke.mockClear()
+    const oneByteOver = {
+      ...exactRequest,
+      methodId: `${exactRequest.methodId.slice(0, -1)}é`
+    }
+    expect(JSON.stringify(oneByteOver).length).toBe(exactJson.length)
+    expect(new TextEncoder().encode(JSON.stringify(oneByteOver)).byteLength).toBe(65_537)
+    await expect(port.authorize(oneByteOver)).rejects.toThrow('Invalid authorization request')
+    expect(invoke).not.toHaveBeenCalled()
+  })
+
+  it('fails closed without invoking Tauri when serialization throws or is not text', async () => {
+    const invoke = vi.fn(async () => ({ allowed: true }))
+    const port = createTauriAuthorityPort(invoke)
+    const stringify = vi.spyOn(JSON, 'stringify')
+
+    stringify.mockImplementation(() => {
+      throw new Error('private serialization detail')
+    })
+    const thrownSerialization = port.authorize(AUTHORIZE_REQUEST)
+    stringify.mockRestore()
+    await expect(thrownSerialization).rejects.toThrow('Invalid authorization request')
+    expect(invoke).not.toHaveBeenCalled()
+
+    const nonStringify = vi.spyOn(JSON, 'stringify').mockReturnValue(undefined as unknown as string)
+    const missingText = port.authorize(AUTHORIZE_REQUEST)
+    nonStringify.mockRestore()
+    await expect(missingText).rejects.toThrow('Invalid authorization request')
+    expect(invoke).not.toHaveBeenCalled()
   })
 
   it('dispatches to the WebAssembly authority', async () => {

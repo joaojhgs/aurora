@@ -90,6 +90,18 @@ export {
   ProviderLeaseController
 } from './provider-lease.js'
 export { WebRtcPeerHost } from './webrtc-peer-host.js'
+export { createPeerHostLocalSpeechSource } from './speech-host.js'
+export type {
+  PeerHostLocalSpeechOptions,
+  PeerHostLocalSpeechRuntimePort,
+  PeerHostLocalSpeechSessionMethodId,
+  PeerHostLocalSpeechSessionOperation,
+  PeerHostLocalSpeechSessionRequest,
+  PeerHostLocalSpeechSessionStage,
+  PeerHostLocalSpeechSessionStageName,
+  PeerHostLocalSpeechSource,
+  PeerHostLocalSpeechStage
+} from './speech-host.js'
 export type {
   PeerHostManifestAuthoritySnapshot,
   PeerHostAuthorizationDecision,

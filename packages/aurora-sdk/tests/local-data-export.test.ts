@@ -222,7 +222,9 @@ describe('local-data export contract', () => {
       memoryItems: [],
       localToolStates: [],
       peerGrantMetadata: [],
-      localAudit: []
+      localAudit: [],
+      transcriptSessions: [],
+      transcriptSegments: []
     }
     const recordsB = {
       ...recordsA,

@@ -236,13 +236,18 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
     session.emit({ type: 'event', topic: 'Config.Updated', correlation_id: 'corr-1', params: { marker: 'wrong-topic' } })
     await tick()
 
-    session.emit({ type: 'event', topic: 'Orchestrator.Response', correlation_id: 'corr-1', params: { text: 'delta' } })
+    session.emit({
+      type: 'event',
+      topic: 'Orchestrator.Response',
+      correlation_id: 'corr-1',
+      params: { kind: 'assistant.delta', delta: 'delta', text: 'delta' }
+    })
     const yielded = await firstEvent
     expect(yielded.done).toBe(false)
     const event = yielded.value as AuroraEvent<Record<string, unknown>>
-    expect(event.kind).toBe('Orchestrator.Response')
+    expect(event.kind).toBe('assistant.delta')
     expect(event.topic).toBe('Orchestrator.Response')
-    expect(event.payload).toEqual({ text: 'delta' })
+    expect(event.payload).toEqual({ kind: 'assistant.delta', delta: 'delta', text: 'delta' })
     expect(event.audit).toEqual(expect.objectContaining({ targetPeerId: 'peer-remote', transport: 'mesh' }))
 
     await iterator.return?.()
@@ -519,6 +524,36 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       nodeName: 'Provider',
       registry: providerRegistry,
       authorizationStore: providerAuthority,
+      speechStageCapabilities: () => [{
+        capability: {
+          schema: 'speech-stage-capability.v1',
+          stage: 'tts',
+          method_ids: ['TTS.Synthesize'],
+          modes: ['finite'],
+          implementation: 'python',
+          peer_id: 'local-provider',
+          resource_id: 'remote:local-provider:TTS',
+          capability_revision: 1,
+          supported_formats: ['wav'],
+          sample_rates: [24_000],
+          channels: [1],
+          supported_languages: [],
+          model_ids: [],
+          lifecycle: ['foreground'],
+          max_input_bytes: 16_384,
+          max_chunk_bytes: 16_384,
+          max_concurrent: 1,
+          max_queue: 0,
+          lease_ms: 15_000,
+          readiness: 'ready',
+          required_permissions: ['TTS.Synthesize'],
+          audio_consent_required: true,
+          experimental: false,
+          exported: true,
+        },
+        voice_ids: [],
+        requires_remote_audio_egress: false,
+      }],
       clock: () => 1000,
       randomId: () => 'provider-epoch'
     })
@@ -603,8 +638,15 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       timeoutMs: 5_000,
       clientTtsPlayback: true
     })[Symbol.asyncIterator]()
-    const finalAudio = iterator.next()
-    await tick()
+    const firstUpdate = iterator.next()
+    await waitForSentCount(session, 1)
+    expect(session.sent[0]).toEqual({
+      type: 'subscribe',
+      id: 'sub-early-final-audio',
+      topics: ['Orchestrator.Response', 'TTS.AudioChunk'],
+      correlation_ids: ['corr-early-final-audio'],
+      ttl_seconds: 60
+    })
 
     session.emit({
       type: 'subscribed',
@@ -619,6 +661,27 @@ describe('WebRtcMeshPeerBridge with MeshP2PTransport and AuroraClient', () => {
       idempotent: false
     })
     await waitForSentCount(session, 2)
+    session.emit({
+      type: 'event',
+      topic: 'Orchestrator.Response',
+      correlation_id: 'corr-early-final-audio',
+      params: {
+        kind: 'assistant.delta',
+        delta: 'Spoken',
+        text: 'Spoken',
+        request_id: 'corr-early-final-audio',
+        metadata: {
+          tts_status: 'streaming',
+          tts_stream_id: 'tts-corr-early-final-audio'
+        }
+      }
+    })
+    await expect(firstUpdate).resolves.toMatchObject({
+      done: false,
+      value: { kind: 'delta', textDelta: 'Spoken' }
+    })
+
+    const finalAudio = iterator.next()
     session.emit({
       type: 'event',
       topic: 'TTS.AudioChunk',

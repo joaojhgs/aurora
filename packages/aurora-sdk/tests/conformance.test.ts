@@ -529,7 +529,11 @@ function methodFromUrl(url: string): ConformanceMethod | null {
 }
 
 function readTauriRequest(args: Record<string, unknown> | undefined): AuroraTransportRequest {
-  const request = args?.request
+  const requestJson = args?.requestJson
+  if (typeof requestJson !== 'string') {
+    throw new Error('Tauri conformance request missing JSON text')
+  }
+  const request: unknown = JSON.parse(requestJson)
   if (typeof request !== 'object' || request === null || Array.isArray(request) || !('method' in request)) {
     throw new Error('Tauri conformance request missing method')
   }

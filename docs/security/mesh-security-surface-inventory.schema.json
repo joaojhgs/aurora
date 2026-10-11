@@ -213,7 +213,11 @@
           "enum": ["low", "moderate", "high", "critical"]
         },
         "current_forwarding": {
-          "enum": ["active_if_module_shared", "dormant_no_mesh_module_config"]
+          "enum": [
+            "active_if_module_shared",
+            "active_for_authorized_status_subscribers",
+            "dormant_no_mesh_module_config"
+          ]
         },
         "safe_for_service_wide_broadcast": {
           "type": "boolean"

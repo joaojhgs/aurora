@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import {
   AuroraClient,
   MockAuroraTransport,
@@ -12,6 +12,7 @@ import {
   type ToolExportPolicyModel,
 } from '@aurora/client'
 import { ToolApprovalPanel, auroraNavSections, navItemSnapshot, type RouteAvailability } from '../src'
+import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
 
 const localTool = {
   id: 'tool:stable:schedule', shareGroupId: 'group:scheduling', shareGroupLabel: 'Scheduling', exportable: true,
@@ -39,7 +40,12 @@ const decision: ToolExportDecisionModel = {
 
 describe('ToolApprovalPanel independent export and approval integration', () => {
   let container: HTMLDivElement
-  let root: Root
+  let root: Root | null
+
+  beforeAll(() => {
+    ;(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+    window.scrollTo = () => undefined
+  })
 
   beforeEach(() => {
     globalThis.ResizeObserver = class {
@@ -54,7 +60,8 @@ describe('ToolApprovalPanel independent export and approval integration', () => 
   })
 
   afterEach(() => {
-    act(() => root.unmount())
+    if (root) act(() => root?.unmount())
+    root = null
     container.remove()
   })
 
@@ -117,9 +124,14 @@ describe('ToolApprovalPanel independent export and approval integration', () => 
     const group = container.querySelector(`[role="group"][aria-label="Mesh sharing for Scheduling group"]`)!
     const notShared = [...group.querySelectorAll('button')].find((node) => node.textContent === 'Not shared') as HTMLButtonElement
     await act(async () => notShared.click())
-    await waitUntil(() => requests.some((request) => request.method === TOOLING_METHODS.upsertToolGroupExportPolicy))
-    expect(notShared.getAttribute('aria-pressed')).toBe('true')
-    expect(group.textContent).toContain('Not shared with mesh peers.')
+    await waitUntil(() => {
+      expect(requests.some((request) => request.method === TOOLING_METHODS.upsertToolGroupExportPolicy)).toBe(true)
+      const refreshedGroup = container.querySelector(`[role="group"][aria-label="Mesh sharing for Scheduling group"]`)
+      const refreshedNotShared = [...(refreshedGroup?.querySelectorAll('button') ?? [])]
+        .find((node) => node.textContent === 'Not shared') as HTMLButtonElement | undefined
+      expect(refreshedNotShared?.getAttribute('aria-pressed')).toBe('true')
+      expect(refreshedGroup?.textContent).toContain('Not shared with mesh peers.')
+    })
   })
 
   it('refreshes an inherited tool decision from the backend instead of assuming the global default', async () => {
@@ -169,9 +181,12 @@ describe('ToolApprovalPanel independent export and approval integration', () => 
     await act(async () => inherit.click())
 
     await waitUntil(() => {
+      const refreshedSharingGroup = container.querySelector(`[role="group"][aria-label="Mesh sharing for ${localTool.name}"]`)
       expect(requests.some((request) => request.method === TOOLING_METHODS.clearToolExportOverride)).toBe(true)
-      expect(sharingGroup.textContent).toContain('Shared')
-      expect(sharingGroup.textContent).toContain('Effective via All peers group policy')
+      expect(refreshedSharingGroup?.textContent).toContain('Shared')
+      expect(refreshedSharingGroup?.textContent).toContain('Effective via All peers group policy')
+      expect(refreshedSharingGroup?.textContent).not.toContain('Exact tool for all peers')
+      expect(container.textContent).toContain('Sharing now inherits from the next policy level.')
     })
     expect(requests.find((request) => request.method === TOOLING_METHODS.previewToolExportDecision)?.payload).toMatchObject({
       global_tool_id: localTool.id,
@@ -207,13 +222,85 @@ describe('ToolApprovalPanel independent export and approval integration', () => 
     expect(document.body.textContent).toContain('stale')
   })
 
+  it('hides in-flight sharing state immediately when the query scope changes and ignores the late completion', async () => {
+    const requests: AuroraTransportRequest[] = []
+    const delayedMutation = deferred<void>()
+    const client = new AuroraClient({ transport: managementTransport(requests, false, delayedMutation.promise) })
+    const queryClient = createAuroraQueryClient()
+    const renderScoped = (peerId: string) => root?.render(
+      <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'test-backend', peerId }}>
+        <ToolApprovalPanel
+          client={client}
+          route={toolsRoute()}
+          initialTools={[localTool]}
+          initialSchedulerJobs={[]}
+          initialManagementState={{
+            managementLoading: false,
+            sharingPolicy: policy,
+            sharingPeers: [{ peerId: 'peer-stable-2', label: 'Kitchen Aurora', stale: false }],
+            sharingDecisions: { [localTool.id]: decision },
+            sharingLoading: false,
+            sourceSummaries: [],
+            sourceDetails: {},
+            grants: [],
+            pendingApprovals: [],
+            auditEvents: [],
+          }}
+        />
+      </AuroraQueryProvider>
+    )
+
+    await act(async () => renderScoped('peer-a'))
+    const group = container.querySelector(`[role="group"][aria-label="Mesh sharing for Scheduling group"]`)
+    const notShared = [...(group?.querySelectorAll('button') ?? [])].find((node) => node.textContent === 'Not shared') as HTMLButtonElement
+    await act(async () => notShared.click())
+    expect(container.textContent).toContain('Saving sharing policy')
+
+    await act(async () => renderScoped('peer-b'))
+    expect(container.textContent).not.toContain('Saving sharing policy')
+    const delayedWrite = requests.find((request) => request.method === TOOLING_METHODS.upsertToolGroupExportPolicy)
+    expect((delayedWrite as { signal?: AbortSignal } | undefined)?.signal?.aborted).toBe(true)
+
+    await act(async () => {
+      delayedMutation.resolve()
+      await delayedMutation.promise
+    })
+    expect(container.textContent).not.toContain('Not shared with mesh peers.')
+    expect(container.textContent).not.toContain('Previous effective sharing policy remains in effect.')
+  })
+
+  it('does not apply a late sharing completion after the panel unmounts', async () => {
+    const requests: AuroraTransportRequest[] = []
+    const delayedMutation = deferred<void>()
+    await mount(new AuroraClient({ transport: managementTransport(requests, false, delayedMutation.promise) }))
+
+    const group = container.querySelector(`[role="group"][aria-label="Mesh sharing for Scheduling group"]`)
+    const notShared = [...(group?.querySelectorAll('button') ?? [])].find((node) => node.textContent === 'Not shared') as HTMLButtonElement
+    await act(async () => notShared.click())
+    expect(container.textContent).toContain('Saving sharing policy')
+    const requestCountBeforeUnmountCompletion = requests.length
+
+    await act(async () => {
+      root?.unmount()
+      root = null
+    })
+    const delayedWrite = requests.find((request) => request.method === TOOLING_METHODS.upsertToolGroupExportPolicy)
+    expect((delayedWrite as { signal?: AbortSignal } | undefined)?.signal?.aborted).toBe(true)
+    await act(async () => {
+      delayedMutation.resolve()
+      await delayedMutation.promise
+    })
+    expect(requests).toHaveLength(requestCountBeforeUnmountCompletion)
+  })
+
+
   async function mount(
     client: AuroraClient,
     peers = [{ peerId: 'peer-stable-2', label: 'Kitchen Aurora', stale: false }],
     sharingPolicy: ToolExportPolicyModel = policy,
     sharingDecision: ToolExportDecisionModel = decision,
   ) {
-    await act(async () => root.render(
+    await act(async () => root?.render(
       <ToolApprovalPanel
         client={client}
         route={toolsRoute()}
@@ -229,8 +316,9 @@ describe('ToolApprovalPanel independent export and approval integration', () => 
   }
 })
 
-function managementTransport(requests: AuroraTransportRequest[], delayedScopes = false): MockAuroraTransport {
+function managementTransport(requests: AuroraTransportRequest[], delayedScopes = false, delayedMutation?: Promise<unknown>): MockAuroraTransport {
   const transport = MockAuroraTransport.empty()
+  let allPeersGroupState: 'shared' | 'unshared' = 'shared'
   const record = <T,>(handler: (request: AuroraTransportRequest) => T | Promise<T>) => async (request: AuroraTransportRequest) => {
     requests.push(request)
     return handler(request)
@@ -244,34 +332,134 @@ function managementTransport(requests: AuroraTransportRequest[], delayedScopes =
     action_id: 'aa-ui', confirmation_token: 'token-ui', digest: 'digest-ui', confirmed: true, expires_at: '2026-07-14T23:59:00Z', audit_receipt: 'audit-ui',
     confirmation_headers: { action_id: 'X-Aurora-AdminAction-Id', confirmation_token: 'X-Aurora-AdminAction-Token', digest: 'X-Aurora-AdminAction-Digest' },
   })))
-  transport.register(TOOLING_METHODS.upsertToolExportOverride, record(() => mutationResponse()))
-  transport.register(TOOLING_METHODS.clearToolExportOverride, record(() => mutationResponse()))
+  transport.register('Tooling.GetPolicySummary', record(() => ({
+    policy_mode: 'enforce', default_approval_mode: 'ask_each_time', default_share: true,
+    active_grant_count: 0, pending_approval_count: 0, blocked_source_count: 0, blocked_tool_count: 0,
+    source_count: 1, tool_count: 1, secrets_redacted: true,
+  })))
+  transport.register('Tooling.ListToolSources', record(() => ({
+    sources: [{ source_id: 'local:core', source: 'core', display_name: 'Core tools', tool_count: 1, secrets_redacted: true }],
+    count: 1,
+    secrets_redacted: true,
+  })))
+  transport.register('Tooling.GetToolSourceDetail', record(() => ({
+    source: { source_id: 'local:core', source: 'core', display_name: 'Core tools', tool_count: 1, secrets_redacted: true },
+    tools: [{
+      global_tool_id: localTool.id,
+      display_name: localTool.name,
+      description: localTool.description,
+      provider_label: localTool.providerLabel,
+      provider_peer_id: localTool.providerPeerId,
+      provider_service_instance_id: localTool.serviceInstanceId,
+      provider_kind: localTool.providerKind,
+      source: localTool.sourceType,
+      source_type: localTool.sourceType,
+      source_id: 'local:core',
+      trust_tier: localTool.trustTier,
+      risk_class: localTool.riskClass,
+      approval_required: localTool.approvalRequired,
+      requires_admin_action: localTool.requiresAdminAction,
+      selector_required: localTool.selectorRequired,
+      provider_selector_required: localTool.providerSelectorRequired,
+      data_egress: localTool.dataEgress,
+      mutating: localTool.mutating,
+      required_permissions: localTool.requiredPermissions,
+      args_schema: localTool.argsSchema,
+      args_preview: localTool.argsPreview,
+      args_hash: localTool.argsHash,
+      mesh_selector: localTool.meshSelector,
+      resource_selector: localTool.resourceSelector,
+      approval_scopes: localTool.approvalScopes,
+      requested_approval_scope: localTool.requestedApprovalScope,
+      token_ttl_seconds: localTool.tokenTtlSeconds,
+      state: localTool.state,
+      disabled_reason: localTool.disabledReason,
+      denial_reason: localTool.denialReason,
+      dry_run_supported: localTool.dryRunSupported,
+      dry_run_required: localTool.dryRunRequired,
+      dry_run_preview: localTool.dryRunPreview,
+      audit_destination: localTool.auditDestination,
+      correlation_id: localTool.correlationId,
+      policy_decision_id: localTool.policyDecisionId,
+      approval_request_id: localTool.approvalRequestId,
+      expires_at: localTool.expiresAt,
+      providers: localTool.providers,
+      result: localTool.result,
+      secrets_redacted: localTool.secretsRedacted,
+      share_group_id: localTool.shareGroupId,
+      share_group_label: localTool.shareGroupLabel,
+      exportable: localTool.exportable,
+    }],
+    blocked_tools: [],
+    grants: [],
+    pending_approvals: [],
+    policy_rules: [],
+    found: true,
+    secrets_redacted: true,
+  })))
+  transport.register('Tooling.ListApprovalGrants', record(() => ({ grants: [], count: 0, secrets_redacted: true })))
+  transport.register('Tooling.ListPendingApprovals', record(() => ({ approvals: [], count: 0, secrets_redacted: true })))
+  transport.register('Tooling.ListPolicyAuditEvents', record(() => ({ events: [], total: 0, secrets_redacted: true })))
+  transport.register('Config.GetSchemaMetadata', record(() => ({ metadata: {}, secrets_redacted: true })))
+  transport.register('Auth.MeshListPeers', record(() => ({ peers: [], count: 0, secrets_redacted: true })))
+  const exportMutation = record(async (request) => {
+    if (delayedMutation) await delayedMutation
+    const payload = request.payload as { peer_id?: string | null; share_group_id?: string; state?: 'shared' | 'unshared' }
+    if (request.method === TOOLING_METHODS.upsertToolGroupExportPolicy && payload.share_group_id === localTool.shareGroupId && (payload.peer_id ?? null) === null && payload.state) {
+      allPeersGroupState = payload.state
+    }
+    return mutationResponse()
+  })
+  transport.register(TOOLING_METHODS.upsertToolExportOverride, exportMutation)
+  transport.register(TOOLING_METHODS.clearToolExportOverride, exportMutation)
   transport.register(TOOLING_METHODS.upsertToolPolicyOverride, record(() => ({ ok: true })))
   transport.register(TOOLING_METHODS.getToolExportPolicy, record(async (request) => {
     const peerId = (request.payload as { peer_id?: string | null }).peer_id ?? null
     if (delayedScopes && peerId === 'peer-slow') await new Promise((resolve) => setTimeout(resolve, 60))
-    return rawPolicy(peerId === 'peer-fast' ? 'shared' : peerId === 'peer-slow' ? 'unshared' : 'shared', peerId)
+    return rawPolicy(peerId === 'peer-fast' ? 'shared' : peerId === 'peer-slow' ? 'unshared' : allPeersGroupState, peerId)
   }))
-  transport.register(TOOLING_METHODS.upsertToolGroupExportPolicy, record(() => mutationResponse()))
+  transport.register(TOOLING_METHODS.upsertToolGroupExportPolicy, exportMutation)
   transport.register(TOOLING_METHODS.previewToolExportDecision, record((request) => {
     const peerId = (request.payload as { peer_id?: string | null }).peer_id ?? null
-    return { decision: rawDecision(peerId) }
+    return { decision: rawDecision(peerId, peerId === null ? allPeersGroupState : undefined) }
   }))
   return transport
 }
 
+function deferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve
+    reject = promiseReject
+  })
+  return { promise, resolve, reject }
+}
+
 function rawPolicy(groupState: 'shared' | 'unshared', peerId: string | null) {
+  const groupRule = {
+    rule_id: peerId ? `rule-${peerId}` : 'group-all-peers',
+    peer_id: peerId,
+    scope_type: 'group',
+    scope_id: 'group:scheduling',
+    state: groupState,
+    actor_principal_id: 'admin',
+    reason: 'test',
+    created_at: 1,
+    updated_at: 1,
+  }
   return {
     policy: { default_state: 'shared', revision: 8, initialized: true, migrated_from_legacy: false, updated_at: 2 },
-    rules: peerId ? [{ rule_id: `rule-${peerId}`, peer_id: peerId, scope_type: 'group', scope_id: 'group:scheduling', state: groupState, actor_principal_id: 'admin', reason: 'test', created_at: 1, updated_at: 1 }] : [],
+    rules: peerId || groupState === 'unshared' ? [groupRule] : [],
     stale_tool_ids: [], stale_group_ids: [], protocol_tier: 'projection_v1',
     mesh_switches: { provider_mesh_tooling_enabled: true, consumer_mesh_tooling_enabled: true, revision: 4, enforcement_active: true }, secrets_redacted: true,
   }
 }
 
-function rawDecision(peerId: string | null) {
+function rawDecision(peerId: string | null, allPeersGroupState: 'shared' | 'unshared' = 'shared') {
+  const effectiveState = peerId === 'peer-slow' ? 'unshared' : allPeersGroupState
   return {
-    effective_state: peerId === 'peer-slow' ? 'unshared' : 'shared', inherited_from: peerId ? 'peer_group' : 'global_group', matched_rule_id: peerId ? `rule-${peerId}` : 'group-shared',
+    effective_state: effectiveState, inherited_from: peerId ? 'peer_group' : 'global_group', matched_rule_id: peerId ? `rule-${peerId}` : 'group-shared',
     peer_id: peerId, global_tool_id: localTool.id, share_group_id: 'group:scheduling', exportable: true, stale_tool_id: false, stale_group_id: false,
     prerequisites: { local_exportable: true, enforcement_active: true }, policy_revision: 8, reason_code: peerId ? 'peer_group' : 'global_default',
   }

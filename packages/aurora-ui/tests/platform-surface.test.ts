@@ -491,6 +491,24 @@ describe('Aurora surface profile regression coverage', () => {
     expect(findForbiddenProductionCopyTerms(ios.voiceCapture.detail)).toEqual([])
   })
 
+  it('keeps iOS speech pack setup visible before native capture is ready', () => {
+    const ios = getAuroraSurfaceProfile({
+      runtimeMode: 'ios-thin',
+      transportKind: 'native-mobile',
+      nativePlatform: 'ios',
+      nodeMode: 'mesh-node',
+      runtimeTier: 'lightweight-ts',
+      nativeVoicePresent: true,
+      nativeVoiceAvailable: false,
+      localSpeechPackState: 'unavailable',
+    })
+
+    expect(ios.voiceCapture.focusedPushToTalkOwner).toBe('unavailable')
+    expect(ios.canManageNativeSpeechPolicy).toBe(true)
+    expect(shouldShowForSurface(ios, 'localVoice')).toBe(false)
+    expect(shouldShowForSurface(ios, 'localSpeechSetup')).toBe(true)
+  })
+
   it('fails closed for legacy mobile profiles without a native voice adapter', () => {
     const mobile = getAuroraSurfaceProfile({ runtimeMode: 'mobile', transportKind: 'native-mobile' })
 

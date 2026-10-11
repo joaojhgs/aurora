@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from app.services.vad.service import VADService
+from app.shared.contracts.models import speech_runtime as speech_runtime_contracts
 from app.shared.contracts.models.speech_runtime import (
     SpeechStageCapabilityV1,
     SpeechStreamAdmissionV1,
@@ -34,6 +35,26 @@ def _admission_kwargs() -> dict[str, object]:
         "route_revision": "route-1",
         "capability_revision": 1,
     }
+
+
+def _speech_capability_export_model():
+    model = getattr(speech_runtime_contracts, "SpeechStageCapabilityExportV1", None)
+    assert model is not None, "SpeechStageCapabilityExportV1 contract is not defined"
+    return model
+
+
+def _ready_tts_capability() -> SpeechStageCapabilityV1:
+    return SpeechStageCapabilityV1(
+        stage="tts",
+        method_ids=["TTS.Synthesize"],
+        modes=["finite"],
+        implementation="python",
+        peer_id="local-peer",
+        capability_revision=1,
+        lifecycle=["foreground"],
+        readiness="ready",
+        exported=True,
+    )
 
 
 def test_ready_capability_is_exported_and_continuous_kws_requires_opt_in() -> None:
@@ -84,6 +105,68 @@ def test_versioned_schema_field_keeps_wire_and_python_compatibility() -> None:
     assert SpeechStageCapabilityV1.model_json_schema()["properties"]["schema"]["const"] == (
         "speech-stage-capability.v1"
     )
+
+
+def test_capability_export_has_only_its_three_wire_fields_and_defaults_egress_off() -> None:
+    export_model = _speech_capability_export_model()
+    from app.shared.contracts.models import SpeechStageCapabilityExportV1
+
+    assert SpeechStageCapabilityExportV1 is export_model
+    export = export_model(
+        capability=_ready_tts_capability(),
+        voice_ids=["standard:test:voice-a", "clone:550e8400-e29b-41d4-a716-446655440000"],
+    )
+
+    serialized = export.model_dump(mode="json")
+    assert set(serialized) == {"capability", "voice_ids", "requires_remote_audio_egress"}
+    assert serialized["requires_remote_audio_egress"] is False
+    assert serialized["voice_ids"] == [
+        "standard:test:voice-a",
+        "clone:550e8400-e29b-41d4-a716-446655440000",
+    ]
+    with pytest.raises(ValidationError):
+        export_model(
+            capability=_ready_tts_capability(),
+            private_cache_path="/models/private/voice.bin",
+        )
+
+
+def test_capability_export_bounds_and_validates_unique_logical_voice_ids() -> None:
+    export_model = _speech_capability_export_model()
+    standard_voice = "standard:test:voice-a"
+    clone_voice = "clone:550e8400-e29b-41d4-a716-446655440000"
+    valid = export_model(
+        capability=_ready_tts_capability(),
+        voice_ids=[standard_voice, clone_voice],
+    )
+    assert valid.voice_ids == (standard_voice, clone_voice)
+
+    for invalid_voice_ids in (
+        [standard_voice, standard_voice],
+        ["/models/private/voice.bin"],
+        ["standard:Test:voice-a"],
+        [f"standard:test:voice-{index:03d}" for index in range(257)],
+    ):
+        with pytest.raises(ValidationError):
+            export_model(capability=_ready_tts_capability(), voice_ids=invalid_voice_ids)
+
+
+def test_capability_export_is_frozen_and_detaches_nested_capability_state() -> None:
+    export_model = _speech_capability_export_model()
+    source_capability = _ready_tts_capability()
+    export = export_model(
+        capability=source_capability,
+        voice_ids=["standard:test:voice-a"],
+    )
+    original_wire = export.model_dump(mode="json")
+
+    source_capability.method_ids.append("TTS.StreamStart")
+    exposed_capability = export.capability
+    exposed_capability.method_ids.append("TTS.StreamStart")
+
+    assert export.model_dump(mode="json") == original_wire
+    with pytest.raises(ValidationError):
+        export.requires_remote_audio_egress = True
 
 
 def test_admission_and_audio_frames_are_bounded_and_rejected_sessions_do_not_leak_ids() -> None:

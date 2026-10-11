@@ -1,6 +1,5 @@
 import type { Metadata } from 'next'
 import '@aurora/ui/styles.css'
-import './globals.css'
 import { DebugUiIndicator } from './debug-ui-host'
 import { PathAwareShell } from './path-aware-shell'
 import { PwaRegistration } from './pwa-registration'

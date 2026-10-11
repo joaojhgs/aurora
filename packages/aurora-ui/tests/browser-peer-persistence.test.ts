@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   inboundVerifierSecretKey,
   type MeshPeerCredentialRecord,
@@ -6,6 +6,7 @@ import {
   type PeerRelationshipSelector,
   type WebRtcPeerConnectionProfile,
 } from '@aurora/client/webrtc'
+import { emptyAuroraNodeConfigDocumentV2 } from '@aurora/client/node-config'
 import {
   BrowserPersistentPeerCredentialStore,
   type BrowserVaultStorage,
@@ -16,7 +17,7 @@ import {
 } from '../src/thin-connection-profile'
 
 class MapVaultStorage implements BrowserVaultStorage {
-  readonly values = new Map<string, unknown>()
+  constructor(readonly values = new Map<string, unknown>()) {}
   failReads = false
   failWrites = false
   failDeletes = false
@@ -131,6 +132,81 @@ const thinProfileDocument: ThinProfileDocument = {
 }
 
 describe('BrowserPersistentPeerCredentialStore', () => {
+  it('serializes V2 CAS across independent stores and fails closed when the Web Lock is unavailable', async () => {
+    const values = new Map<string, unknown>()
+    const metadata = new MapMetadataStorage()
+    const storageA = new MapVaultStorage(values)
+    const storageB = new MapVaultStorage(values)
+    let held = false
+    let pauseNext = false
+    let signalEntered: (() => void) | undefined
+    let releaseHeld: (() => void) | undefined
+    const entered = new Promise<void>((resolve) => { signalEntered = resolve })
+    const heldGate = new Promise<void>((resolve) => { releaseHeld = resolve })
+    const requests: { name: string; options: Record<string, unknown> }[] = []
+    const navigatorWithLocks = {
+      locks: {
+        async request(name: string, options: Record<string, unknown>, callback: (lock: Lock | null) => Promise<unknown>): Promise<unknown> {
+          requests.push({ name, options })
+          if (held) return await callback(null)
+          held = true
+          try {
+            if (pauseNext) {
+              pauseNext = false
+              signalEntered?.()
+              await heldGate
+            }
+            return await callback({} as Lock)
+          } finally {
+            held = false
+          }
+        },
+      },
+    }
+    vi.stubGlobal('navigator', navigatorWithLocks as unknown as Navigator)
+    const first = new BrowserPersistentPeerCredentialStore({
+      storage: storageA, metadataStorage: metadata, crypto: globalThis.crypto, origin: 'https://aurora.example.test', now: () => 1_000,
+    })
+    const second = new BrowserPersistentPeerCredentialStore({
+      storage: storageB, metadataStorage: metadata, crypto: globalThis.crypto, origin: 'https://aurora.example.test', now: () => 1_001,
+    })
+    try {
+      const initial = emptyAuroraNodeConfigDocumentV2(1_000)
+      await first.saveNodeConfigDocumentV2(initial)
+      const firstDraft = {
+        ...initial,
+        speech: { ...initial.speech, sharing: { ...initial.speech.sharing, stt: true } },
+      }
+      const staleDraft = {
+        ...initial,
+        speech: { ...initial.speech, sharing: { ...initial.speech.sharing, tts: true } },
+      }
+      pauseNext = true
+      const firstSave = first.saveNodeConfigDocumentV2Cas(firstDraft, 1)
+      await entered
+
+      await expect(second.saveNodeConfigDocumentV2Cas(staleDraft, 1)).rejects.toThrow('being changed in another tab')
+      releaseHeld?.()
+      await expect(firstSave).resolves.toMatchObject({ document: { revision: 2, speech: { sharing: { stt: true, tts: false } } } })
+
+      await expect(second.saveNodeConfigDocumentV2Cas(staleDraft, 1)).rejects.toThrow('revision conflict')
+      vi.stubGlobal('navigator', {} as Navigator)
+      const unavailableDraft = {
+        ...firstDraft,
+        speech: { ...firstDraft.speech, sharing: { ...firstDraft.speech.sharing, stt: false } },
+      }
+      await expect(second.saveNodeConfigDocumentV2Cas(unavailableDraft, 2)).rejects.toThrow('Cross-tab node config storage lock is unavailable')
+      await expect(first.loadNodeConfigDocumentV2()).resolves.toMatchObject({ revision: 2, speech: { sharing: { stt: true, tts: false } } })
+      expect(requests.every((request) => request.name === 'aurora-node-config-v2:https://aurora.example.test:aurora.nodeConfig.v2')).toBe(true)
+      expect(requests.every((request) => JSON.stringify(request.options) === JSON.stringify({ mode: 'exclusive', ifAvailable: true }))).toBe(true)
+    } finally {
+      releaseHeld?.()
+      vi.unstubAllGlobals()
+      await first.close()
+      await second.close()
+    }
+  })
+
   it('encrypts room and reconnect secrets, then restores them after a reload', async () => {
     const storage = new MapVaultStorage()
     const metadata = new MapMetadataStorage()

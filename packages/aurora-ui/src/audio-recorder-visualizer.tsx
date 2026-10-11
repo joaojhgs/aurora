@@ -3,8 +3,9 @@
 import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Mic, RotateCcw, SendHorizontal, StopCircle } from 'lucide-react'
 import type { VoiceCaptureStatus } from './assistant-view'
+import { cn } from './shadcn-lib/utils'
 
-type RecorderVariant = 'compact' | 'panel'
+type RecorderVariant = 'compact' | 'panel' | 'composer'
 
 type RecorderAction = 'start' | 'stop' | 'reset' | 'send'
 
@@ -26,9 +27,30 @@ export interface AudioRecorderVisualizerProps {
 
 const inactiveBars = Array.from({ length: 48 }, () => 0)
 
-function cx(...parts: Array<string | false | null | undefined>): string {
-  return parts.filter(Boolean).join(' ')
-}
+const RECORDER_ROOT_CLASS =
+  'grid w-full grid-cols-[minmax(0,1fr)_auto] grid-rows-[auto_minmax(2.2rem,1fr)] items-center gap-x-[0.65rem] gap-y-[0.45rem] rounded-[1rem] border border-[color:color-mix(in_srgb,var(--aui-border)_76%,transparent)] bg-[linear-gradient(135deg,rgb(255_255_255_/_0.055),rgb(255_255_255_/_0.025))] p-[0.65rem] text-foreground shadow-[inset_0_1px_0_rgb(255_255_255_/_0.06),0_1rem_2.5rem_rgb(0_0_0_/_0.16)] [@media(max-width:720px)]:grid-cols-[minmax(0,1fr)]'
+const RECORDER_ACTIVE_CLASS =
+  'border-[color:color-mix(in_srgb,var(--aui-primary)_44%,var(--aui-border))] shadow-[inset_0_1px_0_rgb(255_255_255_/_0.08),0_0_2.5rem_color-mix(in_srgb,var(--aui-primary)_13%,transparent)]'
+const RECORDER_UNAVAILABLE_CLASS = 'border-[color:color-mix(in_srgb,#fb7185_44%,var(--aui-border))]'
+const RECORDER_PANEL_CLASS = 'min-h-[7.5rem] grid-cols-[minmax(0,1fr)_auto] p-[0.85rem]'
+const RECORDER_COMPOSER_CLASS =
+  'grid-cols-[minmax(0,1fr)] grid-rows-[auto_1.35rem] gap-[0.2rem] rounded-[0.95rem] px-[0.65rem] pb-[0.46rem] pt-[0.4rem] box-border w-full backdrop-blur-[14px]'
+const RECORDER_MAIN_CLASS = 'flex min-w-0 items-center justify-between gap-3'
+const RECORDER_MAIN_COMPOSER_CLASS = 'min-h-[1.15rem] items-start w-full max-w-none'
+const RECORDER_COPY_CLASS = 'grid min-w-0 gap-[0.12rem]'
+const RECORDER_TITLE_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[0.8rem] font-[850] tracking-[0.01em] text-foreground'
+const RECORDER_DETAIL_CLASS = 'overflow-hidden text-ellipsis whitespace-nowrap text-[0.68rem] font-[650] text-muted-foreground'
+const RECORDER_TIMER_CLASS = 'inline-flex items-center gap-[0.13rem] [font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace] text-[0.72rem] font-[850] text-muted-foreground'
+const RECORDER_TIMER_CELL_CLASS =
+  'min-w-[1.15rem] rounded-[0.35rem] border border-[color-mix(in_srgb,var(--aui-border)_78%,transparent)] bg-muted/60 px-[0.2rem] py-[0.16rem] text-center'
+const RECORDER_CANVAS_CLASS =
+  'col-start-1 h-[2.35rem] w-full rounded-[0.65rem] [background:radial-gradient(circle_at_20%_20%,color-mix(in_srgb,var(--aui-primary)_10%,transparent),transparent_45%),rgb(0_0_0_/_0.18)] [@media(max-width:720px)]:col-start-1'
+const RECORDER_CONTROLS_CLASS =
+  'col-start-2 row-start-1 row-span-2 flex items-center gap-[0.35rem] [@media(max-width:720px)]:col-start-1 [@media(max-width:720px)]:row-auto [@media(max-width:720px)]:justify-stretch'
+const RECORDER_BUTTON_CLASS =
+  'inline-flex size-[2.35rem] items-center justify-center rounded-[0.85rem] border border-border bg-muted/60 text-foreground enabled:hover:border-[color:color-mix(in_srgb,var(--aui-primary)_45%,var(--aui-border))] enabled:hover:text-primary disabled:cursor-not-allowed disabled:opacity-45 [@media(max-width:720px)]:w-auto [@media(max-width:720px)]:flex-1'
+const RECORDER_PRIMARY_CLASS =
+  'border-[color:color-mix(in_srgb,var(--aui-primary)_45%,transparent)] bg-[color-mix(in_srgb,var(--aui-primary)_16%,rgb(255_255_255_/_0.04))] text-primary'
 
 function pad(num: number): string {
   return String(num).padStart(2, '0')
@@ -85,6 +107,7 @@ export function AudioRecorderVisualizer({
   const action = recorderAction(status)
   const active = status === 'listening' || status === 'processing' || status === 'speaking'
   const unavailable = status === 'permission-denied' || status === 'no-device' || status === 'error'
+  const composerPanel = variant === 'composer' || (className?.split(/\s+/).includes('aui-composer-recorder-panel') ?? false)
   const visualBars = useMemo(() => normalizeBars(bars, variant === 'panel' ? 96 : 64), [bars, variant])
   const [hours, minutes, seconds] = timerParts(elapsedSeconds)
 
@@ -130,39 +153,50 @@ export function AudioRecorderVisualizer({
 
   return (
     <div
-      className={cx('aui-audio-recorder', `aui-audio-recorder-${variant}`, active && 'aui-audio-recorder-active', unavailable && 'aui-audio-recorder-unavailable', className)}
+      className={cn(
+        RECORDER_ROOT_CLASS,
+        variant === 'panel' && RECORDER_PANEL_CLASS,
+        active && RECORDER_ACTIVE_CLASS,
+        unavailable && RECORDER_UNAVAILABLE_CLASS,
+        composerPanel && RECORDER_COMPOSER_CLASS,
+        className
+      )}
       data-voice-state={status}
       aria-label="Audio recorder and live microphone visualizer"
     >
-      <div className="aui-audio-recorder-main">
-        <div className="aui-audio-recorder-copy">
-          <span className="aui-audio-recorder-title">{title ?? statusText(status)}</span>
-          <span className="aui-audio-recorder-detail">{detail ?? (sourceLabel ? `${sourceLabel} audio` : 'Live microphone level')}</span>
+      <div className={cn(RECORDER_MAIN_CLASS, composerPanel && RECORDER_MAIN_COMPOSER_CLASS)}>
+        <div className={RECORDER_COPY_CLASS}>
+          <span className={RECORDER_TITLE_CLASS}>{title ?? statusText(status)}</span>
+          <span className={cn(RECORDER_DETAIL_CLASS, composerPanel && 'text-[0.72rem]')}>{detail ?? (sourceLabel ? `${sourceLabel} audio` : 'Live microphone level')}</span>
         </div>
-        <div className="aui-audio-recorder-timer" aria-label={`Recording timer ${hours}:${minutes}:${seconds}`}>
-          <span>{hours}</span><b>:</b><span>{minutes}</span><b>:</b><span>{seconds}</span>
+        <div className={RECORDER_TIMER_CLASS} aria-label={`Recording timer ${hours}:${minutes}:${seconds}`}>
+          <span className={RECORDER_TIMER_CELL_CLASS}>{hours}</span><b>:</b><span className={RECORDER_TIMER_CELL_CLASS}>{minutes}</span><b>:</b><span className={RECORDER_TIMER_CELL_CLASS}>{seconds}</span>
         </div>
       </div>
-      <canvas ref={canvasRef} className="aui-audio-recorder-canvas" aria-hidden />
+      <canvas
+        ref={canvasRef}
+        className={cn(RECORDER_CANVAS_CLASS, variant === 'panel' && 'h-[4.2rem]', composerPanel && 'h-[1.35rem] min-h-[1.35rem] w-full max-w-none')}
+        aria-hidden
+      />
       {showControls ? (
-        <div className="aui-audio-recorder-controls">
+        <div className={RECORDER_CONTROLS_CLASS}>
           {onReset ? (
-            <button type="button" className="aui-audio-recorder-button aui-audio-recorder-reset" onClick={onReset} disabled={disabled || !active} aria-label="Reset voice recording">
+            <button type="button" className={cn(RECORDER_BUTTON_CLASS, 'enabled:text-destructive')} onClick={onReset} disabled={disabled || !active} aria-label="Reset voice recording">
               <RotateCcw size={15} aria-hidden />
             </button>
           ) : null}
           <button
             type="button"
-            className="aui-audio-recorder-button aui-audio-recorder-primary"
+            className={cn(RECORDER_BUTTON_CLASS, RECORDER_PRIMARY_CLASS, active && 'bg-primary text-primary-foreground')}
             onClick={onToggle}
             disabled={disabled}
             aria-label={action === 'stop' ? 'Stop listening' : 'Push to talk'}
           >
             {action === 'stop' ? <StopCircle size={16} aria-hidden /> : <Mic size={15} aria-hidden />}
-            <span className="aui-sr-only">{action === 'stop' ? 'Stop listening' : 'Push to talk'}</span>
+            <span className="sr-only">{action === 'stop' ? 'Stop listening' : 'Push to talk'}</span>
           </button>
           {onSend ? (
-            <button type="button" className="aui-audio-recorder-button aui-audio-recorder-send" onClick={onSend} disabled={disabled || !active} aria-label="Send voice recording">
+            <button type="button" className={cn(RECORDER_BUTTON_CLASS, 'enabled:text-primary')} onClick={onSend} disabled={disabled || !active} aria-label="Send voice recording">
               <SendHorizontal size={15} aria-hidden />
             </button>
           ) : null}

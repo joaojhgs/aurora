@@ -291,11 +291,12 @@ describe('Tauri CI native evidence contract', () => {
     const iosSimulatorSmoke = repoText('apps/aurora-tauri/scripts/ios-simulator-smoke.mjs')
     const iosEvidenceGate = repoText('apps/aurora-tauri/scripts/assert-ios-ci-evidence.mjs')
 
+    expect(packageJson.scripts['android:prepare-native-plugin']).toBe('node ./scripts/install-android-native-plugin.mjs --prepare')
     expect(packageJson.scripts['android:sync-native-plugin']).toBe('node ./scripts/install-android-native-plugin.mjs')
-    expect(packageJson.scripts['android:init']).toContain('android:sync-native-plugin')
-    expect(packageJson.scripts['android:preflight:ci']).toBe('pnpm android:sync-native-plugin && node ./scripts/android-preflight.mjs --require-android-project')
+    expect(packageJson.scripts['android:init']).toContain('android:prepare-native-plugin')
+    expect(packageJson.scripts['android:preflight:ci']).toBe('pnpm android:prepare-native-plugin && node ./scripts/android-preflight.mjs --require-android-project')
     for (const [name, command] of Object.entries(packageJson.scripts).filter(([name, command]) => name.startsWith('android:build:') && command.includes('tauri android build'))) {
-      expect(command, `${name} must sync canonical native plugin before build`).toContain('android:sync-native-plugin')
+      expect(command, `${name} must prepare canonical native plugin before Cargo generation`).toContain('android:prepare-native-plugin')
     }
     expect(packageJson.scripts['android:build:client:apk']).toBe('node ./scripts/build-android-client-bundle.mjs --kind apk')
     expect(packageJson.scripts['android:build:voice-live:apk:x86_64']).toBe(
@@ -311,7 +312,7 @@ describe('Tauri CI native evidence contract', () => {
     expect(packageJson.scripts['android:build:thin:aab']).toBe('pnpm android:build:client:aab')
     expect(packageJson.scripts['android:build:thin:aab']).not.toBe('node ./scripts/build-android-thin-bundle.mjs --kind aab')
     expect(androidClientBuildWrapper).toContain(
-      "run('pnpm', ['android:sync-native-plugin'], nativeSpeechBuild.env)",
+      "run('pnpm', ['android:prepare-native-plugin'], nativeSpeechBuild.env)",
     )
     expect(androidClientBuildWrapper).toContain("buildArgs.push('--config', tempConfigPath)")
     expect(androidClientBuildWrapper).toContain('sourceConfigWritten: false')
@@ -455,12 +456,22 @@ describe('Tauri CI native evidence contract', () => {
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk"',
     )
     expect(androidWorkflow).toContain(
-      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 pnpm --filter @aurora/tauri-ui android:voice:live',
+      'env AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" AURORA_ANDROID_STT_PACK_ID=stt:whisper:tiny AURORA_ANDROID_TTS_PACK_ID=standard:piper:en_gb-cori-medium-int8 AURORA_ANDROID_VAD_PACK_ID=vad:silero:current-int8 AURORA_ANDROID_KWS_PACK_ID=kws:zipformer:zh-en-2025 AURORA_ANDROID_MAIN_FLOW_ONLY=1 AURORA_THREE_NODE_BROKER_URL=ws://127.0.0.1:9001/mqtt node apps/aurora-tauri/scripts/run-android-native-turn-ui-acceptance.mjs',
     )
     expect(androidWorkflow).not.toContain(
       'AURORA_ANDROID_APK="$GITHUB_WORKSPACE/apps/aurora-tauri/reports/android-native-voice-live.apk" \\\n',
     )
-    expect(androidWorkflow).toContain('pnpm --filter @aurora/tauri-ui android:voice:live')
+    expect(androidWorkflow).not.toContain('pnpm --filter @aurora/tauri-ui android:voice:live')
+    const voiceLiveBuildStart = androidWorkflow.indexOf(
+      '      - name: Build Android local native voice x86_64 live APK',
+    )
+    const voiceLiveBuildEnd = androidWorkflow.indexOf('\n      - name:', voiceLiveBuildStart + 1)
+    expect(voiceLiveBuildStart).toBeGreaterThanOrEqual(0)
+    expect(voiceLiveBuildEnd).toBeGreaterThan(voiceLiveBuildStart)
+    const voiceLiveBuildStep = androidWorkflow.slice(voiceLiveBuildStart, voiceLiveBuildEnd)
+    const loopbackOptIn = 'VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK: "1"'
+    expect(voiceLiveBuildStep).toContain(loopbackOptIn)
+    expect(androidWorkflow.match(/VITE_AURORA_WEBRTC_ALLOW_INSECURE_LOOPBACK:/gu)).toHaveLength(1)
     expect(androidWorkflow).not.toContain('AURORA_TAURI_ANDROID_ALLOWED_REMOTE_ORIGINS')
     expect(androidWorkflow).not.toContain('AURORA_TAURI_THIN_CONNECTION_MODE: "webrtc-only"')
     expect(androidWorkflow).not.toContain('https://gateway.example.invalid')

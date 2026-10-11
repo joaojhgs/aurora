@@ -340,6 +340,38 @@ public final class AuroraIOSVoiceSessionHost {
     }
   }
 
+  #if DEBUG
+  /// Starts the protected foreground Rust turn without starting AVAudioEngine.
+  public func startFixture() throws -> UInt64 {
+    guard let nativeSession else {
+      throw AuroraIOSVoiceSessionHostError.nativeSessionUnavailable
+    }
+    guard let capture else { throw AuroraIOSVoiceSessionHostError.audioStateUnavailable }
+    guard !capture.stats().running else {
+      throw AuroraIOSVoiceSessionHostError.commandFailed(Int32(AURORA_IOS_VOICE_ALREADY_ACTIVE))
+    }
+    try capture.beginFixtureIngress()
+    var generation: UInt64 = 0
+    let code = aurora_ios_voice_session_start(nativeSession, &generation)
+    guard code == AURORA_IOS_VOICE_OK else {
+      capture.endFixtureIngress()
+      throw AuroraIOSVoiceSessionHostError.commandFailed(code)
+    }
+    backgroundSessionActive = false
+    activeGeneration = generation
+    return generation
+  }
+
+  public func pushFixturePCM(generation: UInt64, samples: [Float]) throws -> UInt64 {
+    guard !backgroundSessionActive, activeGeneration == generation,
+      let nativeSession, let capture,
+      let status = self.status(), status.active != 0,
+      status.has_generation != 0, status.generation == generation
+    else { throw AuroraIOSVoiceSessionHostError.commandFailed(Int32(AURORA_IOS_VOICE_NOT_ACTIVE)) }
+    return try capture.pushFixturePCM(samples)
+  }
+  #endif
+
   public func startBackground() throws -> UInt64 {
     guard let nativeSession else {
       throw AuroraIOSVoiceSessionHostError.nativeSessionUnavailable
@@ -361,17 +393,34 @@ public final class AuroraIOSVoiceSessionHost {
     }
   }
 
-  public func finish(generation: UInt64) throws {
+  public func finish(generation: UInt64) throws -> String {
     guard let nativeSession else {
       throw AuroraIOSVoiceSessionHostError.nativeSessionUnavailable
     }
     capture?.stop()
-    let code = aurora_ios_voice_session_finish(nativeSession, generation)
+    #if DEBUG
+    capture?.endFixtureIngress()
+    #endif
+    var transcriptPointer: UnsafeMutablePointer<CChar>?
+    let code = withUnsafeMutablePointer(to: &transcriptPointer) { outTranscript in
+      aurora_ios_voice_session_finish_with_transcript(
+        nativeSession,
+        generation,
+        outTranscript
+      )
+    }
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)
     }
+    defer {
+      if let transcriptPointer {
+        aurora_ios_voice_transcript_free(transcriptPointer)
+      }
+    }
+    let transcript = transcriptPointer.map { String(cString: $0) } ?? ""
     backgroundSessionActive = false
     activeGeneration = nil
+    return transcript
   }
 
   public func cancel(generation: UInt64) throws {
@@ -380,6 +429,9 @@ public final class AuroraIOSVoiceSessionHost {
     }
     capture?.stop()
     playback?.stop()
+    #if DEBUG
+    capture?.endFixtureIngress()
+    #endif
     let code = aurora_ios_voice_session_cancel(nativeSession, generation)
     guard code == AURORA_IOS_VOICE_OK else {
       throw AuroraIOSVoiceSessionHostError.commandFailed(code)

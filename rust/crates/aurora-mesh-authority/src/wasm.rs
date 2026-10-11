@@ -20,11 +20,11 @@
 use wasm_bindgen::prelude::*;
 
 use crate::authority::{
-    AuthorityError, AuthorityResult, IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1,
-    LocalPeerGrantV1, MemoryInboundCredentialVerifierStore, MemoryPeerAuditSink,
-    MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster, MemoryPeerRevocationController,
-    MemoryReconnectChallengeStore, PeerAuthorityResolver, PeerGrantRepository,
-    PeerRelationshipSelector, RandomSource, VerifyReconnectProofRequest,
+    AuthenticatedPeerContext, AuthorityError, AuthorityResult, IssueReconnectChallengeRequest,
+    LocalPeerCredentialVerifierV1, LocalPeerGrantV1, MemoryInboundCredentialVerifierStore,
+    MemoryPeerAuditSink, MemoryPeerGrantRepository, MemoryPeerRevocationBroadcaster,
+    MemoryPeerRevocationController, MemoryReconnectChallengeStore, PeerAuthorityResolver,
+    PeerGrantRepository, PeerRelationshipSelector, RandomSource, VerifyReconnectProofRequest,
 };
 use crate::authorization::PeerAuthorityHostAuthorizationStore;
 use crate::contract_registry::{
@@ -36,6 +36,158 @@ use crate::grant_management::{PeerGrantManager, PeerGrantSelection};
 use crate::types::{
     PeerHostAuthorizationStore, PeerHostAuthorizeRequest, PeerHostManifestAuthorityRequest,
 };
+
+/// A JSON value decoded from JavaScript without serde_json's private sentinel
+/// map conventions. `serde-wasm-bindgen` supplies the JS traversal; this
+/// visitor owns the resulting object shape directly.
+#[derive(Debug, PartialEq)]
+struct WasmJsonValue(serde_json::Value);
+
+impl<'de> serde::Deserialize<'de> for WasmJsonValue {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct JsonValueVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for JsonValueVisitor {
+            type Value = WasmJsonValue;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("a JSON-compatible JavaScript value")
+            }
+
+            fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+                Ok(WasmJsonValue(serde_json::Value::Bool(value)))
+            }
+
+            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+                Ok(WasmJsonValue(serde_json::Value::Number(value.into())))
+            }
+
+            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+                Ok(WasmJsonValue(serde_json::Value::Number(value.into())))
+            }
+
+            fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E> {
+                Ok(WasmJsonValue(serde_json::Number::from_f64(value).map_or(
+                    serde_json::Value::Null,
+                    serde_json::Value::Number,
+                )))
+            }
+
+            fn visit_str<E: serde::de::Error>(self, value: &str) -> Result<Self::Value, E> {
+                self.visit_string(value.to_owned())
+            }
+
+            fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+                Ok(WasmJsonValue(serde_json::Value::String(value)))
+            }
+
+            fn visit_none<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                self.visit_unit()
+            }
+
+            fn visit_unit<E>(self) -> Result<Self::Value, E> {
+                Ok(WasmJsonValue(serde_json::Value::Null))
+            }
+
+            fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::SeqAccess<'de>,
+            {
+                let mut values = Vec::new();
+                while let Some(value) = sequence.next_element::<WasmJsonValue>()? {
+                    values.push(value.0);
+                }
+                Ok(WasmJsonValue(serde_json::Value::Array(values)))
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: serde::de::MapAccess<'de>,
+            {
+                let mut values = serde_json::Map::new();
+                while let Some((key, value)) = map.next_entry::<String, WasmJsonValue>()? {
+                    values.insert(key, value.0);
+                }
+                Ok(WasmJsonValue(serde_json::Value::Object(values)))
+            }
+        }
+
+        deserializer.deserialize_any(JsonValueVisitor)
+    }
+}
+
+/// Private input mirror for the one authorization DTO carrying dynamic JSON.
+/// Keep its serde attributes aligned with `PeerHostIdentity` and
+/// `PeerHostAuthorizeRequest`; all other fields still use serde-wasm-bindgen's
+/// existing typed conversion.
+#[derive(serde::Deserialize)]
+struct WasmPeerHostIdentity {
+    #[serde(rename = "callerPeerId")]
+    caller_peer_id: String,
+    #[serde(rename = "principalId", default)]
+    principal_id: Option<String>,
+    #[serde(rename = "effectivePermissions", default)]
+    effective_permissions: Vec<String>,
+    #[serde(rename = "authGrantRevision", default)]
+    auth_grant_revision: Option<i64>,
+    #[serde(rename = "manifestRevision", default)]
+    manifest_revision: Option<WasmJsonValue>,
+}
+
+impl From<WasmPeerHostIdentity> for crate::types::PeerHostIdentity {
+    fn from(identity: WasmPeerHostIdentity) -> Self {
+        Self {
+            caller_peer_id: identity.caller_peer_id,
+            principal_id: identity.principal_id,
+            effective_permissions: identity.effective_permissions,
+            auth_grant_revision: identity.auth_grant_revision,
+            manifest_revision: identity.manifest_revision.map(|value| value.0),
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct WasmPeerHostAuthorizeRequest {
+    #[serde(rename = "remotePeerId")]
+    remote_peer_id: String,
+    #[serde(rename = "methodId")]
+    method_id: String,
+    #[serde(rename = "requiredPermissions", default)]
+    required_permissions: Vec<String>,
+    identity: WasmPeerHostIdentity,
+    #[serde(rename = "authenticatedPeerContext", default)]
+    authenticated_peer_context: Option<AuthenticatedPeerContext>,
+    #[serde(rename = "nowMs")]
+    now_ms: i64,
+}
+
+impl From<WasmPeerHostAuthorizeRequest> for PeerHostAuthorizeRequest {
+    fn from(request: WasmPeerHostAuthorizeRequest) -> Self {
+        Self {
+            remote_peer_id: request.remote_peer_id,
+            method_id: request.method_id,
+            required_permissions: request.required_permissions,
+            identity: request.identity.into(),
+            authenticated_peer_context: request.authenticated_peer_context,
+            now_ms: request.now_ms,
+        }
+    }
+}
+
+fn from_js_json_value(value: JsValue) -> Result<serde_json::Value, JsValue> {
+    serde_wasm_bindgen::from_value::<WasmJsonValue>(value)
+        .map(|value| value.0)
+        .map_err(|_| JsValue::from_str("invalid JSON value"))
+}
+
+fn from_js_authorize_request(value: JsValue) -> Result<PeerHostAuthorizeRequest, JsValue> {
+    serde_wasm_bindgen::from_value::<WasmPeerHostAuthorizeRequest>(value)
+        .map(PeerHostAuthorizeRequest::from)
+        .map_err(|_| JsValue::from_str("invalid authorization request"))
+}
 
 #[derive(serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -241,7 +393,7 @@ impl MeshAuthority {
     /// The question the peer host asks on every inbound call.
     #[wasm_bindgen]
     pub async fn authorize(&mut self, request: JsValue) -> Result<JsValue, JsValue> {
-        let request: PeerHostAuthorizeRequest = from_js(request)?;
+        let request = from_js_authorize_request(request)?;
         let decision = self.store.authorize(&request).await.map_err(to_error)?;
         to_js(&decision)
     }
@@ -415,7 +567,7 @@ impl MeshAuthority {
         event: JsValue,
         correlation_id: Option<String>,
     ) -> Result<(), JsValue> {
-        let event: serde_json::Value = from_js(event)?;
+        let event = from_js_json_value(event)?;
         self.tts_validators
             .entry(subscription_id)
             .or_default()
@@ -458,5 +610,243 @@ impl MeshAuthority {
 impl Default for MeshAuthority {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(test)]
+mod wasm_json_shape_tests {
+    use super::{from_js_authorize_request, from_js_json_value};
+    use serde_json::json;
+    use wasm_bindgen::prelude::wasm_bindgen;
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn authorization_request_js_value(value: &serde_json::Value) -> JsValue {
+        let json = serde_json::to_string(value).expect("serialize authorization fixture JSON");
+        parse_plain_json(&json)
+    }
+
+    #[wasm_bindgen(inline_js = r#"
+        export function parse_plain_json(source) {
+            return JSON.parse(source);
+        }
+        export function request_with_undefined_manifest_revision() {
+            return { remotePeerId: 'remote-probe', methodId: 'TTS.AudioChunk', identity: { callerPeerId: 'caller-probe', manifestRevision: undefined }, nowMs: 0 };
+        }
+        export function request_with_manifest_revision(manifestRevision) {
+            return { remotePeerId: 'remote-probe', methodId: 'TTS.AudioChunk', identity: { callerPeerId: 'caller-probe', manifestRevision }, nowMs: 0 };
+        }
+        export function literal_number_marker_object() {
+            return { '$serde_json::private::Number': '1' };
+        }
+        export function literal_raw_value_marker_object() {
+            return { '$serde_json::private::RawValue': 'not-json' };
+        }
+        export function escaped_number_marker_object() {
+            return JSON.parse('{"\\u0024serde_json::private::Number":"1"}');
+        }
+        export function escaped_raw_value_marker_object() {
+            return JSON.parse('{"\\u0024serde_json::private::RawValue":"1"}');
+        }
+        export function ordinary_raw_value_token_text() {
+            return 'ordinary text containing $serde_json::private::RawValue';
+        }
+        export function request_with_nan_manifest_revision() {
+            return { remotePeerId: 'remote-probe', methodId: 'TTS.AudioChunk', identity: { callerPeerId: 'caller-probe', manifestRevision: NaN }, nowMs: 0 };
+        }
+        export function nan_value() { return NaN; }
+        export function undefined_value() { return undefined; }
+        export function array_with_hole() { return [1, , 3]; }
+        export function string_key_map() { return new Map([['alpha', 1], ['beta', [2, 3]]]); }
+        export function numeric_key_map() { return new Map([[1, 'one']]); }
+    "#)]
+    extern "C" {
+        fn parse_plain_json(source: &str) -> JsValue;
+        fn request_with_undefined_manifest_revision() -> JsValue;
+        fn request_with_manifest_revision(manifest_revision: JsValue) -> JsValue;
+        fn literal_number_marker_object() -> JsValue;
+        fn literal_raw_value_marker_object() -> JsValue;
+        fn request_with_nan_manifest_revision() -> JsValue;
+        fn escaped_number_marker_object() -> JsValue;
+        fn escaped_raw_value_marker_object() -> JsValue;
+        fn ordinary_raw_value_token_text() -> JsValue;
+        fn nan_value() -> JsValue;
+        fn undefined_value() -> JsValue;
+        fn array_with_hole() -> JsValue;
+        fn string_key_map() -> JsValue;
+        fn numeric_key_map() -> JsValue;
+    }
+
+    #[wasm_bindgen_test]
+    fn dynamic_json_visitor_preserves_sentinel_objects_and_text() {
+        let value = json!({
+            "$serde_json::private::Number": "1",
+            "extra": {
+                "$serde_json::private::RawValue": "false",
+                "nested": ["{\"$serde_json::private::Number\":\"1\"}"]
+            }
+        });
+        let js_value = serde_wasm_bindgen::to_value(&value).expect("convert JSON fixture");
+
+        assert_eq!(
+            from_js_json_value(js_value).expect("decode dynamic JSON"),
+            value
+        );
+
+        assert_eq!(
+            from_js_json_value(escaped_number_marker_object()).expect("decode escaped marker"),
+            json!({ "$serde_json::private::Number": "1" })
+        );
+        assert_eq!(
+            from_js_json_value(escaped_raw_value_marker_object())
+                .expect("decode escaped raw marker"),
+            json!({ "$serde_json::private::RawValue": "1" })
+        );
+        assert_eq!(
+            from_js_json_value(ordinary_raw_value_token_text())
+                .expect("decode ordinary token text"),
+            json!("ordinary text containing $serde_json::private::RawValue")
+        );
+        assert_eq!(
+            from_js_json_value(nan_value()).expect("decode NaN"),
+            json!(null)
+        );
+        assert_eq!(
+            from_js_json_value(undefined_value()).expect("decode undefined"),
+            json!(null)
+        );
+        assert_eq!(
+            from_js_json_value(array_with_hole()).expect("decode array hole"),
+            json!([1, null, 3])
+        );
+        assert_eq!(
+            from_js_json_value(string_key_map()).expect("decode string-keyed Map"),
+            json!({ "alpha": 1, "beta": [2, 3] })
+        );
+        let error = from_js_json_value(numeric_key_map()).expect_err("reject numeric Map key");
+        assert_eq!(error.as_string().as_deref(), Some("invalid JSON value"));
+    }
+
+    #[wasm_bindgen_test]
+    fn authorization_mirror_preserves_dynamic_manifest_and_authenticated_context() {
+        let manifest_revision = json!({
+            "$serde_json::private::Number": "1",
+            "additional": true
+        });
+        let input = json!({
+            "remotePeerId": "remote-probe",
+            "methodId": "TTS.AudioChunk",
+            "requiredPermissions": ["TTS.AudioChunk:use"],
+            "identity": {
+                "callerPeerId": "caller-probe",
+                "principalId": "principal-probe",
+                "effectivePermissions": ["TTS.AudioChunk:use"],
+                "authGrantRevision": 7,
+                "manifestRevision": manifest_revision.clone()
+            },
+            "authenticatedPeerContext": {
+                "selector": {
+                    "tokenId": "token-probe",
+                    "claimantPeerId": "caller-probe",
+                    "verifierPeerId": "remote-probe",
+                    "roomName": "room-probe"
+                },
+                "transport": {
+                    "channelBinding": "binding-probe",
+                    "claimantSignalingPeerId": "caller-probe",
+                    "verifierSignalingPeerId": "remote-probe"
+                },
+                "connectionEpoch": "epoch-probe",
+                "credentialRevision": 7,
+                "authenticatedAtMs": 11
+            },
+            "nowMs": 12
+        });
+        let js_value = authorization_request_js_value(&input);
+
+        let request = from_js_authorize_request(js_value).expect("decode authorization request");
+        assert_eq!(request.identity.manifest_revision, Some(manifest_revision));
+        let context = request
+            .authenticated_peer_context
+            .expect("retain authenticated context");
+        assert_eq!(context.selector.token_id, "token-probe");
+        assert_eq!(context.transport.channel_binding, "binding-probe");
+        assert_eq!(context.connection_epoch.as_deref(), Some("epoch-probe"));
+        assert_eq!(context.credential_revision, 7);
+        assert_eq!(context.authenticated_at_ms, 11);
+
+        for (manifest_revision, expected) in [
+            (
+                literal_number_marker_object(),
+                json!({ "$serde_json::private::Number": "1" }),
+            ),
+            (
+                escaped_number_marker_object(),
+                json!({ "$serde_json::private::Number": "1" }),
+            ),
+            (
+                literal_raw_value_marker_object(),
+                json!({ "$serde_json::private::RawValue": "not-json" }),
+            ),
+            (
+                escaped_raw_value_marker_object(),
+                json!({ "$serde_json::private::RawValue": "1" }),
+            ),
+            (
+                ordinary_raw_value_token_text(),
+                json!("ordinary text containing $serde_json::private::RawValue"),
+            ),
+        ] {
+            let request =
+                from_js_authorize_request(request_with_manifest_revision(manifest_revision))
+                    .expect("decode dynamic manifest value from plain request object");
+            assert_eq!(request.identity.manifest_revision, Some(expected));
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn authorization_option_keeps_null_like_values_absent() {
+        for input in [
+            json!({
+                "remotePeerId": "remote-probe",
+                "methodId": "TTS.AudioChunk",
+                "identity": { "callerPeerId": "caller-probe" },
+                "nowMs": 0
+            }),
+            json!({
+                "remotePeerId": "remote-probe",
+                "methodId": "TTS.AudioChunk",
+                "identity": {
+                    "callerPeerId": "caller-probe",
+                    "manifestRevision": null
+                },
+                "nowMs": 0
+            }),
+        ] {
+            let js_value = authorization_request_js_value(&input);
+            let request =
+                from_js_authorize_request(js_value).expect("decode authorization request");
+            assert_eq!(request.identity.manifest_revision, None);
+        }
+
+        let request = from_js_authorize_request(request_with_undefined_manifest_revision())
+            .expect("decode undefined manifest revision");
+        assert_eq!(request.identity.manifest_revision, None);
+
+        let request = from_js_authorize_request(request_with_nan_manifest_revision())
+            .expect("decode non-finite manifest revision");
+        assert_eq!(
+            request.identity.manifest_revision,
+            Some(serde_json::Value::Null)
+        );
+
+        let input = JsValue::from_str("malformed authorization input");
+        let error = from_js_authorize_request(input).expect_err("reject non-object request");
+        assert_eq!(
+            error.as_string().as_deref(),
+            Some("invalid authorization request")
+        );
     }
 }

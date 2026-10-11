@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import copy
 from collections.abc import Callable
 from datetime import datetime, timedelta
 from types import MappingProxyType
@@ -238,6 +239,16 @@ class RegistryAggregator:
                 )
 
             async with self._lock:
+                for module_name, announcement in tuple(loaded_services.items()):
+                    current = self._services.get(module_name)
+                    if current is not None:
+                        loaded_services[module_name] = announcement.model_copy(
+                            update={
+                                "speech_stage_capabilities": copy.deepcopy(
+                                    current.speech_stage_capabilities
+                                )
+                            }
+                        )
                 self._services = loaded_services
                 self._last_seen = dict.fromkeys(loaded_services, loaded_at)
                 changed = self._refresh_registry_snapshot_locked()
@@ -633,6 +644,7 @@ def _normalized_service_snapshot(
         tags=tuple(announcement.capabilities),
         capacity=None,
         feature_members=_feature_members(announcement),
+        speech_stage_capabilities=tuple(announcement.speech_stage_capabilities),
     )
 
 

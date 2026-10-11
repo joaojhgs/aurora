@@ -12,6 +12,8 @@
 //! by peer identity, holds no transport state, and never learns which connection
 //! a peer arrived on.
 
+use crate::mesh_session::MeshSessionState;
+use crate::native_event_hub::clear_global_native_event_peer;
 use aurora_mesh_authority::authority::{
     AuthorityError, AuthorityResult, InboundCredentialVerifierStore,
     IssueReconnectChallengeRequest, LocalPeerCredentialVerifierV1, LocalPeerGrantV1,
@@ -22,12 +24,14 @@ use aurora_mesh_authority::authority::{
 };
 use aurora_mesh_authority::authorization::PeerAuthorityHostAuthorizationStore;
 use aurora_mesh_authority::grant_management::{PeerGrantManager, PeerGrantSelection};
-use aurora_mesh_authority::types::{
-    PeerHostAuthorizationStore, PeerHostAuthorizeRequest, PeerHostManifestAuthorityRequest,
-};
+use aurora_mesh_authority::types::{PeerHostAuthorizationStore, PeerHostManifestAuthorityRequest};
 use serde::Deserialize;
 use serde_json::Value;
+use tauri::Manager;
 use tokio::sync::Mutex;
+
+#[path = "mesh_authority_request_json.rs"]
+mod mesh_authority_request_json;
 
 /// Bytes from the OS CSPRNG.
 ///
@@ -134,8 +138,9 @@ pub async fn aurora_mesh_authority_hydrate(
 #[tauri::command]
 pub async fn aurora_mesh_authority_authorize(
     state: tauri::State<'_, MeshAuthorityState>,
-    request: PeerHostAuthorizeRequest,
+    request_json: String,
 ) -> Result<Value, String> {
+    let request = mesh_authority_request_json::parse_authorize_request_json(&request_json)?;
     let mut authority = state.0.lock().await;
     let decision = authority.authorize(&request).await.map_err(to_error)?;
     to_value(&decision)
@@ -250,7 +255,8 @@ pub async fn aurora_mesh_authority_issue_pairing_credential(
     let resolver = authority.resolver_mut();
     resolver.verifier_store = verifier_store;
     resolver.audit_sink = audit_sink;
-    to_value(&issued.map_err(to_error)?)
+    let issued = issued.map_err(to_error)?;
+    to_value(&issued)
 }
 
 /// Undo a pairing the flow abandoned.
@@ -341,12 +347,33 @@ pub async fn aurora_mesh_authority_replace_grant(
 /// Revoke a relationship outright: verifier, grants and challenges.
 #[tauri::command]
 pub async fn aurora_mesh_authority_revoke_peer_authority(
+    app: tauri::AppHandle,
     state: tauri::State<'_, MeshAuthorityState>,
     selector: PeerRelationshipSelector,
     reason_code: String,
     revoked_at_ms: i64,
 ) -> Result<Value, String> {
-    let mut authority = state.0.lock().await;
+    let claimant_peer_id = selector.claimant_peer_id.clone();
+    let result = {
+        let mut authority = state.0.lock().await;
+        revoke_peer_authority_inner(&mut authority, selector, reason_code, revoked_at_ms).await
+    }?;
+    if let Some(mesh_session) = app.try_state::<MeshSessionState>() {
+        mesh_session
+            .revoke_peer_authority(&app, &claimant_peer_id)
+            .await;
+    } else {
+        clear_global_native_event_peer(&claimant_peer_id);
+    }
+    Ok(result)
+}
+
+async fn revoke_peer_authority_inner(
+    authority: &mut NativeAuthority,
+    selector: PeerRelationshipSelector,
+    reason_code: String,
+    revoked_at_ms: i64,
+) -> Result<Value, String> {
     let resolver = authority.resolver_mut();
     let mut controller = MemoryPeerRevocationController::new(
         std::mem::take(&mut resolver.verifier_store),
@@ -366,12 +393,15 @@ pub async fn aurora_mesh_authority_revoke_peer_authority(
     resolver.grant_repository = controller.grant_repository;
     resolver.challenge_store = controller.challenge_store;
     resolver.audit_sink = controller.audit_sink;
-    to_value(&event.map_err(to_error)?)
+    let event = event.map_err(to_error)?;
+    clear_global_native_event_peer(&selector.claimant_peer_id);
+    to_value(&event)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aurora_mesh_authority::types::PeerHostAuthorizeRequest;
 
     fn selector() -> PeerRelationshipSelector {
         PeerRelationshipSelector {
@@ -398,6 +428,21 @@ mod tests {
             expires_at_ms: None,
             revoked_at_ms: None,
             grant_revision: 3,
+        }
+    }
+
+    fn verifier() -> LocalPeerCredentialVerifierV1 {
+        LocalPeerCredentialVerifierV1 {
+            version: 1,
+            token_id: "token-a".to_owned(),
+            claimant_peer_id: "peer-a".to_owned(),
+            verifier_peer_id: "peer-host".to_owned(),
+            room_name: "lab-room".to_owned(),
+            token_hash_hex: "a".repeat(64),
+            created_at_ms: 1_000,
+            expires_at_ms: None,
+            revoked_at_ms: None,
+            credential_revision: 1,
         }
     }
 
@@ -435,6 +480,12 @@ mod tests {
     /// The command bodies, exercised without a Tauri app handle.
     async fn hydrated() -> NativeAuthority {
         let mut authority = new_authority();
+        authority
+            .resolver_mut()
+            .verifier_store
+            .upsert_verifier(verifier())
+            .await
+            .expect("verifier is valid");
         authority
             .resolver_mut()
             .grant_repository
@@ -477,6 +528,175 @@ mod tests {
             .expect("authority answers");
         assert!(!decision.allowed);
         assert_eq!(decision.reason_code.as_deref(), Some("grant_not_found"));
+    }
+
+    #[tokio::test]
+    async fn revoke_peer_authority_purges_claimant_native_event_state() {
+        use crate::native_event_hub::{
+            assistant_terminal_event, global_native_event_hub, mesh_peer_state_event,
+            mesh_peer_state_snapshot, reset_global_native_event_hub_for_profile_change,
+            upsert_global_native_event_subject_snapshot, NativeEventFilter,
+            NativeEventSubjectSnapshot, ASSISTANT_COMPLETED, NATIVE_EVENTS_GAP,
+        };
+        use serde_json::json;
+
+        reset_global_native_event_hub_for_profile_change();
+        let hub = global_native_event_hub();
+        let stale_epoch = hub.source_epoch();
+        let peer_subscription = hub.subscribe(NativeEventFilter {
+            subjects: vec!["peer-a".to_owned()],
+            ..NativeEventFilter::default()
+        });
+        let request_subscription = hub.subscribe(NativeEventFilter {
+            subjects: vec!["request-a".to_owned()],
+            ..NativeEventFilter::default()
+        });
+        let peer_a_lease = hub.issue_peer_publication_lease("peer-a");
+        hub.publish_observation_with_peer_lease_if_epoch(
+            stale_epoch,
+            &peer_a_lease,
+            mesh_peer_state_event("peer-a", true, 1),
+            Some(mesh_peer_state_snapshot("peer-a", true, 1)),
+        );
+        let request_a_snapshot = NativeEventSubjectSnapshot {
+            subject: "request-a".to_owned(),
+            peer_id: Some("peer-a".to_owned()),
+            kind: ASSISTANT_COMPLETED.to_owned(),
+            generation: Some(42),
+            session_id: None,
+            request_id: Some("request-a".to_owned()),
+            correlation_id: Some("request-a".to_owned()),
+            conversation_id: None,
+            transcript: None,
+            transcript_truncated: false,
+            accumulated_text: Some("done".to_owned()),
+            text_truncated: false,
+            status: "ok".to_owned(),
+            terminal: true,
+            persisted: Some(true),
+            persistence_error_code: None,
+            updated_at: "2026-07-14T23:59:00.000Z".to_owned(),
+        };
+        upsert_global_native_event_subject_snapshot(NativeEventSubjectSnapshot {
+            subject: "voice:42".to_owned(),
+            peer_id: None,
+            kind: "voice.turn.started".to_owned(),
+            generation: Some(42),
+            session_id: None,
+            request_id: None,
+            correlation_id: Some("voice:42".to_owned()),
+            conversation_id: None,
+            transcript: None,
+            transcript_truncated: false,
+            accumulated_text: None,
+            text_truncated: false,
+            status: "active".to_owned(),
+            terminal: false,
+            persisted: None,
+            persistence_error_code: None,
+            updated_at: "2026-07-14T23:59:00.000Z".to_owned(),
+        });
+        hub.publish_observation_with_peer_lease_if_epoch(
+            stale_epoch,
+            &peer_a_lease,
+            assistant_terminal_event(
+                "peer-a",
+                "request-a",
+                &json!({
+                    "type": "result",
+                    "id": "request-a",
+                    "generation": 42,
+                    "result": {"text": "done"}
+                }),
+            )
+            .expect("assistant terminal event"),
+            Some(request_a_snapshot),
+        );
+        let peer_b_lease = hub.issue_peer_publication_lease("peer-b");
+        hub.publish_observation_with_peer_lease_if_epoch(
+            hub.source_epoch(),
+            &peer_b_lease,
+            mesh_peer_state_event("peer-b", true, 1),
+            Some(mesh_peer_state_snapshot("peer-b", true, 1)),
+        );
+
+        let mut authority = hydrated().await;
+        revoke_peer_authority_inner(
+            &mut authority,
+            selector(),
+            "user_removed_peer".to_owned(),
+            3_000,
+        )
+        .await
+        .expect("revoke succeeds");
+
+        assert_eq!(
+            peer_subscription
+                .try_recv()
+                .expect("peer subscriber gap")
+                .kind,
+            NATIVE_EVENTS_GAP,
+        );
+        assert_eq!(
+            request_subscription
+                .try_recv()
+                .expect("request subscriber gap")
+                .kind,
+            NATIVE_EVENTS_GAP,
+        );
+        assert!(hub
+            .publish_observation_with_peer_lease_if_epoch(
+                stale_epoch,
+                &peer_a_lease,
+                mesh_peer_state_event("peer-a", true, 2),
+                Some(mesh_peer_state_snapshot("peer-a", true, 2)),
+            )
+            .is_none());
+        assert!(hub
+            .publish_observation_with_peer_lease_if_epoch(
+                stale_epoch,
+                &peer_a_lease,
+                assistant_terminal_event(
+                    "peer-a",
+                    "request-late",
+                    &json!({
+                        "type": "result",
+                        "id": "request-late",
+                        "generation": 43,
+                        "result": {"text": "late"}
+                    }),
+                )
+                .expect("late assistant terminal event"),
+                None,
+            )
+            .is_none());
+        let late_snapshot = hub.state_snapshot(NativeEventFilter {
+            subjects: vec!["request-late".to_owned()],
+            ..NativeEventFilter::default()
+        });
+        assert!(late_snapshot.subjects.is_empty());
+        assert!(late_snapshot.events.is_empty());
+        let request_snapshot = hub.state_snapshot(NativeEventFilter {
+            subjects: vec!["request-a".to_owned()],
+            after_sequence: Some(0),
+            ..NativeEventFilter::default()
+        });
+        assert!(!request_snapshot.replay_complete);
+        assert!(request_snapshot.subjects.is_empty());
+        assert_eq!(request_snapshot.events[0].kind, NATIVE_EVENTS_GAP);
+        let voice_snapshot = hub.state_snapshot(NativeEventFilter {
+            subjects: vec!["voice:42".to_owned()],
+            ..NativeEventFilter::default()
+        });
+        assert_eq!(voice_snapshot.subjects.len(), 1);
+        assert_eq!(voice_snapshot.subjects[0].peer_id.as_deref(), None);
+        let unrelated_snapshot = hub.state_snapshot(NativeEventFilter {
+            subjects: vec!["peer-b".to_owned()],
+            ..NativeEventFilter::default()
+        });
+        assert_eq!(unrelated_snapshot.subjects.len(), 1);
+        assert_eq!(unrelated_snapshot.events.len(), 1);
+        reset_global_native_event_hub_for_profile_change();
     }
 
     /// The camelCase shapes the shell sends must deserialize into the commands.

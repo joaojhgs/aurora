@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-native-speech-host-snapshot"
+description = "Enables the aurora_native_speech_host_snapshot command without any pre-configured scope."
+commands.allow = ["aurora_native_speech_host_snapshot"]
+
+[[permission]]
+identifier = "deny-aurora-native-speech-host-snapshot"
+description = "Denies the aurora_native_speech_host_snapshot command without any pre-configured scope."
+commands.deny = ["aurora_native_speech_host_snapshot"]

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aurora.local/schemas/native-speech-routing-acceptance.v1.schema.json",
+  "title": "Aurora native speech routing acceptance v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "issue", "status", "integrated_commit", "integration_branch",
+    "plan_sha256", "schemas", "inventory_sha256", "source_map", "capability_matrix",
+    "required_gates", "optional_limitations", "evidence", "reviews"
+  ],
+  "properties": {
+    "schema_version": { "const": "native-speech-routing-acceptance.v1" },
+    "issue": { "const": "PER-286" },
+    "status": { "enum": ["pending", "accepted"] },
+    "integrated_commit": { "$ref": "#/$defs/commitOrNull" },
+    "integration_branch": { "type": ["string", "null"], "minLength": 1 },
+    "plan_sha256": { "$ref": "#/$defs/hashOrNull" },
+    "schemas": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["node_config", "speech_session", "capability", "observer"],
+      "properties": {
+        "node_config": { "const": 2 },
+        "speech_session": { "const": 1 },
+        "capability": { "const": 1 },
+        "observer": { "const": 1 }
+      }
+    },
+    "inventory_sha256": { "$ref": "#/$defs/hashOrNull" },
+    "schema_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "node_config": { "$ref": "#/$defs/schemaArtifact" },
+        "speech_session": { "$ref": "#/$defs/schemaArtifact" },
+        "capability": { "$ref": "#/$defs/schemaArtifact" },
+        "observer": { "$ref": "#/$defs/schemaArtifact" }
+      }
+    },
+    "source_map": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/sourceMapRow" }
+    },
+    "capability_matrix": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/capabilityRow" }
+    },
+    "required_gates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/gate" }
+    },
+    "optional_limitations": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "unresolved_mandatory_gaps": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    },
+    "reviews": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ocr", "architecture_security"],
+      "properties": {
+        "ocr": { "oneOf": [{ "$ref": "#/$defs/review" }, { "type": "null" }] },
+        "architecture_security": { "oneOf": [{ "$ref": "#/$defs/review" }, { "type": "null" }] }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "accepted" } } },
+      "then": { "required": ["schema_artifacts"] }
+    }
+  ],
+  "$defs": {
+    "hash": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "schemaArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file", "sha256"],
+      "properties": { "file": { "$ref": "#/$defs/relativePath" }, "sha256": { "$ref": "#/$defs/hash" } }
+    },
+    "hashOrNull": { "oneOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+    "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "commitOrNull": { "oneOf": [{ "$ref": "#/$defs/commit" }, { "type": "null" }] },
+    "relativePath": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?/)(?!.*\\\\)[^\\u0000]+$"
+    },
+    "sourceMapRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["stage", "methods_or_events", "file", "symbols", "generated_inventory_version"],
+      "properties": {
+        "stage": { "type": "string", "minLength": 1 },
+        "methods_or_events": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "file": { "$ref": "#/$defs/relativePath" },
+        "symbols": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "generated_inventory_version": { "type": "string", "minLength": 1 },
+        "source_sha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "capabilityRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["surface", "role", "stage", "direction", "placement", "finite", "streaming", "lifecycle_eligibility", "required_gate", "implemented", "build", "live"],
+      "properties": {
+        "surface": { "type": "string", "minLength": 1 },
+        "role": { "enum": ["remote-console", "mesh-node"] },
+        "stage": { "type": "string", "minLength": 1 },
+        "direction": { "enum": ["consumer", "host", "consumer_and_host"] },
+        "placement": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+        "finite": { "type": "boolean" },
+        "streaming": { "type": "boolean" },
+        "lifecycle_eligibility": { "type": "string", "minLength": 1 },
+        "required_gate": { "type": "string", "minLength": 1 },
+        "implemented": { "type": "string", "minLength": 1 },
+        "build": { "enum": ["passed", "pending", "failed", "not_applicable"] },
+        "live": { "enum": ["passed", "pending", "failed", "not_applicable"] }
+      }
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gate_id", "status", "command", "exit_code", "notes"],
+      "properties": {
+        "gate_id": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["pending", "passed", "passed_local", "passed_local_contract", "passed_runtime", "skipped_environment", "pending_qa_platform", "failed"] },
+        "command": { "type": ["string", "null"] },
+        "exit_code": { "type": ["integer", "null"] },
+        "artifacts": { "type": "array", "items": { "$ref": "#/$defs/relativePath" } },
+        "notes": { "type": "string" },
+        "evidence_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "exit_code", "commit", "artifact_sha256", "device_os_browser", "model_digest_format", "scenario", "classification", "skipped_assertions"],
+      "properties": {
+        "evidence_id": { "type": "string", "minLength": 1 },
+        "kind": { "enum": ["unit", "integration", "runtime", "platform", "source"] },
+        "command": { "type": ["string", "null"] },
+        "exit_code": { "type": ["integer", "null"] },
+        "commit": { "$ref": "#/$defs/commitOrNull" },
+        "artifact_sha256": { "$ref": "#/$defs/hashOrNull" },
+        "artifact_path": { "$ref": "#/$defs/relativePath" },
+        "device_os_browser": { "type": "string", "minLength": 1 },
+        "model_digest_format": { "type": ["string", "null"] },
+        "scenario": { "type": "string", "minLength": 1 },
+        "classification": { "enum": ["fresh", "retained", "source", "skipped"] },
+        "skipped_assertions": { "type": "string" },
+        "gate_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "review": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["verdict", "reviewer", "artifact_path", "artifact_sha256", "commit", "after_fixes"],
+      "properties": {
+        "verdict": { "enum": ["pending", "approved", "request_changes"] },
+        "reviewer": { "type": "string", "minLength": 1 },
+        "artifact_path": { "$ref": "#/$defs/relativePath" },
+        "artifact_sha256": { "$ref": "#/$defs/hash" },
+        "commit": { "$ref": "#/$defs/commit" },
+        "after_fixes": { "type": "boolean" }
+      }
+    }
+  }
+}

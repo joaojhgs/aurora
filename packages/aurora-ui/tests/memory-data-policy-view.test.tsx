@@ -111,6 +111,23 @@ describe('Memory and data policy production stories', () => {
     expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
   })
 
+  it('renders the data-policy list empty state with the shared empty affordance', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const dataRoute = await enabledRoute(client, 'data')
+    const snapshot = {
+      ...await buildDataPolicySnapshot(client, dataRoute),
+      loadState: 'empty' as const,
+      namespaces: [],
+      conversations: [],
+    }
+
+    const markup = renderToStaticMarkup(<DataPolicyView snapshot={snapshot} />)
+
+    expect(markup).toContain('No collection policy rows')
+    expect(markup).toContain('No collection policy rows returned.')
+    expect(findForbiddenProductionCopyTerms(visibleText(markup)).map((term) => term.id)).toEqual([])
+  })
+
   it('maps hostile memory errors to stable product copy', async () => {
     const client = new Aurora({ transport: new MockAuroraTransport() })
     const memoryRoute = await enabledRoute(client, 'memory')

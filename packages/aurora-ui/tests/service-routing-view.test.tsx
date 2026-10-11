@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 import { act } from 'react'
 import { createRoot } from 'react-dom/client'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AuroraClient, MeshStatusResponse } from '@aurora/client'
+import { AuroraQueryProvider, createAuroraQueryClient } from '../src/query'
 import {
   LocalServiceRoutingResource,
   MeshServiceSharingResource,
+  ServiceRoutingResource,
   ServiceRoutingView,
   buildLocalServiceRoutingSnapshot,
   buildNodeServiceRoutingSnapshot,
@@ -37,6 +39,10 @@ const TARGET_BASES = [
   'services.orchestrator', 'services.db', 'services.tooling', 'services.scheduler',
   'services.tts', 'services.stt.coordinator', 'services.stt.wakeword', 'services.stt.transcription',
 ]
+
+beforeAll(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
 
 function route(): RouteAvailability {
   return {
@@ -156,6 +162,148 @@ function buttonByText(container: HTMLElement, text: string): HTMLButtonElement {
   return Array.from(container.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent?.trim() === text)!
 }
 
+async function flushPromises(): Promise<void> {
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
+  await Promise.resolve()
+}
+
+async function flushQueryRender(): Promise<void> {
+  await flushPromises()
+  await flushPromises()
+}
+
+function authFacade(peerId = 'peer-provider') {
+  return {
+    snapshot: () => ({
+      state: 'authenticated',
+      principalId: 'principal-admin',
+      deviceId: 'device-admin',
+      peerId,
+      credentialKind: 'admin',
+      source: 'test',
+      tokenExpiresAt: null,
+      status: 200,
+      isAdmin: true,
+      effectivePermissions: ['Auth.manage', 'Gateway.use', 'Config.manage'],
+    }),
+    subscribe: () => () => {},
+  }
+}
+
+function querySnapshotClient(calls: string[], state: { available: boolean } = { available: true }): AuroraClient {
+  const base = snapshotClient()
+  const ensureAvailable = (label: string) => {
+    calls.push(label)
+    if (!state.available) throw new Error(`${label} offline`)
+  }
+  return {
+    ...base,
+    registry: {
+      ...base.registry,
+      getRegistry: vi.fn(async () => {
+        ensureAvailable('Gateway.GetRegistry')
+        return base.registry.getRegistry()
+      }),
+      listServices: vi.fn(async () => {
+        ensureAvailable('Gateway.GetServices')
+        return base.registry.listServices()
+      }),
+    },
+    config: {
+      ...base.config,
+      get: vi.fn(async (...args: Parameters<AuroraClient['config']['get']>) => {
+        ensureAvailable('Config.Get')
+        return base.config.get(...args)
+      }),
+      getSchemaMetadata: vi.fn(async () => {
+        ensureAvailable('Config.GetSchemaMetadata')
+        return base.config.getSchemaMetadata({ include_values: false })
+      }),
+    },
+    capabilities: {
+      ...base.capabilities,
+      listCatalog: vi.fn(async () => {
+        ensureAvailable('Gateway.GetCapabilityCatalog')
+        return base.capabilities.listCatalog({ include_unavailable: true })
+      }),
+    },
+    requestResult: vi.fn(async (...args: Parameters<AuroraClient['requestResult']>) => {
+      ensureAvailable(args[0])
+      return base.requestResult(...args)
+    }),
+  } as unknown as AuroraClient
+}
+
+function querySnapshotSaveClient(
+  calls: string[],
+  commit: ReturnType<typeof deferred<{ data: { success: boolean; revision: number; changed_paths: string[] } }>>,
+): { client: AuroraClient; commitChangeSet: ReturnType<typeof vi.fn>; previewDiff: ReturnType<typeof vi.fn> } {
+  const client = querySnapshotClient(calls)
+  const previewDiff = vi.fn(async ({ changes }: { changes: Array<{ key_path: string; value: unknown }> }) => ({
+    ok: true as const,
+    data: {
+      valid: true,
+      diffs: changes.map((change) => ({
+        key_path: change.key_path,
+        old_value: true,
+        new_value: change.value,
+        changed: true,
+        source_layer: 'user',
+        secret: false,
+        reload_required: true,
+        restart_required: false,
+        affected_services: ['TTS'],
+      })),
+      errors: [],
+      base_revision: 7,
+      preview_token: 'preview-7',
+      changed_paths: changes.map((change) => change.key_path),
+      secrets_redacted: true,
+    },
+  }))
+  const commitChangeSet = vi.fn(() => commit.promise)
+  return {
+    client: {
+      ...client,
+      config: {
+        ...client.config,
+        previewDiff,
+        commitChangeSet,
+      },
+    } as unknown as AuroraClient,
+    commitChangeSet,
+    previewDiff,
+  }
+}
+
+async function startRemoteServiceRoutingSave(container: HTMLElement): Promise<void> {
+  await act(async () => {
+    container.querySelector<HTMLElement>('[aria-label="Share Text to speech from this device"]')?.click()
+    await flushPromises()
+  })
+  await act(async () => {
+    const review = Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent?.trim() === 'Review changes' && !button.disabled)
+    expect(review).toBeDefined()
+    review!.click()
+    await flushPromises()
+  })
+  const approval = Array.from(container.querySelectorAll<HTMLElement>('[role="checkbox"]'))
+    .find((checkbox) => checkbox.parentElement?.textContent?.includes('I approve these changes for this session'))
+  expect(approval).toBeDefined()
+  await act(async () => {
+    approval!.click()
+    await flushPromises()
+  })
+  await act(async () => {
+    buttonByText(container, 'Save changes').click()
+    await flushPromises()
+  })
+}
+
 function metadataFields() {
   return TARGET_BASES.flatMap((base) => [
     { key_path: `${base}.mesh_sharing.share`, default: false },
@@ -183,6 +331,8 @@ function snapshotClient(metadata = metadataFields()): AuroraClient {
   }
   const config = { tts: { mesh_sharing: { share: true, max_concurrent: 4, unshared_feature_ids: [], unshared_method_ids: ['TTS.Removed'] }, mesh_routing: { prefer: 'network', fallback: 'local', allowed_provider_peer_ids: ['peer-stale'], min_version: null, required_provider_feature_ids: ['removed_feature'], required_provider_capability_tags: ['removed_tag'], require_explicit_selector: false } } }
   return {
+    transport: { kind: 'mock' },
+    auth: authFacade(),
     registry: {
       getRegistry: async () => ({ modules: [{ module: 'TTS', version: '1', summary: 'TTS', capabilities: ['local_only_tag'], callable_features: [{ feature_id: 'speech', module: 'TTS', label: 'Speech synthesis', summary: 'Speech', method_ids: ['TTS.Synthesize'] }], methods: [{ name: 'Synthesize', summary: 'Speak', bus_topic: 'TTS.Synthesize', exposure: 'external', input_model: null, output_model: null, required_perms: ['TTS.use'], method_type: 'use' }, { name: 'Ping', summary: 'Check', bus_topic: 'TTS.Ping', exposure: 'both', input_model: null, output_model: null, required_perms: ['TTS.use'], method_type: 'use' }, { name: 'Internal', summary: 'No', bus_topic: 'TTS.Internal', exposure: 'internal', input_model: null, output_model: null, required_perms: ['TTS.manage'], method_type: 'manage' }] }], digest: 'r', service_count: 1, method_count: 3 }),
       listServices: async () => ({ services: [{ module: 'TTS', version: '1', summary: 'TTS', capabilities: ['local_only_tag'], callable_features: [], method_count: 2, last_seen: '', status: 'healthy', instance_id: 'tts-local' }], mode: 'thread', app_id: '', room: '', room_password: '' }),
@@ -194,9 +344,11 @@ function snapshotClient(metadata = metadataFields()): AuroraClient {
     capabilities: {
       listCatalog: async () => ({ generated_at: '', local_peer_id: 'local', local_node_name: 'Local', providers: [{ provider_id: 'remote:TTS', peer_id: 'peer-provider', provider_kind: 'remote', node_name: 'Studio node', status: 'negotiated', service_instance_id: 'tts-remote', module: 'TTS', version: '1', latency_ms: 2, max_concurrent: 2, active_calls: 0, available_capacity: 2, eligible: true, reason_code: 'eligible', reason: '', policy: {} as never, freshness: {} as never }], actions: [{ action_id: 'tts-speech', module: 'TTS', method: 'Synthesize', topic: 'TTS.Synthesize', callable_feature_ids: ['speech'], callable_features: [{ feature_id: 'speech', module: 'TTS', label: 'Speech synthesis', summary: 'Speech', method_ids: ['TTS.Synthesize'] }], tool_id: null, resource_id: null, provider_id: 'remote:TTS', peer_id: 'peer-provider', provider_kind: 'remote', service_instance_id: 'tts-remote', selector: {}, bindability: 'available', sdk_operation_kind: 'bus_method', route_hints: [], route_blockers: [], summary: '', input_schema: null, output_schema: null, policy: {} as never, freshness: {} as never }], resources: [], provider_index: {}, action_index: {}, secrets_redacted: true }),
     },
-    requestResult: async (method: string) => method === 'Gateway.GetMeshStatus'
-      ? { ok: true, data: meshStatus }
-      : { ok: true, data: { peers: [{ peer_id: 'peer-provider', node_name: 'Studio node' }, { peer_id: 'peer-not-provider', node_name: 'Kitchen node' }] } },
+    requestResult: async (method: string) => {
+      if (method === 'Config.Get') return { ok: true, data: { config, sources: {}, schema_version: '1', secrets_redacted: true, warnings: [] } }
+      if (method === 'Gateway.GetMeshStatus') return { ok: true, data: meshStatus }
+      return { ok: true, data: { peers: [{ peer_id: 'peer-provider', node_name: 'Studio node' }, { peer_id: 'peer-not-provider', node_name: 'Kitchen node' }] } }
+    },
   } as unknown as AuroraClient
 }
 
@@ -225,6 +377,202 @@ describe('Service sharing and outbound routing', () => {
     expect(JSON.stringify(node)).not.toMatch(/Text to speech|STT coordinator|STT transcription/iu)
   })
 
+
+  it('dedupes concurrent remote service routing loads inside one query scope', async () => {
+    const calls: string[] = []
+    const client = querySnapshotClient(calls)
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-provider' }}>
+          <ServiceRoutingResource client={client} route={route()} />
+          <ServiceRoutingResource client={client} route={route()} />
+        </AuroraQueryProvider>,
+      )
+    })
+    await act(async () => { await flushQueryRender() })
+
+    expect(calls).toEqual([
+      'Gateway.GetRegistry',
+      'Gateway.GetServices',
+      'Config.Get',
+      'Config.GetSchemaMetadata',
+      'Gateway.GetCapabilityCatalog',
+      'Gateway.GetMeshStatus',
+      'Auth.MeshListPeers',
+    ])
+    expect(container.textContent).toContain('Text to speech')
+
+    await act(async () => root.unmount())
+    queryClient.clear()
+  })
+
+  it('does not read remote routing resources while the route is disabled', async () => {
+    const calls: string[] = []
+    const client = querySnapshotClient(calls)
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-provider' }}>
+          <ServiceRoutingResource client={client} route={{ ...route(), disabled: true, state: 'denied', blockers: ['Sign in as an administrator.'] }} />
+        </AuroraQueryProvider>,
+      )
+    })
+    await act(async () => { await flushPromises() })
+
+    expect(calls).toEqual([])
+    expect(container.textContent).toContain('Sign in as an administrator.')
+    expect(container.textContent).not.toContain('Text to speech')
+
+    await act(async () => root.unmount())
+    queryClient.clear()
+  })
+
+  it('does not reuse previous peer scope rows after the next peer scope cannot load', async () => {
+    const calls: string[] = []
+    const availability = { available: true }
+    const client = querySnapshotClient(calls, availability)
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    function Harness({ peerId }: { peerId: string }) {
+      return (
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId }}>
+          <ServiceRoutingResource client={client} route={route()} />
+        </AuroraQueryProvider>
+      )
+    }
+
+    await act(async () => {
+      root.render(<Harness peerId="peer-one" />)
+    })
+    await act(async () => { await flushQueryRender() })
+    expect(container.textContent).toContain('Text to speech')
+
+    availability.available = false
+    await act(async () => {
+      root.render(<Harness peerId="peer-two" />)
+    })
+    await act(async () => { await flushQueryRender() })
+
+    expect(container.textContent).not.toContain('Text to speech')
+    expect(container.textContent).toContain('Service sharing')
+
+    await act(async () => root.unmount())
+    queryClient.clear()
+  })
+
+  it('projects live thin-peer controller changes over the scoped remote routing snapshot', async () => {
+    const calls: string[] = []
+    const client = querySnapshotClient(calls)
+    const thinPeer = mutableBrowserPeer(browserPeerSnapshot({ state: 'authorized', status: 'authorized' }))
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-provider' }}>
+          <ServiceRoutingResource client={client} route={route()} thinPeer={thinPeer.peer} />
+        </AuroraQueryProvider>,
+      )
+    })
+    await act(async () => { await flushQueryRender() })
+    expect(container.textContent).toContain('Text to speech')
+    expect(container.textContent).not.toContain('Service sharing is read-only right now.')
+
+    await act(async () => {
+      thinPeer.emit(browserPeerSnapshot({ state: 'closed', status: 'failed' }))
+    })
+    await act(async () => { await flushPromises() })
+
+    expect(container.textContent).toContain('Text to speech')
+    expect(container.textContent).toContain('Service sharing is read-only right now.')
+    const shareSwitch = container.querySelector<HTMLElement>('[aria-label="Share Text to speech from this device"]')
+    expect(Boolean(shareSwitch?.hasAttribute('disabled') || shareSwitch?.hasAttribute('data-disabled') || shareSwitch?.getAttribute('aria-disabled') === 'true')).toBe(true)
+
+    await act(async () => root.unmount())
+    queryClient.clear()
+  })
+
+
+  it('clears a pending remote routing save and skips invalidation when the peer scope changes before it settles', async () => {
+    const calls: string[] = []
+    const commit = deferred<{ data: { success: boolean; revision: number; changed_paths: string[] } }>()
+    const { client, commitChangeSet } = querySnapshotSaveClient(calls, commit)
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    function Harness({ peerId }: { peerId: string }) {
+      return (
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId }}>
+          <ServiceRoutingResource client={client} route={route()} />
+        </AuroraQueryProvider>
+      )
+    }
+
+    await act(async () => {
+      root.render(<Harness peerId="peer-one" />)
+    })
+    await act(async () => { await flushQueryRender() })
+    await startRemoteServiceRoutingSave(container)
+    expect(commitChangeSet).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('Saving')
+
+    await act(async () => {
+      root.render(<Harness peerId="peer-two" />)
+    })
+    await act(async () => { await flushQueryRender() })
+    expect(container.textContent).not.toContain('Saving')
+
+    commit.resolve({ data: { success: true, revision: 8, changed_paths: ['services.tts.mesh_sharing.share'] } })
+    await act(async () => { await flushPromises() })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
+    expect(container.textContent).not.toContain('Saving')
+    expect(container.textContent).not.toContain('could not save')
+
+    await act(async () => root.unmount())
+    queryClient.clear()
+  })
+
+  it('ignores a remote routing save that settles after unmount', async () => {
+    const calls: string[] = []
+    const commit = deferred<{ data: { success: boolean; revision: number; changed_paths: string[] } }>()
+    const { client, commitChangeSet } = querySnapshotSaveClient(calls, commit)
+    const queryClient = createAuroraQueryClient({ defaultOptions: { queries: { retry: false } } })
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries')
+    const container = document.createElement('div')
+    const root = createRoot(container)
+
+    await act(async () => {
+      root.render(
+        <AuroraQueryProvider client={client} queryClient={queryClient} queryScope={{ backend: 'unit', peerId: 'peer-one' }}>
+          <ServiceRoutingResource client={client} route={route()} />
+        </AuroraQueryProvider>,
+      )
+    })
+    await act(async () => { await flushQueryRender() })
+    await startRemoteServiceRoutingSave(container)
+    expect(commitChangeSet).toHaveBeenCalledTimes(1)
+
+    await act(async () => root.unmount())
+    commit.resolve({ data: { success: true, revision: 8, changed_paths: ['services.tts.mesh_sharing.share'] } })
+    await act(async () => { await flushPromises() })
+
+    expect(invalidateSpy).not.toHaveBeenCalled()
+    queryClient.clear()
+  })
+
   it('shows the sharing table for a remote console instead of omitting it', async () => {
     const container = document.createElement('div')
     const root = createRoot(container)
@@ -244,9 +592,8 @@ describe('Service sharing and outbound routing', () => {
           surface={surface}
         />,
       )
-      await Promise.resolve()
-      await Promise.resolve()
     })
+    await act(async () => { await flushPromises() })
 
     expect(container.textContent).toContain('Service sharing')
     expect(container.textContent).toContain('Text to speech')

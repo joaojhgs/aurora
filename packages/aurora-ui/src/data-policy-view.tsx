@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Database, FileDown, History, Mic, Network, RefreshCw, ShieldCheck, Trash2, Upload } from 'lucide-react'
 import type {
   AuroraClient,
@@ -14,9 +15,11 @@ import { normalizeConversationMessage, normalizeRagPrivacyClass } from '@aurora/
 import type { RouteAvailability } from './shell-data'
 import { EvidenceBadge, PrivacyBadge, StatusBadge } from './status-badges'
 import { safeErrorCopy } from './product-copy'
-import { PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice } from './state-surface'
 import { Button, Card, DataTable, StatStrip, type DataColumn } from './primitives'
 import { cn } from '#lib/utils'
+import { AURORA_QUERY_STALE_TIMES } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 
 export type DataPolicyLoadState = 'loading' | 'ready' | 'degraded' | 'denied' | 'empty' | 'error'
 
@@ -57,6 +60,11 @@ export interface DataPolicyResourceProps {
 export interface DataPolicyViewProps {
   snapshot: DataPolicySnapshot
   onRefresh?: () => void
+  refreshing?: boolean
+}
+
+export interface BuildDataPolicySnapshotOptions {
+  signal?: AbortSignal | undefined
 }
 
 const loadingDataPolicySnapshot = (route: RouteAvailability): DataPolicySnapshot => ({
@@ -72,33 +80,41 @@ const loadingDataPolicySnapshot = (route: RouteAvailability): DataPolicySnapshot
 })
 
 export function DataPolicyResource({ client, route }: DataPolicyResourceProps) {
-  const [snapshot, setSnapshot] = useState<DataPolicySnapshot>(() => loadingDataPolicySnapshot(route))
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const routeKey = dataPolicyRouteKey(route)
+  const stableRoute = useMemo(() => route, [routeKey])
+  const routeReadable = routeAllowsServerRead(stableRoute)
+  const pendingSnapshot = routeReadable
+    ? loadingDataPolicySnapshot(stableRoute)
+    : unavailableDataPolicySnapshot(stableRoute)
+  const dataPolicyQuery = useQuery({
+    queryKey: queryKeys.admin('data-policy', { routeKey }),
+    queryFn: ({ signal }) => buildDataPolicySnapshot(client, stableRoute, { signal }),
+    enabled: routeReadable,
+    placeholderData: pendingSnapshot,
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
 
-  const refresh = useCallback(async () => {
-    setSnapshot(loadingDataPolicySnapshot(route))
-    setSnapshot(await buildDataPolicySnapshot(client, route))
-  }, [client, route])
+  const refresh = useCallback(() => {
+    if (!routeReadable) return
+    void dataPolicyQuery.refetch()
+  }, [dataPolicyQuery, routeReadable])
 
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingDataPolicySnapshot(route))
-    void buildDataPolicySnapshot(client, route).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client, route])
-
-  return <DataPolicyView snapshot={snapshot} onRefresh={refresh} />
+  return <DataPolicyView snapshot={dataPolicyQuery.data ?? pendingSnapshot} onRefresh={refresh} refreshing={dataPolicyQuery.isFetching} />
 }
 
-export async function buildDataPolicySnapshot(client: AuroraClient, route: RouteAvailability): Promise<DataPolicySnapshot> {
+export async function buildDataPolicySnapshot(
+  client: AuroraClient,
+  route: RouteAvailability,
+  options: BuildDataPolicySnapshotOptions = {}
+): Promise<DataPolicySnapshot> {
   const definitions = dataPolicyDefinitions()
   const [namespacesResult, messagesResult, catalogResult, ...checkResults] = await Promise.allSettled([
-    client.memory.listNamespaces({ include_remote: true, include_unavailable: true }),
-    client.memory.listMessages({ limit: 6 }),
-    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }),
+    client.memory.listNamespaces({ include_remote: true, include_unavailable: true }, requestSignalOptions(options.signal)),
+    client.memory.listMessages({ limit: 6 }, requestSignalOptions(options.signal)),
+    client.capabilities.listCatalog({ include_unavailable: true, include_internal: true }, requestSignalOptions(options.signal)),
     ...definitions.map((definition) => client.routes.evaluatePolicy({
       routeRequest: definition.routeRequest,
       payload: definition.payload,
@@ -109,7 +125,7 @@ export async function buildDataPolicySnapshot(client: AuroraClient, route: Route
       privacyIndicatorShown: definition.privacyIndicatorShown,
       allowCloudFallback: definition.allowCloudFallback,
       auditReceiptTarget: definition.auditReceiptTarget
-    }))
+    }, requestSignalOptions(options.signal)))
   ])
   const namespacesResponse = settledOkData(namespacesResult)
   const messagesResponse = settledOkData(messagesResult)
@@ -152,7 +168,32 @@ export async function buildDataPolicySnapshot(client: AuroraClient, route: Route
   }
 }
 
-export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
+function requestSignalOptions(signal: AbortSignal | undefined): { signal?: AbortSignal } {
+  return signal ? { signal } : {}
+}
+
+function routeAllowsServerRead(route: RouteAvailability): boolean {
+  return !route.disabled && route.state !== 'denied' && route.state !== 'privacy-blocked'
+}
+
+function unavailableDataPolicySnapshot(route: RouteAvailability): DataPolicySnapshot {
+  return {
+    ...loadingDataPolicySnapshot(route),
+    loadState: route.state === 'denied' || route.state === 'privacy-blocked' ? 'denied' : 'error',
+    error: null
+  }
+}
+
+function dataPolicyRouteKey(route: RouteAvailability): string {
+  return [
+    route.item.id,
+    route.state,
+    route.disabled ? 'disabled' : 'enabled',
+    route.requiresAdminAction ? 'admin' : 'user'
+  ].join('|')
+}
+
+export function DataPolicyView({ snapshot, onRefresh, refreshing = false }: DataPolicyViewProps) {
   const totals = useMemo(() => dataPolicyTotals(snapshot.namespaces, snapshot.conversations, snapshot.checks), [snapshot.namespaces, snapshot.conversations, snapshot.checks])
 
   const retentionColumns: Array<DataColumn<DBRAGNamespaceInfo>> = [
@@ -219,12 +260,10 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
       />
 
       {snapshot.error ? (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
-          <span>{productDataPolicyErrorCopy(snapshot.error)}</span>
-        </div>
+        <RouteStateNotice state="error" title="Data policy needs attention" message={productDataPolicyErrorCopy(snapshot.error)} />
       ) : null}
-      {snapshot.loadState === 'loading' ? <p className="text-sm text-muted-foreground">Loading data policy from Aurora.</p> : null}
-      {snapshot.loadState === 'empty' ? <p className="text-sm text-muted-foreground">No collections or transcript records were returned by Aurora.</p> : null}
+      {snapshot.loadState === 'loading' ? <RouteStateNotice state="loading" title="Loading data policy" message="Loading data policy from Aurora." /> : null}
+      {snapshot.loadState === 'empty' ? <RouteStateNotice state="empty" title="No collection policy rows" message="No collections or transcript records were returned by Aurora." /> : null}
       {snapshot.warnings.length > 0 ? (
         <ul className="flex flex-col gap-1 rounded-lg border border-warning/30 bg-warning/5 px-3 py-2 text-sm text-warning" aria-label="Data policy warnings">
           {snapshot.warnings.map((warning) => <li key={warning}>{productDataPolicyErrorCopy(warning)}</li>)}
@@ -235,13 +274,13 @@ export function DataPolicyView({ snapshot, onRefresh }: DataPolicyViewProps) {
         title="Retention defaults and collection visibility"
         description="Aurora shows sharing mode, privacy class, available actions, freshness, and approval requirements for each collection."
         icon={<Database size={18} aria-hidden />}
-        actions={<Button variant="ghost" icon={<RefreshCw size={15} aria-hidden />} onClick={onRefresh} disabled={snapshot.loadState === 'loading'}>Refresh</Button>}
+        actions={<Button variant="ghost" icon={<RefreshCw size={15} aria-hidden />} onClick={onRefresh} aria-busy={refreshing} disabled={refreshing || snapshot.loadState === 'loading'}>{refreshing ? 'Refreshing…' : 'Refresh'}</Button>}
       >
         <DataTable
           columns={retentionColumns}
           rows={snapshot.namespaces}
           getRowKey={(namespace) => namespace.namespace}
-          empty="No collection policy rows returned."
+          empty={<EmptyState title="No collection policy rows" message="No collection policy rows returned." />}
         />
       </Card>
 

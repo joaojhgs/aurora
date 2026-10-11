@@ -398,9 +398,9 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
         list(generate_backend_inventory.SDK_TOOLING_PROVIDER_CONTRACT_ALLOWLIST)
     )
     assert len(schema["allowlist"]) == 61
-    assert len(schema["schemas"]) == 126
+    assert len(schema["schemas"]) == 127
     assert len(schema["method_descriptors"]) == 61
-    assert len(schema["event_descriptors"]) == 3
+    assert len(schema["event_descriptors"]) == 4
     assert len(schema["envelope_descriptors"]) == 1
     assert len(provider["methods"]) == 4
     descriptors = {item["method_id"]: item for item in schema["method_descriptors"]}
@@ -427,6 +427,7 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
         "TTS.AudioChunk",
         "Orchestrator.Response",
         "Orchestrator.Interrupted",
+        "Gateway.StatusChanged",
     }
     assert event_descriptors["TTS.AudioChunk"] == {
         "event_topic": "TTS.AudioChunk",
@@ -451,6 +452,27 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     assert event_descriptors["Orchestrator.Interrupted"]["schema_id"] == (
         "Orchestrator.Interrupted.event.OrchestratorInterruptedEvent"
     )
+    gateway_status_descriptor = event_descriptors["Gateway.StatusChanged"]
+    gateway_status_schema_item = next(
+        item
+        for item in schema["schemas"]
+        if item["schema_id"] == "Gateway.StatusChanged.event.GatewayStatusChangedEvent"
+    )
+    assert gateway_status_descriptor == {
+        "event_topic": "Gateway.StatusChanged",
+        "module": "Gateway",
+        "name": "StatusChanged",
+        "topic": "Gateway.StatusChanged",
+        "model": "GatewayStatusChangedEvent",
+        "schema_id": "Gateway.StatusChanged.event.GatewayStatusChangedEvent",
+        "schema_hash": gateway_status_schema_item["schema_hash"],
+        "required_permission": "Gateway.use",
+        "required_perms": ["Gateway.use"],
+        "bounded": True,
+        "authorized": True,
+        "ordered_event_group": "gateway_status",
+        "remote_raw_audio_route": False,
+    }
     envelope = schema["envelope_descriptors"][0]
     assert envelope["envelope_topic"] == "Aurora.EventStream"
     assert envelope["descriptor_kind"] == "sse_envelope"
@@ -471,6 +493,33 @@ def test_generated_contract_outputs_are_deterministic_and_hashed(tmp_path: Path)
     )
     assert event_schema["schema"][TTS_AUDIO_CHUNK_EVENT_INVARIANT_MARKER] is True
     schema_by_id = {item["schema_id"]: item["schema"] for item in schema["schemas"]}
+    gateway_status_schema = schema_by_id["Gateway.StatusChanged.event.GatewayStatusChangedEvent"]
+    assert set(gateway_status_schema["properties"]) == {
+        "event_id",
+        "timestamp",
+        "kind",
+        "status",
+        "freshness",
+        "service_id",
+    }
+    assert set(gateway_status_schema["required"]) == {"event_id", "kind", "status", "timestamp"}
+    assert set(gateway_status_schema["properties"]["kind"]["enum"]) == {
+        "health.updated",
+        "health.stale",
+        "service.announced",
+        "service.stale",
+        "config.updated",
+        "config.validation_failed",
+    }
+    assert gateway_status_schema["properties"]["service_id"]["anyOf"] == [
+        {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "type": "string",
+        },
+        {"type": "null"},
+    ]
     assert (
         schema_by_id["TTS.ExportVoiceProfile.input.TTSExportVoiceProfileRequest"][
             TTS_EXPORT_PROFILE_REQUEST_INVARIANT_MARKER

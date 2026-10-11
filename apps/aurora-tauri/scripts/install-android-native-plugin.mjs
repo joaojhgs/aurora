@@ -1,5 +1,5 @@
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import { cpSync, existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { join, relative, resolve, sep } from 'node:path'
 
 const genAndroidDir = process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR
   ? resolve(process.env.AURORA_ANDROID_GENERATED_PROJECT_DIR)
@@ -21,6 +21,22 @@ const vendorBarcodeScannerSourcePath = resolve(
 )
 const pluginSourceDir = resolve('src-tauri/android/aurora-native-plugin/src/main/java/dev/aurora/tauri/nativeplugin')
 const generatedPluginSourceDir = resolve(genAndroidDir, 'app/src/main/java/dev/aurora/tauri/nativeplugin')
+const canonicalPluginBuildGradlePath = resolve(
+  'src-tauri/android/aurora-native-plugin/build.gradle.kts',
+)
+const generatedAppBuildGradlePath = resolve(genAndroidDir, 'app/build.gradle.kts')
+const generatedRootBuildGradlePath = resolve(genAndroidDir, 'build.gradle.kts')
+const generatedTauriSettingsGradlePath = resolve(genAndroidDir, 'tauri.settings.gradle')
+const generatedAndroidKotlinCompatDir = resolve(genAndroidDir, 'aurora-kotlin-compat')
+const generatedAndroidKotlinCompatManifestPath = resolve(
+  genAndroidDir,
+  '.aurora-kotlin-compat-sources.json',
+)
+const includedAndroidKotlinProjects = [
+  'tauri-android',
+  'tauri-plugin-barcode-scanner',
+  'tauri-plugin-deep-link',
+]
 const canonicalPluginResourceDir = resolve('src-tauri/android/aurora-native-plugin/src/main/res')
 const canonicalAndroidIconDir = resolve('src-tauri/icons/android')
 const generatedAndroidResourceDir = resolve(genAndroidDir, 'app/src/main/res')
@@ -44,28 +60,306 @@ const generatedRustLibrary = 'libaurora_tauri_lib.so'
 const sherpaTtsDisabledMarker = Buffer.from(
   'TTS is not enabled. Please rebuild sherpa-onnx',
 )
+const modes = process.argv.slice(2)
+if (modes.length > 1 || (modes.length === 1 && !['--prepare', '--sync-generated-projects'].includes(modes[0]))) {
+  throw new Error('Usage: install-android-native-plugin.mjs [--prepare|--sync-generated-projects]')
+}
+const mode = modes[0] ?? 'full'
 
 if (!existsSync(appManifestPath)) {
   throw new Error('Tauri Android project is missing. Run android:init before installing the Aurora native plugin.')
 }
 
-// The Tauri scaffold persists generated sources between runs. Reconcile the
-// whole plugin directory before copying so removed canonical sources cannot
-// remain as stale generated classes and fail the parity preflight.
-rmSync(generatedPluginSourceDir, { recursive: true, force: true })
-mkdirSync(generatedPluginSourceDir, { recursive: true })
-cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
-syncAuroraAndroidNativeResources()
-syncCanonicalAndroidLauncherIcons()
-verifyVendorBarcodeScannerSource()
-syncNativeSpeechLibraries()
+if (mode === '--sync-generated-projects') {
+  verifyVendorBarcodeScannerSource()
+  syncIncludedAndroidKotlinProjects()
+  console.log('Synchronized the three generated Tauri Android Kotlin dependency projects.')
+} else {
+  syncCanonicalLiteRtDependency()
+  syncCanonicalKotlinCompilerPlugin()
+  syncCanonicalKotlinCompilerOptions()
 
-patchFile(appManifestPath, (content) => mergePluginManifest(content))
-if (existsSync(mainActivityPath)) {
-  patchFile(mainActivityPath, (content) => addMainActivityImeInsets(content))
+  // The Tauri scaffold persists generated sources between runs. Reconcile the
+  // whole plugin directory before copying so removed canonical sources cannot
+  // remain as stale generated classes and fail the parity preflight.
+  rmSync(generatedPluginSourceDir, { recursive: true, force: true })
+  mkdirSync(generatedPluginSourceDir, { recursive: true })
+  cpSync(pluginSourceDir, generatedPluginSourceDir, { recursive: true })
+  syncAuroraAndroidNativeResources()
+  syncCanonicalAndroidLauncherIcons()
+  verifyVendorBarcodeScannerSource()
+  syncNativeSpeechLibraries()
+
+  if (mode !== '--prepare') syncIncludedAndroidKotlinProjects()
+
+  patchFile(appManifestPath, (content) => mergePluginManifest(content))
+  if (existsSync(mainActivityPath)) {
+    patchFile(mainActivityPath, (content) => addMainActivityImeInsets(content))
+  }
+
+  console.log(
+    mode === '--prepare'
+      ? 'Prepared Aurora Android native plugin scaffold; generated dependency-project synchronization runs after the Tauri Rust build.'
+      : 'Installed Aurora Android native plugin source into src-tauri/gen/android.',
+  )
 }
 
-console.log('Installed Aurora Android native plugin source into src-tauri/gen/android.')
+function syncCanonicalLiteRtDependency() {
+  const canonicalBuild = readFileSync(canonicalPluginBuildGradlePath, 'utf8')
+  const liteRtCoordinates = [...canonicalBuild.matchAll(
+    /^\s*implementation\(\s*["'](com\.google\.ai\.edge\.litertlm:litertlm-android:[^"']+)["']\s*\)\s*$/gm,
+  )].map((match) => match[1])
+  if (liteRtCoordinates.length !== 1) {
+    throw new Error('Canonical Android plugin must declare exactly one pinned LiteRT-LM dependency.')
+  }
+
+  const coordinate = liteRtCoordinates[0]
+  patchFile(generatedAppBuildGradlePath, (content) => {
+    const dependencyLine = /^([ \t]*)(implementation|api|compileOnly|runtimeOnly)\(\s*["'](com\.google\.ai\.edge\.litertlm:litertlm-android:[^"']+)["']\s*\)\s*$/gm
+    const existing = [...content.matchAll(dependencyLine)]
+    if (existing.length === 1 && existing[0][2] === 'implementation' && existing[0][3] === coordinate) return content
+
+    if (existing.length > 0) {
+      let replaced = false
+      return content.replace(dependencyLine, (_line, indent) => {
+        if (replaced) return ''
+        replaced = true
+        return `${indent}implementation("${coordinate}")`
+      })
+    }
+
+    const block = /^([ \t]*dependencies\s*\{\s*\r?\n)([\s\S]*?)(^[ \t]*\})/m
+    const match = content.match(block)
+    if (!match) {
+      throw new Error(`Generated Android app Gradle dependencies are missing: ${generatedAppBuildGradlePath}`)
+    }
+    const indent = `${match[1].match(/^[ \t]*/)?.[0] ?? ''}    `
+    const body = match[2].endsWith('\n') ? match[2] : `${match[2]}\n`
+    return content.replace(block, `${match[1]}${body}${indent}implementation("${coordinate}")\n${match[3]}`)
+  })
+}
+
+function syncCanonicalKotlinCompilerPlugin() {
+  const canonicalBuild = readFileSync(canonicalPluginBuildGradlePath, 'utf8')
+  const versionPins = [...canonicalBuild.matchAll(
+    /^val\s+auroraKotlinGradlePluginVersion\s*=\s*["']([^"']+)["']\s*$/gm,
+  )].map((match) => match[1])
+  if (versionPins.length !== 1) {
+    throw new Error('Canonical Android plugin must declare exactly one Kotlin Gradle plugin version.')
+  }
+
+  const version = versionPins[0]
+  patchFile(generatedRootBuildGradlePath, (content) => {
+    const classpathLine =
+      /^([ \t]*)classpath\(["']org\.jetbrains\.kotlin:kotlin-gradle-plugin:([^"']+)["']\)([ \t]*)$/gm
+    const existing = [...content.matchAll(classpathLine)]
+    if (existing.length !== 1) {
+      throw new Error(
+        `Generated Android root must declare exactly one Kotlin Gradle plugin classpath: ${generatedRootBuildGradlePath}`,
+      )
+    }
+    if (existing[0][2] === version) return content
+    return content.replace(classpathLine, (_line, indent, _previousVersion, trailing) =>
+      `${indent}classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:${version}")${trailing}`,
+    )
+  })
+}
+
+function syncCanonicalKotlinCompilerOptions() {
+  const canonicalBuild = readFileSync(canonicalPluginBuildGradlePath, 'utf8')
+  const jvmTargets = [...canonicalBuild.matchAll(
+    /^\s*jvmTarget\.set\(org\.jetbrains\.kotlin\.gradle\.dsl\.JvmTarget\.(JVM_[0-9_]+)\)\s*$/gm,
+  )].map((match) => match[1])
+  if (jvmTargets.length !== 1 || jvmTargets[0] !== 'JVM_1_8') {
+    throw new Error('Canonical Android plugin must declare exactly one Kotlin JVM 1.8 compiler target.')
+  }
+
+  const target = jvmTargets[0]
+  patchFile(generatedAppBuildGradlePath, (content) => {
+    return migrateKotlinCompilerOptions(content, target, generatedAppBuildGradlePath)
+  })
+}
+
+function migrateKotlinCompilerOptions(content, target, gradlePath) {
+  const legacyBlock =
+    /^([ \t]*)kotlinOptions\s*\{\s*\r?\n\1[ \t]+jvmTarget\s*=\s*["']1\.8["']\s*\r?\n\1\}[ \t]*$/gm
+  const legacyBlocks = [...content.matchAll(legacyBlock)]
+  const anyLegacyBlock = [...content.matchAll(/^[ \t]*kotlinOptions\s*\{/gm)]
+  if (anyLegacyBlock.length !== legacyBlocks.length || legacyBlocks.length > 1) {
+    throw new Error(`Unsupported Kotlin options block in Android project: ${gradlePath}`)
+  }
+
+  const typedBlocks = [...content.matchAll(
+    /^[ \t]*kotlin\s*\{[ \t]*\r?\n[ \t]+compilerOptions\s*\{[ \t]*\r?\n[ \t]+jvmTarget\.set\(org\.jetbrains\.kotlin\.gradle\.dsl\.JvmTarget\.(JVM_[0-9_]+)\)[ \t]*\r?\n[ \t]+\}[ \t]*\r?\n[ \t]*\}[ \t]*$/gm,
+  )]
+  const anyKotlinBlocks = [...content.matchAll(/^[ \t]*kotlin\s*\{/gm)]
+  if (typedBlocks.length > 1 || anyKotlinBlocks.length !== typedBlocks.length) {
+    throw new Error(`Unsupported Kotlin DSL block in Android project: ${gradlePath}`)
+  }
+
+  let next = content
+  if (legacyBlocks.length === 1) next = next.replace(legacyBlock, '')
+
+  if (typedBlocks.length === 1) {
+    if (legacyBlocks.length === 0 && typedBlocks[0][1] === target) return content
+    return next.replace(
+      typedBlocks[0][0],
+      `kotlin {\n    compilerOptions {\n        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.${target})\n    }\n}`,
+    )
+  }
+
+  if (legacyBlocks.length !== 1) {
+    throw new Error(`Android project must contain one legacy or typed Kotlin JVM target: ${gradlePath}`)
+  }
+
+  const dependenciesBlock = /^([ \t]*dependencies\s*\{)/m
+  if (!dependenciesBlock.test(next)) {
+    throw new Error(`Android project dependencies are missing: ${gradlePath}`)
+  }
+  const compilerBlock =
+    `kotlin {\n    compilerOptions {\n        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.${target})\n    }\n}`
+  return next.replace(dependenciesBlock, `${compilerBlock}\n\n$1`)
+}
+
+function syncIncludedAndroidKotlinProjects() {
+  if (!existsSync(generatedTauriSettingsGradlePath)) {
+    throw new Error(`Generated Tauri Android settings are missing: ${generatedTauriSettingsGradlePath}`)
+  }
+
+  const settings = readFileSync(generatedTauriSettingsGradlePath, 'utf8')
+  const projectDirLine =
+    /^([ \t]*project\(["']:)([^"']+)(["']\)\.projectDir\s*=\s*new File\(["'])([^"']+)(["']\)[ \t]*)$/gm
+  const projectLines = [...settings.matchAll(projectDirLine)]
+  const byName = new Map(projectLines.map((match) => [match[2], match]))
+  if (projectLines.length !== includedAndroidKotlinProjects.length ||
+      byName.size !== includedAndroidKotlinProjects.length ||
+      includedAndroidKotlinProjects.some((name) => !byName.has(name))) {
+    throw new Error(`Generated Tauri Android settings must contain exactly the three known dependency project paths: ${generatedTauriSettingsGradlePath}`)
+  }
+
+  let priorSources = null
+  if (existsSync(generatedAndroidKotlinCompatManifestPath)) {
+    try {
+      const manifest = JSON.parse(readFileSync(generatedAndroidKotlinCompatManifestPath, 'utf8'))
+      if (manifest.version !== 1 || !manifest.sources || typeof manifest.sources !== 'object') {
+        throw new Error('unexpected manifest shape')
+      }
+      priorSources = manifest.sources
+    } catch {
+      throw new Error(`Generated Android Kotlin compatibility source map is invalid: ${generatedAndroidKotlinCompatManifestPath}`)
+    }
+  }
+
+  const plannedProjects = includedAndroidKotlinProjects.map((name) => {
+    const settingsMatch = byName.get(name)
+    const settingsPath = resolve(settingsMatch[4])
+    const stageDir = resolve(generatedAndroidKotlinCompatDir, name)
+    const isStaged = settingsPath === stageDir
+    const generatedRelativePath = relative(genAndroidDir, settingsPath)
+    const isInsideGeneratedProject = generatedRelativePath === '' ||
+      (!generatedRelativePath.startsWith(`..${sep}`) && generatedRelativePath !== '..')
+    let sourceDir = settingsPath
+    if (isStaged) {
+      if (!priorSources || typeof priorSources[name] !== 'string') {
+        throw new Error(`Missing original source path for staged Android project ${name}.`)
+      }
+      sourceDir = resolve(priorSources[name])
+    } else if (isInsideGeneratedProject) {
+      throw new Error(`Unexpected nested Android compatibility source path for ${name}: ${settingsPath}`)
+    }
+
+    const compatRelativePath = relative(generatedAndroidKotlinCompatDir, sourceDir)
+    if (compatRelativePath === '' ||
+        (!compatRelativePath.startsWith(`..${sep}`) && compatRelativePath !== '..')) {
+      throw new Error(`Android compatibility source cannot be inside its generated staging directory: ${sourceDir}`)
+    }
+    const sourceGeneratedRelativePath = relative(genAndroidDir, sourceDir)
+    if (sourceGeneratedRelativePath === '' ||
+        (!sourceGeneratedRelativePath.startsWith(`..${sep}`) && sourceGeneratedRelativePath !== '..')) {
+      throw new Error(`Android compatibility source cannot be inside the generated Android project: ${sourceDir}`)
+    }
+
+    const sourceGradlePath = resolve(sourceDir, 'build.gradle.kts')
+    if (!existsSync(sourceGradlePath)) {
+      throw new Error(`Included Android project Gradle file is missing: ${sourceGradlePath}`)
+    }
+    const canonicalBuild = readFileSync(sourceGradlePath, 'utf8')
+    const migratedBuild = migrateKotlinCompilerOptions(canonicalBuild, 'JVM_1_8', sourceGradlePath)
+    return { name, sourceDir, stageDir, migratedBuild }
+  })
+
+  const barcodeScannerProject = plannedProjects.find(({ name }) => name === 'tauri-plugin-barcode-scanner')
+  if (!barcodeScannerProject || resolve(barcodeScannerProject.sourceDir) !== resolve(vendorBarcodeScannerAndroidDir)) {
+    throw new Error(`Generated barcode scanner project must resolve to the vendored Android source: ${vendorBarcodeScannerAndroidDir}`)
+  }
+
+  // Reconcile staged source without deleting Gradle outputs generated between
+  // repeated Cargo builds. Upstream transient directories are never copied in.
+  for (const project of plannedProjects) {
+    mkdirSync(resolve(project.stageDir, '..'), { recursive: true })
+    if (existsSync(project.stageDir)) {
+      const stageStat = lstatSync(project.stageDir)
+      if (!stageStat.isDirectory() || stageStat.isSymbolicLink()) {
+        throw new Error(`Generated Android compatibility project is not a real directory: ${project.stageDir}`)
+      }
+      for (const entry of readdirSync(project.stageDir)) {
+        const entryPath = resolve(project.stageDir, entry)
+        if (entry === 'build' || entry === '.gradle') {
+          const outputStat = lstatSync(entryPath)
+          if (!outputStat.isDirectory() || outputStat.isSymbolicLink()) {
+            throw new Error(`Generated Android build output is not a real directory: ${entryPath}`)
+          }
+          continue
+        }
+        rmSync(entryPath, { recursive: true, force: true })
+      }
+    } else {
+      mkdirSync(project.stageDir, { recursive: true })
+    }
+    cpSync(project.sourceDir, project.stageDir, {
+      recursive: true,
+      force: true,
+      filter: (sourcePath) => {
+        const relativePath = relative(project.sourceDir, sourcePath)
+        return !relativePath.split(sep).some((part) => ['build', '.gradle', '.git'].includes(part))
+      },
+    })
+    writeFileSync(resolve(project.stageDir, 'build.gradle.kts'), project.migratedBuild)
+  }
+
+  const canonicalMain = resolve(vendorBarcodeScannerAndroidDir, 'src/main')
+  const stagedMain = resolve(generatedAndroidKotlinCompatDir, 'tauri-plugin-barcode-scanner/src/main')
+  const canonicalFiles = sourceFiles(canonicalMain).map((file) => relative(canonicalMain, file))
+  const stagedFiles = sourceFiles(stagedMain).map((file) => relative(stagedMain, file))
+  if (!canonicalFiles.length || canonicalFiles.length !== stagedFiles.length ||
+      !canonicalFiles.every((file, index) => file === stagedFiles[index] &&
+        readFileSync(resolve(canonicalMain, file)).equals(readFileSync(resolve(stagedMain, file))))) {
+    throw new Error('Generated barcode scanner source differs from the canonical vendored source.')
+  }
+
+  const sources = Object.fromEntries(plannedProjects.map(({ name, sourceDir }) => [name, sourceDir]))
+  writeFileSync(generatedAndroidKotlinCompatManifestPath, `${JSON.stringify({ version: 1, sources }, null, 2)}\n`)
+  patchFile(generatedTauriSettingsGradlePath, (content) => content.replace(
+    projectDirLine,
+    (_line, prefix, name, projectSuffix, _previousPath, pathSuffix) => `${prefix}${name}${projectSuffix}${resolve(generatedAndroidKotlinCompatDir, name)}${pathSuffix}`,
+  ))
+}
+
+function sourceFiles(root) {
+  if (!existsSync(root)) return []
+  const files = []
+  const stack = [root]
+  while (stack.length) {
+    const current = stack.pop()
+    const stat = statSync(current)
+    if (stat.isDirectory()) {
+      for (const child of readdirSync(current)) stack.push(join(current, child))
+    } else if (stat.isFile()) {
+      files.push(current)
+    }
+  }
+  return files.sort()
+}
 
 function syncAuroraAndroidNativeResources() {
   if (!existsSync(canonicalPluginResourceDir)) {

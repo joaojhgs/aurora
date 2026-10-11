@@ -4,10 +4,13 @@ use crate::local_data_native::{
     local_data_db_path_from_app_config_dir, persist_native_voice_turn_at_path,
     NativeVoiceTurnPersistenceRequest,
 };
+use aurora_voice_core::Generation;
 use aurora_voice_native::{
-    AndroidAssistantRouteMode, AndroidAudioOutput, AndroidPcmIngress, AndroidPcmPushResult,
+    emit_native_voice_observation_from_wire, AndroidAssistantRouteMode, AndroidAudioOutput,
+    AndroidPcmIngress, AndroidPcmPushResult, AndroidTranscriptionSession,
     AndroidTtsReferenceProfile, AndroidVoiceSession, AndroidVoiceSessionCommandError,
-    AndroidVoiceSessionConfig, CancellationToken, SpeechCatalogTask, SpeechModelCatalog,
+    AndroidVoiceSessionConfig, CancellationToken, GatewayAuth, NativeVoiceObservation,
+    NativeVoiceTurnIds, NativeVoiceTurnSnapshot, SpeechCatalogTask, SpeechModelCatalog,
     SpeechPackInstallPhase, SpeechPackInstallProgress, SpeechPackManager, SpeechPackManagerConfig,
     TtsVoiceCatalog,
 };
@@ -28,15 +31,21 @@ pub const AUDIO_BACKPRESSURE: jint = 1;
 pub const AUDIO_CLOSED: jint = 2;
 pub const AUDIO_INVALID_ARGUMENT: jint = -1;
 
+const PLAYBACK_COUNTER_SNAPSHOT_LEN: usize = 9;
+
 static NEXT_NATIVE_HANDLE: AtomicI64 = AtomicI64::new(1);
 static PCM_HANDLES: OnceLock<Mutex<HashMap<jlong, AndroidPcmIngress>>> = OnceLock::new();
 static OUTPUT_HANDLES: OnceLock<Mutex<HashMap<jlong, AndroidAudioOutput>>> = OnceLock::new();
 static SESSION_HANDLES: OnceLock<Mutex<HashMap<jlong, Arc<AndroidVoiceSession>>>> = OnceLock::new();
+static TRANSCRIPTION_HANDLES: OnceLock<Mutex<HashMap<jlong, Arc<AndroidTranscriptionSession>>>> =
+    OnceLock::new();
 
 fn allocate_handle<T>(registry: &OnceLock<Mutex<HashMap<jlong, T>>>, value: T) -> jlong {
-    let Ok(handle) = NEXT_NATIVE_HANDLE.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
-        (next < i64::MAX).then_some(next + 1)
-    }) else {
+    let Ok(handle) =
+        NEXT_NATIVE_HANDLE.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |next| {
+            (next < i64::MAX).then_some(next + 1)
+        })
+    else {
         return 0;
     };
     let Ok(mut handles) = registry.get_or_init(|| Mutex::new(HashMap::new())).lock() else {
@@ -82,6 +91,10 @@ fn session_from_handle(handle: jlong) -> Option<Arc<AndroidVoiceSession>> {
     clone_handle(&SESSION_HANDLES, handle)
 }
 
+fn transcription_from_handle(handle: jlong) -> Option<Arc<AndroidTranscriptionSession>> {
+    clone_handle(&TRANSCRIPTION_HANDLES, handle)
+}
+
 fn session_error_code(error: AndroidVoiceSessionCommandError) -> jint {
     match error {
         AndroidVoiceSessionCommandError::AlreadyActive => 1,
@@ -106,6 +119,31 @@ fn optional_string_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<
     })
 }
 
+fn emit_background_persistence_observation(
+    observation_token: &str,
+    generation: Generation,
+    transcript: &str,
+    conversation_id: Option<String>,
+    persisted: bool,
+    persistence_error_code: Option<String>,
+) {
+    let snapshot = NativeVoiceTurnSnapshot::new(
+        NativeVoiceTurnIds::from_generation(generation),
+        if persisted {
+            "persisted"
+        } else {
+            "persistence_failed"
+        },
+    )
+    .with_transcript(transcript)
+    .terminal(true)
+    .persistence(conversation_id, persisted, persistence_error_code);
+    emit_native_voice_observation_from_wire(
+        observation_token,
+        NativeVoiceObservation::TurnSnapshot { snapshot },
+    );
+}
+
 fn persistence_result_to_jni(env: &JNIEnv<'_>, payload: serde_json::Value) -> jstring {
     serde_json::to_string(&payload)
         .ok()
@@ -122,6 +160,10 @@ fn persistence_failure_to_jni(env: &JNIEnv<'_>, error_code: &str) -> jstring {
             "errorCode": error_code,
         }),
     )
+}
+
+fn u64_to_jlong(value: u64) -> jlong {
+    value.min(i64::MAX as u64) as jlong
 }
 
 fn optional_gateway_from_jni(env: &mut JNIEnv<'_>, value: JString<'_>) -> Option<Option<Url>> {
@@ -449,10 +491,13 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioBridg
     capacity_chunks: jint,
     max_chunk_samples: jint,
 ) -> jlong {
-    allocate_handle(&PCM_HANDLES, AndroidPcmIngress::new(
-        capacity_chunks.max(0) as usize,
-        max_chunk_samples.max(0) as usize,
-    ))
+    allocate_handle(
+        &PCM_HANDLES,
+        AndroidPcmIngress::new(
+            capacity_chunks.max(0) as usize,
+            max_chunk_samples.max(0) as usize,
+        ),
+    )
 }
 
 #[no_mangle]
@@ -645,6 +690,49 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutpu
 }
 
 #[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativePlaybackCountersBridge_nativeEnabled(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jboolean {
+    bool_to_jboolean(AndroidAudioOutput::playback_counters_enabled())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativePlaybackCountersBridge_nativeRecordAudioTrackPlayCall(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) {
+    AndroidAudioOutput::record_audio_track_play_call();
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativePlaybackCountersBridge_nativeRecordAudioTrackWrittenSamples(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    sample_count: jlong,
+) {
+    if sample_count > 0 {
+        AndroidAudioOutput::record_audio_track_written_samples(sample_count as u64);
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativePlaybackCountersBridge_nativeSnapshot(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+) -> jlongArray {
+    let snapshot = AndroidAudioOutput::playback_counter_snapshot_values();
+    let values = snapshot.map(u64_to_jlong);
+    let Ok(array) = env.new_long_array(PLAYBACK_COUNTER_SNAPSHOT_LEN as jint) else {
+        return ptr::null_mut();
+    };
+    if env.set_long_array_region(&array, 0, &values).is_err() {
+        return ptr::null_mut();
+    }
+    array.into_raw()
+}
+
+#[no_mangle]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeAudioOutputBridge_nativeClose(
     _env: JNIEnv<'_>,
     _class: JClass<'_>,
@@ -675,6 +763,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     remote_audio_consent: jboolean,
     assistant_route_mode: JString<'_>,
     preferred_stable_peer_id: JString<'_>,
+    speech_stages_json: JString<'_>,
 ) -> jlong {
     let Some(Some(gateway)) = optional_gateway_from_jni(&mut env, gateway) else {
         return 0;
@@ -694,18 +783,29 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let Ok(config) = AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0)
+    let speech_stages_json = optional_string_from_jni(&mut env, speech_stages_json);
+    let speech_stages = match speech_stages_json.as_deref() {
+        Some(value) if !value.trim().is_empty() => match serde_json::from_str(value) {
+            Ok(stages) => Some(stages),
+            Err(_) => return 0,
+        },
+        _ => None,
+    };
+    let Ok(mut config) = AndroidVoiceSessionConfig::new(gateway, auth, remote_audio_consent != 0)
         .with_assistant_route(assistant_route_mode, preferred_stable_peer_id)
     else {
         return 0;
     };
+    if let Some(stages) = speech_stages {
+        config = config.with_speech_stages(stages);
+    }
     AndroidVoiceSession::new(config, 8, 4_096, 16)
         .map(|session| allocate_handle(&SESSION_HANDLES, Arc::new(session)))
         .unwrap_or(0)
 }
 
-/// Create a local-pack-backed Android voice executor. Empty optional strings
-/// disable background wake providers but STT and TTS ids are required.
+/// Create an Android voice executor with independent optional local stage packs.
+/// Empty optional strings disable the corresponding local or background provider.
 #[no_mangle]
 #[allow(clippy::too_many_arguments)]
 pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessionBridge_nativeCreateWithPackSelection(
@@ -728,6 +828,7 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     tts_reference_samples: JFloatArray<'_>,
     tts_reference_text: JString<'_>,
     tts_reference_revision: JString<'_>,
+    speech_stages_json: JString<'_>,
 ) -> jlong {
     let Some(gateway) = optional_gateway_from_jni(&mut env, gateway) else {
         return 0;
@@ -739,15 +840,10 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         return 0;
     };
     let preferred_stable_peer_id = optional_string_from_jni(&mut env, preferred_stable_peer_id);
-    let Some(pack_store_root) = string_from_jni(&mut env, pack_store_root) else {
-        return 0;
-    };
-    let Some(stt_model_id) = optional_string_from_jni(&mut env, stt_model_id) else {
-        return 0;
-    };
-    let Some(tts_voice_id) = optional_string_from_jni(&mut env, tts_voice_id) else {
-        return 0;
-    };
+    let pack_store_root =
+        optional_string_from_jni(&mut env, pack_store_root).map(std::path::PathBuf::from);
+    let stt_model_id = optional_string_from_jni(&mut env, stt_model_id);
+    let tts_voice_id = optional_string_from_jni(&mut env, tts_voice_id);
     let Ok(assistant_route_mode) = AndroidAssistantRouteMode::parse(&assistant_route_mode) else {
         return 0;
     };
@@ -756,7 +852,15 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     } else {
         aurora_voice_native::GatewayAuth::Bearer(bearer)
     };
-    let Ok(mut config) = AndroidVoiceSessionConfig::with_local_pack_selection_for_route(
+    let speech_stages_json = optional_string_from_jni(&mut env, speech_stages_json);
+    let speech_stages = match speech_stages_json.as_deref() {
+        Some(value) if !value.trim().is_empty() => match serde_json::from_str(value) {
+            Ok(stages) => Some(stages),
+            Err(_) => return 0,
+        },
+        _ => None,
+    };
+    let Ok(mut config) = AndroidVoiceSessionConfig::with_pack_selection_for_route(
         gateway,
         auth,
         remote_audio_consent != 0,
@@ -772,6 +876,9 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     .with_assistant_route(assistant_route_mode, preferred_stable_peer_id) else {
         return 0;
     };
+    if let Some(stages) = speech_stages {
+        config = config.with_speech_stages(stages);
+    }
     let reference_text = optional_string_from_jni(&mut env, tts_reference_text);
     let _reference_revision = optional_string_from_jni(&mut env, tts_reference_revision);
     if tts_reference_sample_rate_hz > 0 {
@@ -836,8 +943,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     _class: JClass<'_>,
     handle: jlong,
 ) -> jstring {
-    let Some(transcript) = session_from_handle(handle)
-        .and_then(|session| session.take_focused_transcript())
+    let Some(transcript) =
+        session_from_handle(handle).and_then(|session| session.take_focused_transcript())
     else {
         return ptr::null_mut();
     };
@@ -852,8 +959,8 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     _class: JClass<'_>,
     handle: jlong,
 ) -> jstring {
-    let Some(result) = session_from_handle(handle)
-        .and_then(|session| session.take_background_result())
+    let Some(result) =
+        session_from_handle(handle).and_then(|session| session.take_background_result())
     else {
         return ptr::null_mut();
     };
@@ -870,6 +977,9 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     mut env: JNIEnv<'_>,
     _class: JClass<'_>,
     app_config_dir: JString<'_>,
+    observation_token: JString<'_>,
+    generation: jlong,
+    transcript_plaintext: JString<'_>,
     profile_id: JString<'_>,
     local_node_id: JString<'_>,
     new_conversation_id: JString<'_>,
@@ -880,6 +990,13 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     created_at_ms: jlong,
     completed_at_ms: jlong,
 ) -> jstring {
+    let generation = Generation(u64::try_from(generation).unwrap_or(0));
+    let Some(observation_token) = string_from_jni(&mut env, observation_token) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
+    let Some(transcript_plaintext) = string_from_jni(&mut env, transcript_plaintext) else {
+        return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
+    };
     let Some(app_config_dir) = string_from_jni(&mut env, app_config_dir) else {
         return persistence_failure_to_jni(&env, "native_voice_persistence_invalid");
     };
@@ -928,8 +1045,24 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
         completed_at_ms,
     };
     let Ok(result) = persist_native_voice_turn_at_path(database_path, request) else {
+        emit_background_persistence_observation(
+            &observation_token,
+            generation,
+            &transcript_plaintext,
+            None,
+            false,
+            Some("native_voice_persistence_failed".to_owned()),
+        );
         return persistence_failure_to_jni(&env, "native_voice_persistence_failed");
     };
+    emit_background_persistence_observation(
+        &observation_token,
+        generation,
+        &transcript_plaintext,
+        Some(result.conversation_id.clone()),
+        true,
+        None,
+    );
     persistence_result_to_jni(
         &env,
         json!({
@@ -1126,6 +1259,349 @@ pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeVoiceSessi
     handle: jlong,
 ) {
     remove_handle(&SESSION_HANDLES, handle);
+}
+
+/// Create an independent finite-STT executor for native transcript recording.
+/// This bridge accepts the already-confirmed profile/stage data from the native
+/// service only; it does not construct assistant, TTS, or playback providers.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeCreate(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    gateway: JString<'_>,
+    bearer: JString<'_>,
+    remote_audio_consent: jboolean,
+    pack_store_root: JString<'_>,
+    stt_model_id: JString<'_>,
+    speech_stages_json: JString<'_>,
+    ingress_capacity_chunks: jint,
+    max_chunk_samples: jint,
+) -> jlong {
+    let Some(gateway) = optional_gateway_from_jni(&mut env, gateway) else {
+        return 0;
+    };
+    let Some(bearer) = string_from_jni(&mut env, bearer) else {
+        return 0;
+    };
+    let pack_store_root = optional_string_from_jni(&mut env, pack_store_root).map(PathBuf::from);
+    let Some(stt_model_id) = string_from_jni(&mut env, stt_model_id) else {
+        return 0;
+    };
+    let stt_model_id = {
+        let trimmed = stt_model_id.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+    };
+    let Some(speech_stages_json) = string_from_jni(&mut env, speech_stages_json) else {
+        return 0;
+    };
+    let Ok(stages) = serde_json::from_str(&speech_stages_json) else {
+        return 0;
+    };
+    let auth = if bearer.is_empty() {
+        GatewayAuth::None
+    } else {
+        GatewayAuth::Bearer(bearer)
+    };
+    let config = AndroidVoiceSessionConfig::with_pack_selection_for_route(
+        gateway,
+        auth,
+        remote_audio_consent != 0,
+        pack_store_root,
+        stt_model_id,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    .with_speech_stages(stages);
+    AndroidTranscriptionSession::new(
+        config,
+        ingress_capacity_chunks.max(1) as usize,
+        max_chunk_samples.max(1) as usize,
+    )
+    .map(|session| allocate_handle(&TRANSCRIPTION_HANDLES, Arc::new(session)))
+    .unwrap_or(0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeStart(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    admission_token: JString<'_>,
+    background_eligible: jboolean,
+) -> jlong {
+    let Some(session) = transcription_from_handle(handle) else {
+        return 0;
+    };
+    let Some(token) = string_from_jni(&mut env, admission_token) else {
+        return 0;
+    };
+    let Ok(generation) = crate::native_transcription_archive::start_capture(&token) else {
+        return 0;
+    };
+    if session.start(generation, background_eligible != 0).is_ok() {
+        generation.min(i64::MAX as u64) as jlong
+    } else {
+        if crate::native_transcription_archive::finish_capture_interval(&token, generation).is_ok()
+            && crate::native_transcription_archive::finalize_capture(
+                &token,
+                "failed",
+                "capture_start_failed",
+            )
+            .is_ok()
+        {
+            -1
+        } else {
+            0
+        }
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativePushPcm(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    samples: JShortArray<'_>,
+    sample_count: jint,
+    sequence: jlong,
+) -> jint {
+    let Some(session) = transcription_from_handle(handle) else {
+        return AUDIO_INVALID_ARGUMENT;
+    };
+    if sample_count <= 0 {
+        return AUDIO_INVALID_ARGUMENT;
+    }
+    let array_len = match env.get_array_length(&samples) {
+        Ok(length) => length,
+        Err(_) => return AUDIO_INVALID_ARGUMENT,
+    };
+    if sample_count > array_len {
+        return AUDIO_INVALID_ARGUMENT;
+    }
+    let mut pcm = vec![0_i16; sample_count as usize];
+    if env.get_short_array_region(&samples, 0, &mut pcm).is_err() {
+        return AUDIO_INVALID_ARGUMENT;
+    }
+    match session.ingress().push_latest(&pcm, sequence.max(0) as u64) {
+        AndroidPcmPushResult::Accepted => AUDIO_OK,
+        AndroidPcmPushResult::Backpressure => AUDIO_BACKPRESSURE,
+        AndroidPcmPushResult::Closed => AUDIO_CLOSED,
+        AndroidPcmPushResult::InvalidArgument => AUDIO_INVALID_ARGUMENT,
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeFinish(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    generation: jlong,
+) -> jint {
+    transcription_from_handle(handle)
+        .and_then(|session| session.finish(generation.max(0) as u64).ok())
+        .map_or(-1, |_| 0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeCancel(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+    generation: jlong,
+) -> jint {
+    transcription_from_handle(handle)
+        .and_then(|session| session.cancel(generation.max(0) as u64).ok())
+        .map_or(-1, |_| 0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeTakeTranscript(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jstring {
+    let Some(transcript) =
+        transcription_from_handle(handle).and_then(|session| session.take_transcript())
+    else {
+        return ptr::null_mut();
+    };
+    env.new_string(transcript)
+        .map(JString::into_raw)
+        .unwrap_or(ptr::null_mut())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeStats(
+    env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) -> jlongArray {
+    let Some(session) = transcription_from_handle(handle) else {
+        return ptr::null_mut();
+    };
+    let status = session.status();
+    let values = [
+        status.accepted_chunks as jlong,
+        status.accepted_samples as jlong,
+        status.dropped_chunks as jlong,
+        0,
+        status.queued_chunks as jlong,
+        if matches!(
+            status.phase,
+            aurora_voice_native::AndroidTranscriptionPhase::Starting
+                | aurora_voice_native::AndroidTranscriptionPhase::Listening
+                | aurora_voice_native::AndroidTranscriptionPhase::Transcribing
+        ) {
+            1
+        } else {
+            0
+        },
+        status.phase as jlong,
+        status.generation.min(i64::MAX as u64) as jlong,
+        0,
+        0,
+        0,
+        match status.error {
+            None => 0,
+            Some("cancelled") => 1,
+            Some(_) => 3,
+        },
+        status.capture_started_at_ms,
+        status.capture_ended_at_ms,
+    ];
+    let Ok(array) = env.new_long_array(values.len() as jint) else {
+        return ptr::null_mut();
+    };
+    if env.set_long_array_region(&array, 0, &values).is_err() {
+        return ptr::null_mut();
+    }
+    array.into_raw()
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeAdmit(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    mode: JString<'_>,
+) -> jstring {
+    let Some(mode) = string_from_jni(&mut env, mode) else {
+        return ptr::null_mut();
+    };
+    crate::native_transcription_archive::admit_capture(&mode)
+        .ok()
+        .and_then(|payload| env.new_string(payload).ok())
+        .map(JString::into_raw)
+        .unwrap_or(ptr::null_mut())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeAppendEncryptedResult(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    token: JString<'_>,
+    generation: jlong,
+    segment_id: JString<'_>,
+    sequence: jlong,
+    start_ms: jlong,
+    end_ms: jlong,
+    envelope_json: JString<'_>,
+    microphone_permission_granted: jboolean,
+) -> jint {
+    let (Some(token), Some(segment_id), Some(envelope_json)) = (
+        string_from_jni(&mut env, token),
+        string_from_jni(&mut env, segment_id),
+        string_from_jni(&mut env, envelope_json),
+    ) else {
+        return -1;
+    };
+    crate::native_transcription_archive::append_result(
+        &token,
+        generation.max(0) as u64,
+        &segment_id,
+        sequence,
+        start_ms,
+        end_ms,
+        &envelope_json,
+        microphone_permission_granted != 0,
+    )
+    .map_or(-1, |appended| if appended { AUDIO_OK } else { -2 })
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeEndCaptureInterval(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    token: JString<'_>,
+    generation: jlong,
+) -> jint {
+    let Some(token) = string_from_jni(&mut env, token) else {
+        return -1;
+    };
+    crate::native_transcription_archive::finish_capture_interval(&token, generation.max(0) as u64)
+        .map_or(-1, |_| 0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeFinalize(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    token: JString<'_>,
+    lifecycle: JString<'_>,
+    reason: JString<'_>,
+) -> jint {
+    let (Some(token), Some(lifecycle), Some(reason)) = (
+        string_from_jni(&mut env, token),
+        string_from_jni(&mut env, lifecycle),
+        string_from_jni(&mut env, reason),
+    ) else {
+        return -1;
+    };
+    crate::native_transcription_archive::finalize_capture(&token, &lifecycle, &reason)
+        .map_or(-1, |_| 0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeFinalizeAdmission(
+    mut env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    token: JString<'_>,
+    lifecycle: JString<'_>,
+    reason: JString<'_>,
+) -> jint {
+    let (Some(token), Some(lifecycle), Some(reason)) = (
+        string_from_jni(&mut env, token),
+        string_from_jni(&mut env, lifecycle),
+        string_from_jni(&mut env, reason),
+    ) else {
+        return -1;
+    };
+    crate::native_transcription_archive::finalize_capture(&token, &lifecycle, &reason)
+        .map_or(-1, |_| 0)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeClose(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    if let Some(session) = transcription_from_handle(handle) {
+        session.close();
+    }
+}
+
+#[no_mangle]
+pub extern "system" fn Java_dev_aurora_tauri_nativeplugin_AuroraNativeTranscriptionSessionBridge_nativeFree(
+    _env: JNIEnv<'_>,
+    _class: JClass<'_>,
+    handle: jlong,
+) {
+    remove_handle(&TRANSCRIPTION_HANDLES, handle);
 }
 
 #[cfg(test)]

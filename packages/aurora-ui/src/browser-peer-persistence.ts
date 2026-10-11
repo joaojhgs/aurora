@@ -22,7 +22,12 @@ import {
 import {
   parseAuroraNodeConfigDocument,
   serializeAuroraNodeConfigDocument,
+  parseAuroraNodeConfigDocumentV2,
+  serializeAuroraNodeConfigDocumentV2,
+  updateAuroraNodeConfigDocumentV2,
   type AuroraNodeConfigDocumentV1,
+  type AuroraNodeConfigDocumentV2,
+  type AuroraNodeConfigSaveAck,
 } from '@aurora/client/node-config'
 import {
   BROWSER_PEER_CREDENTIAL_PREFIX as CREDENTIAL_PREFIX,
@@ -30,6 +35,7 @@ import {
   BROWSER_PEER_INBOUND_VERIFIER_PREFIX as INBOUND_VERIFIER_PREFIX,
   BROWSER_PEER_MESH_PROFILES_KEY as MESH_PROFILES_KEY,
   BROWSER_PEER_NODE_CONFIG_DOCUMENT_KEY as NODE_CONFIG_DOCUMENT_KEY,
+  BROWSER_PEER_NODE_CONFIG_V2_DOCUMENT_KEY as NODE_CONFIG_V2_DOCUMENT_KEY,
   BROWSER_PEER_PROFILE_KEY as PROFILE_KEY,
   BROWSER_PEER_ROOM_PREFIX as ROOM_PREFIX,
   BROWSER_PEER_RUNTIME_PROFILE_DOCUMENT_KEY as RUNTIME_PROFILE_DOCUMENT_KEY,
@@ -44,6 +50,7 @@ import {
 
 export {
   BROWSER_PEER_NODE_CONFIG_DOCUMENT_KEY,
+  BROWSER_PEER_NODE_CONFIG_V2_DOCUMENT_KEY,
   BROWSER_PEER_VAULT_DATABASE_NAME,
   clearBrowserPeerProfileMetadata,
 } from './browser-peer-persistence-keys'
@@ -99,6 +106,13 @@ export interface BrowserWebRtcCredentialStore extends WebRtcPeerCredentialStore 
   loadRuntimeProfileDocument(): AuroraRuntimeProfileDocumentV2 | null
   saveNodeConfigDocument(document: AuroraNodeConfigDocumentV1): Promise<void>
   loadNodeConfigDocument(): Promise<AuroraNodeConfigDocumentV1 | null>
+  saveNodeConfigDocumentV2(document: AuroraNodeConfigDocumentV2): Promise<AuroraNodeConfigSaveAck>
+  saveNodeConfigDocumentV2Cas(draft: unknown, expectedRevision: number): Promise<{
+    document: AuroraNodeConfigDocumentV2
+    acknowledgement: AuroraNodeConfigSaveAck
+  }>
+  loadNodeConfigDocumentV2(): Promise<AuroraNodeConfigDocumentV2 | null>
+  subscribeNodeConfigDocumentV2(listener: (revision: number | null) => void): () => void
   getOrCreateLocalStablePeerId(): string
   persistenceStatus(): BrowserPeerPersistenceStatus
 }
@@ -124,6 +138,9 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
   private readonly now: () => number
   private keyPromise: Promise<CryptoKey> | null = null
   private pendingWrites: Promise<void> = Promise.resolve()
+  private pendingLegacyNodeConfigSaves: Promise<void> = Promise.resolve()
+  private readonly nodeConfigV2Listeners = new Set<(revision: number | null) => void>()
+  private nodeConfigV2Channel: BroadcastChannel | null = null
   private closed = false
   private storageUsable: boolean
   private metadataUsable: boolean
@@ -138,6 +155,18 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.origin = options.origin ?? browserOrigin()
     this.now = options.now ?? Date.now
     this.memory = new MemoryPeerCredentialStore({ now: this.now })
+    if (typeof globalThis.BroadcastChannel === 'function') {
+      try {
+        this.nodeConfigV2Channel = new globalThis.BroadcastChannel(`aurora-node-config-v2:${this.origin}`)
+        this.nodeConfigV2Channel.addEventListener('message', (event: MessageEvent<unknown>) => {
+          const data = event.data
+          if (!isNodeConfigV2Invalidation(data)) return
+          this.notifyNodeConfigV2Listeners(data.revision)
+        })
+      } catch {
+        this.nodeConfigV2Channel = null
+      }
+    }
     this.storageUsable = this.storage !== null && this.cryptoImpl?.subtle !== undefined
     this.metadataUsable = this.metadataStorage !== null && this.metadataStorage !== undefined
     this.storageHealthy = this.storageUsable
@@ -279,9 +308,20 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.assertOpen()
     this.assertDurableNodeConfigStorage()
     const serialized = serializeAuroraNodeConfigDocument(document)
-    await this.writeEncryptedRequired(NODE_CONFIG_DOCUMENT_KEY, JSON.parse(serialized) as AuroraNodeConfigDocumentV1)
-    // Remove the pre-Phase-1 plaintext copy after the encrypted write succeeds.
-    this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
+    const saveLegacy = async () => {
+      if (await this.readEncrypted<unknown>(NODE_CONFIG_V2_DOCUMENT_KEY) !== null) {
+        throw new Error('Node config v1 is read-only after v2 initialization')
+      }
+      await this.writeEncryptedRequired(NODE_CONFIG_DOCUMENT_KEY, JSON.parse(serialized) as AuroraNodeConfigDocumentV1)
+      // Remove the pre-Phase-1 plaintext copy after the encrypted write succeeds.
+      this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
+    }
+    const result = this.pendingLegacyNodeConfigSaves.then(async () => {
+      if (globalThis.navigator?.locks) await this.withNodeConfigV2Lock(saveLegacy)
+      else await saveLegacy()
+    })
+    this.pendingLegacyNodeConfigSaves = result.catch(() => undefined)
+    await result
   }
 
   async loadNodeConfigDocument(): Promise<AuroraNodeConfigDocumentV1 | null> {
@@ -310,6 +350,107 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     )
     this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
     return parsed
+  }
+
+  async saveNodeConfigDocumentV2(document: AuroraNodeConfigDocumentV2): Promise<AuroraNodeConfigSaveAck> {
+    this.assertOpen()
+    this.assertDurableNodeConfigStorage()
+    const acknowledgement = await this.withNodeConfigV2Lock(async () => {
+      if (await this.loadNodeConfigDocumentV2Unlocked() !== null) {
+        throw new Error('Node config v2 save requires a revision checked update')
+      }
+      const parsed = parseAuroraNodeConfigDocumentV2(document)
+      if (parsed === null || parsed.revision !== 1) throw new Error('Node config v2 initialization must start at revision 1')
+      await this.writeEncryptedRequired(NODE_CONFIG_V2_DOCUMENT_KEY, JSON.parse(serializeAuroraNodeConfigDocumentV2(parsed)))
+      return {
+        savedRevision: parsed.revision,
+        effectiveRevision: 0,
+        pendingNextGeneration: true,
+        pendingRevision: parsed.revision,
+      }
+    })
+    this.publishNodeConfigV2(acknowledgement.savedRevision)
+    return acknowledgement
+  }
+
+  async saveNodeConfigDocumentV2Cas(draft: unknown, expectedRevision: number): Promise<{
+    document: AuroraNodeConfigDocumentV2
+    acknowledgement: AuroraNodeConfigSaveAck
+  }> {
+    this.assertOpen()
+    this.assertDurableNodeConfigStorage()
+    const updated = await this.withNodeConfigV2Lock(async () => {
+      const current = await this.loadNodeConfigDocumentV2Unlocked()
+      if (current === null) throw new Error('Node config v2 is not initialized')
+      const updated = updateAuroraNodeConfigDocumentV2(current, draft, expectedRevision)
+      await this.writeEncryptedRequired(
+        NODE_CONFIG_V2_DOCUMENT_KEY,
+        JSON.parse(serializeAuroraNodeConfigDocumentV2(updated.document)),
+      )
+      return updated
+    })
+    this.publishNodeConfigV2(updated.document.revision)
+    return updated
+  }
+
+  async loadNodeConfigDocumentV2(): Promise<AuroraNodeConfigDocumentV2 | null> {
+    this.assertOpen()
+    if (!this.storageUsable || this.storage === null || this.cryptoImpl === null) return null
+    await this.pendingWrites
+    const saved = await this.readEncrypted<unknown>(NODE_CONFIG_V2_DOCUMENT_KEY)
+    if (saved !== null) return requireNodeConfigV2(saved)
+    return await this.withNodeConfigV2Lock(async () => await this.loadNodeConfigDocumentV2Unlocked())
+  }
+
+  subscribeNodeConfigDocumentV2(listener: (revision: number | null) => void): () => void {
+    this.assertOpen()
+    this.nodeConfigV2Listeners.add(listener)
+    return () => this.nodeConfigV2Listeners.delete(listener)
+  }
+
+  private async loadNodeConfigDocumentV2Unlocked(): Promise<AuroraNodeConfigDocumentV2 | null> {
+    await this.pendingWrites
+    const saved = await this.readEncrypted<unknown>(NODE_CONFIG_V2_DOCUMENT_KEY)
+    if (saved !== null) {
+      const parsed = requireNodeConfigV2(saved)
+      return parsed
+    }
+    // V1 stays available as a read-only rollback snapshot. The canonical V2
+    // projection is written to its own encrypted key on first read.
+    const legacy = await this.loadNodeConfigDocument()
+    if (legacy === null) return null
+    const migrated = parseAuroraNodeConfigDocumentV2(legacy)
+    if (migrated === null) throw new Error('Saved node config v1 could not be migrated')
+    await this.writeEncryptedRequired(
+      NODE_CONFIG_V2_DOCUMENT_KEY,
+      JSON.parse(serializeAuroraNodeConfigDocumentV2(migrated)),
+    )
+    return migrated
+  }
+
+  private async withNodeConfigV2Lock<T>(operation: () => Promise<T>): Promise<T> {
+    const locks = globalThis.navigator?.locks
+    if (!locks) throw new Error('Cross-tab node config storage lock is unavailable')
+    const lockName = `aurora-node-config-v2:${this.origin}:${NODE_CONFIG_V2_DOCUMENT_KEY}`
+    return await locks.request(lockName, { mode: 'exclusive', ifAvailable: true }, async (lock) => {
+      if (!lock) throw new Error('Node config v2 is being changed in another tab')
+      return await operation()
+    })
+  }
+
+  private publishNodeConfigV2(revision: number | null): void {
+    this.notifyNodeConfigV2Listeners(revision)
+    try {
+      this.nodeConfigV2Channel?.postMessage({ type: 'node-config-v2-changed', revision })
+    } catch {
+      // The local store listeners still receive successful in-tab writes.
+    }
+  }
+
+  private notifyNodeConfigV2Listeners(revision: number | null): void {
+    for (const listener of this.nodeConfigV2Listeners) {
+      try { listener(revision) } catch { /* One subscriber cannot block policy invalidation. */ }
+    }
   }
 
   setRoomSecret(ref: string, value: string): void {
@@ -448,7 +589,9 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     this.removeMetadata(THIN_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(RUNTIME_PROFILE_DOCUMENT_KEY)
     this.removeMetadata(NODE_CONFIG_DOCUMENT_KEY)
+    this.removeMetadata(NODE_CONFIG_V2_DOCUMENT_KEY)
     this.removeMetadata(STABLE_PEER_KEY)
+    this.publishNodeConfigV2(null)
     if (vaultClearError !== undefined) {
       throw vaultClearError
     }
@@ -460,6 +603,9 @@ export class BrowserPersistentPeerCredentialStore implements BrowserWebRtcCreden
     for (const secret of this.roomSecrets.values()) secret.fill(0)
     this.roomSecrets.clear()
     await this.memory.close()
+    this.nodeConfigV2Channel?.close()
+    this.nodeConfigV2Channel = null
+    this.nodeConfigV2Listeners.clear()
     await this.storage?.close()
     this.closed = true
   }
@@ -990,6 +1136,17 @@ function isEncryptedVaultRecord(value: unknown): value is EncryptedVaultRecord {
     typeof value.nonce === 'string' &&
     typeof value.ciphertext === 'string' &&
     typeof value.updatedAtMs === 'number'
+}
+
+function requireNodeConfigV2(value: unknown): AuroraNodeConfigDocumentV2 {
+  const parsed = parseAuroraNodeConfigDocumentV2(value)
+  if (parsed === null) throw new Error('Saved node config v2 is invalid')
+  return parsed
+}
+
+function isNodeConfigV2Invalidation(value: unknown): value is { type: 'node-config-v2-changed'; revision: number | null } {
+  return isRecord(value) && value.type === 'node-config-v2-changed' &&
+    (value.revision === null || (typeof value.revision === 'number' && Number.isSafeInteger(value.revision) && value.revision >= 0))
 }
 
 function isAesGcmCryptoKey(value: unknown): value is CryptoKey {

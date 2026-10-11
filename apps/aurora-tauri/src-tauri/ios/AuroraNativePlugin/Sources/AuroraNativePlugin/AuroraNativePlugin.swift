@@ -12,6 +12,13 @@ public func initPluginAuroraNative() -> UnsafeMutableRawPointer {
   Unmanaged.passRetained(AuroraNativePlugin()).toOpaque()
 }
 
+#if DEBUG
+private struct AuroraIOSVoiceFixturePcmArgs: Decodable {
+  let generation: UInt64
+  let samples: [Float]
+}
+#endif
+
 struct AuroraInvocationRequest: Decodable {
   let action: String
   let correlationId: String?
@@ -57,6 +64,9 @@ public final class AuroraNativePlugin: Plugin {
   private var voiceSession: AuroraIOSVoiceSessionHost?
   private var voiceSessionGeneration: UInt64?
   private var voiceSessionBackground = false
+  private var voiceProfileChangePending = false
+  private var voiceProfileChangeReleased = false
+  private var voiceProfileChangeCompleted = false
   private let packManager = AuroraIOSVoicePackManager.self
 
   private let mobileIntegrations: [[String: Any]] = [
@@ -525,6 +535,70 @@ public final class AuroraNativePlugin: Plugin {
     ])
   }
 
+  #if DEBUG
+  /// Dedicated test-only input: the protected foreground session still owns
+  /// credentials and packs, while PCM enters through its Rust-owned queue.
+  @objc public func iosVoiceLiveTestStart(_ invoke: Invoke) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self, UIApplication.shared.applicationState == .active,
+        !self.voiceProfileChangePending, !self.voiceSessionBackground,
+        self.voiceCapture.stats().running == false
+      else { invoke.reject("fixture_session_unavailable"); return }
+      guard AuroraNativePlugin.nativeTurnTransportReady().available else {
+        invoke.reject("native_voice_transport_unavailable"); return
+      }
+      if let current = self.voiceSession,
+        let status = current.status(), status.active != 0 {
+        invoke.reject("voice_session_already_active"); return
+      }
+      do {
+        self.voiceSession = try AuroraIOSVoiceSessionHost(
+          requiredSlots: ["vad", "kws", "stt", "tts"],
+          storedConfiguration: AVAudioSession.sharedInstance()
+        )
+        guard let session = self.voiceSession else {
+          invoke.reject("native_voice_session_unavailable"); return
+        }
+        let generation = try session.startFixture()
+        self.voiceSessionGeneration = generation
+        self.voiceSessionBackground = false
+        invoke.resolve(["generation": generation, "sampleRateHz": 16000, "maxSamplesPerCall": 4096])
+      } catch {
+        self.voiceSessionGeneration = nil
+        self.voiceSessionBackground = false
+        self.voiceSession = nil
+        invoke.reject("fixture_session_unavailable")
+      }
+    }
+  }
+
+  @objc public func iosVoiceLiveTestPushPcm(_ invoke: Invoke) throws {
+    let args = try invoke.parseArgs(AuroraIOSVoiceFixturePcmArgs.self)
+    guard !args.samples.isEmpty, args.samples.count <= 4096,
+      args.samples.allSatisfy({ $0.isFinite }) else {
+      invoke.reject("fixture_pcm_invalid")
+      return
+    }
+    DispatchQueue.main.async { [weak self] in
+      guard let self, UIApplication.shared.applicationState == .active,
+        !self.voiceProfileChangePending, !self.voiceSessionBackground,
+        self.voiceSessionGeneration == args.generation,
+        let session = self.voiceSession,
+        let status = session.status(), status.active != 0,
+        status.has_generation != 0, status.generation == args.generation
+      else { invoke.reject("fixture_generation_unavailable"); return }
+      do {
+        let sequence = try session.pushFixturePCM(
+          generation: args.generation, samples: args.samples
+        )
+        invoke.resolve(["accepted": true, "sequence": sequence, "sampleCount": args.samples.count])
+      } catch {
+        invoke.reject("fixture_pcm_rejected")
+      }
+    }
+  }
+  #endif
+
   @objc public func voiceForegroundCaptureStart(_ invoke: Invoke) {
     startVoiceCapture(invoke, background: false)
   }
@@ -537,6 +611,20 @@ public final class AuroraNativePlugin: Plugin {
   }
 
   private func startVoiceCapture(_ invoke: Invoke, background: Bool) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else {
+        invoke.reject("capture_unavailable")
+        return
+      }
+      guard !self.voiceProfileChangePending else {
+        invoke.reject("voice_profile_change_pending")
+        return
+      }
+      self.startVoiceCaptureOnMain(invoke, background: background)
+    }
+  }
+
+  private func startVoiceCaptureOnMain(_ invoke: Invoke, background: Bool) {
     let requiredSlots = ["vad", "kws", "stt", "tts"]
     let transportReady = AuroraNativePlugin.nativeTurnTransportReady()
     guard transportReady.available else {
@@ -546,6 +634,10 @@ public final class AuroraNativePlugin: Plugin {
     let startCapture: () -> Void = { [weak self] in
       guard let self else {
         invoke.reject("capture_unavailable")
+        return
+      }
+      guard !self.voiceProfileChangePending else {
+        invoke.reject("voice_profile_change_pending")
         return
       }
       do {
@@ -595,6 +687,150 @@ public final class AuroraNativePlugin: Plugin {
     }
   }
 
+  /// Drains the current native voice generation before the active profile changes.
+  /// The session host remains available for the next profile's voice session.
+  @objc public func releaseVoiceSessionForProfileChange(_ invoke: Invoke) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else {
+        invoke.reject("voice_session_release_unavailable")
+        return
+      }
+
+      if self.voiceProfileChangePending {
+        guard self.voiceSessionGeneration == nil, !self.voiceCapture.stats().running else {
+          invoke.reject("voice_session_release_unconfirmed")
+          return
+        }
+        if let session = self.voiceSession {
+          guard
+            let status = session.status(),
+            status.active == 0,
+            status.has_generation == 0,
+            session.captureStats()?.running != true
+          else {
+            invoke.reject("voice_session_release_unconfirmed")
+            return
+          }
+        }
+        self.voiceProfileChangeReleased = true
+        invoke.resolve(["released": true])
+        return
+      }
+      self.voiceProfileChangePending = true
+      self.voiceProfileChangeReleased = false
+      self.voiceProfileChangeCompleted = false
+
+      guard let session = self.voiceSession else {
+        guard self.voiceSessionGeneration == nil, !self.voiceCapture.stats().running else {
+          invoke.reject("voice_session_release_unconfirmed")
+          return
+        }
+        self.voiceProfileChangeReleased = true
+        invoke.resolve(["released": true])
+        return
+      }
+
+      guard let generation = self.voiceSessionGeneration else {
+        guard
+          let status = session.status(),
+          status.active == 0,
+          status.has_generation == 0,
+          session.captureStats()?.running != true,
+          !self.voiceCapture.stats().running
+        else {
+          invoke.reject("voice_session_release_unconfirmed")
+          return
+        }
+        self.voiceSessionBackground = false
+        self.voiceProfileChangeReleased = true
+        invoke.resolve(["released": true])
+        return
+      }
+
+      guard let existingStatus = session.status() else {
+        invoke.reject("voice_session_release_unconfirmed")
+        return
+      }
+      if existingStatus.active == 0 && existingStatus.has_generation == 0 {
+        guard session.captureStats()?.running != true, !self.voiceCapture.stats().running else {
+          invoke.reject("voice_session_release_unconfirmed")
+          return
+        }
+        self.voiceSessionGeneration = nil
+        self.voiceSessionBackground = false
+        self.voiceProfileChangeReleased = true
+        invoke.resolve(["released": true])
+        return
+      }
+      guard
+        existingStatus.active != 0,
+        existingStatus.has_generation != 0,
+        existingStatus.generation == generation
+      else {
+        invoke.reject("voice_session_release_unconfirmed")
+        return
+      }
+
+      do {
+        try session.cancel(generation: generation)
+        self.voiceCapture.stop()
+        guard
+          let status = session.status(),
+          status.active == 0,
+          status.has_generation == 0,
+          session.captureStats()?.running != true,
+          !self.voiceCapture.stats().running
+        else {
+          invoke.reject("voice_session_release_unconfirmed")
+          return
+        }
+        self.voiceSessionGeneration = nil
+        self.voiceSessionBackground = false
+        self.voiceProfileChangeReleased = true
+        invoke.resolve(["released": true])
+      } catch {
+        invoke.reject("voice_session_release_failed")
+      }
+    }
+  }
+
+  /// Reopens native voice starts after the replacement profile is installed.
+  @objc public func completeVoiceProfileChange(_ invoke: Invoke) {
+    DispatchQueue.main.async { [weak self] in
+      guard let self else {
+        invoke.reject("voice_profile_change_unavailable")
+        return
+      }
+      if self.voiceProfileChangeCompleted {
+        invoke.resolve(["completed": true])
+        return
+      }
+      guard self.voiceProfileChangePending, self.voiceProfileChangeReleased else {
+        invoke.reject("voice_profile_change_not_released")
+        return
+      }
+      if let session = self.voiceSession {
+        guard
+          let status = session.status(),
+          status.active == 0,
+          status.has_generation == 0,
+          session.captureStats()?.running != true
+        else {
+          invoke.reject("voice_profile_change_unconfirmed")
+          return
+        }
+      }
+      guard self.voiceSessionGeneration == nil, !self.voiceCapture.stats().running else {
+        invoke.reject("voice_profile_change_unconfirmed")
+        return
+      }
+      self.voiceProfileChangePending = false
+      self.voiceProfileChangeReleased = false
+      self.voiceProfileChangeCompleted = true
+      invoke.resolve(["completed": true])
+    }
+  }
+
   @objc public func voiceForegroundCaptureStop(_ invoke: Invoke) {
     if let generation = voiceSessionGeneration {
       try? voiceSession?.cancel(generation: generation)
@@ -612,11 +848,13 @@ public final class AuroraNativePlugin: Plugin {
       return
     }
     do {
-      try session.finish(generation: generation)
+      let transcript = try session.finish(generation: generation)
       voiceSessionBackground = false
       voiceSessionGeneration = nil
       let stats = session.captureStats() ?? voiceCapture.stats()
-      invoke.resolve(AuroraNativePlugin.voiceCapturePayload(stats, background: false))
+      var payload = AuroraNativePlugin.voiceCapturePayload(stats, background: false)
+      payload["transcript"] = transcript
+      invoke.resolve(payload)
     } catch {
       invoke.reject("capture_finish_failed")
     }
@@ -1052,50 +1290,6 @@ public final class AuroraNativePlugin: Plugin {
         )
       )
     }
-  }
-
-  @objc public func nodeConfigGet(_ invoke: Invoke) {
-    invoke.resolve(AuroraThinPeerStorage.nodeConfigGet())
-  }
-
-  @objc public func nodeConfigSet(_ invoke: Invoke) {
-    do {
-      let args = try invoke.parseArgs(AuroraNodeConfigSetArgs.self)
-      invoke.resolve(try AuroraThinPeerStorage.nodeConfigSet(value: args.value))
-    } catch {
-      invoke.reject(
-        AuroraThinStorageError.redactedCode(
-          for: error,
-          fallback: "node_config_set_failed"
-        )
-      )
-    }
-  }
-
-  @objc public func nodeConfigDelete(_ invoke: Invoke) {
-    invoke.resolve(AuroraThinPeerStorage.nodeConfigDelete())
-  }
-
-  @objc public func nodeConfigV2Get(_ invoke: Invoke) {
-    invoke.resolve(AuroraThinPeerStorage.nodeConfigV2Get())
-  }
-
-  @objc public func nodeConfigV2Set(_ invoke: Invoke) {
-    do {
-      let args = try invoke.parseArgs(AuroraNodeConfigSetArgs.self)
-      invoke.resolve(try AuroraThinPeerStorage.nodeConfigV2Set(value: args.value))
-    } catch {
-      invoke.reject(
-        AuroraThinStorageError.redactedCode(
-          for: error,
-          fallback: "node_config_v2_set_failed"
-        )
-      )
-    }
-  }
-
-  @objc public func nodeConfigV2Delete(_ invoke: Invoke) {
-    invoke.resolve(AuroraThinPeerStorage.nodeConfigV2Delete())
   }
 
   @objc public func thinRoomSecretSet(_ invoke: Invoke) {

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { AlertTriangle, CalendarClock, Edit3, Pause, Play, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import type {
   AuroraClient,
@@ -27,6 +27,10 @@ import {
   StatStrip,
   type DataColumn
 } from './primitives'
+import { RouteStateNotice } from './state-surface'
+import { useAdminList, useAuroraQueryKeys } from './query-hooks'
+import { useAuroraQueryScope, useAuroraQueryScopeKey, type AuroraQueryScopeKey } from './query'
+import { useQueryClient } from '@tanstack/react-query'
 
 export type SchedulerLoadState =
   | 'loading'
@@ -61,6 +65,7 @@ export interface SchedulerJobRow {
   status: string
   namespace: string
   ownership: SchedulerOwnershipState
+  ownerPeerId: string
   ownerLabel: string
   targetLabel: string
   approvalLabel: string
@@ -127,8 +132,12 @@ type SchedulerActionKind = 'orchestrator.user_input' | 'tooling.execute'
 
 export async function buildAdminSchedulerSnapshot(
   client: AuroraClient,
-  route?: RouteAvailability
+  route?: RouteAvailability,
+  options: { signal?: AbortSignal } = {}
 ): Promise<AdminSchedulerSnapshot> {
+  throwIfSchedulerSnapshotAborted(options.signal)
+  const signalOptions = options.signal ? { signal: options.signal } : {}
+
   if (route?.disabled) {
     return {
       ...loadingSchedulerSnapshot,
@@ -140,12 +149,14 @@ export async function buildAdminSchedulerSnapshot(
     }
   }
 
-  const [jobsResult, methodsResult, catalogResult, toolsResult] = await Promise.allSettled([
-    client.scheduler.listNormalizedJobs({ limit: 100 }),
-    client.registry.listMethods(),
-    client.capabilities.listCatalog({ include_unavailable: true }),
-    client.tools.listApprovalCards({ include_unavailable: true, top_k: 1000 })
+  const results = await Promise.allSettled([
+    client.scheduler.listNormalizedJobs({ limit: 100 }, signalOptions),
+    client.registry.listMethods(signalOptions),
+    client.capabilities.listCatalog({ include_unavailable: true }, signalOptions),
+    client.tools.listApprovalCards({ include_unavailable: true, top_k: 1000 }, signalOptions)
   ])
+  throwIfSchedulerSnapshotSettledAborted(options.signal, results)
+  const [jobsResult, methodsResult, catalogResult, toolsResult] = results
   const jobs = valueOrNull(jobsResult) ?? []
   const methods = valueOrNull(methodsResult) ?? []
   const catalog = valueOrNull(catalogResult)
@@ -192,8 +203,148 @@ export async function buildAdminSchedulerSnapshot(
   }
 }
 
-export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSchedulerViewProps) {
+
+function adminSchedulerQueryRequest(route: RouteAvailability) {
+  return {
+    routeId: route.item.id,
+    state: route.state,
+    disabled: route.disabled,
+    routeable: route.routeable,
+    selectorRequired: route.selectorRequired,
+    approvalRequired: route.approvalRequired,
+    requiresAdminAction: route.requiresAdminAction,
+  }
+}
+
+
+function schedulerOperationScopeKey(scopeKey: AuroraQueryScopeKey, request: ReturnType<typeof adminSchedulerQueryRequest>): string {
+  return JSON.stringify([scopeKey, request])
+}
+
+function disabledAdminSchedulerSnapshot(route: RouteAvailability): AdminSchedulerSnapshot {
+  return {
+    ...loadingSchedulerSnapshot,
+    loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
+    error: adminRouteCopy(route),
+    warnings: route.blockers.map((blocker) => adminReasonText(blocker)),
+    evidenceSource: route.providerLabel,
+    toolOptions: []
+  }
+}
+
+function adminSchedulerQueryErrorSnapshot(route: RouteAvailability, error: unknown): AdminSchedulerSnapshot {
+  const message = adminErrorTitle(error, 'Scheduler jobs are unavailable. Try again.')
+  return {
+    ...loadingSchedulerSnapshot,
+    loadState: 'error',
+    error: message,
+    warnings: [message],
+    evidenceSource: route.providerLabel,
+    toolOptions: []
+  }
+}
+
+export function AdminSchedulerView(props: AdminSchedulerViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (!hasQueryScope) return <AdminSchedulerStaticView {...props} />
+  return <AdminSchedulerQueryView {...props} />
+}
+
+function AdminSchedulerStaticView({ client, route, initialSnapshot }: AdminSchedulerViewProps) {
   const [snapshot, setSnapshot] = useState<AdminSchedulerSnapshot>(initialSnapshot ?? loadingSchedulerSnapshot)
+  const schedulerQueryRequest = useMemo(() => adminSchedulerQueryRequest(route), [route])
+  const operationScopeKey = useMemo(() => schedulerOperationScopeKey(['aurora', 'static'], schedulerQueryRequest), [schedulerQueryRequest])
+  const currentOperationScopeRef = useRef(operationScopeKey)
+  currentOperationScopeRef.current = operationScopeKey
+
+  useEffect(() => {
+    if (route.disabled) {
+      setSnapshot(disabledAdminSchedulerSnapshot(route))
+      return
+    }
+    let active = true
+    if (initialSnapshot && initialSnapshot.loadState !== 'loading') {
+      setSnapshot(initialSnapshot)
+      return
+    }
+    setSnapshot(loadingSchedulerSnapshot)
+    buildAdminSchedulerSnapshot(client, route).then((next) => {
+      if (active) setSnapshot(next)
+    })
+    return () => {
+      active = false
+    }
+  }, [client, initialSnapshot, route])
+
+  return (
+    <AdminSchedulerInner
+      client={client}
+      route={route}
+      snapshot={route.disabled ? disabledAdminSchedulerSnapshot(route) : snapshot}
+      operationScopeKey={operationScopeKey}
+      onMutationSuccess={async (submittedOperationScopeKey) => {
+        if (currentOperationScopeRef.current !== submittedOperationScopeKey || route.disabled) return
+        const nextSnapshot = await buildAdminSchedulerSnapshot(client, route)
+        if (currentOperationScopeRef.current === submittedOperationScopeKey && !route.disabled) setSnapshot(nextSnapshot)
+      }}
+    />
+  )
+}
+
+function AdminSchedulerQueryView({ client, route, initialSnapshot }: AdminSchedulerViewProps) {
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const queryScopeKey = useAuroraQueryScopeKey()
+  const schedulerQueryRequest = useMemo(() => adminSchedulerQueryRequest(route), [route])
+  const schedulerQueryKey = useMemo(() => queryKeys.admin('scheduler', schedulerQueryRequest), [queryKeys, schedulerQueryRequest])
+  const operationScopeKey = useMemo(() => schedulerOperationScopeKey(queryScopeKey, schedulerQueryRequest), [queryScopeKey, schedulerQueryRequest])
+  const currentOperationScopeRef = useRef(operationScopeKey)
+  currentOperationScopeRef.current = operationScopeKey
+  const initialSnapshotScopeRef = useRef<string | null>(null)
+  let initialQueryData: AdminSchedulerSnapshot | undefined
+  if (initialSnapshot && initialSnapshot.loadState !== 'loading' && !route.disabled) {
+    if (initialSnapshotScopeRef.current === null) initialSnapshotScopeRef.current = operationScopeKey
+    if (initialSnapshotScopeRef.current === operationScopeKey) initialQueryData = initialSnapshot
+  }
+  const schedulerQuery = useAdminList({
+    resource: 'scheduler',
+    request: schedulerQueryRequest,
+    queryFn: (queryClientValue, _request, signal) => buildAdminSchedulerSnapshot(queryClientValue, route, { signal }),
+    options: {
+      enabled: !route.disabled,
+      initialData: initialQueryData,
+    }
+  })
+  const snapshot = route.disabled
+    ? disabledAdminSchedulerSnapshot(route)
+    : schedulerQuery.data ?? (schedulerQuery.error ? adminSchedulerQueryErrorSnapshot(route, schedulerQuery.error) : loadingSchedulerSnapshot)
+  return (
+    <AdminSchedulerInner
+      client={client}
+      route={route}
+      snapshot={snapshot}
+      operationScopeKey={operationScopeKey}
+      onMutationSuccess={async (submittedOperationScopeKey) => {
+        if (currentOperationScopeRef.current !== submittedOperationScopeKey) return
+        await queryClient.invalidateQueries({ queryKey: schedulerQueryKey })
+      }}
+    />
+  )
+}
+
+function AdminSchedulerInner({
+  client,
+  route,
+  snapshot,
+  operationScopeKey,
+  onMutationSuccess,
+}: {
+  client: AuroraClient
+  route: RouteAvailability
+  snapshot: AdminSchedulerSnapshot
+  operationScopeKey: string
+  onMutationSuccess: (operationScopeKey: string) => Promise<void>
+}) {
   const [operation, setOperation] = useState<SchedulerOperationState | null>(null)
   const [reason, setReason] = useState('Scheduler admin change')
   const [reauthConfirmed, setReauthConfirmed] = useState(false)
@@ -205,18 +356,6 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
   const [selectedToolId, setSelectedToolId] = useState('')
   const [toolArguments, setToolArguments] = useState('{}')
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null)
-
-  useEffect(() => {
-    let active = true
-    if (initialSnapshot && initialSnapshot.loadState !== 'loading') return
-    setSnapshot(loadingSchedulerSnapshot)
-    buildAdminSchedulerSnapshot(client, route).then((next) => {
-      if (active) setSnapshot(next)
-    })
-    return () => {
-      active = false
-    }
-  }, [client, route, initialSnapshot])
 
   const selectedTarget = useMemo(
     () => snapshot.createControl.targetOptions.find((option) => option.id === targetPeer) ?? snapshot.createControl.targetOptions[0] ?? null,
@@ -235,6 +374,17 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
     && operation?.status !== 'pending'
 
   async function runAdminAction(label: string, methodId: string, payload: JsonObject) {
+    operationAbortRef.current?.abort()
+    const controller = new AbortController()
+    operationAbortRef.current = controller
+    const submittedOperationScopeKey = operationScopeKey
+    operationGenerationRef.current += 1
+    const submittedGeneration = operationGenerationRef.current
+    const isCurrentOperation = () => mountedRef.current
+      && !controller.signal.aborted
+      && operationScopeRef.current === submittedOperationScopeKey
+      && operationGenerationRef.current === submittedGeneration
+
     if (!reauthConfirmed) {
       setOperation({ status: 'failed', message: `${label} requires your recent admin unlock before submit.`, auditReceipt: null })
       return
@@ -247,17 +397,21 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
         reason: reason.trim(),
         reauthConfirmed,
         affectedResources: ['scheduler.jobs'],
-        path: pathForSchedulerMethod(methodId)
+        path: pathForSchedulerMethod(methodId),
+        signal: controller.signal
       })
+      if (!isCurrentOperation()) return
       setOperation({
         status: result.data.ok ? 'ok' : 'failed',
         message: result.data.reason ?? `${label} returned ${result.data.status}.`,
         auditReceipt: result.data.audit_event ?? result.confirmation.audit_receipt
       })
-      const next = await buildAdminSchedulerSnapshot(client, route)
-      setSnapshot(next)
+      await onMutationSuccess(submittedOperationScopeKey)
+      if (!isCurrentOperation()) return
     } catch (error) {
-      setOperation({ status: 'failed', message: errorMessage(error), auditReceipt: null })
+      if (isCurrentOperation()) setOperation({ status: 'failed', message: errorMessage(error), auditReceipt: null })
+    } finally {
+      if (operationAbortRef.current === controller) operationAbortRef.current = null
     }
   }
 
@@ -291,6 +445,30 @@ export function AdminSchedulerView({ client, route, initialSnapshot }: AdminSche
     }
     void runAdminAction('Schedule typed action', SCHEDULER_METHODS.scheduleAction, payload as unknown as JsonObject)
   }
+
+  const mountedRef = useRef(true)
+  const operationScopeRef = useRef(operationScopeKey)
+  operationScopeRef.current = operationScopeKey
+  const operationGenerationRef = useRef(0)
+  const operationAbortRef = useRef<AbortController | null>(null)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      operationGenerationRef.current += 1
+      operationAbortRef.current?.abort()
+      operationAbortRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    operationScopeRef.current = operationScopeKey
+    operationGenerationRef.current += 1
+    operationAbortRef.current?.abort()
+    operationAbortRef.current = null
+    setOperation(null)
+  }, [operationScopeKey])
 
   const selectedJob = useMemo(
     () => snapshot.jobs.find((job) => job.id === selectedJobId) ?? null,
@@ -443,19 +621,17 @@ function SchedulerStatusPanel({
   route: RouteAvailability
   operation: SchedulerOperationState | null
 }) {
-  const noticeClass = 'flex items-center gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground'
-  const warningClass = 'flex items-center gap-2 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning'
-  if (snapshot.loadState === 'loading') return <div className={noticeClass} aria-live="polite"><CalendarClock size={16} aria-hidden />Loading scheduler jobs through Aurora.</div>
-  if (route.disabled) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{adminRouteCopy(route)}</div>
-  if (snapshot.loadState === 'empty') return <div className={noticeClass} role="status"><CalendarClock size={16} aria-hidden />No scheduler jobs were returned for this namespace.</div>
-  if (snapshot.error) return <div className={warningClass} role="alert"><AlertTriangle size={16} aria-hidden />{snapshot.error}</div>
+  if (snapshot.loadState === 'loading') return <RouteStateNotice state="loading" title="Loading scheduler jobs" message="Loading scheduler jobs through Aurora." />
+  if (route.disabled) return <RouteStateNotice state={route.state === 'denied' ? 'permission' : 'error'} title="Scheduler unavailable" message={adminRouteCopy(route)} />
+  if (snapshot.loadState === 'empty') return <RouteStateNotice state="empty" title="No scheduler jobs" message="No scheduler jobs were returned for this namespace." />
+  if (snapshot.error) return <RouteStateNotice state="error" title="Scheduler needs attention" message={snapshot.error} />
   if (operation) {
     return (
-      <div className={operation.status === 'failed' ? warningClass : noticeClass} role={operation.status === 'failed' ? 'alert' : 'status'}>
-        <ShieldCheck size={16} aria-hidden />
-        <span>{operation.message}</span>
-        {operation.auditReceipt ? <code className="font-mono text-xs">{operation.auditReceipt}</code> : null}
-      </div>
+      <RouteStateNotice
+        state={operation.status === 'failed' ? 'error' : 'loading'}
+        title={operation.status === 'failed' ? 'Scheduler change needs attention' : 'Scheduler change pending'}
+        message={operation.auditReceipt ? `${operation.message} ${operation.auditReceipt}` : operation.message}
+      />
     )
   }
   return null
@@ -536,7 +712,7 @@ function SchedulerJobsTable({
                 onClick={() => void onRun(
                   `${toggle.action} ${job.name}`,
                   toggle.methodId,
-                  { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
+                  { job_id: job.id, namespace: job.namespace, owner_peer_id: job.ownerPeerId, caller_peer_id: 'local-peer' }
                 )}
               >
                 {toggle.action === 'pause' ? 'Pause' : 'Resume'}
@@ -552,7 +728,7 @@ function SchedulerJobsTable({
                 onClick={() => void onRun(
                   `${control.action} ${job.name}`,
                   control.methodId,
-                  { job_id: job.id, namespace: job.namespace, owner_peer_id: ownerPeerFromLabel(job.ownerLabel), caller_peer_id: 'local-peer' }
+                  { job_id: job.id, namespace: job.namespace, owner_peer_id: job.ownerPeerId, caller_peer_id: 'local-peer' }
                 )}
               >
                 {control.action}
@@ -585,6 +761,7 @@ function jobRow(job: NormalizedSchedulerJob, methods: MethodDescriptor[]): Sched
     status: job.status ?? (job.enabled ? 'active' : 'disabled'),
     namespace: job.namespace,
     ownership,
+    ownerPeerId: job.owner_peer_id,
     ownerLabel: `${job.owner_peer_id}/${job.owner_principal_id}`,
     targetLabel: job.target_peer_id ? `${job.target_peer_id}${job.target_resource_namespace ? ` / ${job.target_resource_namespace}` : ''}` : 'local node',
     approvalLabel: approvalLabel(job),
@@ -849,12 +1026,32 @@ function pathForSchedulerMethod(methodId: string): string {
   return routePath('Scheduler', method ?? 'ListJobs')
 }
 
-function ownerPeerFromLabel(label: string): string {
-  return label.split('/')[0] || 'local-peer'
-}
 
 function valueOrNull<T>(result: PromiseSettledResult<T>): T | null {
   return result.status === 'fulfilled' ? result.value : null
+}
+
+function throwIfSchedulerSnapshotSettledAborted(signal: AbortSignal | undefined, results: readonly PromiseSettledResult<unknown>[]): void {
+  throwIfSchedulerSnapshotAborted(signal)
+  const abortedResult = results.find((result) => result.status === 'rejected' && isAbortError(result.reason))
+  if (abortedResult?.status === 'rejected') throw abortedResult.reason
+}
+
+function throwIfSchedulerSnapshotAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return
+  throw signal.reason ?? schedulerSnapshotAbortError()
+}
+
+function schedulerSnapshotAbortError(): Error {
+  if (typeof DOMException !== 'undefined') return new DOMException('Scheduler snapshot request was cancelled', 'AbortError')
+  const error = new Error('Scheduler snapshot request was cancelled')
+  error.name = 'AbortError'
+  return error
+}
+
+function isAbortError(error: unknown): boolean {
+  return (typeof DOMException !== 'undefined' && error instanceof DOMException && error.name === 'AbortError')
+    || (typeof error === 'object' && error !== null && 'name' in error && (error as { name?: unknown }).name === 'AbortError')
 }
 
 function failureMessage(label: string, result: PromiseSettledResult<unknown>): string | null {

@@ -150,6 +150,8 @@ Generated peer-host registration derives input/output schemas, projection method
 
 ## Tauri Local
 
+Generic Gateway IPC calls use a text-only wire argument: the bundled `aurora_command` and compatibility alias `aurora_request` require `requestJson` containing JSON text. The public `AuroraClient` request API is unchanged. Custom generic request commands can choose a different string argument with `requestJsonArgName`; `requestArgName` still names the object argument used by event subscribe, snapshot, acknowledgement, and unsubscribe commands. Direct raw-command callers must migrate from an object-valued `request` argument to the JSON string argument; the generic commands do not accept an object fallback.
+
 ```ts
 import { AuroraClient, TauriLocalTransport, buildCapabilityGraph } from '@aurora/client'
 
@@ -487,6 +489,120 @@ for await (const event of client.events.watchConfig({ backfill: true })) {
   event.audit.transport // "tauri-local"
   event.audit.correlationId
 }
+```
+
+### Native event source (partial feature)
+
+Native event observation is exposed through the existing `client.events` family. It is an observation lane only: event kinds and subjects let a UI select which native events to display, but they do not grant command authority, peer trust, mesh authorization, or route access. Authorization stays with the backend/native authority path used by the command or route being observed.
+
+A host can provide a native event transport beside the primary SDK transport. Native subscriptions still use the existing `aurora_subscribe` descriptor, `aurora_activate_subscription`, and `aurora_unsubscribe` lifecycle; snapshots use `aurora_native_event_snapshot` through `client.events.snapshot(...)` instead of a parallel native-events API.
+
+```ts
+const client = new AuroraClient({
+  transport: gatewayOrMeshTransport,
+  nativeEventTransport: new TauriLocalTransport({
+    invoke: window.__TAURI__.core.invoke,
+    commands: {
+      eventSubscribe: 'aurora_subscribe',
+      eventSnapshot: 'aurora_native_event_snapshot'
+    }
+  })
+})
+
+const assistantEvents = client.events.subscribe({
+  source: 'native',
+  kinds: ['assistant.delta', 'assistant.completed'],
+  subject: 'request-123',
+  lastEventId: 'native:41',
+  backfill: true
+})
+
+for await (const event of assistantEvents) {
+  event.id // "native:<sequence>"
+  event.audit.transport // "native"
+}
+```
+
+Native filters normalize subjects to bare IDs for the bridge. Object filters are accepted for caller readability, but the SDK currently sends only the `id` string because the native hub standardizes subjects as bare request or peer IDs. Use typed `kinds` for display routing and bounded UI state; do not treat a received event kind as permission to execute a command.
+
+```ts
+client.events.subscribe({
+  source: 'native',
+  kinds: ['voice.turn.started', 'voice.turn.finalized'],
+  subjects: [
+    { type: 'request', id: 'request-123' },
+    { type: 'peer', id: 'peer-phone' }
+  ]
+})
+
+// Bridge request subjects: ['request-123', 'peer-phone']
+```
+
+Replay cursors are sequence-backed. A delivered native event ID is `native:<sequence>`. Snapshot responses return `lastSequenceId` in that same `native:<sequence>` form, or `null` before the first native event. A gap marker is `native:gap:<firstMissingSequence>`, and a snapshot should ask for the numeric sequence before the gap so the missing event is not skipped when replay history is still available.
+
+```ts
+const snapshot = await client.events.snapshot({
+  source: 'native',
+  kinds: ['assistant.delta', 'assistant.completed'],
+  subject: 'request-123',
+  afterSequence: 41
+})
+
+snapshot.events // events after native:41
+snapshot.lastSequenceId // "native:<sequence>" | null
+snapshot.replayComplete
+```
+
+The Rust hub keeps bounded replay and subject snapshots independently of the WebView. Lifecycle, terminal, and persistence events never silently evict another lifecycle or terminal event: if a hub subscriber cannot keep up, the hub sends a gap marker and closes that subscription so the UI can reconcile an authoritative snapshot. Lossy progress may evict older lossy progress. This deliberately avoids blocking native speech or persistence on an absent or stalled UI; it replaces the plan's blocking-backpressure proposal with explicit recoverable discontinuities. The Tauri SDK bridge uses one-event credit to bound native IPC delivery. If native IPC delivers another event before the previous event is acknowledged, the SDK reports `transport_loss` and cleans up the subscription instead of emitting a synthetic gap or applying backpressure to voice capture, assistant generation, or saving.
+
+When the native hub emits `native.events.gap`, `useAuroraEvents` can request `client.events.snapshot({ source: 'native', afterSequence })`, apply the feature's `onSnapshot` recovery decision, and resubscribe with the recovered `lastEventId`/`lastSequenceId`. Consumers should keep their own rendered event list bounded, dedupe by event ID, and recover with a snapshot before continuing display. This recovery is not a server data store: it depends on the native hub retaining the requested sequence window or returning authoritative subject state, including persisted or persistence-failed voice turn state when saving completed while the UI was absent. If `replayComplete` is `false`, do not replay partial snapshot events over accumulated subject state; first reconcile `subjects`, then resume from `lastSequenceId` only after that reconciliation succeeds. Local IPC protocol faults, including an ack-window violation, surface as subscription errors and cleanup; the hook does not automatically snapshot-recover those faults. Until the integrated Rust snapshot bridge proves that consumption path end to end, native gap recovery remains a partial feature rather than an acceptance claim.
+
+```ts
+for await (const event of client.events.subscribe({
+  source: 'native',
+  kinds: ['assistant.delta'],
+  subject: 'request-123',
+  lastEventId: 'native:41'
+})) {
+  if (event.kind !== 'native.events.gap') {
+    appendBoundedAndDedupe(event)
+    continue
+  }
+
+  const firstMissingSequence = Number(event.id?.replace('native:gap:', ''))
+  const recovered = await client.events.snapshot({
+    source: 'native',
+    kinds: ['assistant.delta'],
+    subject: 'request-123',
+    afterSequence: firstMissingSequence - 1
+  })
+
+  if (recovered.replayComplete) {
+    for (const replayed of recovered.events) appendBoundedAndDedupe(replayed)
+  } else {
+    await reconcileAuthoritativeSubjectState(recovered.subjects ?? [])
+  }
+
+  resumeFrom(recovered.lastSequenceId)
+}
+```
+
+A second peer consumer uses the same contract with a different bare peer subject. This lets separate UI surfaces observe their selected native peer without sharing cursor state or trust decisions.
+
+```ts
+const phonePeerEvents = client.events.subscribe({
+  source: 'native',
+  kinds: ['mesh.peer.state_changed'],
+  subject: { type: 'peer', id: 'peer-phone' },
+  lastEventId: 'native:120'
+})
+
+const tabletPeerEvents = client.events.subscribe({
+  source: 'native',
+  kinds: ['mesh.peer.state_changed'],
+  subject: { type: 'peer', id: 'peer-tablet' },
+  lastEventId: 'native:84'
+})
 ```
 
 Mesh subscriptions are bridge-owned. The bridge may use WebRTC DataChannels, a local Gateway, or a native command, but it must return backend/peer event evidence:

@@ -29,6 +29,11 @@ export const GATEWAY_METHODS = {
   adminActionConfirm: 'Gateway.AdminActionConfirm'
 } as const
 
+/** Gateway event topics with an explicit backend subscription contract. */
+export const GATEWAY_EVENT_TOPICS = {
+  statusChanged: 'Gateway.StatusChanged'
+} as const
+
 export const AUTH_METHODS = {
   login: 'Auth.Login',
   validateToken: 'Auth.ValidateToken',

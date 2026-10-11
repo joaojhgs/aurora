@@ -1,16 +1,19 @@
 import { RouteMatrix, StateSurface } from '@aurora/ui'
 import { getShellSnapshot } from './shell-state'
 import { auroraWebRouteById } from './route-registry'
+import { PRODUCT_ROUTE_COPY } from './product-copy'
 
 export interface AuroraRoutePageProps {
   routeId: string
-  title: string
-  description: string
 }
 
-export async function AuroraRoutePage({ routeId, title, description }: AuroraRoutePageProps) {
+export async function AuroraRoutePage({ routeId }: AuroraRoutePageProps) {
   const snapshot = await getShellSnapshot()
   const item = auroraWebRouteById.get(routeId)
+  const copy = PRODUCT_ROUTE_COPY[routeId] ?? {
+    title: item?.label ?? 'Page unavailable',
+    description: 'This feature is available through Aurora.',
+  }
   const route = snapshot.routes.find((candidate) => candidate.item.id === routeId)
   const state = route?.state ?? item?.fallbackState ?? 'unsupported'
   const evidence = route
@@ -19,9 +22,9 @@ export async function AuroraRoutePage({ routeId, title, description }: AuroraRou
   return (
     <div className="aw-page-stack">
       <StateSurface
-        title={title}
+        title={copy.title}
         state={state}
-        description={description}
+        description={copy.description}
         evidence={evidence}
         actionLabel={route?.requiresAdminAction ? 'Approval needed' : route?.disabled ? 'Feature unavailable' : null}
       />
@@ -30,8 +33,8 @@ export async function AuroraRoutePage({ routeId, title, description }: AuroraRou
           <h2>Feature Status</h2>
           <dl className="aw-facts">
             <div><dt>Availability</dt><dd>{route ? 'Checked by Aurora' : 'Not available yet'}</dd></div>
-            <div><dt>Expected task</dt><dd>{route?.item.expectedTask ?? 'Open this page when Aurora marks it ready'}</dd></div>
-            <div><dt>Privacy class</dt><dd>{route?.item.privacyClass ?? 'unknown'}</dd></div>
+            <div><dt>About</dt><dd>{copy.description}</dd></div>
+            <div><dt>Access</dt><dd>{route ? 'Checked by Aurora' : 'Not available yet'}</dd></div>
             <div><dt>Changes</dt><dd>{route?.requiresAdminAction ? 'Extra confirmation required' : 'Unavailable actions stay off until Aurora confirms them'}</dd></div>
           </dl>
         </section>

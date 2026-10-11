@@ -231,6 +231,12 @@
           "markdownDescription": "Enables the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_android_voice_live_test_playback_counters command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-android-voice-live-test-playback-counters",
+          "markdownDescription": "Enables the aurora_android_voice_live_test_playback_counters command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_android_voice_pack_activate command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-android-voice-pack-activate",
@@ -501,6 +507,30 @@
           "markdownDescription": "Enables the aurora_mesh_session_bind command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-prepare",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-verify-fresh-rebind",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-verify-peer-boundary",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-mesh-session-live-privacy-verify-profile-reset",
+          "markdownDescription": "Enables the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_mesh_session_set_lifecycle command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-mesh-session-set-lifecycle",
@@ -523,6 +553,18 @@
           "type": "string",
           "const": "allow-aurora-native-capability-manifest",
           "markdownDescription": "Enables the aurora_native_capability_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_event_ack command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-event-ack",
+          "markdownDescription": "Enables the aurora_native_event_ack command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_native_event_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-native-event-snapshot",
+          "markdownDescription": "Enables the aurora_native_event_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_native_open_deep_link command without any pre-configured scope.",
@@ -571,6 +613,42 @@
           "type": "string",
           "const": "allow-aurora-native-voice-tray-toggle-e2e",
           "markdownDescription": "Enables the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-delete",
+          "markdownDescription": "Enables the aurora_node_config_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-get",
+          "markdownDescription": "Enables the aurora_node_config_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-set",
+          "markdownDescription": "Enables the aurora_node_config_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_v2_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-v2-delete",
+          "markdownDescription": "Enables the aurora_node_config_v2_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_v2_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-v2-get",
+          "markdownDescription": "Enables the aurora_node_config_v2_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_node_config_v2_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-node-config-v2-set",
+          "markdownDescription": "Enables the aurora_node_config_v2_set command without any pre-configured scope."
         },
         {
           "description": "Enables the aurora_remote_origin_policy command without any pre-configured scope.",
@@ -681,6 +759,24 @@
           "markdownDescription": "Enables the aurora_thin_profile_set command without any pre-configured scope."
         },
         {
+          "description": "Enables the aurora_thin_room_secret_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-room-secret-delete",
+          "markdownDescription": "Enables the aurora_thin_room_secret_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_room_secret_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-room-secret-get",
+          "markdownDescription": "Enables the aurora_thin_room_secret_get command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the aurora_thin_room_secret_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-aurora-thin-room-secret-set",
+          "markdownDescription": "Enables the aurora_thin_room_secret_set command without any pre-configured scope."
+        },
+        {
           "description": "Enables the aurora_unsubscribe command without any pre-configured scope.",
           "type": "string",
           "const": "allow-aurora-unsubscribe",
@@ -699,10 +795,10 @@
           "markdownDescription": "Allow Android client/mobile runtime to read bounded native status, control the foreground voice session, and use narrow Android Keystore-backed inbound verifier storage. Generic secure storage is granted separately."
         },
         {
-          "description": "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue.",
+          "description": "Allow debug-only Android voice live acceptance to inject bounded PCM, read passive playback counters, and verify native event privacy boundaries.",
           "type": "string",
           "const": "aurora-android-voice-live-e2e",
-          "markdownDescription": "Allow the maintained debug-only Android voice live test to inject bounded PCM into the native capture queue."
+          "markdownDescription": "Allow debug-only Android voice live acceptance to inject bounded PCM, read passive playback counters, and verify native event privacy boundaries."
         },
         {
           "description": "Allow the trusted Tauri shell to configure a narrow assistant provider, check redacted provider status, and complete assistant turns without returning provider secrets to WebView JavaScript.",
@@ -825,6 +921,12 @@
           "markdownDescription": "Allow a native Aurora shell to carry WebRTC peer connections and data channels through the Rust transport. Signaling, pairing, encryption, reconnect, and Aurora RPC remain in the shared TypeScript runtime."
         },
         {
+          "description": "Allow the node-owned, nonsecret routing policy document through its fixed platform storage namespace. This does not expose generic credential storage or arbitrary keys.",
+          "type": "string",
+          "const": "aurora-node-config",
+          "markdownDescription": "Allow the node-owned, nonsecret routing policy document through its fixed platform storage namespace. This does not expose generic credential storage or arbitrary keys."
+        },
+        {
           "description": "Allow notification status checks and structured denied send responses without granting notification delivery by default.",
           "type": "string",
           "const": "aurora-notifications",
@@ -885,10 +987,10 @@
           "markdownDescription": "Allow the frontend SDK adapter to stop the Rust-supervised local Aurora Python sidecar after sidecar-session token proof."
         },
         {
-          "description": "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route.",
+          "description": "Allow the frontend SDK adapter to observe Aurora events through Gateway or native subscriptions and recover native state snapshots.",
           "type": "string",
           "const": "aurora-subscribe",
-          "markdownDescription": "Allow the frontend SDK adapter to open, activate, and close the Aurora EventStream subscription bridge through the configured Gateway SSE route."
+          "markdownDescription": "Allow the frontend SDK adapter to observe Aurora events through Gateway or native subscriptions and recover native state snapshots."
         },
         {
           "description": "Allow thin WebView runtimes to store/delete/status opaque peer reconnect credentials, request challenge-bound reconnect proofs without returning raw bearer tokens, and store/retrieve the separately scoped room secret required to rebuild an approved WebRTC session.",
@@ -961,6 +1063,12 @@
           "type": "string",
           "const": "deny-aurora-android-voice-live-test-inject-pcm",
           "markdownDescription": "Denies the aurora_android_voice_live_test_inject_pcm command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_android_voice_live_test_playback_counters command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-android-voice-live-test-playback-counters",
+          "markdownDescription": "Denies the aurora_android_voice_live_test_playback_counters command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_android_voice_pack_activate command without any pre-configured scope.",
@@ -1233,6 +1341,30 @@
           "markdownDescription": "Denies the aurora_mesh_session_bind command without any pre-configured scope."
         },
         {
+          "description": "Denies the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-prepare",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_prepare command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-verify-fresh-rebind",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_verify_fresh_rebind command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-verify-peer-boundary",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-mesh-session-live-privacy-verify-profile-reset",
+          "markdownDescription": "Denies the aurora_mesh_session_live_privacy_verify_profile_reset command without any pre-configured scope."
+        },
+        {
           "description": "Denies the aurora_mesh_session_set_lifecycle command without any pre-configured scope.",
           "type": "string",
           "const": "deny-aurora-mesh-session-set-lifecycle",
@@ -1255,6 +1387,18 @@
           "type": "string",
           "const": "deny-aurora-native-capability-manifest",
           "markdownDescription": "Denies the aurora_native_capability_manifest command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_event_ack command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-event-ack",
+          "markdownDescription": "Denies the aurora_native_event_ack command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_native_event_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-native-event-snapshot",
+          "markdownDescription": "Denies the aurora_native_event_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_native_open_deep_link command without any pre-configured scope.",
@@ -1303,6 +1447,42 @@
           "type": "string",
           "const": "deny-aurora-native-voice-tray-toggle-e2e",
           "markdownDescription": "Denies the aurora_native_voice_tray_toggle_e2e command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-delete",
+          "markdownDescription": "Denies the aurora_node_config_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-get",
+          "markdownDescription": "Denies the aurora_node_config_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-set",
+          "markdownDescription": "Denies the aurora_node_config_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_v2_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-v2-delete",
+          "markdownDescription": "Denies the aurora_node_config_v2_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_v2_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-v2-get",
+          "markdownDescription": "Denies the aurora_node_config_v2_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_node_config_v2_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-node-config-v2-set",
+          "markdownDescription": "Denies the aurora_node_config_v2_set command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_remote_origin_policy command without any pre-configured scope.",
@@ -1411,6 +1591,24 @@
           "type": "string",
           "const": "deny-aurora-thin-profile-set",
           "markdownDescription": "Denies the aurora_thin_profile_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_room_secret_delete command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-room-secret-delete",
+          "markdownDescription": "Denies the aurora_thin_room_secret_delete command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_room_secret_get command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-room-secret-get",
+          "markdownDescription": "Denies the aurora_thin_room_secret_get command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the aurora_thin_room_secret_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-aurora-thin-room-secret-set",
+          "markdownDescription": "Denies the aurora_thin_room_secret_set command without any pre-configured scope."
         },
         {
           "description": "Denies the aurora_unsubscribe command without any pre-configured scope.",

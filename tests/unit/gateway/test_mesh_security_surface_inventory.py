@@ -27,7 +27,7 @@ SCHEMA_PATH = ROOT / "docs/security/mesh-security-surface-inventory.schema.json"
 
 EXPECTED_METHOD_COUNT = 123
 EXPECTED_PERMISSIONLESS_METHOD_COUNT = 0
-EXPECTED_MESH_PUBLISHER_COUNT = 0
+EXPECTED_MESH_PUBLISHER_COUNT = 1
 EXPECTED_PERMISSIONLESS_TOPICS: set[str] = set()
 EXPECTED_METHOD_COUNTS_BY_MODULE = {
     "DB": 11,
@@ -187,8 +187,31 @@ def test_mesh_security_inventory_domain_invariants():
     assert method_sites == _external_method_contract_sites(
         {method["source"]["file"] for method in methods}
     )
-    assert publisher_sites == []
+    assert publisher_sites == [("app/services/gateway/service.py", 2160)]
     assert set(publisher_sites) == _mesh_publish_call_sites()
+    assert publishers == [
+        {
+            "topic": "Gateway.StatusChanged",
+            "payload_type": "GatewayStatusChangedEvent",
+            "payload_fields_or_shape": [
+                "event_id",
+                "timestamp",
+                "kind",
+                "status",
+                "freshness",
+                "service_id",
+            ],
+            "sensitivity": "low",
+            "current_forwarding": "active_for_authorized_status_subscribers",
+            "safe_for_service_wide_broadcast": False,
+            "remediation_goal": None,
+            "blocker_reason": (
+                "Not safe for blanket service-wide broadcast: recipients are restricted to "
+                "peers with the status-events capability and current Gateway status authority."
+            ),
+            "source": {"file": "app/services/gateway/service.py", "line": 2160},
+        }
+    ]
     assert (
         sum(method["permission_status"] == "ordinary_permissionless" for method in methods)
         == EXPECTED_PERMISSIONLESS_METHOD_COUNT
@@ -254,7 +277,8 @@ def test_mesh_security_inventory_domain_invariants():
         in identities_by_field["provider_service_instance_id"]["derivation"].lower()
     )
 
-    assert publishers == []
+    assert {publisher["topic"] for publisher in publishers} == {"Gateway.StatusChanged"}
+    assert all(publisher["safe_for_service_wide_broadcast"] is False for publisher in publishers)
 
 
 def _assert_source_exists(source: dict) -> None:

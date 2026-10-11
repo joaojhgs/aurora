@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-node-config-policy-compare-and-swap"
+description = "Enables the aurora_node_config_policy_compare_and_swap command without any pre-configured scope."
+commands.allow = ["aurora_node_config_policy_compare_and_swap"]
+
+[[permission]]
+identifier = "deny-aurora-node-config-policy-compare-and-swap"
+description = "Denies the aurora_node_config_policy_compare_and_swap command without any pre-configured scope."
+commands.deny = ["aurora_node_config_policy_compare_and_swap"]

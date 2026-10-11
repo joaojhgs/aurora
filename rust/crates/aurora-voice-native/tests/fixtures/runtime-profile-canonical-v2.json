@@ -1,0 +1,427 @@
+{
+  "format": "aurora-runtime-profile-canonical-v2-vectors",
+  "scope": "Nonsecret representative UI serializer outputs shared with strict native validator; no native storage/IPC/platform proof.",
+  "vectors": [
+    {
+      "name": "empty-document",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": null,
+        "profiles": []
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":null,\"profiles\":[]}"
+    },
+    {
+      "name": "remote-http",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "https://gateway.example.test"
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://gateway.example.test\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "idna-default-port-final-slash",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "  https://BÜCHER.example:443/  "
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://xn--bcher-kva.example\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "query-root-slash",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "https://gateway.example.test/?room=public"
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://gateway.example.test/?room=public\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "empty-fragment",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "https://gateway.example.test/#"
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://gateway.example.test/#\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "empty-query",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "https://gateway.example.test/?"
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://gateway.example.test/?\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "derived-signaling-multiple-brokers-first-output",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "webrtc-only",
+              "webrtcProfile": {
+                "mode": "webrtc-preferred",
+                "appId": "aurora",
+                "room": "family-room",
+                "roomSecretRef": "ref:memory:family-room",
+                "signalingBrokers": [
+                  "wss://signal.example.test",
+                  "wss://second.example.test/mqtt"
+                ]
+              }
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"webrtc-only\",\"signalingUrl\":\"wss://signal.example.test\",\"webrtcProfile\":{\"mode\":\"webrtc-only\",\"appId\":\"aurora\",\"room\":\"family-room\",\"roomSecretRef\":\"ref:memory:family-room\",\"signalingBrokers\":[\"wss://signal.example.test\",\"wss://second.example.test/mqtt\"]}},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "explicit-signaling-override",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "webrtc-preferred",
+              "gatewayUrl": "https://gateway.example.test",
+              "signalingUrl": " WSS://Signal.EXAMPLE.test:443/ ",
+              "webrtcProfile": {
+                "mode": "webrtc-preferred",
+                "appId": "aurora",
+                "room": "family-room",
+                "roomSecretRef": "ref:memory:family-room",
+                "signalingBrokers": [
+                  "wss://signal.example.test",
+                  "wss://second.example.test/mqtt"
+                ]
+              }
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"webrtc-preferred\",\"gatewayUrl\":\"https://gateway.example.test\",\"signalingUrl\":\"wss://signal.example.test\",\"webrtcProfile\":{\"mode\":\"webrtc-preferred\",\"appId\":\"aurora\",\"room\":\"family-room\",\"roomSecretRef\":\"ref:memory:family-room\",\"signalingBrokers\":[\"wss://signal.example.test\"]}},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "mesh-node-membership",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "node",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "node",
+            "label": "My device",
+            "nodeMode": "mesh-node",
+            "runtimeTier": "lightweight-ts",
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": [],
+              "meshMembership": {
+                "signalingUrl": "wss://signal.example.test",
+                "webrtcProfile": {
+                  "mode": "webrtc-only",
+                  "appId": "aurora",
+                  "room": "family-room",
+                  "roomSecretRef": "ref:memory:family-room",
+                  "signalingBrokers": [
+                    "wss://signal.example.test"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"node\",\"profiles\":[{\"version\":2,\"id\":\"node\",\"label\":\"My device\",\"nodeMode\":\"mesh-node\",\"runtimeTier\":\"lightweight-ts\",\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[],\"meshMembership\":{\"signalingUrl\":\"wss://signal.example.test\",\"webrtcProfile\":{\"mode\":\"webrtc-only\",\"appId\":\"aurora\",\"room\":\"family-room\",\"roomSecretRef\":\"ref:memory:family-room\",\"signalingBrokers\":[\"wss://signal.example.test\"]}}}}]}"
+    },
+    {
+      "name": "trusted-python-full-package",
+      "allowPythonFull": true,
+      "input": {
+        "version": 2,
+        "activeProfileId": "node",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "node",
+            "label": "My device",
+            "nodeMode": "mesh-node",
+            "runtimeTier": "python-full",
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": [],
+              "meshMembership": {
+                "signalingUrl": "wss://signal.example.test",
+                "webrtcProfile": {
+                  "mode": "webrtc-only",
+                  "appId": "aurora",
+                  "room": "family-room",
+                  "roomSecretRef": "ref:memory:family-room",
+                  "signalingBrokers": [
+                    "wss://signal.example.test"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"node\",\"profiles\":[{\"version\":2,\"id\":\"node\",\"label\":\"My device\",\"nodeMode\":\"mesh-node\",\"runtimeTier\":\"python-full\",\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[],\"meshMembership\":{\"signalingUrl\":\"wss://signal.example.test\",\"webrtcProfile\":{\"mode\":\"webrtc-only\",\"appId\":\"aurora\",\"room\":\"family-room\",\"roomSecretRef\":\"ref:memory:family-room\",\"signalingBrokers\":[\"wss://signal.example.test\"]}}}}]}"
+    },
+    {
+      "name": "full-settings-assets-wake-overlay",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "node",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "node",
+            "label": "My device",
+            "nodeMode": "mesh-node",
+            "runtimeTier": "lightweight-ts",
+            "localNode": {
+              "nodeName": " Local Aurora ",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": [
+                "foreground-voice",
+                "local-tools",
+                "foreground-voice",
+                "native-actions"
+              ],
+              "primaryLanguage": "PT_br",
+              "voiceLanguage": "AUTO",
+              "localSpeechPackState": "ready",
+              "localSpeechSelection": {
+                "stt": {
+                  "packId": "speech/stt",
+                  "packRevision": "v1",
+                  "referenceProfileId": "reference.v1"
+                },
+                "tts": {
+                  "packId": "speech/tts",
+                  "packRevision": "v1",
+                  "voiceId": "voice:pt",
+                  "voiceRevision": "r1"
+                },
+                "wakePhrase": {
+                  "phraseId": "wake.main",
+                  "phrase": "Olá Aurora",
+                  "language": "pt-BR",
+                  "revision": "r1"
+                }
+              },
+              "desktopOverlay": {
+                "textHotkey": " ctrl + shift + k ",
+                "autoCloseDelayMs": 1200.4
+              },
+              "meshMembership": {
+                "signalingUrl": "wss://signal.example.test",
+                "webrtcProfile": {
+                  "mode": "webrtc-preferred",
+                  "appId": "aurora",
+                  "room": "family-room",
+                  "roomSecretRef": "ref:memory:family-room",
+                  "signalingBrokers": [
+                    "wss://second.example.test/mqtt"
+                  ],
+                  "production": true,
+                  "allowInsecureLoopbackSignaling": false,
+                  "requireAppLayerE2ee": true,
+                  "expectedStablePeerId": "home-peer",
+                  "expectedSignalingPeerId": "signaling-peer",
+                  "nodeName": "Home Aurora",
+                  "stunServers": [
+                    "STUN:stun.example.test:3478"
+                  ],
+                  "turnServers": [
+                    "turns:turn.example.test:5349?transport=tcp"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"node\",\"profiles\":[{\"version\":2,\"id\":\"node\",\"label\":\"My device\",\"nodeMode\":\"mesh-node\",\"runtimeTier\":\"lightweight-ts\",\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[\"local-tools\",\"native-actions\",\"foreground-voice\"],\"primaryLanguage\":\"pt-br\",\"voiceLanguage\":\"auto\",\"localSpeechPackState\":\"ready\",\"localSpeechSelection\":{\"stt\":{\"packId\":\"speech/stt\",\"packRevision\":\"v1\",\"referenceProfileId\":\"reference.v1\"},\"tts\":{\"packId\":\"speech/tts\",\"packRevision\":\"v1\",\"voiceId\":\"voice:pt\",\"voiceRevision\":\"r1\"},\"wakePhrase\":{\"phraseId\":\"wake.main\",\"phrase\":\"Olá Aurora\",\"language\":\"pt-BR\",\"revision\":\"r1\"}},\"desktopOverlay\":{\"enabled\":true,\"voiceEnabled\":true,\"textHotkey\":\"CommandOrControl+Shift+K\",\"autoCloseDelayMs\":1200},\"meshMembership\":{\"signalingUrl\":\"wss://signal.example.test\",\"webrtcProfile\":{\"mode\":\"webrtc-only\",\"appId\":\"aurora\",\"room\":\"family-room\",\"roomSecretRef\":\"ref:memory:family-room\",\"signalingBrokers\":[\"wss://signal.example.test\"],\"expectedStablePeerId\":\"home-peer\",\"expectedSignalingPeerId\":\"signaling-peer\",\"nodeName\":\"Home Aurora\",\"production\":true,\"allowInsecureLoopbackSignaling\":false,\"requireAppLayerE2ee\":true,\"stunServers\":[\"STUN:stun.example.test:3478\"],\"turnServers\":[\"turns:turn.example.test:5349?transport=tcp\"]}}}}]}"
+    },
+    {
+      "name": "non-js-trim-control-identities",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "home",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "home",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "https://gateway.example.test"
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "local-node",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"home\",\"profiles\":[{\"version\":2,\"id\":\"home\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://gateway.example.test\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"local-node\",\"enabledCapabilityPacks\":[]}}]}"
+    },
+    {
+      "name": "utf8-identity-boundaries",
+      "allowPythonFull": false,
+      "input": {
+        "version": 2,
+        "activeProfileId": "éééééééééééééééééééééééééééééééééééééééééééééééé",
+        "profiles": [
+          {
+            "version": 2,
+            "id": "éééééééééééééééééééééééééééééééééééééééééééééééé",
+            "label": "Home",
+            "nodeMode": "remote-console",
+            "runtimeTier": "none",
+            "homeConnection": {
+              "mode": "http-only",
+              "gatewayUrl": "https://gateway.example.test"
+            },
+            "localNode": {
+              "nodeName": "Local Aurora",
+              "stablePeerId": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+              "enabledCapabilityPacks": []
+            }
+          }
+        ]
+      },
+      "canonicalJson": "{\"version\":2,\"activeProfileId\":\"éééééééééééééééééééééééééééééééééééééééééééééééé\",\"profiles\":[{\"version\":2,\"id\":\"éééééééééééééééééééééééééééééééééééééééééééééééé\",\"label\":\"Home\",\"nodeMode\":\"remote-console\",\"runtimeTier\":\"none\",\"homeConnection\":{\"mode\":\"http-only\",\"gatewayUrl\":\"https://gateway.example.test\"},\"localNode\":{\"nodeName\":\"Local Aurora\",\"stablePeerId\":\"😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀\",\"enabledCapabilityPacks\":[]}}]}"
+    }
+  ]
+}

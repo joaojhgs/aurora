@@ -1,0 +1,193 @@
+{
+  "defaultV1Fixture": "node_policy_v1_default.json",
+  "defaultV2Fixture": "node_policy_v2_default.json",
+  "migration": {
+    "input": "{\"version\":0,\"updatedAtMs\":100,\"services\":{}}",
+    "now": 100,
+    "expectedSnapshotFixture": "node_policy_v1_default.json"
+  },
+  "acceptedStage": {
+    "inputPatches": [
+      { "path": ["speech", "stages", "stt", "target"], "value": null },
+      { "path": ["speech", "stages", "stt", "modelId"], "value": "logical model/path" },
+      { "path": ["speech", "stages", "stt", "language"], "value": null },
+      { "path": ["speech", "stages", "tts", "networkKind"], "value": "mesh" },
+      { "path": ["speech", "stages", "tts", "target"], "value": { "peerId": "peer-1", "resourceId": null, "modelId": "model-1" } }
+    ],
+    "expectedPatches": [
+      { "path": ["speech", "stages", "stt", "target"], "value": null },
+      { "path": ["speech", "stages", "stt", "modelId"], "value": "logical model/path" },
+      { "path": ["speech", "stages", "stt", "language"], "value": null },
+      { "path": ["speech", "stages", "tts", "networkKind"], "value": "mesh" },
+      { "path": ["speech", "stages", "tts", "target"], "value": { "peerId": "peer-1", "resourceId": null, "modelId": "model-1" } }
+    ]
+  },
+  "safeNumberSpellings": [
+    { "needle": "\"version\": 2,", "replacement": "\"version\": 2e0," },
+    { "needle": "\"version\": 1,", "replacement": "\"version\": 1.0," },
+    { "needle": "\"revision\": 1,", "replacement": "\"revision\": 1.0," },
+    { "needle": "\"revision\": 1,", "replacement": "\"revision\": 1e0," },
+    { "needle": "\"updatedAtMs\": 100,", "replacement": "\"updatedAtMs\": 100.0," },
+    { "needle": "\"maxAttempts\": 2,", "replacement": "\"maxAttempts\": 2e0," },
+    { "needle": "\"admissionTimeoutMs\": 5000,", "replacement": "\"admissionTimeoutMs\": 5e3," },
+    { "needle": "\"finiteDeadlineMs\": 60000", "replacement": "\"finiteDeadlineMs\": 6e4" }
+  ],
+  "snapshotNumberSpellings": {
+    "snapshotVersionNeedle": "\"version\": 1,",
+    "snapshotVersionReplacement": "\"version\": 1e0,",
+    "snapshotTimestampNeedle": "\"updatedAtMs\": 100,",
+    "snapshotTimestampReplacement": "\"updatedAtMs\": 1e2,"
+  },
+  "duplicateKeys": {
+    "needle": "\"prefer\": \"local\", \"fallback\": \"network\"",
+    "firstInvalidLastValid": "\"prefer\": \"unsupported\", \"prefer\": \"local\", \"fallback\": \"network\"",
+    "firstValidLastInvalid": "\"prefer\": \"local\", \"prefer\": \"unsupported\", \"fallback\": \"network\""
+  },
+  "rawTokenObjectCases": [
+    {
+      "name": "forged arbitrary precision number token object",
+      "needle": "\"revision\": 1,",
+      "replacement": "\"revision\": {\"$serde_json::private::Number\":\"1.0\"},"
+    },
+    {
+      "name": "escaped forged arbitrary precision number token key",
+      "needle": "\"revision\": 1,",
+      "replacement": "\"revision\": {\"\\u0024serde_json::private::Number\":\"1.0\"},"
+    },
+    {
+      "name": "forged raw value token object",
+      "needle": "\"revision\": 1,",
+      "replacement": "\"revision\": {\"$serde_json::private::RawValue\":\"1\"},"
+    },
+    {
+      "name": "escaped forged raw value token key",
+      "needle": "\"revision\": 1,",
+      "replacement": "\"revision\": {\"\\u0024serde_json::private::RawValue\":\"1\"},"
+    }
+  ],
+  "rawJsonStringControl": {
+    "needle": "\"stt\": { \"routing\": { \"prefer\": \"local\", \"fallback\": \"network\" }, \"experimentalRemote\": false }",
+    "replacement": "\"stt\": { \"routing\": { \"prefer\": \"local\", \"fallback\": \"network\" }, \"experimentalRemote\": false, \"language\": \"$serde_json::private::RawValue\" }",
+    "expectedLanguage": "$serde_json::private::RawValue"
+  },
+  "rawDuplicateControls": {
+    "revisionNeedle": "\"revision\": 1,",
+    "overwrittenLoneSurrogate": "\"revision\": \"\\ud800\", \"revision\": 1,"
+  },
+  "enumStringControls": [
+    { "path": ["services", "tts", "routing", "prefer"], "value": "local" },
+    { "path": ["services", "tts", "routing", "prefer"], "value": "network" },
+    { "path": ["speech", "stages", "kws", "routing", "prefer"], "value": "local_only" },
+    { "path": ["speech", "stages", "kws", "routing", "prefer"], "value": "network_only", "enableExperimental": true },
+    { "path": ["services", "tts", "routing", "fallback"], "value": "local" },
+    { "path": ["services", "tts", "routing", "fallback"], "value": "network" },
+    { "path": ["services", "tts", "routing", "fallback"], "value": "error" },
+    { "path": ["services", "tts", "routing", "fallback"], "value": "none" },
+    { "path": ["speech", "stages", "stt", "networkKind"], "value": "mesh" },
+    { "path": ["speech", "stages", "stt", "networkKind"], "value": "gateway" }
+  ],
+  "rejectedPatches": [
+    { "name": "unknown top-level field", "path": ["unexpected"], "value": true },
+    { "name": "unknown nested field", "path": ["speech", "stages", "tts", "unexpected"], "value": true },
+    { "name": "unknown stage", "path": ["speech", "stages", "wakeword"], "value": {} },
+    { "name": "invalid target identifier", "path": ["speech", "stages", "stt", "target"], "value": { "peerId": ".invalid" } },
+    { "name": "null omission-only network kind", "path": ["speech", "stages", "tts", "networkKind"], "value": null },
+    { "name": "null omission-only experimental flag", "path": ["speech", "stages", "tts", "experimentalRemote"], "value": null },
+    { "name": "speech limits rejects positional array", "path": ["speech", "limits"], "value": [2, 5000, 60000] },
+    { "name": "service exposure rejects positional array", "path": ["services", "tooling", "expose"], "value": [true] },
+    { "name": "unsafe revision", "path": ["revision"], "value": 9007199254740992 },
+    { "name": "routing preference rejects object-tagged unit variant", "path": ["speech", "stages", "stt", "routing", "prefer"], "value": { "network": null } },
+    { "name": "routing fallback rejects object-tagged unit variant", "path": ["services", "tts", "routing", "fallback"], "value": { "error": null } },
+    { "name": "speech network kind rejects object-tagged unit variant", "path": ["speech", "stages", "stt", "networkKind"], "value": { "mesh": null } },
+    { "name": "KWS network route requires experiment", "path": ["speech", "stages", "kws", "routing", "prefer"], "value": "network_only" }
+  ],
+  "removedPaths": [
+    { "name": "missing required stage", "path": ["speech", "stages", "vad"] }
+  ],
+  "invalidObjectShapes": [
+    { "name": "services map is an array", "path": ["services"] },
+    { "name": "service object is an array", "path": ["services", "tooling"] },
+    { "name": "service routing object is an array", "path": ["services", "tooling", "routing"] },
+    { "name": "exposure object is an array", "path": ["expose"] },
+    { "name": "feature override map is an array", "path": ["expose", "featureOverrides", "tooling"] },
+    { "name": "speech object is an array", "path": ["speech"] },
+    { "name": "speech stages object is an array", "path": ["speech", "stages"] },
+    { "name": "stage object is an array", "path": ["speech", "stages", "tts"] },
+    { "name": "stage routing object is an array", "path": ["speech", "stages", "tts", "routing"] },
+    { "name": "sharing object is an array", "path": ["speech", "sharing"] },
+    { "name": "limits object is an array", "path": ["speech", "limits"] },
+    { "name": "target object is an array", "path": ["speech", "stages", "tts", "target"] },
+    { "name": "embedded snapshot object is an array", "path": ["legacyV1Snapshot"] }
+  ],
+  "invalidMigrationObjectShapes": [
+    { "name": "V1 services object is an array", "input": "{\"version\":1,\"updatedAtMs\":33,\"services\":[],\"expose\":{\"featureOverrides\":{}}}" },
+    { "name": "V1 service object is an array", "input": "{\"version\":1,\"updatedAtMs\":33,\"services\":{\"tts\":[]},\"expose\":{\"featureOverrides\":{}}}" },
+    { "name": "V1 routing object is an array", "input": "{\"version\":1,\"updatedAtMs\":33,\"services\":{\"tts\":{\"routing\":[]}},\"expose\":{\"featureOverrides\":{}}}" },
+    { "name": "legacy V0 preference rejects object-tagged unit variant", "input": "{\"version\":0,\"services\":{\"tts\":{\"routing\":{\"prefer\":{\"network\":null},\"fallback\":\"network\"}}}}" },
+    { "name": "legacy V0 fallback rejects object-tagged unit variant", "input": "{\"version\":0,\"services\":{\"tts\":{\"routing\":{\"prefer\":\"local\",\"fallback\":{\"local\":null}}}}}" }
+  ],
+  "sparseMigrations": [
+    {
+      "name": "empty V1 service map",
+      "input": "{\"version\":1,\"updatedAtMs\":33,\"services\":{},\"expose\":{\"featureOverrides\":{}}}",
+      "now": 99,
+      "sttRouting": { "prefer": "local", "fallback": "network" },
+      "ttsRouting": { "prefer": "local", "fallback": "network" }
+    },
+    {
+      "name": "partial V1 service map",
+      "input": "{\"version\":1,\"updatedAtMs\":34,\"services\":{\"tts\":{\"routing\":{\"prefer\":\"network_only\",\"fallback\":\"none\"}}},\"expose\":{\"featureOverrides\":{}}}",
+      "now": 99,
+      "sttRouting": { "prefer": "local", "fallback": "network" },
+      "ttsRouting": { "prefer": "network_only", "fallback": "none" }
+    }
+  ],
+  "ordinaryUpdate": {
+    "draftPatches": [
+      { "path": ["speech", "sharing", "stt"], "value": true }
+    ],
+    "expectedPatches": [
+      { "path": ["revision"], "value": 2 },
+      { "path": ["updatedAtMs"], "value": 101 },
+      { "path": ["speech", "sharing", "stt"], "value": true }
+    ],
+    "expectedRevision": 1,
+    "now": 101
+  },
+  "staleConflict": { "expectedRevision": 0 },
+  "unicodeBoundary": {
+    "needle": "\"experimentalRemote\": false",
+    "cases": [
+      {
+        "name": "lone high surrogate",
+        "replacement": "\"experimentalRemote\": false, \"language\": \"\\ud800\"",
+        "sdkCodeUnit": 55296,
+        "rust": "reject"
+      },
+      {
+        "name": "lone low surrogate",
+        "replacement": "\"experimentalRemote\": false, \"language\": \"\\udc00\"",
+        "sdkCodeUnit": 56320,
+        "rust": "reject"
+      },
+      {
+        "name": "valid surrogate pair",
+        "replacement": "\"experimentalRemote\": false, \"language\": \"\\ud83d\\ude00\"",
+        "sdkValue": "😀",
+        "rust": "accept"
+      },
+      {
+        "name": "literal backslash text",
+        "replacement": "\"experimentalRemote\": false, \"language\": \"\\\\ud800\"",
+        "sdkValue": "\\ud800",
+        "rust": "accept"
+      }
+    ]
+  },
+  "intentionalRustSafeguards": {
+    "draftSnapshot": null,
+    "maxSafeRevision": 9007199254740991,
+    "sdkMaxIncrement": 9007199254740992,
+    "description": "Rust retains the validated current V1 snapshot and rejects unsafe revision exhaustion; the current SDK update helper uses the draft snapshot and returns the unsafe max+1 candidate. These are documented safeguard divergences, not parity failures."
+  }
+}

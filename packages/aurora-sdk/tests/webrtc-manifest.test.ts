@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { sha256 } from '@noble/hashes/sha2.js'
 
 import {
   WebRtcManifestParseError,
   buildWebRtcManifestAck,
   parseWebRtcMeshManifest
 } from '../src/webrtc/manifest.js'
+import { bytesToHex, canonicalJson } from '../src/webrtc/encoding.js'
 
 function validFrame(): Record<string, unknown> & { shared_services: unknown[] } {
   return {
@@ -120,6 +122,108 @@ function projectionFrame(): Record<string, unknown> & { shared_services: unknown
   return frame
 }
 
+function canonicalDigest(value: unknown): string {
+  return bytesToHex(sha256(new TextEncoder().encode(canonicalJson(value))))
+}
+
+function refreshProjectionDigests(frame: Record<string, unknown> & { shared_services: unknown[] }): void {
+  for (const service of frame.shared_services) {
+    const record = service as Record<string, unknown>
+    const { digest: _digest, ...withoutDigest } = record
+    record.digest = canonicalDigest(withoutDigest)
+  }
+
+  const evidence = frame.recipient_projection_evidence as Record<string, unknown>
+  evidence.projection_digest = canonicalDigest({
+    provider_peer_id: frame.peer_id,
+    services: frame.shared_services.map((service) => {
+      const { digest: _digest, ...withoutDigest } = service as Record<string, unknown>
+      return withoutDigest
+    })
+  })
+  const { evidence_digest: _evidenceDigest, ...withoutEvidenceDigest } = evidence
+  evidence.evidence_digest = canonicalDigest(withoutEvidenceDigest)
+}
+
+function speechProjectionFrame(): Record<string, unknown> & { shared_services: unknown[] } {
+  const frame = projectionFrame()
+  const stageWrapper = {
+    capability: {
+      schema: 'speech-stage-capability.v1',
+      stage: 'tts',
+      method_ids: ['TTS.Synthesize'],
+      modes: ['finite'],
+      implementation: 'python',
+      peer_id: 'stable-peer-1',
+      resource_id: 'remote:stable-peer-1:TTS',
+      capability_revision: 1,
+      supported_formats: ['raw', 'wav'],
+      sample_rates: [],
+      channels: [],
+      supported_languages: ['en-us'],
+      model_ids: [],
+      lifecycle: ['foreground'],
+      max_input_bytes: 4_194_304,
+      max_chunk_bytes: 65_536,
+      max_concurrent: 1,
+      max_queue: 4,
+      lease_ms: 15_000,
+      readiness: 'ready',
+      required_permissions: ['TTS.Synthesize'],
+      audio_consent_required: false,
+      experimental: false,
+      exported: true
+    },
+    voice_ids: ['standard:piper:en-us-lessac-medium'],
+    requires_remote_audio_egress: true
+  }
+  const ttsService = {
+    module: 'TTS',
+    version: '1.0.0',
+    capabilities: ['speech_synthesis'],
+    callable_features: [],
+    available_feature_ids: [],
+    speech_stage_capabilities: [stageWrapper],
+    methods: [
+      {
+        name: 'Synthesize',
+        summary: '',
+        bus_topic: 'TTS.Synthesize',
+        exposure: 'external',
+        input_model: null,
+        output_model: null,
+        required_perms: ['TTS.Synthesize'],
+        callable_feature_ids: [],
+        callable_features: [],
+        public_infrastructure: false,
+        method_type: 'use',
+        speech_constraints: null,
+        input_schema: null,
+        output_schema: null
+      }
+    ],
+    max_concurrent: 10,
+    digest: ''
+  }
+  frame.shared_services = [frame.shared_services[0], ttsService, frame.shared_services[1]]
+  refreshProjectionDigests(frame)
+  return frame
+}
+
+const invalidSpeechWrapperCases: Array<[string, (wrapper: Record<string, unknown>) => void]> = [
+  ['malformed logical voice ID', (wrapper) => {
+    wrapper.voice_ids = ['../../private/model.wav']
+  }],
+  ['unknown wrapper field', (wrapper) => {
+    wrapper.smuggled = 'value'
+  }],
+  ['peer and resource mismatch', (wrapper) => {
+    const capability = wrapper.capability as Record<string, unknown>
+    capability.peer_id = 'other-peer'
+    capability.resource_id = 'remote:other-peer:TTS'
+  }]
+]
+
 describe('WebRTC mesh manifest parser', () => {
   it('normalizes a valid Python-shaped manifest and preserves raw frame', () => {
     const frame = validFrame()
@@ -147,6 +251,90 @@ describe('WebRTC mesh manifest parser', () => {
       ],
       raw: frame
     })
+    expect(parsed.services?.[0]).not.toHaveProperty('speechStageCapabilities')
+  })
+
+  it('parses ready finite speech metadata without changing projection digest verification', () => {
+    const frame = speechProjectionFrame()
+    const parsed = parseWebRtcMeshManifest(frame, 'stable-peer-1')
+    const ttsService = parsed.services?.find((service) => service.module === 'TTS') as
+      | (NonNullable<typeof parsed.services>[number] & { speechStageCapabilities?: unknown })
+      | undefined
+
+    expect(ttsService?.speechStageCapabilities).toEqual(
+      (frame.shared_services[1] as Record<string, unknown>).speech_stage_capabilities
+    )
+    expect(buildWebRtcManifestAck(parsed, { expectedRecipientPeerId: 'thin-consumer-1' })).toMatchObject({
+      compatible_services: ['TTS', 'Tooling'],
+      projection_digest: (frame.recipient_projection_evidence as Record<string, unknown>).projection_digest
+    })
+  })
+
+  it.each(invalidSpeechWrapperCases)('rejects %s after valid projection digests are recomputed', (_label, mutate) => {
+    const frame = speechProjectionFrame()
+    const ttsService = frame.shared_services[1] as Record<string, unknown>
+    const wrapper = (ttsService.speech_stage_capabilities as Record<string, unknown>[])[0]!
+    mutate(wrapper)
+    refreshProjectionDigests(frame)
+
+    expect(() => {
+      const parsed = parseWebRtcMeshManifest(frame, 'stable-peer-1')
+      buildWebRtcManifestAck(parsed, { expectedRecipientPeerId: 'thin-consumer-1' })
+    }).toThrow(WebRtcManifestParseError)
+  })
+
+  it.each(['kws', 'vad'] as const)(
+    'rejects non-experimental streaming %s capabilities after digest recomputation',
+    (stage) => {
+      const frame = speechProjectionFrame()
+      const ttsService = frame.shared_services[1] as Record<string, unknown>
+      const wrapper = (ttsService.speech_stage_capabilities as Record<string, unknown>[])[0]!
+      const capability = wrapper.capability as Record<string, unknown>
+      capability.stage = stage
+      capability.modes = ['streaming']
+      capability.experimental = false
+      refreshProjectionDigests(frame)
+
+      expect(() => parseWebRtcMeshManifest(frame, 'stable-peer-1')).toThrow(WebRtcManifestParseError)
+    }
+  )
+
+  it.each(['kws', 'vad'] as const)(
+    'accepts experimental streaming %s capabilities after digest recomputation',
+    (stage) => {
+      const frame = speechProjectionFrame()
+      const ttsService = frame.shared_services[1] as Record<string, unknown>
+      const wrapper = (ttsService.speech_stage_capabilities as Record<string, unknown>[])[0]!
+      const capability = wrapper.capability as Record<string, unknown>
+      capability.stage = stage
+      capability.modes = ['streaming']
+      capability.experimental = true
+      refreshProjectionDigests(frame)
+
+      const parsed = parseWebRtcMeshManifest(frame, 'stable-peer-1')
+      expect(parsed.services?.find((service) => service.module === 'TTS')).toMatchObject({
+        speechStageCapabilities: [{ capability: { stage, modes: ['streaming'], experimental: true } }]
+      })
+    }
+  )
+
+  it('rejects speech capabilities that reference a method from another service module', () => {
+    const frame = speechProjectionFrame()
+    const ttsService = frame.shared_services[1] as Record<string, unknown>
+    const wrapper = (ttsService.speech_stage_capabilities as Record<string, unknown>[])[0]!
+    const capability = wrapper.capability as Record<string, unknown>
+    capability.method_ids = ['Transcription.Transcribe']
+    capability.required_permissions = ['Transcription.Transcribe']
+    const methods = ttsService.methods as Record<string, unknown>[]
+    methods.push({
+      ...methods[0],
+      name: 'Transcribe',
+      bus_topic: 'Transcription.Transcribe',
+      required_perms: ['Transcription.Transcribe']
+    })
+    refreshProjectionDigests(frame)
+
+    expect(() => parseWebRtcMeshManifest(frame, 'stable-peer-1')).toThrow(WebRtcManifestParseError)
   })
 
   it('rejects signaling/transient ID substitution', () => {

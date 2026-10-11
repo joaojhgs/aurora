@@ -1307,6 +1307,52 @@ async def test_handle_call_forbidden_audits_redacted_correlation(
 
 
 @pytest.mark.asyncio
+async def test_handle_call_denied_speech_audit_redacts_text(
+    mock_bus,
+    mock_registry,
+    mock_send_fn,
+    mock_acl_provider,
+):
+    audit_fn = AsyncMock()
+    private_text = "private spoken content must not enter denial audit"
+    method_info = MethodInfo(
+        name="Synthesize",
+        bus_topic="TTS.Synthesize",
+        required_perms=["admin"],
+        exposure="external",
+    )
+    mock_registry.get_service.return_value = ServiceAnnouncement(
+        module="TTS", version="1.0", methods=[method_info]
+    )
+    handler = RPCHandler(
+        mock_bus,
+        mock_registry,
+        mock_send_fn,
+        mock_acl_provider,
+        audit_fn=audit_fn,
+    )
+
+    await handler.on_message(
+        json.dumps(
+            {
+                "type": "call",
+                "id": "speech-denied",
+                "method": "TTS.Synthesize",
+                "params": {"text": private_text, "format": "wav"},
+            }
+        )
+    )
+
+    audit_fn.assert_awaited_once()
+    _, _, audit = audit_fn.await_args.args
+    redacted_text = audit["details"]["params"]["text"]
+    assert redacted_text["redacted"] is True
+    assert redacted_text["kind"] == "speech"
+    assert redacted_text["char_length"] == len(private_text)
+    assert private_text not in json.dumps(audit)
+
+
+@pytest.mark.asyncio
 async def test_handle_call_streaming(rpc_handler, mock_registry, mock_bus):
     method_info = MethodInfo(name="Stream", exposure="external")
     mock_registry.get_service.return_value = ServiceAnnouncement(

@@ -3,6 +3,24 @@ import { describe, expect, it } from 'vitest'
 import { AuroraError, TauriLocalTransport, resolveNativeTtsRequiresReferenceProfile } from '../src/index.js'
 
 describe('Tauri bounded native action transport', () => {
+  it('reconciles recording from native saved policy without renderer scope or text', async () => {
+    const calls: Array<{ command: string, args: unknown }> = []
+    const status = {
+      running: false,
+      transcription: {
+        capability: 'supported', permission: 'not_requested', foreground: true,
+        sttAvailable: false, archiveAvailable: true, captureMode: null,
+        state: 'idle', reason: 'permission_required'
+      }
+    }
+    const transport = new TauriLocalTransport({ invoke: async (command, args) => {
+      calls.push({ command, args })
+      return status
+    } })
+    await expect(transport.synchronizeAndroidBackgroundTranscription()).resolves.toEqual(status)
+    expect(calls).toEqual([{ command: 'aurora_android_background_transcription_sync', args: undefined }])
+  })
+
   it('uses only exact native action commands and omits absent optional fields', async () => {
     const calls: Array<{ command: string, args: unknown }> = []
     const transport = new TauriLocalTransport({

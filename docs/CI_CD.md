@@ -10,6 +10,7 @@ Aurora CI is organized around durable product lanes rather than one-off issue ga
 | `python-tests.yml` | Consolidated backend and Python E2E coverage. | Unit tests, non-process integration tests, Redis-backed process-mode integration tests, every discoverable Python E2E test, both mesh harnesses, and redacted support-bundle artifacts. |
 | `webrtc-interop.yml` | Live browser ↔ Python Gateway WebRTC interop, hosted peer UI behavior, and browser credential persistence. | One consolidated required check runs Chromium/Firefox/WebKit encrypted IndexedDB refresh restoration, a hosted-Chromium full-service UI pairing/reload E2E, and a single shared Chromium/Firefox/Playwright-WebKit × direct/STUN/TURN matrix command with MQTT signaling, Python HTTP API disabled for the browser data path, strict browser availability, and uploaded redacted reports. |
 | `frontend-sdk.yml` | TypeScript SDK, shared UI, web app, and Tauri frontend. | SDK tests/build, UI tests/build, accessibility/responsive/visual suite, web app tests/build, Tauri frontend tests/typecheck/build. |
+| `rust-voice.yml` | Shared Rust voice/runtime workspace and browser WASM checks. | Rust 1.88 formatting, linting, native tests, browser WASM tests, and Rust-flagged native workspace coverage on matching pull requests and default-branch pushes. |
 | `sdk-backend-contract-conformance.yml` | Backend/SDK contract drift protection. | Generated backend inventory, SDK fixture/type conformance, SDK package checks. |
 | `tauri-desktop.yml` | Desktop Tauri shell and sidecar packaging smoke. | Builds the pinned, Aurora-patched static Sherpa/ONNX Runtime for Linux, macOS, and Windows; runs Rust checks and desktop-local sidecar/smoke lanes; publishes separate Linux AppImage/DEB/RPM sets for the bundled minimal Python sidecar and Python-free client; and produces native macOS/Windows client packages. Legacy desktop-thin scripts delegate to the client commands. |
 | `tauri-android.yml` | Android client build, emulator smoke, and mobile WebRTC interop. | Pull-request CI builds an x86_64 debug APK/AAB for emulator checks. Canonical releases reuse the same workflow but publish a stripped arm64 release APK and multi-ABI release AAB. API 30 and API 35 cover packaged UI/native payload and external-Python-peer WebRTC in the packaged System WebView and Android Chrome. Python is only the remote test peer and is never packaged. |
@@ -46,6 +47,9 @@ pnpm --filter @aurora/tauri-ui test:e2e:admin
 pnpm --filter @aurora/tauri-ui test:e2e:runtime
 pnpm --filter @aurora/tauri-ui test:e2e:outcomes
 pnpm --filter @aurora/tauri-ui tauri:smoke:linux
+
+# Shared Rust voice/runtime workspace
+make check-rust-voice
 
 # WebRTC live interop
 pnpm test:web-persistence

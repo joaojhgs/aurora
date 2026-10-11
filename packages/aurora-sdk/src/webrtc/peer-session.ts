@@ -3,6 +3,7 @@ import {
   CAP_CONSUMER_ONLY_V1,
   CAP_FRAGMENTATION_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  CAP_GATEWAY_STATUS_EVENTS_V1,
   buildProtocolHello,
   parseProtocolHello
 } from './peer-protocol.js'
@@ -368,9 +369,14 @@ export class WebRtcPeerSession {
   private terminalNoReconnect = false
   private lastError: string | undefined
   private sentLocalProtocolHello = false
+  /** Whether the authenticated reciprocal hello was delivered for this channel. */
+  private deliveredRemoteProtocolHello = false
   private pendingRemoteProtocolHello: unknown | undefined
   private authenticatedPeerContext: AuthenticatedPeerContext | undefined
   private transportGeneration = 0
+  // Invalidates an in-flight local offer when glare rolls it back while the
+  // same peer connection remains current for the winning remote offer.
+  private negotiationGeneration = 0
 
   constructor(options: PeerSessionOptions) {
     this.options = options
@@ -613,6 +619,7 @@ export class WebRtcPeerSession {
     this.ensurePeerConnection()
     const pc = this.pc!
     const generation = this.transportGeneration
+    const negotiationGeneration = this.negotiationGeneration
     const remoteSignalingId = this.remoteSignalingId
     if (remoteSignalingId === undefined) return
     this.attachDataChannel(pc.createDataChannel(AURORA_RPC_DATA_CHANNEL_LABEL, { ordered: true }))
@@ -621,13 +628,13 @@ export class WebRtcPeerSession {
       if (this.isCurrentTransport(pc, generation)) this.fail('negotiation timeout', true)
     })
     const offer = await pc.createOffer()
-    if (!this.isCurrentNegotiation(pc, generation)) return
+    if (!this.isCurrentNegotiation(pc, generation) || negotiationGeneration !== this.negotiationGeneration) return
     await pc.setLocalDescription(offer)
-    if (!this.isCurrentNegotiation(pc, generation)) return
+    if (!this.isCurrentNegotiation(pc, generation) || negotiationGeneration !== this.negotiationGeneration) return
     const localOfferSdp = pc.localDescription?.sdp ?? offer.sdp
     this.offerSdpTranscript = localOfferSdp
     this.answerSdpTranscript = undefined
-    if (!this.isCurrentNegotiation(pc, generation)) return
+    if (!this.isCurrentNegotiation(pc, generation) || negotiationGeneration !== this.negotiationGeneration) return
     await this.options.signaling.publish('offer', { type: 'offer', from: this.options.localSignalingId, to: remoteSignalingId, sdp: localOfferSdp }, remoteSignalingId)
   }
 
@@ -647,10 +654,13 @@ export class WebRtcPeerSession {
     this.ensurePeerConnection()
     const pc = this.pc!
     const generation = this.transportGeneration
-    const yieldingOfferer = this.role === 'offerer' && pc.localDescription?.type === 'offer'
-    if (yieldingOfferer) {
-      await pc.setLocalDescription({ type: 'rollback' })
-      if (!this.isCurrentNegotiation(pc, generation)) return
+    const abandoningLocalOffer = this.role === 'offerer' && this.state === 'negotiating'
+    if (abandoningLocalOffer) {
+      this.negotiationGeneration += 1
+      if (pc.localDescription?.type === 'offer') {
+        await pc.setLocalDescription({ type: 'rollback' })
+        if (!this.isCurrentTransport(pc, generation)) return
+      }
       // The channel was created by the abandoned local offer. The remote
       // offer will deliver its negotiated channel through `ondatachannel`.
       this.options.auth.resetTransport?.()
@@ -789,6 +799,7 @@ export class WebRtcPeerSession {
 
   private bindDataChannel(channel: DataChannelLike): void {
     this.sentLocalProtocolHello = false
+    this.deliveredRemoteProtocolHello = false
     this.pendingRemoteProtocolHello = undefined
     this.receiveQueue = Promise.resolve()
     channel.onopen = () => void this.onChannelOpen(channel)
@@ -882,9 +893,26 @@ export class WebRtcPeerSession {
   private async handleAuthorizedAuthFrame(frame: unknown, channel: DataChannelLike): Promise<boolean> {
     const auth = this.requiredAuth()
     if (auth === undefined) return false
+    const isHello = isProtocolHelloFrame(frame)
+    if (isHello) {
+      try {
+        parseProtocolHello(frame)
+      } catch {
+        this.terminalNoReconnect = true
+        this.fail('invalid protocol hello', false)
+        return true
+      }
+    }
     const result = await auth.handleFrame(frame, this.authContext(channel))
     if (this.channel !== channel || this.isTerminal()) return true
-    if (result === true) return true
+    if (result === true) {
+      if (isHello) {
+        if (this.deliveredRemoteProtocolHello) return true
+        this.deliveredRemoteProtocolHello = true
+        return false
+      }
+      return true
+    }
     if (typeof result === 'object' && result !== null) {
       if (result.retry === true) {
         this.fail('authorized auth retry required', true)
@@ -897,10 +925,16 @@ export class WebRtcPeerSession {
       }
       if (result.authenticated === true) {
         this.updateAuthenticatedContext(result.authenticatedPeerContext)
+        if (isHello) {
+          if (this.deliveredRemoteProtocolHello) return true
+          this.deliveredRemoteProtocolHello = true
+          return false
+        }
         return true
       }
       if (result.handled === true) return true
     }
+    if (isHello) return true
     return false
   }
 
@@ -1112,7 +1146,10 @@ export class WebRtcPeerSession {
     this.pendingRemoteProtocolHello = undefined
     this.lastError = undefined
     this.transition('authorized')
-    if (replayFrame !== undefined) this.deliverFrame(replayFrame)
+    if (replayFrame !== undefined) {
+      if (isProtocolHelloFrame(replayFrame)) this.deliveredRemoteProtocolHello = true
+      this.deliverFrame(replayFrame)
+    }
     await this.sendLocalProtocolHello()
   }
 
@@ -1286,7 +1323,8 @@ function defaultLocalConsumerHello(): unknown {
       CAP_FRAGMENTATION_V1,
       CAP_BACKPRESSURE_V1,
       CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
-      CAP_CONSUMER_ONLY_V1
+      CAP_CONSUMER_ONLY_V1,
+      CAP_GATEWAY_STATUS_EVENTS_V1
     ]
   })
 }

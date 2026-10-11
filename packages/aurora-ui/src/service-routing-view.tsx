@@ -37,6 +37,10 @@ import {
 } from './local-feature-sharing'
 import type { AuroraSurfaceProfile } from './platform-surface'
 import type { RouteAvailability } from './shell-data'
+import { EmptyState, RouteStateNotice } from './state-surface'
+import { AuroraQueryProvider, useAuroraQueryScope, useAuroraQueryScopeKey } from './query'
+import { useAdminList, useAuroraQueryKeys } from './query-hooks'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   isBrowserWebRtcConfigured,
   isBrowserWebRtcConnected,
@@ -233,6 +237,73 @@ const loadingSnapshot: ServiceRoutingSnapshot = {
   evidenceSource: 'pending Aurora service calls',
 }
 
+function serviceRoutingQueryScope(route: RouteAvailability, thinPeer?: BrowserWebRtcPeerController) {
+  const peerId = thinPeer?.snapshot().expectedStablePeerId ?? route.providerLabel
+  return {
+    backend: 'service-routing',
+    peerId: typeof peerId === 'string' && peerId.trim() ? peerId : route.item.id,
+  }
+}
+
+function thinPeerRoutingIdentity(thinPeer: BrowserWebRtcSnapshot | null | undefined) {
+  if (!thinPeer) return null
+  return {
+    expectedStablePeerId: thinPeer.expectedStablePeerId ?? null,
+    connectionMode: thinPeer.connectionMode,
+    status: thinPeer.status,
+  }
+}
+
+function serviceRoutingQueryRequest(route: RouteAvailability, thinPeer: BrowserWebRtcSnapshot | null | undefined) {
+  return {
+    routeId: route.item.id,
+    state: route.state,
+    disabled: route.disabled,
+    routeable: route.routeable,
+    selectorRequired: route.selectorRequired,
+    approvalRequired: route.approvalRequired,
+    requiresAdminAction: route.requiresAdminAction,
+    thinPeer: thinPeerRoutingIdentity(thinPeer),
+  }
+}
+
+function disabledServiceRoutingSnapshot(route: RouteAvailability): ServiceRoutingSnapshot {
+  return {
+    ...loadingSnapshot,
+    loadState: 'unavailable',
+    error: route.blockers[0] ?? 'This control is unavailable right now.',
+    warnings: route.blockers,
+    evidenceSource: route.providerLabel,
+  }
+}
+
+function useThinPeerSnapshot(thinPeer: BrowserWebRtcPeerController | undefined): BrowserWebRtcSnapshot | null {
+  const [snapshot, setSnapshot] = useState<BrowserWebRtcSnapshot | null>(() => thinPeer?.snapshot() ?? null)
+  useEffect(() => {
+    if (!thinPeer) {
+      setSnapshot(null)
+      return
+    }
+    setSnapshot(thinPeer.snapshot())
+    return thinPeer.subscribe((next) => setSnapshot(next))
+  }, [thinPeer])
+  return snapshot
+}
+
+async function invalidateServiceRoutingQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  queryKeys: ReturnType<typeof useAuroraQueryKeys>,
+  routingQueryKey: readonly unknown[],
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: routingQueryKey }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.capabilities({ include_unavailable: true }) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.capabilityGraph({ include_unavailable: true, include_internal: true }) }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.services() }),
+    queryClient.invalidateQueries({ queryKey: queryKeys.root() }),
+  ])
+}
+
 /**
  * Mesh always shows the canonical service-sharing table.
  * Nodes that own local features use only the local sharing projection. Remote
@@ -263,85 +334,104 @@ export function MeshServiceSharingResource({
   )
 }
 
-export function ServiceRoutingResource({
+export function ServiceRoutingResource(props: ServiceRoutingResourceProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (!hasQueryScope) {
+    return (
+      <AuroraQueryProvider client={props.client} queryScope={serviceRoutingQueryScope(props.route, props.thinPeer)}>
+        <ServiceRoutingQueryResource {...props} />
+      </AuroraQueryProvider>
+    )
+  }
+  return <ServiceRoutingQueryResource {...props} />
+}
+
+function ServiceRoutingQueryResource({
   client,
   route,
   thinPeer,
   sessionIsAdmin,
 }: ServiceRoutingResourceProps) {
-  const [snapshot, setSnapshot] = useState<ServiceRoutingSnapshot>(loadingSnapshot)
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const scopeKey = useAuroraQueryScopeKey()
   const [pendingRowId, setPendingRowId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
-  const routeKey = [route.item.id, route.state, route.disabled ? 'disabled' : 'enabled'].join('|')
-  const stableRoute = useMemo(() => route, [routeKey])
+  const activeMutationScope = useRef<string | null>(null)
+  const mutationGeneration = useRef(0)
+  const thinPeerSnapshot = useThinPeerSnapshot(thinPeer)
+  const previousProjection = useRef<{ key: string; snapshot: ServiceRoutingSnapshot } | null>(null)
+  const routingQueryRequest = useMemo(() => serviceRoutingQueryRequest(route, thinPeerSnapshot), [route, thinPeerSnapshot])
+  const routingQueryKey = useMemo(() => queryKeys.admin('service-routing', routingQueryRequest), [queryKeys, routingQueryRequest])
+  const projectionKey = useMemo(() => JSON.stringify([scopeKey, routingQueryRequest]), [routingQueryRequest, scopeKey])
+  const routingQuery = useAdminList({
+    resource: 'service-routing',
+    request: routingQueryRequest,
+    queryFn: (queryClientValue, _request, signal) => buildServiceRoutingSnapshot(queryClientValue, route, { signal }),
+    options: { enabled: !route.disabled },
+  })
+  const rawSnapshot = route.disabled
+    ? disabledServiceRoutingSnapshot(route)
+    : routingQuery.data ?? loadingSnapshot
+  const snapshot = useMemo(() => {
+    const previous = previousProjection.current?.key === projectionKey
+      ? previousProjection.current.snapshot
+      : null
+    return reconcileServiceRoutingWithThinPeer(rawSnapshot, thinPeerSnapshot, previous)
+  }, [projectionKey, rawSnapshot, thinPeerSnapshot])
 
   useEffect(() => {
-    if (!thinPeer) return
-    return thinPeer.subscribe((nextThinSnapshot) => {
-      setSnapshot((current) =>
-        reconcileServiceRoutingWithThinPeer(
-          current,
-          nextThinSnapshot,
-          current,
-        ),
-      )
-    })
-  }, [thinPeer])
-
-  const load = useCallback(async () => {
-    const next = await buildServiceRoutingSnapshot(client, stableRoute)
-    setSnapshot((current) =>
-      reconcileServiceRoutingWithThinPeer(
-        next,
-        thinPeer?.snapshot(),
-        current,
-      ),
-    )
-  }, [client, stableRoute, thinPeer])
-
-  useEffect(() => {
-    let cancelled = false
-    setSnapshot(loadingSnapshot)
-    void buildServiceRoutingSnapshot(client, stableRoute).then((next) => {
-      if (!cancelled) {
-        setSnapshot((current) =>
-          reconcileServiceRoutingWithThinPeer(
-            next,
-            thinPeer?.snapshot(),
-            current,
-          ),
-        )
-      }
-    })
+    activeMutationScope.current = projectionKey
+    mutationGeneration.current += 1
+    setPendingRowId(null)
+    setMutationError(null)
     return () => {
-      cancelled = true
+      if (activeMutationScope.current === projectionKey) activeMutationScope.current = null
+      mutationGeneration.current += 1
     }
-  }, [client, stableRoute, thinPeer])
+  }, [projectionKey])
 
+  useEffect(() => {
+    if (snapshot.loadState !== 'loading') {
+      previousProjection.current = { key: projectionKey, snapshot }
+    }
+  }, [projectionKey, snapshot])
+
+  const mutationIsCurrent = useCallback((guard: { scope: string; generation: number }) => (
+    activeMutationScope.current === guard.scope && mutationGeneration.current === guard.generation
+  ), [])
+
+  const refresh = useCallback(async () => {
+    await queryClient.invalidateQueries({ queryKey: routingQueryKey })
+  }, [queryClient, routingQueryKey])
   const previewRow = useCallback(
     async (_row: ServiceRoutingRow, changes: ServiceRoutingChange[]) => previewServiceRoutingChanges(client, changes),
-    [client.config],
+    [client],
   )
   const adminLocked = !resolveSessionIsAdmin(sessionIsAdmin, client)
 
   const saveRow = useCallback(
     async (row: ServiceRoutingRow, changes: ServiceRoutingChange[], preview: ServiceRoutingPreviewEvidence, confirmation: ServiceRoutingSaveConfirmation) => {
-      if (adminLocked || changes.length === 0) return
+      if (adminLocked || route.disabled || changes.length === 0) return
+      const guard = { scope: projectionKey, generation: mutationGeneration.current + 1 }
+      mutationGeneration.current = guard.generation
+      activeMutationScope.current = guard.scope
       setPendingRowId(row.id)
       setMutationError(null)
       try {
         await commitServiceRoutingChanges(client, row, changes, preview, confirmation)
-        await load()
+        if (!mutationIsCurrent(guard)) return
+        await invalidateServiceRoutingQueries(queryClient, queryKeys, routingQueryKey)
       } catch (error) {
-        setMutationError(meshPeerErrorMessage(error))
+        if (mutationIsCurrent(guard)) setMutationError(meshPeerErrorMessage(error))
       } finally {
-        setPendingRowId(null)
+        if (mutationIsCurrent(guard)) setPendingRowId(null)
       }
     },
-    [adminLocked, client.config, load],
+    [adminLocked, client, mutationIsCurrent, projectionKey, queryClient, queryKeys, route.disabled, routingQueryKey],
   )
 
-  return <ServiceRoutingView snapshot={snapshot} pendingRowId={pendingRowId} mutationError={mutationError} adminLocked={adminLocked} onRefresh={load} onPreviewRow={previewRow} onSaveRow={saveRow} />
+  return <ServiceRoutingView snapshot={snapshot} pendingRowId={pendingRowId} mutationError={mutationError} adminLocked={adminLocked} onRefresh={refresh} onPreviewRow={previewRow} onSaveRow={saveRow} />
 }
 
 export function LocalServiceRoutingResource({
@@ -601,15 +691,22 @@ export async function commitServiceRoutingChanges(client: AuroraClient, row: Ser
   }
 }
 
-export async function buildServiceRoutingSnapshot(client: AuroraClient, route: RouteAvailability): Promise<ServiceRoutingSnapshot> {
+export async function buildServiceRoutingSnapshot(
+  client: AuroraClient,
+  route: RouteAvailability,
+  options: { signal?: AbortSignal } = {},
+): Promise<ServiceRoutingSnapshot> {
+  if (route.disabled) return disabledServiceRoutingSnapshot(route)
+  throwServiceRoutingAbortIfRequested(options.signal)
+  const signalOptions = options.signal ? { signal: options.signal } : {}
   const [registryResult, servicesResult, configResult, metadataResult, catalogResult, meshStatusResult, peersResult] = await Promise.allSettled([
-    withSnapshotTimeout(client.registry.getRegistry(), 'full service registry'),
-    withSnapshotTimeout(client.registry.listServices(), 'service registry status'),
+    withSnapshotTimeout(client.registry.getRegistry(signalOptions), 'full service registry'),
+    withSnapshotTimeout(client.registry.listServices(signalOptions), 'service registry status'),
     withSnapshotTimeout(client.config.get({ section: 'services' }), 'service config'),
-    withSnapshotTimeout(client.config.getSchemaMetadata({ include_values: false }), 'config metadata'),
-    withSnapshotTimeout(client.capabilities.listCatalog({ include_unavailable: true }), 'recipient capability catalog'),
-    withSnapshotTimeout(client.requestResult<MeshStatusResponse, JsonObject>(GATEWAY_METHODS.getMeshStatus, {}, { path: routePath('Gateway', 'GetMeshStatus'), timeoutMs: 8_000 }), 'mesh status'),
-    withSnapshotTimeout(client.requestResult<MeshPeerListResponse, JsonObject>(AUTH_METHODS.meshListPeers, { include_disconnected: true }, { path: routePath('Auth', 'MeshListPeers'), timeoutMs: 5_000 }), 'mesh peers'),
+    withSnapshotTimeout(client.config.getSchemaMetadata({ include_values: false }, signalOptions), 'config metadata'),
+    withSnapshotTimeout(client.capabilities.listCatalog({ include_unavailable: true }, signalOptions), 'recipient capability catalog'),
+    withSnapshotTimeout(client.requestResult<MeshStatusResponse, JsonObject>(GATEWAY_METHODS.getMeshStatus, {}, { path: routePath('Gateway', 'GetMeshStatus'), timeoutMs: 8_000, ...signalOptions }), 'mesh status'),
+    withSnapshotTimeout(client.requestResult<MeshPeerListResponse, JsonObject>(AUTH_METHODS.meshListPeers, { include_disconnected: true }, { path: routePath('Auth', 'MeshListPeers'), timeoutMs: 5_000, ...signalOptions }), 'mesh peers'),
   ])
   const registry = fulfilled(registryResult)
   const services = fulfilled(servicesResult)
@@ -629,12 +726,12 @@ export async function buildServiceRoutingSnapshot(client: AuroraClient, route: R
     rejectedWarning(meshStatusResult),
   ].filter((message): message is string => Boolean(message)))]
 
-  if (route.disabled || (!registry && !services && !config)) {
+  if (!registry && !services && !config) {
     return {
       ...loadingSnapshot,
       loadState: 'unavailable',
       warnings,
-      error: route.disabled ? 'This control is unavailable right now.' : 'Aurora could not load service sharing.',
+      error: 'Aurora could not load service sharing.',
       evidenceSource: 'Aurora service status',
     }
   }
@@ -1018,8 +1115,8 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
                 const updateDraft = (patch: Partial<ServiceRoutingRowDraft>) => { invalidateReview(row.id); setDrafts((current) => ({ ...current, [row.id]: { ...draft, ...patch } })) }
                 return <ServiceRoutingTableRow key={row.id} row={row} draft={draft} knownPeers={snapshot.knownPeers} dirty={changes.length > 0} pending={pending} disabled={disabled} expanded={expanded} review={reviews[row.id]} sharingOnly={sharingOnly} onToggleExpanded={() => setExpandedRowId(expanded ? null : row.id)} onDraftChange={updateDraft} onReview={() => { void reviewRow(row, changes) }} onCancelReview={() => invalidateReview(row.id)} onReauthChange={(checked) => setReviews((current) => current[row.id] ? ({ ...current, [row.id]: { ...current[row.id]!, reauthConfirmed: checked } }) : current)} onConfirm={() => confirmRow(row)} />
               })}
-              {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">Loading service sharing through Aurora...</TableCell></TableRow> : null}
-              {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8 text-center text-sm text-muted-foreground">This device has nothing to share yet.</TableCell></TableRow> : null}
+              {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8"><RouteStateNotice state="loading" title="Loading service sharing" message="Loading service sharing through Aurora." /></TableCell></TableRow> : null}
+              {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <TableRow><TableCell colSpan={sharingOnly ? 4 : 6} className="py-8"><EmptyState title="Nothing to share yet" message="This device has nothing to share yet." /></TableCell></TableRow> : null}
             </TableBody>
           </Table>
         </div>
@@ -1033,8 +1130,8 @@ export function ServiceRoutingView({ snapshot, pendingRowId = null, mutationErro
             const updateDraft = (patch: Partial<ServiceRoutingRowDraft>) => { invalidateReview(row.id); setDrafts((current) => ({ ...current, [row.id]: { ...draft, ...patch } })) }
             return <ServiceRoutingMobileCard key={row.id} row={row} draft={draft} changes={changes} pending={pending} disabled={disabled} expanded={expanded} review={reviews[row.id]} onToggleExpanded={() => setExpandedRowId(expanded ? null : row.id)} onDraftChange={updateDraft} onReview={() => { void reviewRow(row, changes) }} onCancelReview={() => invalidateReview(row.id)} onReauthChange={(checked) => setReviews((current) => current[row.id] ? ({ ...current, [row.id]: { ...current[row.id]!, reauthConfirmed: checked } }) : current)} onConfirm={() => confirmRow(row)} />
           })}
-          {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">Loading service sharing through Aurora...</p> : null}
-          {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground">This device has nothing to share yet.</p> : null}
+          {snapshot.loadState === 'loading' && snapshot.rows.length === 0 ? <RouteStateNotice state="loading" title="Loading service sharing" message="Loading service sharing through Aurora." /> : null}
+          {snapshot.loadState !== 'loading' && snapshot.rows.length === 0 ? <EmptyState title="Nothing to share yet" message="This device has nothing to share yet." /> : null}
         </div>
       </CardContent>
     </Card>
@@ -1166,7 +1263,7 @@ function ChangeReview({ review, pending, onCancel, onReauthChange, onConfirm }: 
   return <div role="region" aria-label="Service sharing change review" className="flex flex-col gap-2 rounded-lg border border-amber-500/50 bg-amber-500/5 p-3">
     <div><p className="text-sm font-semibold">Review {review.changes.length} change{review.changes.length === 1 ? '' : 's'}</p><p className="text-xs text-muted-foreground">No changes have been saved. Aurora checks this exact change set before you confirm.</p></div>
     {review.status === 'loading' ? <p className="text-xs text-muted-foreground">Checking changes...</p> : null}
-    {review.error ? <p role="alert" className="text-xs text-destructive">Check failed: {review.error}</p> : null}
+    {review.error ? <RouteStateNotice state="error" title="Review needs attention" message={`Check failed: ${review.error}`} /> : null}
     {review.evidence ? <div className="flex flex-col gap-2 text-xs">
       <div className="flex flex-wrap gap-2"><Badge variant="outline">{review.evidence.valid ? 'Ready to save' : 'Needs attention'}</Badge></div>
       {review.evidence.errors.length ? <ul className="list-inside list-disc text-destructive">{review.evidence.errors.map((error) => <li key={error}>{serviceRoutingSafeError(error)}</li>)}</ul> : null}
@@ -1230,6 +1327,10 @@ function serviceRoutingSafeError(value: string): string {
     return 'Aurora could not complete that request. Refresh and try again.'
   }
   return value
+}
+
+function throwServiceRoutingAbortIfRequested(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) throw new DOMException('Service sharing request was cancelled', 'AbortError')
 }
 
 export const SERVICE_ROUTING_SNAPSHOT_TIMEOUT_MS = 60_000

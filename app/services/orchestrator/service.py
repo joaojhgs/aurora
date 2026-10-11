@@ -18,7 +18,7 @@ import time
 from collections.abc import AsyncIterator
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 from uuid import uuid4
 
@@ -87,6 +87,8 @@ from app.shared.contracts.models.orchestrator import (
 from app.shared.contracts.models.stt import STTMethods
 from app.shared.contracts.models.tooling import ToolingExecuteToolResponse
 from app.shared.contracts.models.tts import (
+    TTSGetCapabilitiesRequest,
+    TTSGetCapabilitiesResponse,
     TTSMethods,
     TTSRequest,
     TTSStopRequest,
@@ -94,6 +96,9 @@ from app.shared.contracts.models.tts import (
     TTSStreamEndRequest,
     TTSStreamStartRequest,
 )
+
+if TYPE_CHECKING:
+    from app.services.orchestrator.native_request_completion import RequestBinding
 from app.shared.contracts.registry import get_contract, method_contract
 from app.shared.messaging.models.stt_coordinator_models import STTUserSpeechCaptured
 from app.shared.services.base_service import BaseService
@@ -248,12 +253,17 @@ class OrchestratorService(BaseService):
         self._model_runtime_operations: dict[str, ModelRuntimeOperationResponse] = {}
         self._model_catalog_cache: dict[str, dict[str, Any]] = {}
         self._generation_tasks: dict[asyncio.Task, str | None] = {}
+        self._generation_task_owners: dict[asyncio.Task, tuple[str | None, str | None]] = {}
         self._generation_lock = asyncio.Lock()
+        self._stopping = False
         self._ui_automatic_tts_readback = False
+        self._native_execution_generation = uuid4().hex
 
     async def on_start(self) -> None:
         """Start the orchestrator service and subscribe to inputs."""
         log_info("Starting Orchestrator service...")
+        async with self._generation_lock:
+            self._stopping = False
         await self._load_ui_assistant_config()
 
         # Initialize graph orchestrator with bus dependency injection
@@ -272,8 +282,14 @@ class OrchestratorService(BaseService):
     async def on_stop(self) -> None:
         """Stop the orchestrator service."""
         log_info("Stopping Orchestrator service...")
+        async with self._generation_lock:
+            self._stopping = True
         self.bus.unsubscribe(STTMethods.USER_SPEECH_CAPTURED, self._on_transcription)
         await self._cancel_generation_tasks(session_id=None)
+        chatbot_module = importlib.import_module("app.services.orchestrator.agents.chatbot")
+        detached_llm = await chatbot_module.fence_llm()
+        if detached_llm is not None:
+            await chatbot_module.dispose_llm(detached_llm)
 
     async def reload(self, config_section: str | None = None) -> None:
         """Reload service configuration.
@@ -469,6 +485,81 @@ class OrchestratorService(BaseService):
             log_error(f"Chat session persistence is unavailable; continuing ephemerally: {exc}")
             return session_id, caller_principal_id, False
 
+    async def _run_in_native_request_group(self, binding: Any, operation: Any) -> Any:
+        """Keep graph inference and its accepted local work within one request scope."""
+        from contextlib import suppress
+
+        from app.services.orchestrator.native_request_completion import (
+            RequestCompletionStatus,
+            bind_request_group,
+            create_request_group,
+        )
+
+        group = create_request_group(binding)
+        try:
+            with bind_request_group(group):
+                result = await operation()
+        except asyncio.CancelledError:
+            group.begin_stop()
+            await group.stop_and_wait(timeout=30.0)
+            raise
+        except BaseException:
+            # Preserve the graph's primary exception while draining work that
+            # was already admitted under this request.
+            with suppress(BaseException):
+                await group.complete_and_wait(timeout=30.0)
+            raise
+
+        try:
+            completion = await group.complete_and_wait(timeout=30.0)
+        except asyncio.CancelledError:
+            group.begin_stop()
+            await group.stop_and_wait(timeout=30.0)
+            raise
+
+        # Cloud and other non-native graph paths have no local member to
+        # report. The group API represents that case as UNKNOWN; only enforce
+        # the result when local work was admitted or failed explicitly.
+        if completion.status is not RequestCompletionStatus.COMPLETE and not (
+            completion.status is RequestCompletionStatus.UNKNOWN
+            and completion.reason == "native_completion_unverified"
+            and not group.has_admitted_work
+        ):
+            raise RuntimeError("Aurora could not complete this request.") from None
+        return result
+
+    def _native_request_binding(
+        self,
+        *,
+        principal_id: str | None,
+        peer_id: str | None,
+        session_id: str | None,
+        trusted_local_origin: bool,
+    ) -> Any:
+        """Build internal request identity from trusted service context."""
+        from app.services.orchestrator.native_request_completion import RequestBinding
+
+        principal = principal_id
+        if principal is None and peer_id is None and not trusted_local_origin:
+            raise RuntimeError("Aurora could not complete this request.") from None
+
+        execution_generation = getattr(self, "_native_execution_generation", None)
+        if execution_generation is None:
+            execution_generation = uuid4().hex
+            self._native_execution_generation = execution_generation
+
+        if principal is None and peer_id is None:
+            # Local UI/STT ingress has a server-owned identity; caller payload
+            # fields never supply this principal.
+            principal = f"local-orchestrator-{execution_generation}"
+        return RequestBinding(
+            principal=principal,
+            peer=peer_id,
+            session_id=session_id or f"session-{uuid4().hex}",
+            request_id=f"request-{uuid4().hex}",
+            execution_generation=execution_generation,
+        )
+
     async def _on_transcription(self, env: Envelope) -> None:
         """Handle STT transcription event.
 
@@ -507,6 +598,7 @@ class OrchestratorService(BaseService):
                 request_id=voice_request_id,
                 correlation_id=voice_request_id,
                 stream=True,
+                trusted_local_origin=True,
             )
 
         except Exception as e:
@@ -544,6 +636,7 @@ class OrchestratorService(BaseService):
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
                 stream=cmd.stream,
+                trusted_local_origin=True,
                 inference_selector=cmd.inference_selector,
                 inference_provider_id=cmd.inference_provider_id,
                 inference_model_id=cmd.inference_model_id,
@@ -612,6 +705,7 @@ class OrchestratorService(BaseService):
                 inference_selector=cmd.inference_selector,
                 inference_provider_id=cmd.inference_provider_id,
                 inference_model_id=cmd.inference_model_id,
+                trusted_local_origin=False,
                 **caller_context,
             )
             return OrchestratorResponse(
@@ -625,7 +719,7 @@ class OrchestratorService(BaseService):
         except Exception as e:
             log_error(f"Error processing external input: {e}", exc_info=True)
             return OrchestratorResponse(
-                text=f"Error: {e!s}",
+                text="Error: Aurora could not complete this request.",
                 session_id=session_id,
                 request_id=cmd.request_id,
                 correlation_id=cmd.correlation_id,
@@ -652,14 +746,39 @@ class OrchestratorService(BaseService):
         self._authorize_direct_inference_request(
             data, envelope, explicit_selection=explicit_selection
         )
-        data = await self._validated_inference_request(
-            data,
-            include_cloud_models=self._can_expand_cloud_catalog(
-                envelope, explicit_selection=explicit_selection
-            ),
+        origin = getattr(envelope, "origin", "internal")
+        binding = self._native_request_binding(
+            principal_id=getattr(envelope, "principal_id", None),
+            peer_id=getattr(envelope, "caller_peer_id", None),
+            session_id=data.session_id,
+            trusted_local_origin=envelope is None
+            or (origin == "internal" and not self._external_approval_request(envelope)),
         )
-        response_message = await self._invoke_inference_llm(data)
-        return self._infer_response_from_message(data, response_message)
+        current_task = asyncio.current_task()
+        if current_task is not None and not await self._track_generation_task(
+            current_task,
+            data.session_id,
+            principal_id=binding.principal,
+            peer_id=binding.peer,
+        ):
+            raise RuntimeError("orchestrator is stopping")
+        try:
+
+            async def run_inference() -> OrchestratorInferChatResponse:
+                validated_data = data
+                validated_data = await self._validated_inference_request(
+                    validated_data,
+                    include_cloud_models=self._can_expand_cloud_catalog(
+                        envelope, explicit_selection=explicit_selection
+                    ),
+                )
+                response_message = await self._invoke_inference_llm(validated_data)
+                return self._infer_response_from_message(validated_data, response_message)
+
+            return await self._run_in_native_request_group(binding, run_inference)
+        finally:
+            if current_task is not None:
+                await self._untrack_generation_task(current_task)
 
     @method_contract(
         method_id=OrchestratorMethods.STREAM_INFER_CHAT,
@@ -677,6 +796,7 @@ class OrchestratorService(BaseService):
         envelope: Envelope | None = None,
     ) -> AsyncIterator[OrchestratorInferChatChunk]:
         """Stream local LLM chunks for mesh callers without executing tools."""
+        await self._ensure_accepting_inference()
         explicit_selection = bool(data.provider_id or data.model_id)
         self._authorize_direct_inference_request(
             data, envelope, explicit_selection=explicit_selection
@@ -687,7 +807,23 @@ class OrchestratorService(BaseService):
                 envelope, explicit_selection=explicit_selection
             ),
         )
-        return self._stream_inference_llm(data)
+        origin = getattr(envelope, "origin", "internal")
+        binding = self._native_request_binding(
+            principal_id=getattr(envelope, "principal_id", None),
+            peer_id=getattr(envelope, "caller_peer_id", None),
+            session_id=data.session_id,
+            trusted_local_origin=envelope is None
+            or (origin == "internal" and not self._external_approval_request(envelope)),
+        )
+        return self._stream_inference_llm(
+            data,
+            binding=binding,
+        )
+
+    async def _ensure_accepting_inference(self) -> None:
+        async with self._generation_lock:
+            if self._stopping:
+                raise RuntimeError("orchestrator is stopping")
 
     @method_contract(
         method_id=OrchestratorMethods.INGEST_CONTEXT,
@@ -1102,7 +1238,21 @@ class OrchestratorService(BaseService):
         generation_cancelled_by_session = False
         for scope in scopes:
             if scope == "generation":
-                cancelled = await self._cancel_generation_tasks(session_id=data.session_id)
+                principal_id = getattr(envelope, "principal_id", None)
+                peer_id = getattr(envelope, "caller_peer_id", None)
+                if (
+                    envelope is not None
+                    and getattr(envelope, "origin", None) == "internal"
+                    and principal_id is None
+                    and peer_id is None
+                ):
+                    principal_id = f"local-orchestrator-{self._native_execution_generation}"
+                cancelled = await self._cancel_generation_tasks(
+                    session_id=data.session_id,
+                    principal_id=principal_id,
+                    peer_id=peer_id,
+                    owner_bound=envelope is not None,
+                )
                 generation_cancelled_by_session = generation_cancelled_by_session or cancelled > 0
                 results.append(
                     OrchestratorInterruptScopeResult(
@@ -1150,7 +1300,21 @@ class OrchestratorService(BaseService):
                     )
                 )
             elif scope == "session":
-                cancelled = await self._cancel_generation_tasks(session_id=data.session_id)
+                principal_id = getattr(envelope, "principal_id", None)
+                peer_id = getattr(envelope, "caller_peer_id", None)
+                if (
+                    envelope is not None
+                    and getattr(envelope, "origin", None) == "internal"
+                    and principal_id is None
+                    and peer_id is None
+                ):
+                    principal_id = f"local-orchestrator-{self._native_execution_generation}"
+                cancelled = await self._cancel_generation_tasks(
+                    session_id=data.session_id,
+                    principal_id=principal_id,
+                    peer_id=peer_id,
+                    owner_bound=envelope is not None,
+                )
                 generation_cancelled_by_session = generation_cancelled_by_session or cancelled > 0
                 results.append(
                     OrchestratorInterruptScopeResult(
@@ -1370,6 +1534,7 @@ class OrchestratorService(BaseService):
         inference_model_id: str | None = None,
         caller_effective_perms: list[str] | None = None,
         caller_identity_source: str | None = None,
+        trusted_local_origin: bool = True,
     ) -> str | None:
         """Process user input through LangGraph agent.
 
@@ -1383,9 +1548,19 @@ class OrchestratorService(BaseService):
             Response text if return_response is True, else None
         """
         current_task = asyncio.current_task()
-        if current_task is not None:
-            await self._track_generation_task(current_task, session_id)
+        generation_owner_principal = caller_principal_id
+        if generation_owner_principal is None and caller_peer_id is None and trusted_local_origin:
+            generation_owner_principal = f"local-orchestrator-{self._native_execution_generation}"
+        if current_task is not None and not await self._track_generation_task(
+            current_task,
+            session_id,
+            principal_id=generation_owner_principal,
+            peer_id=caller_peer_id,
+        ):
+            raise RuntimeError("orchestrator is stopping")
         metadata = response_metadata if response_metadata is not None else {}
+        trusted_request_principal_id = caller_principal_id
+        active_tts_streams: list[str] = []
         metadata.setdefault("source", source)
         metadata.setdefault("stream", stream)
         persist_session = False
@@ -1434,8 +1609,13 @@ class OrchestratorService(BaseService):
                 caller_peer_id=caller_peer_id,
                 caller_identity_source=caller_identity_source,
             )
-            if current_task is not None:
-                await self._track_generation_task(current_task, session_id)
+            if current_task is not None and not await self._track_generation_task(
+                current_task,
+                session_id,
+                principal_id=generation_owner_principal,
+                peer_id=caller_peer_id,
+            ):
+                raise RuntimeError("orchestrator is stopping")
             if session_id:
                 metadata["session_id"] = session_id
             metadata.update(await self._assistant_response_metadata())
@@ -1461,22 +1641,26 @@ class OrchestratorService(BaseService):
                     source=source,
                 )
 
-            if stream:
-                response_text = await self._process_streaming_input(
-                    text=text,
-                    source=source,
-                    session_id=session_id,
-                    request_id=request_id,
-                    correlation_id=correlation_id,
-                    metadata=metadata,
-                    caller_principal_id=caller_principal_id,
-                    caller_peer_id=caller_peer_id,
-                    inference_override=inference_override,
-                    persist_session=persist_session,
-                    mesh_response=mesh_response,
-                )
-            else:
-                response_text = await self.orchestrator.stream_graph_updates(
+            stream_completion_finalizers: list[Any] = []
+
+            async def run_graph_request() -> str:
+                if stream:
+                    return await self._process_streaming_input(
+                        text=text,
+                        source=source,
+                        session_id=session_id,
+                        request_id=request_id,
+                        correlation_id=correlation_id,
+                        metadata=metadata,
+                        caller_principal_id=caller_principal_id,
+                        caller_peer_id=caller_peer_id,
+                        inference_override=inference_override,
+                        persist_session=persist_session,
+                        mesh_response=mesh_response,
+                        completion_finalizers=stream_completion_finalizers,
+                        active_tts_streams=active_tts_streams,
+                    )
+                return await self.orchestrator.stream_graph_updates(
                     text,
                     tts_result=False,
                     thread_id=session_id or request_id or correlation_id,
@@ -1485,6 +1669,18 @@ class OrchestratorService(BaseService):
                     owner_peer_id=caller_peer_id,
                     inference_override=inference_override,
                 )
+
+            response_text = await self._run_in_native_request_group(
+                self._native_request_binding(
+                    principal_id=trusted_request_principal_id,
+                    peer_id=caller_peer_id,
+                    session_id=session_id,
+                    trusted_local_origin=trusted_local_origin,
+                ),
+                run_graph_request,
+            )
+            for finalize_stream in stream_completion_finalizers:
+                await finalize_stream()
 
             response_bytes = len(response_text.encode("utf-8"))
             has_unsupported_control = any(
@@ -1590,10 +1786,24 @@ class OrchestratorService(BaseService):
                 return response_text
 
         except asyncio.CancelledError:
+            await self._cancel_request_tts_streams(
+                active_tts_streams,
+                reason="interrupted",
+                correlation_id=correlation_id,
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
+            )
             log_info(f"Orchestrator input processing interrupted for session={session_id}")
             if return_response:
                 return "Interrupted"
         except Exception as e:
+            await self._cancel_request_tts_streams(
+                active_tts_streams,
+                reason="canceled",
+                correlation_id=correlation_id,
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
+            )
             log_error(f"Error processing input: {e}", exc_info=True)
             try:
                 if stream:
@@ -1648,7 +1858,7 @@ class OrchestratorService(BaseService):
                     exc_info=True,
                 )
             if return_response:
-                return f"Error: {e!s}"
+                return "Error: Aurora could not complete this request."
         finally:
             if current_task is not None:
                 await self._untrack_generation_task(current_task)
@@ -1669,6 +1879,8 @@ class OrchestratorService(BaseService):
         inference_override: dict[str, Any] | None = None,
         persist_session: bool = False,
         mesh_response: bool = True,
+        completion_finalizers: list[Any] | None = None,
+        active_tts_streams: list[str] | None = None,
     ) -> str:
         """Publish correlated assistant stream events while graph generation runs."""
 
@@ -1686,8 +1898,20 @@ class OrchestratorService(BaseService):
             source in {"ui", "external"}
             and (self._ui_automatic_tts_readback or client_tts_playback)
         )
-        if should_stream_tts and get_contract(TTSMethods.STREAM_START) is not None:
+        if (
+            should_stream_tts
+            and get_contract(TTSMethods.STREAM_START) is not None
+            and await self._tts_stream_is_ready(
+                correlation_id=correlation_id,
+                principal_id=caller_principal_id,
+                caller_peer_id=caller_peer_id,
+            )
+        ):
             tts_stream_id = f"tts-{request_id or correlation_id or uuid4().hex}"
+            if active_tts_streams is not None:
+                # Retain the exact scoped target before dispatch: a failed or
+                # ambiguous start still needs request-owned cleanup.
+                active_tts_streams.append(tts_stream_id)
             await self.bus.publish(
                 TTSMethods.STREAM_START,
                 TTSStreamStartRequest(
@@ -1705,6 +1929,9 @@ class OrchestratorService(BaseService):
             )
             metadata["tts_status"] = "streaming"
             metadata["tts_stream_id"] = tts_stream_id
+        elif should_stream_tts:
+            metadata["tts_status"] = "unavailable"
+            metadata["tts_reason"] = "TTS streaming provider is not ready."
 
         async for event in self.orchestrator.stream_graph_events(
             text,
@@ -1714,7 +1941,6 @@ class OrchestratorService(BaseService):
             owner_peer_id=caller_peer_id,
             inference_override=inference_override,
         ):
-            sequence += 1
             if event.kind == "assistant.delta":
                 response_text = event.text or f"{response_text}{event.delta}"
                 if tts_stream_id and event.delta:
@@ -1730,17 +1956,19 @@ class OrchestratorService(BaseService):
                     )
             elif event.kind == "assistant.completed" and event.text:
                 response_text = event.text
-            await self._publish_assistant_stream_event(
-                event,
-                sequence=sequence,
-                session_id=session_id,
-                request_id=request_id,
-                correlation_id=correlation_id,
-                metadata=metadata,
-                principal_id=caller_principal_id,
-                caller_peer_id=caller_peer_id,
-                mesh=mesh_response,
-            )
+            if event.kind != "assistant.completed":
+                sequence += 1
+                await self._publish_assistant_stream_event(
+                    event,
+                    sequence=sequence,
+                    session_id=session_id,
+                    request_id=request_id,
+                    correlation_id=correlation_id,
+                    metadata=metadata,
+                    principal_id=caller_principal_id,
+                    caller_peer_id=caller_peer_id,
+                    mesh=mesh_response,
+                )
 
         if tts_stream_id and response_text and response_text != "END":
             if not tts_source_text:
@@ -1756,66 +1984,107 @@ class OrchestratorService(BaseService):
             terminal_metadata["tts_status"] = "skipped"
             terminal_metadata["tts_reason"] = "Graph ended without a speakable assistant answer."
 
-        if tts_stream_id:
-            tts_buffer, tts_text_sequence = await self._flush_tts_stream_chunks(
-                stream_id=tts_stream_id,
-                buffer=tts_buffer,
-                next_sequence=tts_text_sequence,
-                correlation_id=correlation_id,
-                principal_id=caller_principal_id,
-                caller_peer_id=caller_peer_id,
-                final=True,
-            )
-            await self.bus.publish(
-                TTSMethods.STREAM_END,
-                TTSStreamEndRequest(
+        async def finalize_stream() -> None:
+            nonlocal tts_text_sequence, tts_buffer
+            if tts_stream_id:
+                tts_buffer, tts_text_sequence = await self._flush_tts_stream_chunks(
                     stream_id=tts_stream_id,
-                    final_sequence=tts_text_sequence - 1 if tts_text_sequence > 0 else None,
-                    reason="completed",
+                    buffer=tts_buffer,
+                    next_sequence=tts_text_sequence,
                     correlation_id=correlation_id,
+                    principal_id=caller_principal_id,
+                    caller_peer_id=caller_peer_id,
+                    final=True,
+                )
+                await self.bus.publish(
+                    TTSMethods.STREAM_END,
+                    TTSStreamEndRequest(
+                        stream_id=tts_stream_id,
+                        final_sequence=tts_text_sequence - 1 if tts_text_sequence > 0 else None,
+                        reason="completed",
+                        correlation_id=correlation_id,
+                    ),
+                    event=False,
+                    priority=get_interactive_priority(),
+                    origin="internal",
+                    principal_id=caller_principal_id,
+                    caller_peer_id=caller_peer_id,
+                    correlation_id=correlation_id,
+                )
+                if active_tts_streams is not None and tts_stream_id in active_tts_streams:
+                    active_tts_streams.remove(tts_stream_id)
+            elif publish_text and publish_text != "Done.":
+                await self._request_response_tts(
+                    text=publish_text,
+                    source=source,
+                    metadata=terminal_metadata,
+                    skip_tts=False,
+                )
+
+            if publish_text and persist_session:
+                await self._persist_chat_message(
+                    principal_id=caller_principal_id or "system",
+                    session_id=session_id or "",
+                    role="assistant",
+                    content=publish_text,
+                    source=source,
+                    metadata={**terminal_metadata, "execution": "local"},
+                )
+
+            final_sequence = sequence + 1
+            await self._publish_assistant_stream_event(
+                AssistantStreamEvent(
+                    kind="assistant.completed",
+                    text=publish_text,
+                    is_final=True,
                 ),
-                event=False,
-                priority=get_interactive_priority(),
-                origin="internal",
+                sequence=final_sequence,
+                session_id=session_id,
+                request_id=request_id,
+                correlation_id=correlation_id,
+                metadata=terminal_metadata,
                 principal_id=caller_principal_id,
                 caller_peer_id=caller_peer_id,
-                correlation_id=correlation_id,
-            )
-        elif publish_text and publish_text != "Done.":
-            await self._request_response_tts(
-                text=publish_text,
-                source=source,
-                metadata=terminal_metadata,
-                skip_tts=False,
+                mesh=mesh_response,
             )
 
-        if publish_text and persist_session:
-            await self._persist_chat_message(
-                principal_id=caller_principal_id or "system",
-                session_id=session_id or "",
-                role="assistant",
-                content=publish_text,
-                source=source,
-                metadata={**terminal_metadata, "execution": "local"},
-            )
-
-        sequence += 1
-        await self._publish_assistant_stream_event(
-            AssistantStreamEvent(
-                kind="assistant.completed",
-                text=publish_text,
-                is_final=True,
-            ),
-            sequence=sequence,
-            session_id=session_id,
-            request_id=request_id,
-            correlation_id=correlation_id,
-            metadata=terminal_metadata,
-            principal_id=caller_principal_id,
-            caller_peer_id=caller_peer_id,
-            mesh=mesh_response,
-        )
+        if completion_finalizers is None:
+            await finalize_stream()
+        else:
+            completion_finalizers.append(finalize_stream)
         return publish_text
+
+    async def _cancel_request_tts_streams(
+        self,
+        stream_ids: list[str],
+        *,
+        reason: str,
+        correlation_id: str | None,
+        principal_id: str | None,
+        caller_peer_id: str | None,
+    ) -> None:
+        """Cancel only TTS streams opened by this request, preserving its outcome."""
+        for stream_id in tuple(stream_ids):
+            try:
+                result = await self.bus.request(
+                    TTSMethods.STOP,
+                    TTSStopRequest(
+                        stream_id=stream_id,
+                        correlation_id=correlation_id,
+                        reason=reason,
+                    ),
+                    priority=get_interactive_priority(),
+                    timeout=2.0,
+                    origin="internal",
+                    correlation_id=correlation_id,
+                    principal_id=principal_id,
+                    caller_peer_id=caller_peer_id,
+                )
+                if not result.ok:
+                    log_info(f"Request-scoped TTS stop was not confirmed for stream={stream_id}")
+            except BaseException:
+                # Stream cleanup must never replace the graph/native outcome.
+                continue
 
     async def _flush_tts_stream_chunks(
         self,
@@ -1875,6 +2144,44 @@ class OrchestratorService(BaseService):
             )
             next_sequence += 1
         return remainder, next_sequence
+
+    async def _tts_stream_is_ready(
+        self,
+        *,
+        correlation_id: str | None,
+        principal_id: str | None,
+        caller_peer_id: str | None,
+    ) -> bool:
+        """Check the selected TTS runtime before publishing stream commands."""
+        if get_contract(TTSMethods.GET_CAPABILITIES) is None:
+            return False
+        try:
+            result = await self.bus.request(
+                TTSMethods.GET_CAPABILITIES,
+                TTSGetCapabilitiesRequest(correlation_id=correlation_id),
+                timeout=5.0,
+                priority=get_interactive_priority(),
+                origin="internal",
+                principal_id=principal_id,
+                caller_peer_id=caller_peer_id,
+                correlation_id=correlation_id,
+            )
+            if not result.ok:
+                log_info("TTS capability request was rejected; automatic speech skipped")
+                return False
+            try:
+                capabilities_response = TTSGetCapabilitiesResponse.model_validate(result.data)
+            except Exception:
+                log_info(
+                    "TTS capability response was malformed; automatic speech skipped (type=%s)",
+                    type(result.data).__name__,
+                )
+                return False
+            capabilities = capabilities_response.capabilities
+            return bool(capabilities.ready and capabilities.streaming)
+        except Exception:
+            log_info("TTS capability lookup failed; automatic speech skipped")
+            return False
 
     async def _publish_assistant_stream_event(
         self,
@@ -1948,6 +2255,8 @@ class OrchestratorService(BaseService):
         )
         if skip_tts:
             return
+        if metadata.get("tts_status") in {"unavailable", "skipped"}:
+            return
         if not should_request_tts:
             metadata["tts_status"] = "skipped"
             metadata["tts_reason"] = (
@@ -2001,23 +2310,50 @@ class OrchestratorService(BaseService):
         self,
         task: asyncio.Task,
         session_id: str | None,
-    ) -> None:
+        *,
+        principal_id: str | None = None,
+        peer_id: str | None = None,
+    ) -> bool:
         async with self._generation_lock:
+            if self._stopping:
+                return False
             self._generation_tasks[task] = session_id
+            task_owners = getattr(self, "_generation_task_owners", None)
+            if task_owners is None:
+                task_owners = {}
+                self._generation_task_owners = task_owners
+            task_owners[task] = (principal_id, peer_id)
+            return True
 
     async def _untrack_generation_task(self, task: asyncio.Task) -> None:
         async with self._generation_lock:
             self._generation_tasks.pop(task, None)
+            getattr(self, "_generation_task_owners", {}).pop(task, None)
 
-    async def _cancel_generation_tasks(self, session_id: str | None) -> int:
+    async def _cancel_generation_tasks(
+        self,
+        session_id: str | None,
+        *,
+        principal_id: str | None = None,
+        peer_id: str | None = None,
+        owner_bound: bool = False,
+    ) -> int:
         current_task = asyncio.current_task()
         async with self._generation_lock:
+            task_owners = getattr(self, "_generation_task_owners", {})
             candidates = [
                 task
                 for task, task_session_id in self._generation_tasks.items()
                 if task is not current_task
                 and not task.done()
                 and (session_id is None or task_session_id == session_id)
+                and (
+                    not owner_bound
+                    or (
+                        (principal_id is not None or peer_id is not None)
+                        and task_owners.get(task) == (principal_id, peer_id)
+                    )
+                )
             ]
 
         for task in candidates:
@@ -2025,6 +2361,10 @@ class OrchestratorService(BaseService):
 
         if candidates:
             await asyncio.gather(*candidates, return_exceptions=True)
+            async with self._generation_lock:
+                for task in candidates:
+                    self._generation_tasks.pop(task, None)
+                    getattr(self, "_generation_task_owners", {}).pop(task, None)
         return len(candidates)
 
     async def _resolve_inference_override(
@@ -2475,10 +2815,86 @@ class OrchestratorService(BaseService):
                 return await maybe_response
             return maybe_response
         if hasattr(llm, "invoke"):
-            return await asyncio.to_thread(llm.invoke, messages)
+            chatbot_module = importlib.import_module("app.services.orchestrator.agents.chatbot")
+            return await chatbot_module.run_native(llm, llm.invoke, messages)
         raise RuntimeError("configured LLM does not support invoke")
 
     async def _stream_inference_llm(
+        self,
+        data: OrchestratorInferChatRequest,
+        *,
+        binding: RequestBinding,
+    ) -> AsyncIterator[OrchestratorInferChatChunk]:
+        from contextlib import suppress
+
+        from app.services.orchestrator.native_request_completion import (
+            RequestCompletionStatus,
+            bind_request_group,
+            create_request_group,
+        )
+
+        current_task = asyncio.current_task()
+        if current_task is not None and not await self._track_generation_task(
+            current_task,
+            binding.session_id,
+            principal_id=binding.principal,
+            peer_id=binding.peer,
+        ):
+            raise RuntimeError("orchestrator is stopping")
+        try:
+            group = create_request_group(binding)
+            stream = self._stream_inference_llm_impl(data)
+            terminal_chunk: OrchestratorInferChatChunk | None = None
+            primary_error: BaseException | None = None
+            try:
+                while True:
+                    try:
+                        with bind_request_group(group):
+                            chunk = await anext(stream)
+                    except StopAsyncIteration:
+                        break
+                    async with self._generation_lock:
+                        if self._stopping:
+                            raise asyncio.CancelledError
+                    if chunk.is_final:
+                        terminal_chunk = chunk
+                    else:
+                        # The request capability is reset before control is
+                        # yielded to an arbitrary stream consumer.
+                        yield chunk
+
+                completion = await group.complete_and_wait(timeout=30.0)
+                if completion.status is not RequestCompletionStatus.COMPLETE and not (
+                    completion.status is RequestCompletionStatus.UNKNOWN
+                    and completion.reason == "native_completion_unverified"
+                    and not group.has_admitted_work
+                ):
+                    raise RuntimeError("Aurora could not complete this request.") from None
+                if terminal_chunk is not None:
+                    yield terminal_chunk
+            except (asyncio.CancelledError, GeneratorExit):
+                group.begin_stop()
+                with suppress(BaseException):
+                    await stream.aclose()
+                with suppress(BaseException):
+                    await group.stop_and_wait(timeout=30.0)
+                raise
+            except BaseException as error:
+                primary_error = error
+                with suppress(BaseException):
+                    await stream.aclose()
+                with suppress(BaseException):
+                    await group.complete_and_wait(timeout=30.0)
+                raise
+            finally:
+                if primary_error is None and terminal_chunk is None:
+                    with suppress(BaseException):
+                        await stream.aclose()
+        finally:
+            if current_task is not None:
+                await self._untrack_generation_task(current_task)
+
+    async def _stream_inference_llm_impl(
         self, data: OrchestratorInferChatRequest
     ) -> AsyncIterator[OrchestratorInferChatChunk]:
         """Stream the configured chat model and normalize chunks."""

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import {
@@ -8,6 +8,8 @@ import {
   ORCHESTRATOR_METHODS,
   ORCHESTRATOR_MODEL_METHODS,
   modelRuntimeCatalogFixture,
+  emptyAuroraNodeConfigDocumentV2,
+  serializeAuroraNodeConfigDocumentV2,
   type AuroraStreamRequest,
   type AuroraTransportRequest,
   type ToolApprovalConfirmRequest,
@@ -29,6 +31,8 @@ import {
 } from '@aurora/client/local-data'
 
 import { AssistantView } from '../src/assistant-view'
+import { AuroraQueryProvider, useAuroraStateScopeId, type NativeSpeechPolicyPort } from '../src/query'
+import { useNativeSpeechPolicy, type NativeSpeechPolicyState } from '../src/native-speech-policy'
 import type { LightweightAssistantDependencies } from '../src/local-assistant/lightweight-assistant'
 import type { NativeMobileVoicePort, NativeMobileVoiceStatus } from '../src/native-mobile-voice'
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from '../src/platform-surface'
@@ -36,10 +40,12 @@ import type { RouteAvailability } from '../src/shell-data'
 
 const roots: Root[] = []
 const scope = Object.freeze({ profileId: 'profile-unified', localNodeId: 'node-unified' })
+let originalDocumentTokenDescriptor: PropertyDescriptor | undefined
 
 beforeAll(() => {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   Element.prototype.scrollIntoView = () => undefined
+  originalDocumentTokenDescriptor = Object.getOwnPropertyDescriptor(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__')
   globalThis.ResizeObserver = class {
     observe() {}
     unobserve() {}
@@ -53,6 +59,11 @@ afterEach(() => {
   vi.unstubAllGlobals()
   Reflect.deleteProperty(window.URL, 'createObjectURL')
   Reflect.deleteProperty(window.URL, 'revokeObjectURL')
+  if (originalDocumentTokenDescriptor) {
+    Object.defineProperty(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__', originalDocumentTokenDescriptor)
+  } else {
+    Reflect.deleteProperty(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__')
+  }
 })
 
 describe('unified Assistant execution controls', () => {
@@ -88,7 +99,7 @@ describe('unified Assistant execution controls', () => {
     })
 
     await enterPrompt(container, 'keep this turn at the bottom')
-    await waitUntil(() => container.textContent?.includes('Waiting for Aurora...') === true)
+    await waitUntil(() => container.textContent?.includes('Aurora is preparing a response.') === true)
     const beforeIds = [...container.querySelectorAll<HTMLElement>('[data-slot="message-scroller-item"][data-message-id]')]
       .map((item) => item.dataset.messageId)
     expect(beforeIds).toHaveLength(2)
@@ -210,6 +221,35 @@ describe('unified Assistant execution controls', () => {
 
   it('keeps desktop-local read-aloud on the Python-owned speaker path', async () => {
     const playbackPayloads: unknown[] = []
+    let observedPolicyState: NativeSpeechPolicyState = 'loading'
+    const observePolicyState = (state: NativeSpeechPolicyState) => { observedPolicyState = state }
+    const documentToken = 'a'.repeat(64)
+    const scopedPolicy = emptyAuroraNodeConfigDocumentV2(1)
+    Object.defineProperty(window, '__AURORA_NODE_CONFIG_DOCUMENT_TOKEN__', {
+      configurable: true,
+      value: documentToken,
+    })
+    const nativeSpeechPolicyPort: NativeSpeechPolicyPort = {
+      async nodeConfigPolicyRead(token) {
+        expect(token).toBe(documentToken)
+        return {
+          documentJson: serializeAuroraNodeConfigDocumentV2(scopedPolicy),
+          draftHandle: 'b'.repeat(64),
+        }
+      },
+      async nodeConfigPolicyCompareAndSwap() {
+        throw new Error('Policy save is not part of this read-aloud fixture.')
+      },
+      async getAndroidVoiceForegroundServiceStatus() {
+        throw new Error('Android status is not used by this desktop fixture.')
+      },
+      async synchronizeAndroidBackgroundTranscription() {
+        throw new Error('Android synchronization is not used by this desktop fixture.')
+      },
+      async requestMicrophonePermission() {
+        throw new Error('Microphone permissions are not used by this desktop fixture.')
+      },
+    }
     const provider: LightweightAssistantProvider = {
       async complete() {
         return { type: 'message', content: 'Read this response on the desktop speaker.' }
@@ -229,10 +269,13 @@ describe('unified Assistant execution controls', () => {
         nodeMode: 'mesh-node',
         runtimeTier: 'python-full',
       }),
+      nativeSpeechPolicyPort,
+      onNativeSpeechPolicyState: observePolicyState,
     })
 
     await enterPrompt(container, 'read locally')
     await waitUntil(() => container.textContent?.includes('Read this response on the desktop speaker.') === true)
+    await waitUntil(() => observedPolicyState === 'ready')
     const readAloud = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.trim() === 'Read aloud')
     if (!readAloud) throw new Error('missing read-aloud action')
@@ -272,8 +315,9 @@ describe('unified Assistant execution controls', () => {
       await Promise.resolve()
     })
 
-    const source = document.querySelector<HTMLButtonElement>('.aui-model-source-trigger')
-    const providers = [...document.querySelectorAll<HTMLButtonElement>('.aui-model-provider-trigger')]
+    const modelGroupTriggers = [...document.querySelectorAll<HTMLButtonElement>('[data-slot="model-selector-content"] button[aria-expanded]')]
+    const source = modelGroupTriggers.find((button) => button.textContent?.includes('Home Aurora'))
+    const providers = modelGroupTriggers.filter((button) => button !== source && button.textContent?.includes('model'))
     expect(source?.textContent).toContain('Home Aurora')
     expect(source?.getAttribute('aria-expanded')).toBe('true')
     expect(providers.length).toBeGreaterThan(0)
@@ -354,7 +398,7 @@ describe('unified Assistant execution controls', () => {
     })
 
     const sheet = document.body.querySelector<HTMLElement>('[data-slot="sheet-content"]')
-    const firstChat = [...(sheet?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+    const firstChat = [...(sheet?.querySelectorAll<HTMLButtonElement>('[aria-label="Assistant conversation list"] button') ?? [])]
       .find((button) => button.textContent?.includes('first saved chat'))
     if (!firstChat) throw new Error('missing first saved local chat')
     await act(async () => {
@@ -415,6 +459,104 @@ describe('unified Assistant execution controls', () => {
 
     await waitUntil(() => attempts === 2 && container.textContent?.includes('Answered after retry.') === true)
     expect(container.textContent).toContain('retry this prompt')
+  })
+
+  it('keeps a complete fallback response successful and returns the composer to Send', async () => {
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Unused local response.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register(ORCHESTRATOR_METHODS.externalUserInput, (request) => assistantResponse(request, 'A complete fallback answer.'))
+      .stream('assistant', async function* () {
+        throw new Error('Live event stream unavailable before any event.')
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
+    await enterPrompt(container, 'finish with the request response')
+    await waitUntil(() => container.textContent?.includes('A complete fallback answer.') === true)
+
+    expect(container.textContent).toContain('Aurora continued with a complete response.')
+    expect(container.querySelector('[data-aurora-part="assistant-composer-send"]')?.getAttribute('data-composer-action'))
+      .toBe('send')
+  })
+
+  it('keeps a genuinely interrupted response retryable after a partial event', async () => {
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Unused local response.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register(ORCHESTRATOR_METHODS.externalUserInput, (request) => assistantResponse(request, 'Unused response.'))
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as Record<string, unknown>
+        yield {
+          id: 'assistant-interrupted-delta',
+          kind: 'assistant.delta',
+          payload: {
+            delta: 'A partial answer',
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+          },
+          correlation_id: request.correlationId,
+        }
+        throw new Error('The event stream disconnected.')
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
+    await enterPrompt(container, 'retry after stream loss')
+    await waitUntil(() => container.querySelector('[data-composer-action="retry"]') !== null)
+
+    expect(container.textContent).toContain('A partial answer')
+    expect(container.querySelector('[data-aurora-part="assistant-composer-send"]')?.getAttribute('data-composer-action'))
+      .toBe('retry')
+  })
+
+  it('keeps partial text when an explicit failed event clears the stream store', async () => {
+    const provider: LightweightAssistantProvider = {
+      async complete() {
+        return { type: 'message', content: 'Unused local response.' }
+      },
+    }
+    const transport = MockAuroraTransport.empty()
+      .register(ORCHESTRATOR_MODEL_METHODS.getCatalog, () => structuredClone(modelRuntimeCatalogFixture))
+      .register(ORCHESTRATOR_METHODS.externalUserInput, (request) => assistantResponse(request, 'Unused response.'))
+      .stream('assistant', async function* (request) {
+        const payload = request.payload as Record<string, unknown>
+        yield {
+          id: 'assistant-explicit-failure-delta',
+          kind: 'assistant.delta',
+          payload: {
+            delta: 'A partial failed answer',
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+          },
+          correlation_id: request.correlationId,
+        }
+        yield {
+          id: 'assistant-explicit-failure',
+          kind: 'assistant.failed',
+          payload: {
+            error_message: 'The response failed explicitly.',
+            session_id: payload.session_id,
+            request_id: payload.request_id,
+          },
+          correlation_id: request.correlationId,
+        }
+      })
+    const container = await renderUnifiedAssistant(new AuroraClient({ transport }), provider)
+
+    await chooseModelSelectorItem('Using this device', 'Home Aurora')
+    await enterPrompt(container, 'keep text from an explicit failure')
+    await waitUntil(() => container.querySelector('[data-composer-action="retry"]') !== null)
+
+    expect(container.textContent).toContain('A partial failed answer')
   })
 
   it('switches the same composer to dispatch and sends the turn through the connected Aurora device', async () => {
@@ -481,7 +623,7 @@ describe('unified Assistant execution controls', () => {
     expect((streamCalls[0]?.payload as { session_id?: string }).session_id).toBe(localConversationId)
     expect(container.textContent).toContain('Local setup response.')
     expect(container.textContent).toContain('Answered by Home Aurora.')
-    expect([...container.querySelectorAll('.aui-chat-runtime')].map((node) => node.textContent)).toContain(
+    expect([...container.querySelectorAll('[data-slot="message-header"] span')].map((node) => node.textContent)).toContain(
       'Home Aurora · llama-3-8b-instruct',
     )
     expect(container.textContent).toContain('Home Aurora · llama-3-8b-instruct')
@@ -509,7 +651,7 @@ describe('unified Assistant execution controls', () => {
     ])
     expect(container.textContent).toContain('Local setup response.')
     expect(container.textContent).toContain('Answered by Home Aurora.')
-    expect([...container.querySelectorAll('.aui-chat-runtime')].map((node) => node.textContent)).toContain(
+    expect([...container.querySelectorAll('[data-slot="message-header"] span')].map((node) => node.textContent)).toContain(
       'Home Aurora · llama-3-8b-instruct',
     )
 
@@ -532,7 +674,7 @@ describe('unified Assistant execution controls', () => {
       await Promise.resolve()
     })
     await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]')?.textContent?.includes('start a local-only chat') === true)
-    const savedConversation = [...(document.body.querySelector('[data-slot="sheet-content"]')?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+    const savedConversation = [...(document.body.querySelector('[data-slot="sheet-content"]')?.querySelectorAll<HTMLButtonElement>('[aria-label="Assistant conversation list"] button') ?? [])]
       .find((button) => button.textContent?.includes('start a local-only chat'))
     if (!savedConversation) throw new Error('missing saved mixed-execution conversation')
     await act(async () => {
@@ -541,7 +683,7 @@ describe('unified Assistant execution controls', () => {
     })
     await waitUntil(() => container.textContent?.includes('Local continuation response.') === true)
 
-    const restoredRuntimeLabels = [...container.querySelectorAll('.aui-chat-runtime')]
+    const restoredRuntimeLabels = [...container.querySelectorAll('[data-slot="message-header"] span')]
       .map((node) => node.textContent)
     expect(restoredRuntimeLabels.filter((label) => label === 'Local · Configured default')).toHaveLength(2)
     expect(restoredRuntimeLabels).toContain('Home Aurora · llama-3-8b-instruct')
@@ -692,10 +834,10 @@ describe('unified Assistant execution controls', () => {
     await chooseModelSelectorItem('Using this device', 'Home Aurora')
     await enterPrompt(container, 'play the targeted response')
     await waitUntil(() => playedSources.length === 1)
-    await waitUntil(() => container.querySelector('.aui-chat-assistant.aui-chat-sent') !== null)
+    await waitUntil(() => container.querySelector('[data-slot="message"][data-align="start"] [data-slot="bubble-content"] p') !== null)
 
-    const assistantText = container.querySelector('.aui-chat-assistant .aui-chat-bubble p')?.textContent
-    const readAloud = [...container.querySelectorAll<HTMLButtonElement>('.aui-chat-assistant .aui-message-action-button')]
+    const assistantText = container.querySelector('[data-slot="message"][data-align="start"] [data-slot="bubble-content"] p')?.textContent
+    const readAloud = [...container.querySelectorAll<HTMLButtonElement>('[data-slot="message"][data-align="start"] [data-slot="message-footer"] button')]
       .find((button) => button.textContent?.trim() === 'Read aloud')
     expect(assistantText).toBe('Targeted audio works.')
     expect(playedSources).toEqual(['blob:aurora-streamed-tts'])
@@ -802,7 +944,7 @@ describe('unified Assistant execution controls', () => {
       await Promise.resolve()
     })
     await waitUntil(() => document.body.querySelector('[data-slot="sheet-content"]')?.textContent?.includes('check the connected device') === true)
-    const savedConversation = [...(document.body.querySelector('[data-slot="sheet-content"]')?.querySelectorAll<HTMLButtonElement>('.aui-thread-row-button') ?? [])]
+    const savedConversation = [...(document.body.querySelector('[data-slot="sheet-content"]')?.querySelectorAll<HTMLButtonElement>('[aria-label="Assistant conversation list"] button') ?? [])]
       .find((button) => button.textContent?.includes('check the connected device'))
     if (!savedConversation) throw new Error('missing saved dispatched conversation')
     await act(async () => {
@@ -811,10 +953,11 @@ describe('unified Assistant execution controls', () => {
     })
 
     await waitUntil(() => container.textContent?.includes('The connected device is online.') === true)
-    expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).not.toBeNull()
-    expect(container.querySelector('.aui-chat-tool')).toBeNull()
+    const restoredToolRoot = container.querySelector('[data-slot="message"][data-align="start"] [data-slot="tool-fallback-root"]')
+    expect(restoredToolRoot).not.toBeNull()
+    expect(restoredToolRoot?.closest('[data-slot="message"]')?.querySelector('[data-slot="bubble-content"] p')?.textContent).toBe('The connected device is online.')
     expect(container.textContent).toContain('Action finished')
-    expect([...container.querySelectorAll('.aui-chat-runtime')].map((node) => node.textContent)).toContain(
+    expect([...container.querySelectorAll('[data-slot="message-header"] span')].map((node) => node.textContent)).toContain(
       'Home Aurora · llama-3-8b-instruct',
     )
   })
@@ -850,8 +993,9 @@ describe('unified Assistant execution controls', () => {
     await waitUntil(() => container.textContent?.includes('This device is online.') === true)
 
     expect(container.querySelectorAll('[data-slot="tool-fallback-root"]')).toHaveLength(1)
-    expect(container.querySelector('.aui-chat-tool')).toBeNull()
-    expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).not.toBeNull()
+    const localToolRoot = container.querySelector('[data-slot="message"][data-align="start"] [data-slot="tool-fallback-root"]')
+    expect(localToolRoot).not.toBeNull()
+    expect(localToolRoot?.closest('[data-slot="message"]')?.querySelector('[data-slot="bubble-content"] p')?.textContent).toBe('This device is online.')
     expect(container.textContent).toContain('Action finished')
     expect(container.textContent).not.toContain('Action completed.')
   })
@@ -886,10 +1030,11 @@ describe('unified Assistant execution controls', () => {
     await enterPrompt(container, 'check this device silently')
     await waitUntil(() => container.textContent?.includes('Action finished') === true)
 
-    expect(container.querySelector('.aui-chat-tool [data-slot="tool-fallback-root"]')).not.toBeNull()
-    expect(container.querySelector('.aui-chat-assistant [data-slot="tool-fallback-root"]')).toBeNull()
-    expect(container.querySelector('.aui-chat-assistant .aui-chat-message-header')).toBeNull()
-    expect(container.querySelectorAll('.aui-chat-assistant .aui-chat-bubble')).toHaveLength(0)
+    const toolOnlyRoot = container.querySelector('[data-slot="tool-fallback-root"]')
+    const toolOnlyMessage = toolOnlyRoot?.closest('[data-slot="message"]')
+    expect(toolOnlyRoot).not.toBeNull()
+    expect(toolOnlyMessage?.querySelector('[data-slot="message-header"]')).toBeNull()
+    expect(toolOnlyMessage?.querySelectorAll('[data-slot="bubble"]')).toHaveLength(0)
     expect(container.textContent).not.toContain('Saved message')
     expect(container.textContent).not.toContain('Action completed.')
   })
@@ -927,11 +1072,13 @@ describe('unified Assistant execution controls', () => {
     const sessionButton = [...container.querySelectorAll<HTMLButtonElement>('button')]
       .find((button) => button.textContent?.trim() === 'Session')
     if (!sessionButton) throw new Error('missing Session approval button')
+    expect(sessionButton.disabled).toBe(false)
     await act(async () => {
       sessionButton.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))
       await Promise.resolve()
       await Promise.resolve()
     })
+    expect(confirmations).toHaveLength(1)
     await waitUntil(() => confirmations.length === 1 && container.textContent?.includes('Approved action completed.') === true)
 
     expect(confirmations[0]).toEqual(expect.objectContaining({
@@ -1068,6 +1215,8 @@ async function renderUnifiedAssistant(
     envelopeCrypto?: EnvelopeCryptoPort
     surfaceProfile?: AuroraSurfaceProfile
     nativeMobileVoice?: NativeMobileVoicePort
+    nativeSpeechPolicyPort?: NativeSpeechPolicyPort
+    onNativeSpeechPolicyState?: (state: NativeSpeechPolicyState) => void
   } = {},
 ): Promise<HTMLElement> {
   client.auth.setApiKeySystem()
@@ -1086,7 +1235,7 @@ async function renderUnifiedAssistant(
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(
+    const assistant = (
       <AssistantView
         client={client}
         route={connectedRoute()}
@@ -1099,11 +1248,39 @@ async function renderUnifiedAssistant(
         initialSession={{ sessionId: null, messages: [] }}
       />
     )
+    root.render(overrides.nativeSpeechPolicyPort
+      ? <AuroraQueryProvider
+          client={client}
+          surfaceProfile={overrides.surfaceProfile ?? null}
+          nativeSpeechPolicyPort={overrides.nativeSpeechPolicyPort}
+        >
+          {assistant}
+          {overrides.onNativeSpeechPolicyState
+            ? <NativeSpeechPolicyReadinessObserver
+                surfaceProfile={overrides.surfaceProfile ?? null}
+                onState={overrides.onNativeSpeechPolicyState}
+              />
+            : null}
+        </AuroraQueryProvider>
+      : assistant)
     await Promise.resolve()
     await Promise.resolve()
   })
   await waitUntil(() => document.querySelector('[aria-label="Model: Configured default"]') !== null)
   return container
+}
+
+function NativeSpeechPolicyReadinessObserver({
+  surfaceProfile,
+  onState,
+}: {
+  surfaceProfile: AuroraSurfaceProfile | null
+  onState: (state: NativeSpeechPolicyState) => void
+}) {
+  const scopeId = useAuroraStateScopeId()
+  const policy = useNativeSpeechPolicy(surfaceProfile, scopeId)
+  useEffect(() => { onState(policy.state) }, [onState, policy.state])
+  return null
 }
 
 function idSequence(): () => string {

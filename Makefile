@@ -8,7 +8,7 @@ AURORA_COMPOSE_PROJECT ?= aurora-process
 DEP_ANALYSIS_DIR ?= .artifacts/dependency-analysis
 RUST_TOOLCHAIN ?= 1.88.0
 
-.PHONY: help setup lint test format check check-docs check-tracked-artifacts check-config-generated check-sdk-backend-contracts check-rust-voice coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
+.PHONY: help setup lint test format check check-docs check-ui-styles check-tracked-artifacts check-config-generated check-sdk-backend-contracts check-rust-voice coverage clean docker-process-mode docker-process-up docker-process-down docker-process-logs docker-process-ps docker-process-restart compose-validate-tilt tilt-up tilt-compose-rebuild docker-process-rebuild-tilt docker-db-build-openai docker-db-build-local docker-db-build docker-build-db-openai docker-build-db-local docker-orchestrator-build-openai docker-orchestrator-build-hf-endpoint docker-orchestrator-build-hf-local docker-orchestrator-build-llama-cpp docker-orchestrator-build-llama-cpp-cuda docker-orchestrator-build
 
 # Default target when just running 'make'
 help:
@@ -85,6 +85,7 @@ check:
 	ruff format --check app tests scripts
 	$(MAKE) check-docs
 	$(MAKE) check-tracked-artifacts
+	$(MAKE) check-ui-styles
 	$(MAKE) check-sdk-backend-contracts
 	$(MAKE) check-rust-voice
 	# mypy --explicit-package-bases app tests scripts
@@ -92,6 +93,11 @@ check:
 check-docs:
 	@echo "Checking documentation links and hygiene..."
 	@uv run python scripts/check_docs.py
+
+# Check the committed CSS before a build can regenerate it.
+check-ui-styles:
+	pnpm --filter @aurora/ui test:styles
+	pnpm --filter @aurora/ui check:styles
 
 check-tracked-artifacts:
 	@echo "Checking tracked-file artifact policy..."

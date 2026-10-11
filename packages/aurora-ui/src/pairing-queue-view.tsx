@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AUTH_METHODS,
   AuroraError,
@@ -9,6 +10,7 @@ import {
   type AuroraClient,
   type AuthPairingExchangeResponse,
   type AuthPairingStartResponse,
+  type ListPendingPairingsRequest,
   type AvailabilityState,
   type JsonObject,
   type ListPendingPairingsResponse,
@@ -20,11 +22,13 @@ import { Alert, AlertDescription, AlertTitle } from '#components/ui/alert'
 import { Input } from '#components/ui/input'
 import { Label } from '#components/ui/label'
 import { Textarea } from '#components/ui/textarea'
-import { PageHeader } from './state-surface'
+import { EmptyState, PageHeader, RouteStateNotice, SurfaceSkeleton } from './state-surface'
 import { StatusBadge, presentableSignal } from './status-badges'
 import { safeErrorCopy } from './product-copy'
 import type { RouteAvailability } from './shell-data'
 import { getAuroraSurfaceProfile } from './platform-surface'
+import { AURORA_QUERY_STALE_TIMES, AuroraQueryProvider, useAuroraQueryScope } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 import {
   Button,
   Card,
@@ -40,7 +44,6 @@ export type PairingQueueLoadState = 'loading' | 'ready' | 'error'
 export type PairingOperationStatus = 'idle' | 'pending' | 'success' | 'error'
 export type PairingAdminActionKind = 'create' | 'approve' | 'deny' | 'exchange' | 'revoke-token'
 
-const PAIRING_QUEUE_REFRESH_INTERVAL_MS = 3_000
 const PAIRING_DIAGNOSTICS_TIMEOUT_MS = 2_500
 const MOBILE_PAIRING_ASSISTANT_PERMISSION = 'Orchestrator.use'
 
@@ -139,12 +142,18 @@ export interface PairingRevokeInput {
   reauthConfirmed?: boolean
 }
 
-export function PairingQueueView({ client, route }: PairingQueueViewProps) {
+export function PairingQueueView(props: PairingQueueViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <PairingQueueViewContent {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <PairingQueueViewContent {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function PairingQueueViewContent({ client, route }: PairingQueueViewProps) {
   const [includeNonPending, setIncludeNonPending] = useState(false)
-  const [response, setResponse] = useState<ListPendingPairingsResponse | null>(null)
-  const [diagnostics, setDiagnostics] = useState<WebRTCDiagnosticsResponse | null>(null)
-  const [loadState, setLoadState] = useState<PairingQueueLoadState>(route.disabled ? 'ready' : 'loading')
-  const [loadError, setLoadError] = useState<unknown>(null)
   const [adminReason, setAdminReason] = useState('Review pending device or peer pairing request')
   const [permissions, setPermissions] = useState('')
   const [mobilePermissionScope, setMobilePermissionScope] = useState('assistant')
@@ -162,53 +171,61 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
   const [copiedRequestId, setCopiedRequestId] = useState<string | null>(null)
   const [copyError, setCopyError] = useState<string | null>(null)
 
-  const loadQueue = useCallback(async (background = false) => {
-    if (route.disabled) {
-      setLoadState('ready')
-      return
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const pairingQueryKey = useMemo(
+    () => queryKeys.admin('pairing-queue', { includeNonPending }),
+    [includeNonPending, queryKeys],
+  )
+  const pairingQuery = useQuery({
+    queryKey: pairingQueryKey,
+    enabled: !route.disabled,
+    staleTime: AURORA_QUERY_STALE_TIMES.volatile,
+    // Auth pairing events are not yet a confirmed subscription topic, so keep
+    // the fallback explicit and centralized at the query boundary.
+    refetchInterval: fallbackInterval,
+    queryFn: async ({ signal }) => {
+      const [result, diagnosticsResult] = await Promise.all([
+        client.requestResult<ListPendingPairingsResponse, ListPendingPairingsRequest>(
+          AUTH_METHODS.listPendingPairings,
+          { include_non_pending: includeNonPending },
+          {
+            path: routePath('Auth', 'ListPendingPairings'),
+            signal
+          }
+        ),
+        client.requestResult<WebRTCDiagnosticsResponse, JsonObject>(
+          GATEWAY_METHODS.getWebRTCDiagnostics,
+          {},
+          {
+            path: routePath('Gateway', 'GetWebRTCDiagnostics'),
+            timeoutMs: PAIRING_DIAGNOSTICS_TIMEOUT_MS,
+            signal
+          }
+        )
+      ])
+      if (!result.ok) throw result.error
+      return {
+        response: result.data,
+        diagnostics: diagnosticsResult.ok ? diagnosticsResult.data : null,
+      }
     }
-    if (!background) {
-      setLoadState('loading')
-      setLoadError(null)
-    }
-    const [result, diagnosticsResult] = await Promise.all([
-      client.authApi.listPendingPairings({ include_non_pending: includeNonPending }),
-      client.requestResult<WebRTCDiagnosticsResponse, JsonObject>(
-        GATEWAY_METHODS.getWebRTCDiagnostics,
-        {},
-        {
-          path: routePath('Gateway', 'GetWebRTCDiagnostics'),
-          timeoutMs: PAIRING_DIAGNOSTICS_TIMEOUT_MS
-        }
-      )
-    ])
-    setDiagnostics(diagnosticsResult.ok ? diagnosticsResult.data : null)
-    if (result.ok) {
-      setResponse(result.data)
-      setLoadError(null)
-      setLoadState('ready')
-      return
-    }
-    setLoadError(productPairingErrorCopy(result.error))
-    setLoadState('error')
-  }, [client, includeNonPending, route.disabled])
-
-  useEffect(() => {
-    void loadQueue()
-  }, [loadQueue])
-
-  useEffect(() => {
+  })
+  const response = pairingQuery.data?.response ?? null
+  const diagnostics = pairingQuery.data?.diagnostics ?? null
+  const loadState: PairingQueueLoadState = route.disabled
+    ? 'ready'
+    : pairingQuery.isPending
+      ? 'loading'
+      : pairingQuery.isError
+        ? 'error'
+        : 'ready'
+  const loadError = pairingQuery.error
+  const loadQueue = useCallback(async () => {
     if (route.disabled) return
-    let refreshPending = false
-    const interval = window.setInterval(() => {
-      if (refreshPending) return
-      refreshPending = true
-      void loadQueue(true).finally(() => {
-        refreshPending = false
-      })
-    }, PAIRING_QUEUE_REFRESH_INTERVAL_MS)
-    return () => window.clearInterval(interval)
-  }, [loadQueue, route.disabled])
+    await queryClient.refetchQueries({ queryKey: pairingQueryKey, type: 'active' })
+  }, [pairingQueryKey, queryClient, route.disabled])
 
   const model = useMemo(
     () => buildPairingQueueModel({ route, response, diagnostics, loadState, error: loadError }),
@@ -311,6 +328,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
           : 'Pairing exchange completed; Aurora did not return a credential reference for revoke.',
         auditReceipt: result.confirmation.audit_receipt
       })
+      await loadQueue()
     } catch (error) {
       const message = pairingErrorMessage(error)
       setMutationError(message)
@@ -318,7 +336,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     } finally {
       setPendingAction(null)
     }
-  }, [adminReason, client.admin, exchangeCode, reauthConfirmed])
+  }, [adminReason, client.admin, exchangeCode, loadQueue, reauthConfirmed])
 
   const revokeExchangedToken = useCallback(async () => {
     if (!exchangeResult?.tokenId) return
@@ -333,6 +351,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
         message: result.data.success ? 'Exchanged credential revoked.' : 'Aurora finished the revoke request but did not confirm the outcome.',
         auditReceipt: result.confirmation.audit_receipt
       })
+      await loadQueue()
     } catch (error) {
       const message = pairingErrorMessage(error)
       setMutationError(message)
@@ -340,7 +359,7 @@ export function PairingQueueView({ client, route }: PairingQueueViewProps) {
     } finally {
       setPendingAction(null)
     }
-  }, [adminReason, client.admin, exchangeResult?.tokenId, reauthConfirmed])
+  }, [adminReason, client.admin, exchangeResult?.tokenId, loadQueue, reauthConfirmed])
 
   const copyPairingValue = useCallback(async (value: string, requestId: string) => {
     setCopyError(null)
@@ -766,14 +785,18 @@ export function PairingQueueSurface({
         </p>
       ) : null}
       {model.disabledReason ? (
-        <Alert role="note">
-          <AlertDescription>{productPairingNoticeCopy(model.disabledReason)}</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          title="Pairing queue unavailable"
+          state="permission"
+          message={productPairingNoticeCopy(model.disabledReason)}
+        />
       ) : null}
       {model.error ? (
-        <Alert variant="destructive" role="alert">
-          <AlertDescription>{productPairingNoticeCopy(model.error)}</AlertDescription>
-        </Alert>
+        <RouteStateNotice
+          title="Pairing queue needs attention"
+          state="error"
+          message={productPairingNoticeCopy(model.error)}
+        />
       ) : null}
 
       {model.outgoingPeers.length > 0 ? (
@@ -800,17 +823,15 @@ export function PairingQueueSurface({
           rows={model.entries}
           getRowKey={(entry) => entry.request_id}
           empty={
-            <div className="p-6 text-sm text-muted-foreground">
-              {model.state === 'loading'
-                ? <p aria-live="polite">Loading pairing queue from Aurora.</p>
-                : model.disabledReason
-                  ? <p>{productPairingNoticeCopy(model.disabledReason)}</p>
-                  : model.error
-                    ? <p>{productPairingNoticeCopy(model.error)}</p>
-                    : model.outgoingPeers.length > 0
-                      ? <p>Outgoing pairing is active; Aurora is negotiating the matching incoming request.</p>
-                    : <p>No pending device or peer pairing requests were reported by Auth.</p>}
-            </div>
+            model.state === 'loading'
+              ? <SurfaceSkeleton title="Pairing queue loading" lines={2} />
+              : model.disabledReason
+                ? <RouteStateNotice title="Pairing queue unavailable" state="permission" message={productPairingNoticeCopy(model.disabledReason)} />
+                : model.error
+                  ? <RouteStateNotice title="Pairing queue needs attention" state="error" message={productPairingNoticeCopy(model.error)} />
+                  : model.outgoingPeers.length > 0
+                    ? <EmptyState title="Outgoing pairing active" message="Outgoing pairing is active; Aurora is negotiating the matching incoming request." />
+                    : <EmptyState title="No pending pairings" message="No pending device or peer pairing requests were found." />
           }
         />
       </Card>
@@ -833,7 +854,7 @@ export function buildPairingQueueModel({
   if (route.disabled) {
     return {
       state: route.state,
-      description: 'Pairing queue is disabled until Aurora reports pending-pairing access as available.',
+      description: 'Pairing queue is unavailable until this account can review pending device requests.',
       evidence: routeEvidence(route),
       entries: [],
       total: 0,
@@ -865,8 +886,8 @@ export function buildPairingQueueModel({
     return {
       state,
       description: state === 'denied'
-        ? 'Auth denied pairing queue access for the current principal.'
-        : 'Pairing queue could not be loaded from Aurora; no local fallback state is shown.',
+        ? 'This account cannot view pairing requests.'
+        : 'Pairing details are unavailable right now.',
       evidence: `${routeEvidence(route)}; Aurora unavailable`,
       entries: [],
       total: 0,
@@ -885,10 +906,10 @@ export function buildPairingQueueModel({
   return {
     state: entries.length > 0 || outgoingPeers.length > 0 ? 'pending' : route.state,
     description: entries.length > 0
-      ? 'Auth reports pending device or peer pairing requests that require explicit review.'
+      ? 'Pending device or peer pairing requests need review.'
       : outgoingPeers.length > 0
-        ? 'Gateway reports an active bilateral pairing session.'
-        : 'Auth reports no pending device or peer pairing requests.',
+        ? 'An outgoing pairing session is active.'
+        : 'No pending device or peer pairing requests were found.',
     evidence: `${routeEvidence(route)}; total=${response?.total ?? entries.length}; expired=${expiredCount}; outgoing=${outgoingPeers.length}; secrets_redacted=${response?.secrets_redacted ?? true}`,
     entries,
     total: response?.total ?? entries.length,

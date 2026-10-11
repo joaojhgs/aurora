@@ -1,7 +1,8 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { AlertTriangle, Plug, RefreshCw } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Plug } from 'lucide-react'
 import type {
   AuroraClient,
   McpSourceWizardDraft,
@@ -17,12 +18,15 @@ import { getToolSourceDetailFromView, normalizeToolCatalog, validateMcpSourceDra
 import type { RouteAvailability } from './shell-data'
 import { ToneBadge, presentableSignal, riskTone, stateTone, trustTone } from './status-badges'
 import { PageTabs } from './shared-components'
+import { EmptyState, RouteStateNotice } from './state-surface'
 import { Button, Card, DataTable, FormField, Switch, useToast, type DataColumn } from './primitives'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '#components/ui/dialog'
 import { Input } from '#components/ui/input'
 import { Badge } from '#components/ui/badge'
 import { cn } from '#lib/utils'
 import { adminErrorTitle, adminReasonText, adminRouteCopy, productAdminErrorCopy, productAdminReasonCopy, sanitizeAdminText } from './admin-product-copy'
+import { AURORA_QUERY_STALE_TIMES, AuroraQueryProvider, isAuroraTerminalQueryError, useAuroraQueryScope } from './query'
+import { useAuroraQueryFallbackInterval, useAuroraQueryKeys } from './query-hooks'
 import {
   buildToolingPolicySummaryFromBackend,
   buildToolingSourcesFromBackend,
@@ -63,6 +67,7 @@ export interface AdminPluginsSnapshot {
   fallbackTools: ToolApprovalCardModel[]
   warnings: string[]
   error: string | null
+  queryFailure?: { code?: unknown; message: string } | null
   evidenceSource: string
 }
 
@@ -96,34 +101,45 @@ const loadingPluginsSnapshot: AdminPluginsSnapshot = {
   fallbackTools: [],
   warnings: [],
   error: null,
+  queryFailure: null,
   evidenceSource: 'pending Aurora service calls'
 }
 
-export async function buildAdminPluginsSnapshot(client: AuroraClient, route?: RouteAvailability): Promise<AdminPluginsSnapshot> {
+export async function buildAdminPluginsSnapshot(
+  client: AuroraClient,
+  route?: RouteAvailability,
+  options: { signal?: AbortSignal } = {}
+): Promise<AdminPluginsSnapshot> {
+  throwIfAborted(options.signal)
   if (route?.disabled) {
     return {
       ...loadingPluginsSnapshot,
       loadState: route.state === 'denied' ? 'denied' : route.state === 'degraded' ? 'degraded' : 'service-unavailable',
       warnings: route.blockers.map((blocker) => adminReasonText(blocker)),
       error: adminRouteCopy(route),
+      queryFailure: null,
       evidenceSource: route.providerLabel
     }
   }
 
   let catalog: ToolCatalogResponse
   try {
-    catalog = await client.tools.listCatalog<ToolCatalogResponse>()
+    catalog = await client.tools.listCatalog<ToolCatalogResponse>({}, options)
   } catch (error) {
+    if (options.signal?.aborted) throw error
     return {
       ...loadingPluginsSnapshot,
-      loadState: isPermissionError(error) ? 'denied' : 'service-unavailable',
+      loadState: isAuroraTerminalQueryError(error) ? 'denied' : 'service-unavailable',
       warnings: [errorMessage(error)],
       error: errorMessage(error),
+      queryFailure: isAuroraTerminalQueryError(error) ? queryFailureFromError(error) : null,
       evidenceSource: 'Aurora request error'
     }
   }
 
-  const view: ToolingPageViewModel = await client.tools.getPageView(catalog)
+  throwIfAborted(options.signal)
+  const view: ToolingPageViewModel = await client.tools.getPageView(catalog, options)
+  throwIfAborted(options.signal)
   const fallbackTools = normalizeToolCatalog(catalog, { transportKind: client.transport.kind })
   const sourceDetails = Object.fromEntries(
     view.sources.map((source) => [source.id, getToolSourceDetailFromView(view, source.id, catalog)] as const)
@@ -138,35 +154,47 @@ export async function buildAdminPluginsSnapshot(client: AuroraClient, route?: Ro
     fallbackTools,
     warnings: [],
     error: null,
+    queryFailure: null,
     evidenceSource: client.transport.kind === 'mock' ? 'Local preview' : 'Aurora service response'
   }
 }
 
-export function AdminPluginsView({ client, route, initialSnapshot, initialTab }: AdminPluginsViewProps) {
-  const [snapshot, setSnapshot] = useState<AdminPluginsSnapshot>(initialSnapshot ?? loadingPluginsSnapshot)
+export function AdminPluginsView(props: AdminPluginsViewProps) {
+  const hasQueryScope = useAuroraQueryScope()
+  if (hasQueryScope) return <AdminPluginsViewQuery {...props} />
+  return (
+    <AuroraQueryProvider client={props.client}>
+      <AdminPluginsViewQuery {...props} />
+    </AuroraQueryProvider>
+  )
+}
+
+function AdminPluginsViewQuery({ client, route, initialSnapshot, initialTab }: AdminPluginsViewProps) {
   const [activeTab, setActiveTab] = useState<'tools' | 'plugins'>(initialTab ?? 'tools')
   const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null)
   const [mutationError, setMutationError] = useState<string | null>(null)
   const [mcpWizardOpen, setMcpWizardOpen] = useState(false)
   const [pluginConfigTarget, setPluginConfigTarget] = useState<AvailablePluginTemplate | null>(null)
   const { toast } = useToast()
+  const queryClient = useQueryClient()
+  const queryKeys = useAuroraQueryKeys()
+  const fallbackInterval = useAuroraQueryFallbackInterval({ subscriptionAvailable: false })
+  const pluginsQueryKey = useMemo(
+    () => queryKeys.admin('plugins', { id: route.item.id, state: route.state, disabled: route.disabled }),
+    [queryKeys, route.disabled, route.item.id, route.state]
+  )
+  const pluginsQuery = useQuery<AdminPluginsSnapshot, unknown>({
+    queryKey: pluginsQueryKey,
+    queryFn: ({ signal }) => buildAdminPluginsSnapshot(client, route, { signal }),
+    ...(initialSnapshot && initialSnapshot.loadState !== 'loading' ? { initialData: initialSnapshot } : {}),
+    staleTime: AURORA_QUERY_STALE_TIMES.lists,
+    refetchInterval: fallbackInterval
+  })
+  const snapshot = pluginsQuery.data ?? (pluginsQuery.error ? adminPluginsSnapshotFromQueryError(route, pluginsQuery.error) : initialSnapshot ?? loadingPluginsSnapshot)
 
   const refresh = async () => {
-    const next = await buildAdminPluginsSnapshot(client, route)
-    setSnapshot(next)
+    await queryClient.refetchQueries({ queryKey: pluginsQueryKey, type: 'active' })
   }
-
-  useEffect(() => {
-    let cancelled = false
-    if (initialSnapshot && initialSnapshot.loadState !== 'loading') return
-    setSnapshot(loadingPluginsSnapshot)
-    buildAdminPluginsSnapshot(client, route).then((next) => {
-      if (!cancelled) setSnapshot(next)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [client, route, initialSnapshot])
 
   const sources = useMemo(
     () => buildToolingSourcesFromBackend(snapshot.sourceSummaries, snapshot.sourceDetails, snapshot.fallbackTools),
@@ -301,28 +329,22 @@ export function AdminPluginsView({ client, route, initialSnapshot, initialTab }:
 
 function RouteNotice({ snapshot, route, mutationError }: { snapshot: AdminPluginsSnapshot; route: RouteAvailability; mutationError: string | null }) {
   if (snapshot.loadState === 'loading') {
-    return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground" aria-live="polite">
-        <RefreshCw size={14} aria-hidden /> Loading Tooling catalog through Aurora.
-      </p>
-    )
+    return <RouteStateNotice title="Loading tools" state="loading" message="Loading Tooling catalog through Aurora." />
   }
   if (route.disabled || snapshot.error) {
     return (
-      <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
-        <AlertTriangle size={14} aria-hidden /> {productAdminReasonCopy(snapshot.error, adminRouteCopy(route))}
-      </p>
+      <RouteStateNotice
+        title="Tooling unavailable"
+        state={snapshot.loadState === 'denied' ? 'permission' : snapshot.loadState === 'degraded' ? 'offline' : 'error'}
+        message={productAdminReasonCopy(snapshot.error, adminRouteCopy(route))}
+      />
     )
   }
   if (mutationError) {
-    return (
-      <p className="flex items-center gap-2 text-sm text-destructive" role="alert">
-        <AlertTriangle size={14} aria-hidden /> {mutationError}
-      </p>
-    )
+    return <RouteStateNotice title="Tool source was not updated" state="error" message={mutationError} />
   }
   if (snapshot.loadState === 'empty') {
-    return <p className="text-sm text-muted-foreground">No tools are available from Aurora yet.</p>
+    return <RouteStateNotice title="No tools available" state="empty" message="No tools are available from Aurora yet." />
   }
   return null
 }
@@ -408,7 +430,7 @@ function ToolsTab({
             </div>
           )
         })}
-        {sources.length === 0 ? <p className="px-1 text-xs text-muted-foreground">No tool sources reported.</p> : null}
+        {sources.length === 0 ? <EmptyState title="No tool sources" message="No tool sources reported." /> : null}
       </div>
 
       <div className="min-w-0 flex-1 overflow-y-auto">
@@ -435,11 +457,11 @@ function ToolsTab({
             </div>
 
             <div className="mt-4">
-              <DataTable columns={columns} rows={selectedSource.tools} getRowKey={(tool) => tool.id} empty="No tools reported for this source." />
+              <DataTable columns={columns} rows={selectedSource.tools} getRowKey={(tool) => tool.id} empty={<EmptyState title="No tools reported" message="No tools reported for this source." />} />
             </div>
           </>
         ) : (
-          <p className="text-sm text-muted-foreground">No tool source is selected.</p>
+          <EmptyState title="No tool source selected" message="Select a source to review its tools." />
         )}
       </div>
     </div>
@@ -485,7 +507,7 @@ function PluginsTab({
           </Button>
         </Card>
       ))}
-      {configured.length === 0 && available.length === 0 ? <p className="text-sm text-muted-foreground">No plugins reported.</p> : null}
+      {configured.length === 0 && available.length === 0 ? <EmptyState title="No plugins reported" message="No plugins reported." /> : null}
     </div>
   )
 }
@@ -711,8 +733,29 @@ function toolStateLabel(tool: ToolApprovalCardModel): string {
   return tool.state
 }
 
-function isPermissionError(error: unknown): boolean {
-  return typeof error === 'object' && error !== null && 'code' in error && (error as { code?: unknown }).code === 'permission'
+function adminPluginsSnapshotFromQueryError(route: RouteAvailability, error: unknown): AdminPluginsSnapshot {
+  const terminal = isAuroraTerminalQueryError(error)
+  return {
+    ...loadingPluginsSnapshot,
+    loadState: terminal ? 'denied' : 'service-unavailable',
+    warnings: [errorMessage(error)],
+    error: errorMessage(error),
+    queryFailure: terminal ? queryFailureFromError(error) : null,
+    evidenceSource: route.providerLabel || 'Aurora request error'
+  }
+}
+
+function queryFailureFromError(error: unknown): NonNullable<AdminPluginsSnapshot['queryFailure']> {
+  const code = typeof error === 'object' && error !== null && 'code' in error
+    ? (error as { code?: unknown }).code
+    : undefined
+  return { code, message: errorMessage(error) }
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new DOMException('Admin plugins request was cancelled', 'AbortError')
+  }
 }
 
 function errorMessage(error: unknown): string {

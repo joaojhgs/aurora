@@ -176,6 +176,12 @@ class TTSSynthesizeRequest(IOModel):
 
     text: str
     voice: LogicalVoiceId | None = None
+    model_id: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=128,
+        pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+    )
     language: SpeechLanguageTag | None = None
     speed: float = 1.0
     format: str = "wav"  # "wav" | "raw"

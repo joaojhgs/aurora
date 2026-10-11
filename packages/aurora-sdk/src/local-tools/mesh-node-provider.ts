@@ -5,6 +5,7 @@ import {
   createToolingPeerHostRegistry,
   type PeerHostAuthorizationStore,
   type PeerHostOptions,
+  type PeerHostLocalSpeechSource,
   type ToolingProjectionInvalidatedEventHandler
 } from '../peer-host/index.js'
 import { DenyAllPeerHostAuthorizationStore } from '../peer-host/rust-authorization-store.js'
@@ -49,6 +50,7 @@ export interface MeshNodeLocalToolProviderOptions {
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
   readonly approvalPolicy?: LocalToolApprovalDecisionPort | undefined
   readonly projectionInvalidationSource?: MeshNodeToolProjectionInvalidationSource | undefined
+  readonly speechHost?: PeerHostLocalSpeechSource | undefined
 }
 
 export interface MeshNodeLocalToolProviderComposition {
@@ -61,6 +63,7 @@ export interface MeshNodeLocalToolProviderComposition {
   readonly registeredToolIds: readonly string[]
   readonly approvalController?: ProviderLocalApprovalControllerPort | undefined
   readonly enabled: boolean
+  readonly speechHost?: PeerHostLocalSpeechSource | undefined
 }
 
 export interface MeshNodeToolProjectionInvalidationSource {
@@ -132,8 +135,9 @@ export function createMeshNodeLocalToolProvider(
               })
             }
           : {})
-      })
+    })
     : new PeerHostContractRegistry()
+  if (enabled) options.speechHost?.register(peerHostRegistry)
   const peerHost = new WebRtcPeerHost({
     localPeerId: options.localPeerId,
     nodeName: options.nodeName,
@@ -141,6 +145,11 @@ export function createMeshNodeLocalToolProvider(
     authorizationStore: enabled && options.authorizationStore !== undefined
       ? withGrantedToolPermissions(options.authorizationStore, options.registry)
       : new DenyAllPeerHostAuthorizationStore(),
+    ...(options.speechHost ? { speechStageCapabilities: () => options.speechHost!.capabilities() } : {}),
+    ...(options.speechHost ? {
+      onRemotePeerDisconnected: (remotePeerId: string, connectionEpoch: string, reason: string) =>
+        options.speechHost!.disconnectPeer(remotePeerId, connectionEpoch, reason),
+    } : {}),
     ...(options.clock ? { clock: options.clock } : {}),
     ...(options.randomId ? { randomId: options.randomId } : {}),
     ...(options.maxRequestBytes !== undefined ? { maxRequestBytes: options.maxRequestBytes } : {}),
@@ -156,6 +165,7 @@ export function createMeshNodeLocalToolProvider(
     serviceInstanceId,
     registeredToolIds: registeredTools.map((tool) => tool.descriptor.toolContractId),
     ...(options.approvalController ? { approvalController: options.approvalController } : {}),
+    ...(options.speechHost ? { speechHost: options.speechHost } : {}),
     enabled
   }
 }

@@ -20,6 +20,7 @@ import {
 } from '@aurora/client/local-data'
 
 import { buildMemoryViewModel, MemoryView } from '../memory-view.js'
+import { AuroraQueryProvider } from '../query.js'
 import { buildShellSnapshot, type RouteAvailability } from '../shell-data.js'
 import { findForbiddenProductionCopyTerms } from '../product-copy-forbidden-terms.js'
 import { BrowserIndexedDbLocalDataBackend } from './browser-indexeddb.js'
@@ -254,6 +255,52 @@ describe('local data product UI', () => {
     expect(findForbiddenProductionCopyTerms(container.textContent ?? '').map((term) => term.id)).toEqual([])
     root.unmount()
   })
+
+
+  it('uses the Memory initial model only for the first query scope', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const route = await enabledRoute(client, 'memory')
+    const remoteModel = await buildMemoryViewModel(client, route)
+    const seededModel = {
+      ...remoteModel,
+      conversations: remoteModel.conversations.map((conversation, index) => index === 0
+        ? { ...conversation, id: 'seed-memory-message', content: 'Seeded profile memory should clear' }
+        : conversation)
+    }
+    const store = new MapBrowserLocalDataDocumentStore()
+    await seedLocalData(store, async (session) => {
+      await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-local', updatedAtMs: 1_000 }))
+    })
+    const { container, root } = mountedRoot()
+
+    await act(async () => {
+      root.render(
+        <LocalDataProvider profileId="profile-1" localNodeId="node-1" backendFactory={persistentBackendFactory(store)}>
+          <AuroraQueryProvider client={client} queryScope={{ profileId: 'profile-one', peerId: 'peer-one' }}>
+            <MemoryView client={client} route={route} initialModel={seededModel} />
+          </AuroraQueryProvider>
+        </LocalDataProvider>
+      )
+      await flushReactWork()
+    })
+
+    expect(container.textContent).toContain('Seeded profile memory should clear')
+
+    await act(async () => {
+      root.render(
+        <LocalDataProvider profileId="profile-1" localNodeId="node-1" backendFactory={persistentBackendFactory(store)}>
+          <AuroraQueryProvider client={client} queryScope={{ profileId: 'profile-two', peerId: 'peer-two' }}>
+            <MemoryView client={client} route={route} initialModel={seededModel} />
+          </AuroraQueryProvider>
+        </LocalDataProvider>
+      )
+      await flushReactWork()
+    })
+
+    await waitForText(container, 'Summarize recent mesh pairing failures.')
+    expect(container.textContent).not.toContain('Seeded profile memory should clear')
+    root.unmount()
+  })
 })
 
 function ProviderProbe() {
@@ -434,7 +481,10 @@ class UnusedSession implements LocalDataSession {
     listConversations: async () => [],
     listMessageCounts: async () => ({}),
     listFirstUserMessages: async () => ({}),
-    listMessages: async () => []
+    listMessages: async () => [],
+    getConversation: async () => null,
+    getMessage: async () => null,
+    getLatestMessageSequence: async () => null
   }
   readonly memory: LocalDataRepositories['memory'] = {
     upsertMemoryItem: async () => undefined,
@@ -453,6 +503,18 @@ class UnusedSession implements LocalDataSession {
   readonly localAudit: LocalDataRepositories['localAudit'] = {
     appendAudit: async () => undefined,
     listAudit: async () => []
+  }
+  readonly transcripts: LocalDataRepositories['transcripts'] = {
+    createSession: async () => { throw new Error('unused') },
+    startSession: async () => { throw new Error('unused') },
+    appendSegment: async () => { throw new Error('unused') },
+    getSession: async () => { throw new Error('unused') },
+    listSessions: async () => { throw new Error('unused') },
+    listSegments: async () => { throw new Error('unused') },
+    finalizeSession: async () => { throw new Error('unused') },
+    recoverActiveSessions: async () => { throw new Error('unused') },
+    deleteSession: async () => { throw new Error('unused') },
+    deleteExpiredSessions: async () => { throw new Error('unused') }
   }
   async transaction<T>(work: (repositories: LocalDataRepositories) => Promise<T>): Promise<T> {
     return await work(this)

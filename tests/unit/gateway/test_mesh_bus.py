@@ -16,6 +16,7 @@ from app.services.gateway.mesh.provider_eligibility import SpeechRouteConstraint
 from app.services.gateway.mesh.route_errors import RouteDispatchError
 from app.services.gateway.mesh.routing_table import RoutingTable
 from app.shared.contracts.models.auth import AuthMethods
+from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.mesh import MeshAddressSelector
 from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.models.stt import TranscribeAudioRequest, TranscriptionMethods
@@ -174,6 +175,52 @@ class TestMeshBusPublish:
         await bus.publish("TTS.StateChanged", FakePayload(), event=True, mesh=False)
         inner_bus.publish.assert_awaited_once()
         peer_bridge.fire_event.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_status_event_uses_exact_live_subscribers_without_registry_enumeration(
+        self, inner_bus, routing_table, peer_bridge
+    ):
+        """Status control-plane events use live exact subscribers only."""
+        cfg = MeshConfig(enabled=True, node_name="test", services={})
+        peer_bridge.gateway_status_event_recipient_ids.return_value = ["stable-peer"]
+        peer_bridge.fire_event_async = AsyncMock(return_value=True)
+        bus = MeshBus(inner_bus, routing_table, peer_bridge, cfg)
+
+        await bus.publish(
+            GatewayMethods.STATUS_CHANGED,
+            {"kind": "config.updated"},
+            event=True,
+            mesh=True,
+            origin="internal",
+        )
+
+        routing_table.get_negotiated_peers.assert_not_called()
+        peer_bridge.fire_event_async.assert_awaited_once_with(
+            "stable-peer",
+            GatewayMethods.STATUS_CHANGED,
+            {"kind": "config.updated"},
+            correlation_id=None,
+        )
+        peer_bridge.gateway_status_event_recipient_ids.assert_called_once_with()
+
+        peer_bridge.fire_event_async.reset_mock()
+        await bus.publish(
+            GatewayMethods.STATUS_CHANGED,
+            {"kind": "config.updated"},
+            event=True,
+            mesh=True,
+            origin="mesh_forwarded",
+        )
+        peer_bridge.fire_event_async.assert_not_called()
+
+        await bus.publish(
+            GatewayMethods.GET_SERVICE_HEALTH,
+            {},
+            event=True,
+            mesh=True,
+            origin="internal",
+        )
+        peer_bridge.fire_event_async.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_events_with_mesh_true_forwarded_when_shared(

@@ -23,6 +23,7 @@ import {
   type LocalFeatureSharingPort,
 } from '../src/index'
 import { encodeMeshInviteToken, encodeMeshInviteUrl } from '../src/mesh-invite'
+import { AuroraQueryProvider } from '../src/query'
 import type { ThinConnectionProfile } from '../src/thin-connection-profile'
 
 const roots: Root[] = []
@@ -388,10 +389,7 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       />,
     )
 
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
+    await flushReactWork()
 
     expect(container.textContent).toContain('Waydroid')
     expect(container.textContent).toContain('Home Aurora')
@@ -438,15 +436,12 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       />,
     )
 
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
+    await flushReactWork()
     expect(container.textContent).toContain('Portugal node')
     await act(async () => {
       findButton(container, 'Set up').click()
-      await Promise.resolve()
     })
+    await flushReactWork()
 
     expect(peer.connectedDiscoveredPeerIds).toEqual(['peer-portugal'])
   })
@@ -502,14 +497,11 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
       />,
     )
 
-    await act(async () => {
-      await Promise.resolve()
-      await Promise.resolve()
-    })
+    await flushReactWork()
     await act(async () => {
       findButton(container, 'Features').click()
-      await Promise.resolve()
     })
+    await flushReactWork()
 
     const dialog = document.body.querySelector('[role="dialog"]')
     expect(dialog?.textContent).toContain('Tools')
@@ -518,29 +510,318 @@ describe('Phase 2 onboarding and Mesh baseline behavior', () => {
     expect(dialog?.textContent).not.toContain('Orchestrator')
     expect(dialog?.querySelector('[aria-label="Role templates"]')).toBeNull()
 
+    const toolingToggle = dialog?.querySelector<HTMLButtonElement>('[aria-label="Toggle Tools"]')
+    expect(toolingToggle).not.toBeNull()
     await act(async () => {
-      const toolingToggle = dialog?.querySelector<HTMLButtonElement>('[aria-label="Toggle Tools"]')
-      expect(toolingToggle).not.toBeNull()
       toolingToggle?.click()
-      await Promise.resolve()
-      expect(toolingToggle?.getAttribute('aria-checked')).toBe('true')
     })
+    expect(toolingToggle?.getAttribute('aria-checked')).toBe('true')
     await act(async () => {
       peer.emit({ updatedAt: '2026-08-02T00:00:01.000Z' })
-      await Promise.resolve()
     })
-    expect(dialog?.querySelector('[aria-label="Toggle Tools"]')?.getAttribute('aria-checked')).toBe('true')
+    await flushReactWork()
+    const refreshedDialog = document.body.querySelector('[role="dialog"]')
+    expect(refreshedDialog?.querySelector('[aria-label="Toggle Tools"]')?.getAttribute('aria-checked')).toBe('true')
     await act(async () => {
       findButton(document.body, 'Save').click()
-      await Promise.resolve()
-      await Promise.resolve()
     })
+    await flushReactWork()
 
     expect(setFeatureEnabled).toHaveBeenCalledWith('Native.GetDeviceStatus', true)
     expect(replacePeerSharing).toHaveBeenCalledWith(
       'peer-home',
       ['Native.GetDeviceStatus'],
       1_800_000_000_000,
+    )
+  })
+
+  it('does not retain a Mesh scopes peer while a new Query scope is loading', async () => {
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const thinSnapshot: BrowserWebRtcSnapshot = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      status: 'authorized',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+    }
+    const snapshot = buildLocalMeshNodeSnapshot({
+      localNode: { peerId: 'peer-waydroid', nodeName: 'Waydroid' },
+      thinPeer: thinSnapshot,
+      sharingAvailable: true,
+      featureSharing: {
+        features: [{
+          ...TOOLING_SERVICE,
+          id: 'Native.GetDeviceStatus',
+          label: 'Device status',
+          description: 'Read device status.',
+          enabled: true,
+          available: true,
+          requiresAuroraOpen: true,
+          requiresLocalConfirmation: false,
+        }],
+        approvedDevices: [
+          { peerId: 'peer-home', peerLabel: 'Home Aurora', featureIds: [], expiresAtMs: null },
+        ],
+      },
+    })
+    const loadingSnapshot = {
+      ...snapshot,
+      loadState: 'loading' as const,
+      peers: [],
+      approvedCount: 0,
+    }
+    const localServiceScope = {
+      id: TOOLING_SERVICE.serviceId,
+      permissionId: TOOLING_SERVICE.servicePermissionId,
+      label: TOOLING_SERVICE.serviceLabel,
+      description: TOOLING_SERVICE.serviceDescription,
+      featureIds: ['Native.GetDeviceStatus'],
+    }
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const renderView = (profileId: string, nextSnapshot: typeof snapshot) => {
+      act(() => {
+        root.render(
+          <AuroraQueryProvider client={client} queryScope={{ profileId }}>
+            <MeshPeersView
+              snapshot={nextSnapshot}
+              route={meshRoute()}
+              ownsLocalNodeState
+              canManageLocalServiceConfiguration={false}
+              onSaveScopes={() => undefined}
+              localServiceScopes={[localServiceScope]}
+              thinPeerSnapshot={thinSnapshot}
+            />
+          </AuroraQueryProvider>,
+        )
+      })
+    }
+
+    renderView('profile-a', snapshot)
+    await act(async () => {
+      featureButtons(container)[0]?.click()
+    })
+    expect(document.body.querySelector('[role="dialog"]')?.textContent).toContain('Home Aurora')
+
+    renderView('profile-b', loadingSnapshot)
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+  })
+
+  it('resets unsaved service access when reopening or switching the Mesh scopes dialog', async () => {
+    const thinSnapshot: BrowserWebRtcSnapshot = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      status: 'authorized',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+    }
+    const snapshot = buildLocalMeshNodeSnapshot({
+      localNode: { peerId: 'peer-waydroid', nodeName: 'Waydroid' },
+      thinPeer: thinSnapshot,
+      sharingAvailable: true,
+      featureSharing: {
+        features: [{
+          ...TOOLING_SERVICE,
+          id: 'Native.GetDeviceStatus',
+          label: 'Device status',
+          description: 'Read device status.',
+          enabled: true,
+          available: true,
+          requiresAuroraOpen: true,
+          requiresLocalConfirmation: false,
+        }],
+        approvedDevices: [
+          { peerId: 'peer-home', peerLabel: 'Home Aurora', featureIds: [], expiresAtMs: null },
+          { peerId: 'peer-studio', peerLabel: 'Studio Aurora', featureIds: [], expiresAtMs: null },
+        ],
+      },
+    })
+    const container = render(
+      <MeshPeersView
+        snapshot={snapshot}
+        route={meshRoute()}
+        ownsLocalNodeState
+        canManageLocalServiceConfiguration={false}
+        onSaveScopes={() => undefined}
+        localServiceScopes={[{
+          id: TOOLING_SERVICE.serviceId,
+          permissionId: TOOLING_SERVICE.servicePermissionId,
+          label: TOOLING_SERVICE.serviceLabel,
+          description: TOOLING_SERVICE.serviceDescription,
+          featureIds: ['Native.GetDeviceStatus'],
+        }]}
+        thinPeerSnapshot={thinSnapshot}
+      />,
+    )
+
+    expect(featureButtons(container).length).toBeGreaterThanOrEqual(2)
+
+    await act(async () => {
+      featureButtons(container)[0]?.click()
+    })
+    let dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Home Aurora')
+    let toolingToggle = dialog?.querySelector<HTMLButtonElement>('[aria-label="Toggle Tools"]')
+    expect(toolingToggle?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      toolingToggle?.click()
+    })
+    expect(toolingToggle?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      findButton(document.body, 'Cancel').click()
+    })
+
+    await act(async () => {
+      featureButtons(container)[0]?.click()
+    })
+    dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Home Aurora')
+    expect(dialog?.querySelector('[aria-label="Toggle Tools"]')?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      dialog?.querySelector<HTMLButtonElement>('[aria-label="Toggle Tools"]')?.click()
+    })
+    expect(dialog?.querySelector('[aria-label="Toggle Tools"]')?.getAttribute('aria-checked')).toBe('true')
+    await act(async () => {
+      findButton(document.body, 'Cancel').click()
+    })
+
+    await act(async () => {
+      featureButtons(container)[1]?.click()
+    })
+    dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain('Studio Aurora')
+    expect(dialog?.querySelector('[aria-label="Toggle Tools"]')?.getAttribute('aria-checked')).toBe('false')
+  })
+
+  it('removes unsaved service access when the allowed Mesh feature catalog changes', async () => {
+    const thinSnapshot: BrowserWebRtcSnapshot = {
+      state: 'authorized',
+      connectionMode: 'webrtc-only',
+      expectedStablePeerId: 'peer-home',
+      nodeName: 'Home Aurora',
+      icePathCategory: 'host',
+      protocolCapabilities: [],
+      reconnectCount: 0,
+      pendingCallCount: 0,
+      pendingStreamCount: 0,
+      pendingSubscriptionCount: 0,
+      pendingFragmentCount: 0,
+      bufferPressureHighWaterBytes: 0,
+      sentFragmentCount: 0,
+      receivedFragmentCount: 0,
+      updatedAt: '2026-08-02T00:00:00.000Z',
+      status: 'authorized',
+      secureContext: true,
+      visible: true,
+      focused: true,
+      hasHttpFallback: false,
+      secretsPersisted: true,
+    }
+    const snapshot = buildLocalMeshNodeSnapshot({
+      localNode: { peerId: 'peer-waydroid', nodeName: 'Waydroid' },
+      thinPeer: thinSnapshot,
+      sharingAvailable: true,
+      featureSharing: {
+        features: [{
+          ...TOOLING_SERVICE,
+          id: 'Native.GetDeviceStatus',
+          label: 'Device status',
+          description: 'Read device status.',
+          enabled: true,
+          available: true,
+          requiresAuroraOpen: true,
+          requiresLocalConfirmation: false,
+        }],
+        approvedDevices: [
+          { peerId: 'peer-home', peerLabel: 'Home Aurora', featureIds: [], expiresAtMs: null },
+        ],
+      },
+    })
+    const localServiceScope = {
+      id: TOOLING_SERVICE.serviceId,
+      permissionId: TOOLING_SERVICE.servicePermissionId,
+      label: TOOLING_SERVICE.serviceLabel,
+      description: TOOLING_SERVICE.serviceDescription,
+      featureIds: ['Native.GetDeviceStatus'],
+    }
+    const onSaveScopes = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    roots.push(root)
+    const renderView = (localServiceScopes: (typeof localServiceScope)[]) => {
+      act(() => {
+        root.render(
+          <MeshPeersView
+            snapshot={snapshot}
+            route={meshRoute()}
+            ownsLocalNodeState
+            canManageLocalServiceConfiguration={false}
+            onSaveScopes={onSaveScopes}
+            localServiceScopes={localServiceScopes}
+            thinPeerSnapshot={thinSnapshot}
+          />,
+        )
+      })
+    }
+
+    renderView([localServiceScope])
+    await act(async () => {
+      featureButtons(container)[0]?.click()
+    })
+    let dialog = document.body.querySelector('[role="dialog"]')
+    let toolingToggle = dialog?.querySelector<HTMLButtonElement>('[aria-label="Toggle Tools"]')
+    expect(toolingToggle?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      toolingToggle?.click()
+    })
+    expect(toolingToggle?.getAttribute('aria-checked')).toBe('true')
+
+    renderView([])
+    await flushReactWork()
+    dialog = document.body.querySelector('[role="dialog"]')
+    expect(dialog?.querySelector('[aria-label="Toggle Tools"]')).toBeNull()
+    await act(async () => {
+      findButton(document.body, 'Save').click()
+    })
+
+    expect(onSaveScopes).toHaveBeenCalledWith(
+      expect.objectContaining({ peerId: 'peer-home' }),
+      [],
     )
   })
 
@@ -1110,7 +1391,9 @@ class FakeBrowserPeer {
   selectedCandidatePairEvidenceCalls = 0
   connectedDiscoveredPeerIds: string[] = []
   private snapshotValue: BrowserWebRtcSnapshot
+  private rosterValue: MeshPeerRosterSnapshot | null = null
   private readonly listeners = new Set<(snapshot: BrowserWebRtcSnapshot) => void>()
+  private readonly rosterListeners = new Set<(roster: MeshPeerRosterSnapshot) => void>()
 
   constructor(partial: Partial<BrowserWebRtcSnapshot> = {}) {
     this.snapshotValue = {
@@ -1138,15 +1421,25 @@ class FakeBrowserPeer {
   }
 
   snapshot() { return this.snapshotValue }
-  roster() { return null }
+  roster() { return this.rosterValue }
   subscribe(listener: (snapshot: BrowserWebRtcSnapshot) => void) {
     this.listeners.add(listener)
     listener(this.snapshotValue)
     return () => this.listeners.delete(listener)
   }
+  subscribeRoster(listener: (roster: MeshPeerRosterSnapshot) => void) {
+    this.rosterListeners.add(listener)
+    if (this.rosterValue) listener(this.rosterValue)
+    return () => { this.rosterListeners.delete(listener) }
+  }
   emit(partial: Partial<BrowserWebRtcSnapshot>) {
     this.snapshotValue = { ...this.snapshotValue, ...partial }
     for (const listener of this.listeners) listener(this.snapshotValue)
+  }
+  emitRoster(roster: MeshPeerRosterSnapshot | null) {
+    this.rosterValue = roster
+    if (!roster) return
+    for (const listener of this.rosterListeners) listener(roster)
   }
   importInvite(inviteText: string): WebRtcPeerConnectionProfile {
     return webRtcProfileFromInvite(inviteText)!
@@ -1276,6 +1569,19 @@ async function setTextareaValue(
     textarea?.dispatchEvent(new Event('input', { bubbles: true }))
     textarea?.dispatchEvent(new Event('change', { bubbles: true }))
   })
+}
+
+async function flushReactWork(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+  })
+}
+
+function featureButtons(container: ParentNode): HTMLButtonElement[] {
+  return Array.from(container.querySelectorAll('button'))
+    .filter((candidate) => candidate.textContent?.includes('Features'))
 }
 
 function findButton(container: ParentNode, text: string): HTMLButtonElement {

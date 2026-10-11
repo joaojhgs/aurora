@@ -1,35 +1,33 @@
 import {
-  Activity,
-  Boxes,
-  CalendarClock,
-  Compass,
-  Cpu,
-  Database,
-  DatabaseBackup,
-  KeyRound,
-  Laptop,
-  LayoutDashboard,
-  MemoryStick,
-  MessagesSquare,
-  Network,
-  Plug,
-  ScrollText,
-  Server,
-  Settings,
-  ShieldCheck,
   Sparkles,
-  Volume2,
-  Wrench,
   type LucideIcon
 } from 'lucide-react'
 import type { AvailabilityState, ContractMethodType, PrivacyClass } from '@aurora/client'
+import {
+  AURORA_FEATURE_SECTION_LABELS,
+  OPERATE_FEATURE_SECTION_LABEL,
+  auroraFeatureDefinitions,
+  type AuroraFeatureDefinition,
+  type AuroraFeatureId,
+  type AuroraNavSectionId,
+} from './feature-manifest'
 import { shouldShowForSurface, type AuroraSurfaceProfile } from './platform-surface'
+
+export {
+  auroraFeatureDefinitionById,
+  auroraFeatureDefinitions,
+  auroraRoutedFeatureDefinitions,
+  type AuroraFeatureComponentLoader,
+  type AuroraFeatureDefinition,
+  type AuroraFeatureId,
+} from './feature-manifest'
 
 export interface AuroraNavItem {
   id: string
   label: string
   href: string
   icon: LucideIcon
+  capabilityFeatureId: string
   capabilityModule: string
   capabilityMethod?: string
   methodType: ContractMethodType
@@ -40,65 +38,60 @@ export interface AuroraNavItem {
   expectedTask: string
 }
 
-export type AuroraNavItemSnapshot = Omit<AuroraNavItem, 'icon'>
+export type AuroraNavItemSnapshot = Omit<AuroraNavItem, 'icon' | 'capabilityFeatureId'> & { capabilityFeatureId?: string }
 
 export interface AuroraNavSection {
   label: string
   items: AuroraNavItem[]
 }
 
-export const OPERATE_NAV_SECTION_LABEL = 'Operate · admin only'
+export const OPERATE_NAV_SECTION_LABEL = OPERATE_FEATURE_SECTION_LABEL
 
-export const auroraNavSections: AuroraNavSection[] = [
-  {
-    label: 'Assistant',
-    items: [
-      item('assistant', 'Assistant', '/', Sparkles, 'Orchestrator', 'ExternalUserInput', 'use', 'personal', 'unsupported', 'service contract'),
-      item('memory', 'Memory & Knowledge', '/memory', MessagesSquare, 'DB', 'RAGSearch', 'use', 'personal', 'stale', 'service contract'),
-      item('tools', 'Tools & Plugins', '/tools', Wrench, 'Tooling', 'GetToolCatalog', 'use', 'sensitive', 'unsupported', 'service contract'),
-      item('mesh', 'Mesh', '/mesh', Network, 'Gateway', 'GetMeshStatus', 'use', 'personal', 'degraded', 'service contract')
-    ]
-  },
-  {
-    label: OPERATE_NAV_SECTION_LABEL,
-    items: [
-      item('admin', 'Admin Overview', '/admin', LayoutDashboard, 'Gateway', 'GetCapabilityCatalog', 'use', 'admin-critical', 'available-local', 'service contract', true),
-      item('services', 'Services', '/admin/services', Boxes, 'Gateway', 'GetServices', 'use', 'admin-critical', 'available-local', 'service contract', true),
-      item('config', 'Server settings', '/admin/config', Server, 'Config', 'Get', 'use', 'secret', 'unsupported', 'service contract', true),
-      item('spoken-replies', 'Spoken replies', '/admin/voice', Volume2, 'TTS', 'ListVoices', 'use', 'personal', 'unsupported', 'service contract', true),
-      item('access', 'Access & RBAC', '/admin/access', ShieldCheck, 'Auth', 'ListPrincipals', 'use', 'admin-critical', 'degraded', 'service contract', true),
-      item('tokens', 'Tokens', '/admin/tokens', KeyRound, 'Auth', 'ListTokens', 'use', 'credential', 'unsupported', 'service contract', true),
-      item('backups', 'Backups', '/admin/backups', DatabaseBackup, 'Backup', 'List', 'use', 'admin-critical', 'unsupported', 'service contract', true),
-      item('scheduler', 'Scheduler', '/admin/scheduler', CalendarClock, 'Scheduler', 'ListJobs', 'use', 'admin-critical', 'unsupported', 'service contract', true),
-      item('audit', 'Audit Log', '/admin/audit', Activity, 'Auth', 'AuditLog', 'use', 'sensitive', 'unsupported', 'service contract', true)
-    ]
-  },
-  {
-    label: 'Configure',
-    items: [
-      item('models', 'Models', '/models', Cpu, 'Orchestrator', 'GetModelCatalog', 'use', 'personal', 'unsupported', 'service contract'),
-      item('settings', 'Settings', '/settings', Settings, 'Shell', 'Settings', 'use', 'personal', 'available-local', 'shell page')
-    ]
+const primaryNavSectionIds: readonly AuroraNavSectionId[] = ['assistant', 'operate', 'configure']
+
+export interface AuroraNavProjection {
+  navSections: AuroraNavSection[]
+  embeddedNavItems: AuroraNavItem[]
+  mobileTabs: AuroraNavItem[]
+  routeNavItems: AuroraNavItem[]
+  productCopyById: ReadonlyMap<string, AuroraFeatureDefinition['productCopy']>
+  definitionById: ReadonlyMap<string, AuroraFeatureDefinition>
+}
+
+export function projectAuroraNavFromDefinitions(
+  definitions: readonly AuroraFeatureDefinition[],
+): AuroraNavProjection {
+  const navSections = primaryNavSectionIds.map((sectionId) => ({
+    label: AURORA_FEATURE_SECTION_LABELS[sectionId],
+    items: definitions
+      .filter((definition) => definition.nav.section === sectionId)
+      .map(navItemFromFeatureDefinition),
+  }))
+  const embeddedNavItems = definitions
+    .filter((definition) => definition.nav.section === 'embedded')
+    .map(navItemFromFeatureDefinition)
+  return {
+    navSections,
+    embeddedNavItems,
+    mobileTabs: definitions.filter((definition) => definition.hostHints?.mobileTab === true).map(navItemFromFeatureDefinition),
+    routeNavItems: definitions.map(navItemFromFeatureDefinition),
+    productCopyById: new Map(definitions.map((definition) => [definition.id, definition.productCopy])),
+    definitionById: new Map(definitions.map((definition) => [definition.id, definition])),
   }
-]
+}
 
-export const auroraEmbeddedNavItems: AuroraNavItem[] = [
-  item('onboarding', 'Onboarding', '/onboarding', Compass, 'Auth', 'StartPairing', 'use', 'credential', 'unsupported', 'first-run gate'),
-  item('devices', 'Devices', '/admin/devices', Laptop, 'Auth', 'ListDevices', 'use', 'credential', 'unsupported', 'service contract', true),
-  item('contracts', 'Service actions', '/admin/contracts', ScrollText, 'Gateway', 'GetRegistry', 'use', 'public', 'available-local', 'service contract', true),
-  item('plugins', 'Plugins', '/admin/plugins', Plug, 'Tooling', 'GetToolCatalog', 'use', 'admin-critical', 'unsupported', 'service contract', true),
-  item('pairing', 'Pairing', '/admin/pairing', Network, 'Auth', 'ListPendingPairings', 'use', 'credential', 'unsupported', 'service contract', true),
-  item('diagnostics', 'Diagnostics', '/diagnostics', Activity, 'Gateway', 'GetWebRTCDiagnostics', 'use', 'sensitive', 'unsupported', 'service contract', true),
-  item('data', 'Data Policy', '/memory/policy', Database, 'DB', 'RAGSearch', 'use', 'sensitive', 'privacy-blocked', 'service contract', true),
-  item('native', 'Device Features', '/settings/native', MemoryStick, 'Native', 'GetCapabilityManifest', 'use', 'credential', 'unsupported', 'service contract', true)
-]
+const auroraNavProjection = projectAuroraNavFromDefinitions(auroraFeatureDefinitions)
 
+export const auroraNavSections: AuroraNavSection[] = auroraNavProjection.navSections
 
-export const auroraMobileTabs = ['assistant', 'mesh', 'settings'].map((id) => {
-  const match = getAuroraNavItem(id)
-  if (!match) throw new Error(`Missing mobile nav item: ${id}`)
-  return match
-})
+export const auroraEmbeddedNavItems: AuroraNavItem[] = auroraNavProjection.embeddedNavItems
+
+export const allAuroraRouteNavItems: AuroraNavItem[] = auroraNavProjection.routeNavItems
+
+export const auroraFeatureProductCopyById: ReadonlyMap<AuroraFeatureId, AuroraFeatureDefinition['productCopy']> =
+  auroraNavProjection.productCopyById as ReadonlyMap<AuroraFeatureId, AuroraFeatureDefinition['productCopy']>
+
+export const auroraMobileTabs: AuroraNavItem[] = auroraNavProjection.mobileTabs
 
 export const auroraAssistantCancellationItem = item(
   'assistant-cancel',
@@ -162,6 +155,18 @@ export const auroraAssistantVoiceItems = {
     'unsupported',
     'service contract'
   ),
+  ttsStream: item(
+    'voice-tts-stream',
+    'Spoken replies',
+    '/',
+    Sparkles,
+    'TTS',
+    'StreamStart',
+    'use',
+    'personal',
+    'unsupported',
+    'service contract'
+  ),
   ttsStop: item(
     'voice-tts-stop',
     'TTS playback stop',
@@ -200,9 +205,10 @@ export function visibleAuroraNavSections(
 export function visibleAuroraMobileTabs(
   profile: AuroraSurfaceProfile,
   sessionIsAdmin: boolean,
+  mobileTabs: readonly AuroraNavItem[] = auroraMobileTabs,
 ): AuroraNavItem[] {
   const showLocalSettings = shouldShowForSurface(profile, 'localSettings')
-  return auroraMobileTabs.filter((tab) => {
+  return mobileTabs.filter((tab) => {
     if (tab.adminGated && !sessionIsAdmin) return false
     if (tab.id === 'settings') return showLocalSettings
     return true
@@ -232,6 +238,7 @@ function item(
     label,
     href,
     icon,
+    capabilityFeatureId: `method:${capabilityModule}.${capabilityMethod}`,
     capabilityModule,
     capabilityMethod,
     methodType,
@@ -243,27 +250,24 @@ function item(
   }
 }
 
-function mobileLabelForNavItem(id: string, label: string): string {
-  switch (id) {
-    case 'memory':
-      return 'Memory'
-    case 'tools':
-      return 'Tools'
-    case 'diagnostics':
-      return 'Activity'
-    case 'mesh':
-      return 'Mesh'
-    case 'admin':
-      return 'Admin'
-    case 'settings':
-      return 'Settings'
-    case 'config':
-      return 'Server'
-    case 'spoken-replies':
-      return 'Speech'
-    case 'assistant':
-      return 'Assistant'
-    default:
-      return label
+function navItemFromFeatureDefinition(definition: AuroraFeatureDefinition): AuroraNavItem {
+  return {
+    id: definition.id,
+    label: definition.nav.label,
+    href: definition.nav.href,
+    icon: definition.nav.icon,
+    capabilityFeatureId: definition.capabilityFeatureId,
+    capabilityModule: definition.routePolicy.capabilityModule,
+    capabilityMethod: definition.routePolicy.capabilityMethod,
+    methodType: definition.routePolicy.methodType,
+    privacyClass: definition.routePolicy.privacyClass,
+    fallbackState: definition.routePolicy.fallbackState,
+    adminGated: definition.nav.adminGated ?? false,
+    expectedTask: definition.routePolicy.expectedTask,
+    mobileLabel: definition.nav.mobileLabel ?? definition.nav.label
   }
+}
+
+function mobileLabelForNavItem(id: string, label: string): string {
+  return id === 'assistant' ? 'Assistant' : label
 }

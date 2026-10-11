@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-aurora-mesh-session-live-privacy-verify-peer-boundary"
+description = "Enables the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope."
+commands.allow = ["aurora_mesh_session_live_privacy_verify_peer_boundary"]
+
+[[permission]]
+identifier = "deny-aurora-mesh-session-live-privacy-verify-peer-boundary"
+description = "Denies the aurora_mesh_session_live_privacy_verify_peer_boundary command without any pre-configured scope."
+commands.deny = ["aurora_mesh_session_live_privacy_verify_peer_boundary"]

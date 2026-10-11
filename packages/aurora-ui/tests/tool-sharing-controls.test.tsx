@@ -79,6 +79,18 @@ describe('tool-row mesh sharing controls', () => {
     expect(mutations).toEqual([{ scopeType: 'tool', scopeId: localTool.id, mode: 'unshared', peerIds: [] }])
   })
 
+  it('disables sharing controls while a save is pending', async () => {
+    const mutations: ToolSharingMutation[] = []
+    await act(async () => root.render(control({ pending: true, onMutate: (mutation) => mutations.push(mutation) })))
+
+    const notShared = [...container.querySelectorAll('button')].find((node) => node.textContent === 'Not shared') as HTMLButtonElement
+    expect(notShared.disabled).toBe(true)
+    expect(container.textContent).toContain('Saving')
+
+    await act(async () => notShared.click())
+    expect(mutations).toEqual([])
+  })
+
   it('starts group sharing with all peers and reveals the multi-peer picker', async () => {
     const mutations: ToolSharingMutation[] = []
     await act(async () => root.render(

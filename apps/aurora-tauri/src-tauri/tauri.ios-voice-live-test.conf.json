@@ -1,0 +1,16 @@
+{
+  "app": {
+    "security": {
+      "capabilities": [
+        "aurora-ios-baseline",
+        "aurora-mobile-mesh",
+        "aurora-ios-voice-live-test"
+      ]
+    }
+  },
+  "build": {
+    "features": [
+      "ios-voice-live-test"
+    ]
+  }
+}

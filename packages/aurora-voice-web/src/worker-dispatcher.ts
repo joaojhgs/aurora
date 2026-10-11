@@ -5,6 +5,7 @@ import {
   type AuroraCapturedAudio,
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTtsAudio,
+  type AuroraVoiceSttRequest,
   type AuroraVoiceInferenceOutput,
   type AuroraVoiceTurnFinishOutcome,
   type AuroraVoiceWebCapabilities,
@@ -19,6 +20,9 @@ import {
 const MAX_CAPTURED_AUDIO_SAMPLES = 16_000 * 60
 const MAX_TTS_AUDIO_SAMPLES = 48_000 * 60
 const MAX_TTS_TEXT_CHARS = 1_000
+const MAX_FINITE_STT_BYTES = 4 * 1024 * 1024
+const MAX_FINITE_STT_SAMPLES = 16_000 * 60
+const MAX_FINITE_STT_TEXT_CHARS = 65_536
 
 export interface AuroraVoiceWasmBridge {
   initialize?(modelBindings: AuroraVoiceWebModelBindings | undefined): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
@@ -27,6 +31,7 @@ export interface AuroraVoiceWasmBridge {
   stopSession(sessionId: string, generation: number): Promise<AuroraCapturedAudio>
   finishTurn(sessionId: string, generation: number, outcome: AuroraVoiceTurnFinishOutcome): Promise<void>
   synthesizeSpeech?(request: { readonly text: string; readonly generation: number; readonly voiceId?: string; readonly speakerId?: number; readonly speed?: number }): Promise<AuroraVoiceTtsAudio>
+  transcribeSpeech?(request: AuroraVoiceSttRequest & { readonly generation: number }): Promise<string>
   cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void>
   snapshot(): Promise<{ readonly capabilities?: AuroraVoiceWebCapabilities }>
 }
@@ -37,6 +42,7 @@ export interface AuroraVoiceWorkerDispatcherPort {
 
 export class AuroraVoiceWorkerDispatcher {
   private initialized = false
+  private capabilities: AuroraVoiceWebCapabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
   private activeSession: AuroraVoiceWebSession | null = null
   private pendingStoppedSession: AuroraVoiceWebSession | null = null
   private nextSequence = 0
@@ -85,6 +91,7 @@ export class AuroraVoiceWorkerDispatcher {
           const capabilities = snapshot.capabilities ?? AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
           assertCapabilities(capabilities)
           this.initialized = true
+          this.capabilities = capabilities
           return {
             type: 'ready',
             protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION,
@@ -146,6 +153,18 @@ export class AuroraVoiceWorkerDispatcher {
         if (this.bridge.synthesizeSpeech === undefined) throw new Error('tts_unavailable')
         const audio = boundedTtsAudio(await this.bridge.synthesizeSpeech(command), command.generation)
         return { type: 'tts_result', generation: command.generation, audio }
+      }
+      case 'transcribe_stt': {
+        this.requireInitialized()
+        if (this.activeSession !== null || this.pendingStoppedSession !== null) {
+          throw new AuroraVoiceWebRuntimeError('session_active', 'A voice session is already active')
+        }
+        if (!this.capabilities.stt || this.bridge.transcribeSpeech === undefined) {
+          throw new AuroraVoiceWebRuntimeError('stt_unavailable', 'Speech is not available')
+        }
+        const text = await this.bridge.transcribeSpeech(command)
+        if (!validSttResult(text)) throw new Error('stt_result')
+        return { type: 'stt_result', generation: command.generation, text }
       }
       case 'cancel':
         if (command.sessionId === null) {
@@ -318,6 +337,19 @@ function assertValidCommand(command: unknown): asserts command is AuroraVoiceWor
       ) throw new Error('command')
       return
     }
+    case 'transcribe_stt': {
+      const transcribe = command as Partial<Extract<AuroraVoiceWorkerCommand, { type: 'transcribe_stt' }>>
+      if (
+        !safePositiveInteger(transcribe.generation) ||
+        !(transcribe.pcm instanceof Int16Array) ||
+        transcribe.pcm.length === 0 ||
+        transcribe.pcm.length > MAX_FINITE_STT_SAMPLES ||
+        transcribe.pcm.byteLength > MAX_FINITE_STT_BYTES ||
+        transcribe.pcm.byteLength !== transcribe.pcm.length * Int16Array.BYTES_PER_ELEMENT ||
+        !(transcribe.language === undefined || (typeof transcribe.language === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(transcribe.language)))
+      ) throw new Error('command')
+      return
+    }
     case 'cancel': {
       const cancel = command as Partial<Extract<AuroraVoiceWorkerCommand, { type: 'cancel' }>>
       if (!(cancel.sessionId === null || safeString(cancel.sessionId)) || !safePositiveInteger(cancel.generation) || !safeString(cancel.reason)) {
@@ -481,7 +513,7 @@ function safeGenerationFor(command: unknown): number {
     const generation = (command as { frame?: Partial<AuroraPcmFrameEnvelope> }).frame?.generation
     return safePositiveInteger(generation) ? generation : 0
   }
-  if (type === 'stop' || type === 'finish_turn' || type === 'synthesize_tts' || type === 'cancel' || type === 'shutdown') {
+  if (type === 'stop' || type === 'finish_turn' || type === 'synthesize_tts' || type === 'transcribe_stt' || type === 'cancel' || type === 'shutdown') {
     const generation = (command as { generation?: unknown }).generation
     return safePositiveInteger(generation) ? generation : 0
   }
@@ -504,6 +536,10 @@ function validFinishOutcome(value: unknown): value is AuroraVoiceTurnFinishOutco
 
 function validTtsText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= MAX_TTS_TEXT_CHARS
+}
+
+function validSttResult(text: unknown): text is string {
+  return typeof text === 'string' && text.length <= MAX_FINITE_STT_TEXT_CHARS
 }
 
 function validTtsSpeed(value: unknown): value is number {

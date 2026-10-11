@@ -19,14 +19,18 @@ import asyncio
 import inspect
 import json
 import uuid
-from collections.abc import AsyncIterator, Mapping
+from collections.abc import AsyncIterator, Callable, Mapping
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel
 
 from app.helpers.aurora_logger import log_debug, log_error, log_warning
 from app.messaging.bus import QueryResult
-from app.services.gateway.webrtc.peer_protocol import CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1
+from app.services.gateway.webrtc.peer_protocol import (
+    CAP_GATEWAY_STATUS_EVENTS_V1,
+    CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+)
+from app.shared.contracts.models.gateway import GatewayMethods
 from app.shared.contracts.models.orchestrator import OrchestratorMethods
 from app.shared.contracts.models.speech import SpeechRouteBinding
 from app.shared.contracts.models.tooling import ToolingMethods
@@ -154,10 +158,12 @@ class PeerBridge:
         peer_registry: PeerRegistry,
         *,
         legacy_event_broadcast: bool = True,
+        status_event_authorizer: Callable[[str], bool] | None = None,
     ) -> None:
         self._rtc_client = rtc_client
         self._registry = peer_registry
         self._legacy_event_broadcast = bool(legacy_event_broadcast)
+        self._status_event_authorizer = status_event_authorizer
         self._pending_calls: dict[tuple[str, str], asyncio.Future] = {}
         self._pending_streams: dict[tuple[str, str], asyncio.Queue] = {}
         self._latency_monitor: LatencyMonitor | None = None
@@ -246,6 +252,17 @@ class PeerBridge:
         except Exception as error:
             log_debug(f"PeerBridge: Event interest check failed for {peer_id}: {error}")
             return False
+
+    def gateway_status_event_recipient_ids(self) -> list[str]:
+        """Return exact status subscribers from the live RTC session registry."""
+        provider = getattr(self._rtc_client, "gateway_status_event_recipient_ids", None)
+        if not callable(provider):
+            return []
+        try:
+            return list(provider())
+        except Exception as error:
+            log_debug(f"PeerBridge: Failed to enumerate status recipients: {error}")
+            return []
 
     async def call(
         self,
@@ -564,6 +581,22 @@ class PeerBridge:
 
         sensitive = topic in _SENSITIVE_EVENT_TOPICS
         scoped_only = topic in _SCOPED_ONLY_EVENT_TOPICS
+        if topic == GatewayMethods.STATUS_CHANGED and not self._peer_supports_capability(
+            peer_id, CAP_GATEWAY_STATUS_EVENTS_V1
+        ):
+            log_debug(f"PeerBridge: Suppressed status event to {peer_id}; capability absent")
+            return False
+        if topic == GatewayMethods.STATUS_CHANGED and self._status_event_authorizer is None:
+            log_debug(f"PeerBridge: Suppressed status event to {peer_id}; authority checker absent")
+            return False
+        if topic == GatewayMethods.STATUS_CHANGED and self._status_event_authorizer is not None:
+            try:
+                if not self._status_event_authorizer(peer_id):
+                    log_debug(f"PeerBridge: Suppressed status event to {peer_id}; authority lost")
+                    return False
+            except Exception as error:
+                log_debug(f"PeerBridge: Status authority check failed for {peer_id}: {error}")
+                return False
         if scoped_only and target_peer_id is None:
             log_debug(f"PeerBridge: Suppressed scoped-only event {topic}; target absent")
             return False
@@ -597,8 +630,9 @@ class PeerBridge:
             "type": "event",
             "topic": topic,
             "params": params,
-            "correlation_id": correlation_id,
         }
+        if correlation_id is not None:
+            msg["correlation_id"] = correlation_id
 
         sent = await self._send_to_peer(peer_id, json.dumps(msg))
         if sent:

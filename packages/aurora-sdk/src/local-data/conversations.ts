@@ -17,9 +17,12 @@ import {
   type LocalDataHistoryBoundary,
   type LocalDataScope
 } from './provenance.js'
+import type { ConversationCursor, MessageListDirection } from './repositories.js'
 
 const MAX_CONVERSATION_LIMIT = 500
 const MAX_MESSAGE_LIMIT = 2_000
+const CONVERSATION_PROBE_LIMIT = MAX_CONVERSATION_LIMIT + 1
+const MESSAGE_PROBE_LIMIT = MAX_MESSAGE_LIMIT + 1
 
 export interface LocalConversationSummary {
   readonly record: ConversationRecord
@@ -31,6 +34,7 @@ export interface LocalConversationListOptions {
   readonly scope: LocalDataScope
   readonly includeArchived?: boolean
   readonly limit?: number
+  readonly cursor?: ConversationCursor
   readonly signal?: AbortSignal
 }
 
@@ -38,6 +42,8 @@ export interface LocalConversationMessagesOptions {
   readonly scope: LocalDataScope
   readonly conversationId: string
   readonly afterSequence?: number
+  readonly beforeSequence?: number
+  readonly direction?: MessageListDirection
   readonly limit?: number
   readonly signal?: AbortSignal
 }
@@ -75,11 +81,27 @@ export interface LocalConversationDeleteResult {
 export interface LocalConversationsFacade {
   listConversations(options: LocalConversationListOptions): Promise<LocalConversationSummary[]>
   listMessages(options: LocalConversationMessagesOptions): Promise<ConversationMessageRecord[]>
+  listConversationsPage(options: LocalConversationListOptions): Promise<LocalConversationPage>
+  listMessagesPage(options: LocalConversationMessagesOptions): Promise<LocalMessagesPage>
   upsertConversation(input: UpsertLocalConversationInput): Promise<void>
   appendMessage(input: AppendLocalConversationMessageInput): Promise<void>
   archiveConversation(input: ArchiveLocalConversationInput): Promise<ConversationRecord>
   deleteConversation(input: LocalConversationDeleteInput): Promise<LocalConversationDeleteResult>
 }
+
+export interface LocalConversationPage {
+  readonly items: LocalConversationSummary[]
+  readonly nextCursor: ConversationCursor | null
+}
+
+export interface LocalMessagesPage {
+  readonly items: ConversationMessageRecord[]
+  readonly nextCursor: LocalMessageCursor | null
+}
+
+export type LocalMessageCursor =
+  | { readonly direction: 'asc'; readonly afterSequence: number }
+  | { readonly direction: 'desc'; readonly beforeSequence: number }
 
 export function createLocalConversations(session: LocalDataSession): LocalConversationsFacade {
   return new SessionLocalConversationsFacade(session)
@@ -89,42 +111,73 @@ class SessionLocalConversationsFacade implements LocalConversationsFacade {
   constructor(private readonly session: LocalDataSession) {}
 
   async listConversations(options: LocalConversationListOptions): Promise<LocalConversationSummary[]> {
+    return (await this.listConversationsPage(options)).items
+  }
+
+  async listConversationsPage(options: LocalConversationListOptions): Promise<LocalConversationPage> {
     assertNoImplicitPythonHistoryMerge(options)
     const scope = this.parseScope(options.scope)
     throwIfAborted(options.signal)
     const limit = requirePositiveLimit(options.limit ?? 100, MAX_CONVERSATION_LIMIT, 'conversation_limit')
-    const records = await this.session.conversations.listConversations()
+    const records = await this.session.conversations.listConversations({
+      limit: Math.min(limit + 1, CONVERSATION_PROBE_LIMIT),
+      includeArchived: options.includeArchived === true,
+      ...(options.cursor === undefined ? {} : { cursor: options.cursor })
+    })
     throwIfAborted(options.signal)
     const scoped = records
       .filter((record) => record.profileId === scope.profileId && record.localNodeId === scope.localNodeId)
       .filter((record) => options.includeArchived === true || record.archivedAtMs === null)
       .sort(compareConversations)
-      .slice(0, limit)
-    const messageCounts = await this.session.conversations.listMessageCounts()
+    const hasMore = scoped.length > limit
+    const items = scoped.slice(0, limit)
+    const messageCounts = await this.session.conversations.listMessageCounts(items.map((record) => record.id))
     throwIfAborted(options.signal)
-    return scoped.map((record) => ({
+    return {
+      items: items.map((record) => ({
       record,
       messageCount: messageCounts[record.id] ?? 0,
       historyBoundary: localDataHistoryBoundary()
-    }))
+      })),
+      nextCursor: hasMore && items.length > 0 ? {
+        updatedAtMs: items[items.length - 1]!.updatedAtMs,
+        id: items[items.length - 1]!.id
+      } : null
+    }
   }
 
   async listMessages(options: LocalConversationMessagesOptions): Promise<ConversationMessageRecord[]> {
+    return (await this.listMessagesPage({ ...options, direction: options.direction ?? 'asc' })).items
+  }
+
+  async listMessagesPage(options: LocalConversationMessagesOptions): Promise<LocalMessagesPage> {
     assertNoImplicitPythonHistoryMerge(options)
     const scope = this.parseScope(options.scope)
     throwIfAborted(options.signal)
     const conversation = await this.requireConversation(options.conversationId, scope)
     void conversation
     const limit = requirePositiveLimit(options.limit ?? 500, MAX_MESSAGE_LIMIT, 'message_limit')
-    const afterSequence = options.afterSequence === undefined
-      ? undefined
-      : requireEpochMs(options.afterSequence, 'message_after_sequence')
-    const messages = await this.session.conversations.listMessages(options.conversationId)
+    if (options.afterSequence !== undefined) requireEpochMs(options.afterSequence, 'message_after_sequence')
+    if (options.beforeSequence !== undefined) requireEpochMs(options.beforeSequence, 'message_before_sequence')
+    const direction = options.direction ?? 'desc'
+    const messages = await this.session.conversations.listMessages(options.conversationId, {
+      limit: Math.min(limit + 1, MESSAGE_PROBE_LIMIT),
+      direction,
+      ...(options.beforeSequence === undefined ? {} : { beforeSequence: options.beforeSequence }),
+      ...(options.afterSequence === undefined ? {} : { afterSequence: options.afterSequence })
+    })
     throwIfAborted(options.signal)
-    return messages
-      .filter((record) => afterSequence === undefined || record.sequence > afterSequence)
-      .sort(compareMessages)
-      .slice(0, limit)
+    const page = messages.slice(0, limit)
+    const hasMore = messages.length > limit
+    const items = direction === 'desc' ? [...page].reverse() : page
+    return {
+      items,
+      nextCursor: hasMore && items.length > 0
+        ? direction === 'desc'
+          ? { direction, beforeSequence: items[0]!.sequence }
+          : { direction, afterSequence: items[items.length - 1]!.sequence }
+        : null
+    }
   }
 
   async upsertConversation(input: UpsertLocalConversationInput): Promise<void> {
@@ -142,15 +195,11 @@ class SessionLocalConversationsFacade implements LocalConversationsFacade {
     throwIfAborted(input.signal)
     const record = parseConversationMessageRecord(input.record)
     await this.requireConversation(record.conversationId, scope)
-    const existingMessages = await this.session.conversations.listMessages(record.conversationId)
-    if (existingMessages.some((message) => message.conversationId === record.conversationId && message.sequence === record.sequence && message.id !== record.id)) {
-      throw new LocalDataError('invalid_record', 'Message sequence must be unique within a conversation', { reason: 'duplicate_message_sequence' })
-    }
     throwIfAborted(input.signal)
     try {
       await this.session.conversations.appendMessage(record)
     } catch (error) {
-      if (error instanceof LocalDataError && error.code === 'invalid_record' && error.message.includes('Message ID')) {
+      if (error instanceof LocalDataError && error.code === 'invalid_record' && error.metadata?.reason === 'duplicate_message_id') {
         throw new LocalDataError('invalid_record', 'Message IDs must be unique within scoped local history', { reason: 'duplicate_message_id' })
       }
       throw error
@@ -187,9 +236,8 @@ class SessionLocalConversationsFacade implements LocalConversationsFacade {
   }
 
   private async requireConversation(conversationId: string, scope: LocalDataScope): Promise<ConversationRecord> {
-    const conversations = await this.session.conversations.listConversations()
-    const conversation = conversations.find((record) => record.id === conversationId)
-    if (conversation === undefined) {
+    const conversation = await this.session.conversations.getConversation(conversationId)
+    if (conversation === null) {
       throw new LocalDataError('invalid_record', 'Conversation does not exist in local history', { reason: 'conversation_missing' })
     }
     assertScopeIdentity(conversation, scope)

@@ -391,7 +391,11 @@ async fn resolve_public_addrs(
 fn android_model_download_host_allowed(host: &str) -> bool {
     matches!(
         host.to_ascii_lowercase().as_str(),
-        "github.com" | "release-assets.githubusercontent.com" | "objects.githubusercontent.com"
+        "github.com"
+            | "release-assets.githubusercontent.com"
+            | "objects.githubusercontent.com"
+            | "huggingface.co"
+            | "us.aws.cdn.hf.co"
     )
 }
 
@@ -945,12 +949,14 @@ mod tests {
     }
 
     #[test]
-    fn android_model_download_hosts_are_closed_to_the_github_release_path() {
+    fn android_model_download_hosts_are_closed_to_trusted_release_origins() {
         for allowed in [
             "github.com",
             "release-assets.githubusercontent.com",
             "objects.githubusercontent.com",
             "GITHUB.COM",
+            "huggingface.co",
+            "us.aws.cdn.hf.co",
         ] {
             assert!(android_model_download_host_allowed(allowed), "{allowed}");
         }
@@ -958,6 +964,8 @@ mod tests {
             "raw.githubusercontent.com",
             "github.example",
             "github.com.example",
+            "huggingface.co.example",
+            "us.aws.cdn.hf.co.example",
             "localhost",
             "127.0.0.1",
         ] {

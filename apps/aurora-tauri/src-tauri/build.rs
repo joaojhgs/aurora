@@ -13,106 +13,185 @@ fn main() {
         link_ios_aurora_native_plugin().expect("failed to link Aurora iOS native plugin");
     }
 
-    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
-        tauri_build::AppManifest::new().commands(&[
-            "aurora_request",
-            "aurora_command",
-            "aurora_subscribe",
-            "aurora_activate_subscription",
-            "aurora_unsubscribe",
-            "aurora_sidecar_session",
-            "aurora_sidecar_start",
-            "aurora_sidecar_stop",
-            "aurora_sidecar_status",
-            "aurora_native_voice_status",
-            "aurora_native_voice_start",
-            "aurora_native_voice_finish",
-            "aurora_native_voice_cancel",
-            "aurora_native_voice_tray_toggle_e2e",
-            "aurora_native_capability_manifest",
-            "native_capabilities",
-            "aurora_android_baseline_status",
-            "aurora_android_native_plugin_payload",
-            "aurora_android_lifecycle_status",
-            "aurora_android_webview_microphone_permission_decision",
-            "aurora_android_voice_foreground_service_status",
-            "aurora_android_voice_foreground_service_start",
-            "aurora_android_voice_live_test_inject_pcm",
-            "aurora_android_voice_foreground_service_finish",
-            "aurora_android_voice_foreground_service_cancel",
-            "aurora_android_voice_pack_catalog_status",
-            "aurora_android_voice_pack_catalog_set",
-            "aurora_android_voice_pack_download",
-            "aurora_android_voice_pack_download_status",
-            "aurora_android_voice_pack_activate",
-            "aurora_android_voice_pack_remove",
-            "aurora_ios_native_plugin_manifest",
-            "aurora_ios_invocation_status",
-            "aurora_ios_invoke_action",
-            "aurora_native_share_text",
-            "aurora_native_open_deep_link",
-            "aurora_native_show_notification",
-            "aurora_log_tail",
-            "aurora_thin_peer_credential_set",
-            "aurora_thin_peer_credential_status",
-            "aurora_thin_peer_credential_delete",
-            "aurora_thin_peer_reconnect_prove",
-            "aurora_remote_origin_policy",
-            "aurora_thin_profile_get",
-            "aurora_thin_profile_set",
-            "aurora_node_config_get",
-            "aurora_node_config_set",
-            "aurora_node_config_delete",
-            "aurora_node_config_v2_get",
-            "aurora_node_config_v2_set",
-            "aurora_node_config_v2_delete",
-            "aurora_thin_room_secret_set",
-            "aurora_thin_room_secret_get",
-            "aurora_thin_room_secret_delete",
-            "aurora_inbound_verifier_get",
-            "aurora_inbound_verifier_set",
-            "aurora_inbound_verifier_delete",
-            "aurora_secure_storage_get",
-            "aurora_secure_storage_set",
-            "aurora_secure_storage_delete",
-            "aurora_local_data_open",
-            "aurora_local_data_status",
-            "aurora_local_data_close",
-            "aurora_local_data_transaction_begin",
-            "aurora_local_data_transaction_commit",
-            "aurora_local_data_transaction_rollback",
-            "aurora_local_data_repository_operation",
-            "aurora_local_data_export_v1",
-            "aurora_local_data_import_v1",
-            "aurora_local_data_envelope_encrypt",
-            "aurora_local_data_envelope_decrypt",
-            "aurora_local_data_envelope_rotate",
-            "aurora_mesh_authority_hydrate",
-            "aurora_mesh_authority_authorize",
-            "aurora_mesh_authority_snapshot_manifest",
-            "aurora_mesh_authority_issue_reconnect_challenge",
-            "aurora_mesh_authority_verify_reconnect_proof",
-            "aurora_mesh_authority_list_active_grants",
-            "aurora_mesh_authority_replace_grant",
-            "aurora_mesh_authority_revoke_peer_authority",
-            "aurora_mesh_authority_resolve_grant",
-            "aurora_mesh_authority_issue_pairing_credential",
-            "aurora_mesh_authority_rollback_pairing_credential",
-            "aurora_mesh_authority_revoke_sharing",
-            "aurora_mesh_authority_drain_audit",
-            "aurora_mesh_authority_export_grants",
-            "aurora_mesh_session_bind",
-            "aurora_mesh_session_unbind",
-            "aurora_mesh_session_set_lifecycle",
-            "aurora_mesh_session_snapshot",
-            "aurora_local_file_read",
-            "aurora_local_file_write",
-            "aurora_local_file_pick",
-            "aurora_secure_file_handle_open",
-            "aurora_shutdown",
-        ]),
-    ))
+    static COMMANDS: &[&str] = &[
+        "aurora_local_inference_engines",
+        "aurora_local_inference_catalog",
+        "aurora_local_inference_model_status",
+        "aurora_local_inference_download_model",
+        "aurora_local_inference_delete_model",
+        "aurora_local_inference_session_create",
+        "aurora_local_inference_complete",
+        "aurora_local_inference_cancel",
+        "aurora_local_inference_session_reset",
+        "aurora_local_inference_session_destroy",
+        "aurora_request",
+        "aurora_command",
+        "aurora_subscribe",
+        "aurora_native_event_snapshot",
+        "aurora_activate_subscription",
+        "aurora_native_event_ack",
+        "aurora_unsubscribe",
+        "aurora_sidecar_session",
+        "aurora_sidecar_start",
+        "aurora_sidecar_stop",
+        "aurora_sidecar_status",
+        "aurora_native_voice_status",
+        "aurora_native_voice_start",
+        "aurora_native_voice_finish",
+        "aurora_native_voice_cancel",
+        "aurora_native_voice_tray_toggle_e2e",
+        "aurora_native_speech_host_snapshot",
+        "aurora_peer_host_local_speech_transcribe",
+        "aurora_peer_host_local_speech_synthesize",
+        "aurora_peer_host_local_speech_cancel",
+        "aurora_peer_host_local_speech_stage",
+        "aurora_native_capability_manifest",
+        "native_capabilities",
+        "aurora_android_baseline_status",
+        "aurora_android_native_plugin_payload",
+        "aurora_android_lifecycle_status",
+        "aurora_android_webview_microphone_permission_decision",
+        "aurora_android_voice_foreground_service_status",
+        "aurora_android_voice_foreground_service_start",
+        "aurora_android_background_transcription_sync",
+        "aurora_android_voice_live_test_inject_pcm",
+        "aurora_android_voice_live_test_playback_counters",
+        "aurora_android_voice_foreground_service_finish",
+        "aurora_android_voice_foreground_service_cancel",
+        "aurora_android_voice_pack_catalog_status",
+        "aurora_android_voice_pack_catalog_set",
+        "aurora_android_voice_pack_download",
+        "aurora_android_voice_pack_download_status",
+        "aurora_android_voice_pack_activate",
+        "aurora_android_voice_pack_remove",
+        "aurora_ios_native_plugin_manifest",
+        "aurora_ios_invocation_status",
+        "aurora_ios_invoke_action",
+        "aurora_native_share_text",
+        "aurora_native_open_deep_link",
+        "aurora_native_show_notification",
+        "aurora_log_tail",
+        "aurora_thin_peer_credential_set",
+        "aurora_thin_peer_credential_status",
+        "aurora_thin_peer_credential_delete",
+        "aurora_thin_peer_reconnect_prove",
+        "aurora_remote_origin_policy",
+        "aurora_thin_profile_get",
+        "aurora_thin_profile_set",
+        "aurora_node_config_policy_read",
+        "aurora_node_config_policy_compare_and_swap",
+        "aurora_thin_room_secret_set",
+        "aurora_thin_room_secret_get",
+        "aurora_thin_room_secret_delete",
+        "aurora_inbound_verifier_get",
+        "aurora_inbound_verifier_set",
+        "aurora_inbound_verifier_delete",
+        "aurora_secure_storage_get",
+        "aurora_secure_storage_set",
+        "aurora_secure_storage_delete",
+        "aurora_local_data_open",
+        "aurora_local_data_status",
+        "aurora_local_data_close",
+        "aurora_local_data_transaction_begin",
+        "aurora_local_data_transaction_commit",
+        "aurora_local_data_transaction_rollback",
+        "aurora_local_data_repository_operation",
+        "aurora_local_data_export_v1",
+        "aurora_local_data_import_v1",
+        "aurora_local_data_envelope_encrypt",
+        "aurora_local_data_envelope_decrypt",
+        "aurora_local_data_envelope_rotate",
+        "aurora_mesh_authority_hydrate",
+        "aurora_mesh_authority_authorize",
+        "aurora_mesh_authority_snapshot_manifest",
+        "aurora_mesh_authority_issue_reconnect_challenge",
+        "aurora_mesh_authority_verify_reconnect_proof",
+        "aurora_mesh_authority_list_active_grants",
+        "aurora_mesh_authority_replace_grant",
+        "aurora_mesh_authority_revoke_peer_authority",
+        "aurora_mesh_authority_resolve_grant",
+        "aurora_mesh_authority_issue_pairing_credential",
+        "aurora_mesh_authority_rollback_pairing_credential",
+        "aurora_mesh_authority_revoke_sharing",
+        "aurora_mesh_authority_drain_audit",
+        "aurora_mesh_authority_export_grants",
+        "aurora_mesh_session_bind",
+        "aurora_mesh_session_unbind",
+        "aurora_mesh_session_live_privacy_prepare",
+        "aurora_mesh_session_live_privacy_verify_peer_boundary",
+        "aurora_mesh_session_live_privacy_verify_fresh_rebind",
+        "aurora_mesh_session_live_privacy_verify_profile_reset",
+        "aurora_mesh_session_set_lifecycle",
+        "aurora_mesh_session_snapshot",
+        "aurora_local_file_read",
+        "aurora_local_file_write",
+        "aurora_local_file_pick",
+        "aurora_secure_file_handle_open",
+        "aurora_shutdown",
+        "aurora_ios_voice_live_test_start",
+        "aurora_ios_voice_live_test_push_pcm",
+    ];
+    let include_ios_live_test = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("ios")
+        && std::env::var_os("CARGO_FEATURE_IOS_VOICE_LIVE_TEST").is_some();
+    let command_count = COMMANDS.len() - if include_ios_live_test { 0 } else { 2 };
+    let commands: &'static [&'static str] = &COMMANDS[..command_count];
+
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(tauri_build::AppManifest::new().commands(commands)),
+    )
     .expect("failed to build Aurora Tauri manifest");
+
+    sync_generated_android_kotlin_projects()
+        .expect("failed to synchronize generated Aurora Android dependency projects");
+}
+
+fn sync_generated_android_kotlin_projects() -> Result<(), Box<dyn std::error::Error>> {
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() != Ok("android") {
+        return Ok(());
+    }
+    let Some(generated_project) = std::env::var_os("TAURI_ANDROID_PROJECT_PATH") else {
+        return Ok(());
+    };
+
+    use std::path::{Path, PathBuf};
+    use std::process::Command;
+
+    let manifest_dir = std::env::var_os("CARGO_MANIFEST_DIR").ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "CARGO_MANIFEST_DIR is unavailable",
+        )
+    })?;
+    let manifest_path = Path::new(&manifest_dir);
+    let app_dir = manifest_path.parent().ok_or_else(|| {
+        std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "Cargo manifest directory has no application parent",
+        )
+    })?;
+    let project_path = PathBuf::from(generated_project);
+    let generated_project = if project_path.is_absolute() {
+        project_path
+    } else {
+        manifest_path.join(project_path)
+    };
+    let installer = app_dir.join("scripts/install-android-native-plugin.mjs");
+    let node = std::env::var_os("NODE").unwrap_or_else(|| "node".into());
+    println!("cargo:rerun-if-changed={}", installer.display());
+    let status = Command::new(node)
+        .arg(installer)
+        .arg("--sync-generated-projects")
+        .current_dir(app_dir)
+        .env("AURORA_ANDROID_GENERATED_PROJECT_DIR", generated_project)
+        .status()?;
+    if !status.success() {
+        return Err(std::io::Error::other(format!(
+            "Android dependency-project synchronization exited with {status}"
+        ))
+        .into());
+    }
+    Ok(())
 }
 
 /// Turns the platform list above into the single `aurora_native_webrtc` cfg that

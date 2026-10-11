@@ -5,6 +5,7 @@ import {
   type AuroraPcmFrameEnvelope,
   type AuroraVoiceTtsAudio,
   type AuroraVoiceTtsRequest,
+  type AuroraVoiceSttRequest,
   type AuroraVoiceInferenceOutput,
   type AuroraVoiceWebCapabilities,
   type AuroraVoiceWebModelBindings,
@@ -23,6 +24,9 @@ const MAX_VIRTUAL_PATH_BYTES = 256
 const MAX_TTS_TEXT_CHARS = 1_000
 const MAX_TTS_SECONDS = 60
 const MAX_TTS_SAMPLES = 48_000 * MAX_TTS_SECONDS
+const MAX_FINITE_STT_BYTES = 4 * 1024 * 1024
+const MAX_FINITE_STT_SAMPLES = SAMPLE_RATE_HZ * 60
+const MAX_FINITE_STT_TEXT_CHARS = 65_536
 
 export interface AuroraSherpaVoiceEngine {
   initialize(bindings: AuroraVoiceWebModelBindings | undefined): Promise<AuroraVoiceWebCapabilities>
@@ -30,6 +34,8 @@ export interface AuroraSherpaVoiceEngine {
   pushPcmI16(frame: AuroraPcmFrameEnvelope, pcm: Int16Array): Promise<AuroraVoiceInferenceOutput | undefined>
   stopSession(): Promise<void>
   synthesizeSpeech(request: AuroraVoiceTtsRequest): Promise<AuroraVoiceTtsAudio>
+  transcribeSpeech?(request: AuroraVoiceSttRequest & { readonly generation: number }): Promise<string>
+  cancelFiniteSttGeneration?(generation: number): void
   cancelTtsGeneration?(generation: number): void
   dispose(): void
 }
@@ -135,6 +141,8 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
   private readonly fetchAsset: typeof fetch
   private handles: SherpaRuntimeHandles | null = null
   private capabilities: AuroraVoiceWebCapabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
+  private boundModels: readonly AuroraVoiceWebModelDescriptor[] = []
+  private readonly cancelledSttGenerations = new Set<number>()
 
   constructor(options: AuroraSherpaWasmVoiceEngineOptions = {}) {
     this.engineAssets = options.engineAssets
@@ -210,6 +218,7 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
         if (!validTts(tts)) throw unavailable('missing_tts_helper')
       }
       this.handles = { vad, recognizer, recognizerStream, kws, kwsStream, tts, ttsGenerationConfig: ttsGenerationConfig(models, files) }
+      this.boundModels = models
       this.capabilities = Object.freeze({
         vad: vad !== null,
         kws: kws !== null,
@@ -283,11 +292,53 @@ export class AuroraSherpaWasmVoiceEngine implements AuroraSherpaVoiceEngine {
     return Object.freeze(validateTtsAudio(audio, generation))
   }
 
+  async transcribeSpeech(request: AuroraVoiceSttRequest & { readonly generation: number }): Promise<string> {
+    const recognizer = this.handles?.recognizer ?? null
+    if (this.handles === null || recognizer === null || !this.capabilities.stt) throw unavailable('stt_unavailable')
+    const generation = boundedGeneration(request.generation)
+    const pcm = request.pcm
+    if (!(pcm instanceof Int16Array) || pcm.length === 0 || pcm.byteLength > MAX_FINITE_STT_BYTES || pcm.length > MAX_FINITE_STT_SAMPLES) {
+      throw unavailable('invalid_stt_audio')
+    }
+    const model = requireModel(this.boundModels, 'stt')
+    if (request.language !== undefined && request.language !== (model.config?.language ?? '')) {
+      throw unavailable('unsupported_language')
+    }
+    if (this.cancelledSttGenerations.has(generation)) throw unavailable('stale_generation')
+
+    const stream = recognizer.createStream()
+    if (!validOfflineStream(stream) || typeof stream.inputFinished !== 'function') {
+      try { stream.free() } catch {}
+      throw unavailable('missing_asr_helper')
+    }
+    try {
+      stream.acceptWaveform(SAMPLE_RATE_HZ, pcmI16ToF32(pcm))
+      stream.inputFinished()
+      recognizer.decode(stream)
+      if (this.cancelledSttGenerations.has(generation)) throw unavailable('stale_generation')
+      const text = textFromResult(recognizer.getResult(stream))
+      if (text.length > MAX_FINITE_STT_TEXT_CHARS) throw unavailable('invalid_stt_result')
+      return text
+    } finally {
+      try { stream.free() } catch {}
+    }
+  }
+
+  cancelFiniteSttGeneration(generation: number): void {
+    const bounded = boundedGeneration(generation)
+    this.cancelledSttGenerations.add(bounded)
+    if (this.cancelledSttGenerations.size > 64) {
+      const oldest = this.cancelledSttGenerations.values().next().value
+      if (oldest !== undefined) this.cancelledSttGenerations.delete(oldest)
+    }
+  }
+
   dispose(): void {
     if (this.handles !== null) {
       freeHandles(this.handles)
       this.handles = null
     }
+    this.boundModels = []
     this.capabilities = AURORA_VOICE_WEB_DEFAULT_CAPABILITIES
   }
 }

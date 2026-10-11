@@ -112,7 +112,7 @@ describe('one Aurora in the notification shade', () => {
       'private fun isBackgroundVoiceSessionAvailable',
     )
     expect(onStart).toContain('AuroraRuntimeForegroundLedger.acquireOnce(AuroraRuntimeForegroundReason.VOICE)')
-    expect(onStart).toContain('if (intent?.action == ACTION_SYNC_REASONS)')
+    expect(onStart).toMatch(/if \((?:intent\?\.action|action) == ACTION_SYNC_REASONS\)/u)
 
     const sync = sliceBetween(service, 'private fun syncForegroundReasons(', 'private fun ensureNotificationChannel()')
     expect(sync).toContain('val reasons = AuroraRuntimeForegroundLedger.activeReasons()')

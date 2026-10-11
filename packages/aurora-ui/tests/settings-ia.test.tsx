@@ -668,6 +668,7 @@ async function renderRoleLayout(
 function settingsClient(): AuroraClient {
   return {
     transport: { kind: 'http' },
+    auth: testAuth('settings-peer'),
     config: {
       getSchemaMetadata: async () => ({ ok: true, data: { fields: [], secrets_redacted: true } }),
       applyChange: async () => ({ ok: true, data: { success: true } })
@@ -707,6 +708,13 @@ function settingsClient(): AuroraClient {
     }
   } as unknown as AuroraClient
 }
+function testAuth(peerId: string) {
+  return {
+    snapshot: () => ({ principalId: 'settings-principal', peerId }),
+    subscribe: () => () => undefined,
+  }
+}
+
 
 function visibleText(container: HTMLElement): string {
   return (container.textContent ?? '').replace(/\s+/gu, ' ').trim()

@@ -2,9 +2,27 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { describe, expect, it, vi } from 'vitest'
+const browserSpeechMocks = vi.hoisted(() => ({
+  openExistingModelStore: vi.fn(),
+  openActiveModelPack: vi.fn(),
+  createRuntime: vi.fn(),
+}))
+
+// Voice is a dependency of the UI package; resolve its actual entry from this app.
+vi.mock('../../../packages/aurora-voice-web/dist/browser.js', () => ({
+  AuroraBrowserModelStoreHost: {
+    create: vi.fn(),
+    openExisting: browserSpeechMocks.openExistingModelStore,
+  },
+  installVerifiedBrowserModelPack: vi.fn(),
+  openActiveBrowserModelPack: browserSpeechMocks.openActiveModelPack,
+  createAuroraBrowserVoiceRuntime: browserSpeechMocks.createRuntime,
+}))
+
 import { BrowserPersistentPeerCredentialStore, createBrowserNativeCapabilityPack, type AuroraRuntimeProfileV2 } from '@aurora/ui'
 import { MemoryLocalDataBackend, type EncryptedDataEnvelopeV1, type EnvelopeCryptoPort, type LocalDataBackend, type LocalDataBackendStatus, type LocalDataKeyPurpose, type LocalDataSession } from '@aurora/client/local-data'
 import type { LocalToolExportDecisionPort } from '@aurora/client/local-tools'
+import { emptyAuroraNodeConfigDocumentV2 } from '@aurora/client/node-config'
 import { createReconnectProofForBearer } from '@aurora/client/webrtc'
 import type { MeshAuthorityWasmSource } from '@aurora/mesh-authority-web'
 import {
@@ -102,6 +120,129 @@ describe('browser mesh-node service composition', () => {
     })
     await expect(backend.session?.localAudit.listAudit()).resolves.toEqual([])
     await services.close()
+  })
+
+  it('hosts the profile-selected default speech model, then withdraws it after a V2 sharing-off save', async () => {
+    const vaultValues = new Map<string, unknown>()
+    const metadata = memoryStorage()
+    const credentialStore = new BrowserPersistentPeerCredentialStore({
+      storage: new MemoryVaultStorage(vaultValues), metadataStorage: metadata, crypto: globalThis.crypto,
+      origin: 'https://aurora.example.test', now: () => 1_000,
+    })
+    const policyWriter = new BrowserPersistentPeerCredentialStore({
+      storage: new MemoryVaultStorage(vaultValues), metadataStorage: metadata, crypto: globalThis.crypto,
+      origin: 'https://aurora.example.test', now: () => 1_001,
+    })
+    const model = {
+      task: 'stt' as const,
+      family: 'whisper-mini',
+      kind: 'offline-asr' as const,
+      files: [{ role: 'tokens' as const, fileId: 'stt-tokens', virtualPath: '/speech/stt/tokens.txt' }],
+      config: { language: 'en' },
+    }
+    const modelPack = {
+      identity: {
+        packId: 'profile-stt-pack', packVersion: '1.0.0', variantId: 'browser-wasm',
+        scope: { task: 'stt' as const, slotId: 'default' },
+      },
+      files: [{
+        fileId: 'stt-tokens', storageKey: 'profile-stt-pack@stt-tokens', sha256: 'b'.repeat(64), byteLength: 2,
+        readAll: async () => new Uint8Array([1, 2]),
+        readChunk: async () => new Uint8Array([1, 2]),
+      }],
+      models: [model],
+    }
+    const runtime = {
+      initialize: vi.fn(async () => ({ vad: false, kws: false, stt: true, tts: false })),
+      transcribeSpeech: vi.fn(async () => ({ text: 'local transcript' })),
+      synthesizeSpeech: vi.fn(async () => ({ pcm: new Int16Array([1]), sampleRateHz: 16_000, durationMs: 1 })),
+      cancel: vi.fn(async () => undefined),
+      dispose: vi.fn(async () => undefined),
+    }
+    const localSpeechSelection = { stt: { packId: 'profile-stt-pack', packRevision: '1.0.0' } }
+    const profile = {
+      ...meshProfile(),
+      localNode: { ...meshProfile().localNode, localSpeechSelection },
+    }
+    const trust = [{
+      task: 'stt', packId: 'profile-stt-pack', packVersion: '1.0.0', expectedManifestSha256: 'a'.repeat(64),
+    }]
+    const lockNavigator = {
+      locks: {
+        async request(_name: string, _options: unknown, callback: (lock: Lock | null) => Promise<unknown>): Promise<unknown> {
+          return await callback({} as Lock)
+        },
+      },
+    }
+    vi.stubGlobal('navigator', lockNavigator as unknown as Navigator)
+    vi.stubGlobal('window', {
+      localStorage: { getItem: (key: string) => key === 'aurora.browserSpeechTrust.v1' ? JSON.stringify(trust) : null },
+    } as unknown as Window & typeof globalThis)
+    vi.stubGlobal('document', undefined)
+    browserSpeechMocks.openExistingModelStore.mockResolvedValue({})
+    browserSpeechMocks.openActiveModelPack.mockResolvedValue(modelPack)
+    browserSpeechMocks.createRuntime.mockReturnValue(runtime)
+
+    let services: Awaited<ReturnType<typeof createBrowserMeshNodeServices>> | undefined
+    try {
+      const config = emptyAuroraNodeConfigDocumentV2(1_000)
+      config.speech.sharing.stt = true
+      await credentialStore.saveNodeConfigDocumentV2(config)
+      await expect(credentialStore.loadNodeConfigDocumentV2()).resolves.toMatchObject({
+        speech: { sharing: { stt: true } },
+      })
+      services = await createBrowserMeshNodeServices({
+        runtimeProfile: profile,
+        credentialStore,
+        rolloutFlags: rolloutFlags(),
+        localStablePeerId: 'browser-peer',
+        origin: 'https://aurora.example.test',
+        navigator: { onLine: true, userAgent: 'vitest' },
+        window: { open: () => undefined, location: { origin: 'https://aurora.example.test', href: 'https://aurora.example.test/' } },
+        localDataBackendFactory: async () => localDataAuthority(new PersistentMemoryLocalDataBackend()),
+        envelopeCryptoFactory: () => new RecordingEnvelopeCrypto(),
+        nativeCapabilityPackFactory: (options) => createBrowserNativeCapabilityPack({
+          ...options,
+          navigator: { onLine: true, userAgent: 'vitest' },
+        }),
+        cursorSecret: 'cursor-secret-1234',
+        nowMs: () => 1_000,
+        randomId: () => 'speech-host-test',
+        randomBytes: fixedBytes,
+        authorityWasmSource: nodeWasmSource,
+      })
+      expect(services.provider.peerHostRegistry.get('Transcription.Transcribe')).toBeDefined()
+      expect(services.provider.speechHost?.capabilities()).toMatchObject([{
+        capability: {
+          stage: 'stt', readiness: 'ready', model_ids: ['whisper-mini'], supported_languages: ['en'],
+        },
+      }])
+      expect(browserSpeechMocks.createRuntime).toHaveBeenCalledWith(expect.objectContaining({
+        modelBindings: expect.objectContaining({ models: [expect.objectContaining({ family: 'whisper-mini', config: { language: 'en' } })] }),
+      }))
+      const persisted = await policyWriter.loadNodeConfigDocumentV2()
+      if (persisted === null) throw new Error('V2 speech policy missing')
+      await policyWriter.saveNodeConfigDocumentV2Cas({
+        ...persisted,
+        speech: { ...persisted.speech, sharing: { ...persisted.speech.sharing, stt: false } },
+      }, persisted.revision)
+      await services.refreshSpeechPolicy()
+
+      // Cross-tab notifications arrive asynchronously after the saved revision.
+      await vi.waitFor(() => {
+        expect(runtime.dispose).toHaveBeenCalledOnce()
+        expect(services!.provider.peerHostRegistry.get('Transcription.Transcribe')).toBeUndefined()
+        expect(services!.provider.speechHost?.capabilities()).toEqual([])
+      })
+    } finally {
+      await services?.close()
+      await credentialStore.close()
+      await policyWriter.close()
+      vi.unstubAllGlobals()
+      browserSpeechMocks.openExistingModelStore.mockReset()
+      browserSpeechMocks.openActiveModelPack.mockReset()
+      browserSpeechMocks.createRuntime.mockReset()
+    }
   })
 
   it('defaults local tool export to deny-all until an explicit decision port opts in', async () => {
@@ -733,7 +874,7 @@ class RecordingEnvelopeCrypto implements EnvelopeCryptoPort {
 }
 
 class MemoryVaultStorage {
-  private readonly values = new Map<string, unknown>()
+  constructor(private readonly values = new Map<string, unknown>()) {}
 
   async get(key: string): Promise<unknown> {
     return this.values.get(key)

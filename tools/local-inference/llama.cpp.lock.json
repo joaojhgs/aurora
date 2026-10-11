@@ -1,0 +1,22 @@
+{
+  "source": {
+    "project": "ggml-org/llama.cpp",
+    "version": "0.4.1",
+    "commit": "b29c606e28a01b1bc8c1351026a0fa6e616bf6c4",
+    "archive_url": "https://github.com/ggml-org/llama.cpp/archive/b29c606e28a01b1bc8c1351026a0fa6e616bf6c4.tar.gz",
+    "archive_file": "llama.cpp-b29c606e28a01b1bc8c1351026a0fa6e616bf6c4.tar.gz",
+    "archive_bytes": 37437459,
+    "archive_sha256": "03fb04316eb32a7b7347004a79a8dd60531c02f5a064d853fed3b53828951723"
+  },
+  "build": {
+    "link_kind": "static",
+    "build_shared_libs": false,
+    "targets": ["llama", "llama-common"],
+    "ggml_native": false,
+    "ggml_openmp": false,
+    "ggml_llamafile": false,
+    "llama_openssl": false,
+    "llama_subprocess": false,
+    "json_schema_grammar": true
+  }
+}

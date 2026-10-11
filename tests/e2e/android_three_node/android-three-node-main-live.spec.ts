@@ -91,6 +91,75 @@ type NativeMeshPeer = {
   lastRttMs?: number
 }
 
+type NativeEvent = {
+  id?: string
+  sequence?: number
+  kind?: string
+  subjects?: string[]
+  audit?: { peerId?: string; targetPeerId?: string }
+  payload?: { peerId?: string; peer_id?: string; connected?: boolean }
+}
+
+type NativeEventSubject = {
+  subject?: string
+  peerId?: string | null
+  kind?: string
+  status?: string
+}
+
+type NativeEventSnapshot = {
+  events?: NativeEvent[]
+  subjects?: NativeEventSubject[]
+  lastSequenceId?: string
+  replayComplete?: boolean
+}
+
+type NativeEventPeerPrivacyPrepare = {
+  probeId?: string
+  peerId?: string
+  retainedPeerId?: string
+  peerSubject?: string
+  peerOwnedRequestSubject?: string
+  retainedPeerSubject?: string
+  peerlessVoiceSubject?: string
+  pendingAssistantBeforeBoundary?: number
+}
+
+type NativeEventPeerBoundaryPrivacy = {
+  probeId?: string
+  peerId?: string
+  retainedPeerId?: string
+  oldPublicationRejectedAfterBoundary?: boolean
+  peerSubjectPurgedAfterBoundary?: boolean
+  peerOwnedRequestPurgedAfterBoundary?: boolean
+  oldCursorGapAfterBoundary?: boolean
+  retainedPeerSubjectRetainedAfterBoundary?: boolean
+  retainedPeerOldPublicationAcceptedAfterBoundary?: boolean
+  peerlessVoiceRetainedAfterBoundary?: boolean
+  pendingAssistantClearedAfterBoundary?: boolean
+}
+
+type NativeEventFreshRebindPrivacy = {
+  probeId?: string
+  peerId?: string
+  oldPublicationAttemptedAfterFreshRebind?: boolean
+  oldPublicationRejectedAfterFreshRebind?: boolean
+  oldPeerOwnedRequestAbsentAfterFreshRebind?: boolean
+  freshBindingPresentAfterRebind?: boolean
+  freshPublicationAcceptedAfterRebind?: boolean
+}
+
+type NativeEventProfileResetPrivacy = {
+  probeId?: string
+  peerId?: string
+  retainedPeerId?: string
+  oldPublicationAttemptedAfterProfileReset?: boolean
+  oldPublicationRejectedAfterProfileReset?: boolean
+  oldProfileSubjectsCleared?: boolean
+  replayCleared?: boolean
+  pendingAssistantClearedAfterProfileReset?: boolean
+}
+
 type AndroidVoiceStatus = {
   acceptedSamples?: number
   backgroundSessionActive?: boolean
@@ -532,6 +601,92 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       120_000,
     )
 
+    let nativeEventPeerPrivacy: Awaited<ReturnType<typeof proveNativeEventPeerPrivacy>> | null = null
+    let restoredAfterPrivacyProbe: {
+      androidBrowserPeerId: string | null
+      androidToBrowserRttSamplesMs: number[]
+      credentialFound: boolean
+      hasBearerToken: boolean
+    } | null = null
+    let privacyProbeError: unknown = null
+    let restorationError: unknown = null
+    try {
+      nativeEventPeerPrivacy = await proveNativeEventPeerPrivacy({
+        androidHelpers,
+        client: android.webview.client,
+        peerId: browserPeerId,
+        retainedPeerId: pythonPeerId,
+      })
+    } catch (error) {
+      privacyProbeError = error
+    } finally {
+      try {
+        try {
+          android.webview.close()
+        } catch {
+          // Restart/reconnect below is the cleanup that matters if the privacy probe reset native state.
+        }
+        restartAndroid(android)
+        android = {
+          ...android,
+          webview: await androidHelpers.connectInstalledWebview({
+            adb: android.adb,
+            serial: android.serial,
+            appId: android.appId,
+          }),
+        }
+        const restoredAfterPrivacyPeer = await waitForNativePeer(
+          androidHelpers,
+          android.webview.client,
+          browserPeerId,
+          'restored Android Rust binding for the self-hosted UI after native event privacy probe',
+        )
+        const restoredAfterPrivacyRttSamplesMs = await measureAndroidPeerRtt(
+          androidHelpers,
+          android.webview.client,
+          restoredAfterPrivacyPeer,
+          1,
+        )
+        const restoredAfterPrivacyCredential = await androidHelpers.invokeTauri(
+          android.webview.client,
+          'aurora_thin_peer_credential_status',
+          { request: { peerId: browserPeerId } },
+        ) as { found?: boolean; hasBearerToken?: boolean }
+        expect(restoredAfterPrivacyCredential.found).toBe(true)
+        expect(restoredAfterPrivacyCredential.hasBearerToken).toBe(true)
+        restoredAfterPrivacyProbe = {
+          androidBrowserPeerId: restoredAfterPrivacyPeer.peerId ?? null,
+          androidToBrowserRttSamplesMs: restoredAfterPrivacyRttSamplesMs,
+          credentialFound: restoredAfterPrivacyCredential.found === true,
+          hasBearerToken: restoredAfterPrivacyCredential.hasBearerToken === true,
+        }
+      } catch (error) {
+        restorationError = error
+      }
+    }
+    if (privacyProbeError) {
+      if (restorationError) {
+        throw new AggregateError(
+          [privacyProbeError, restorationError],
+          `Native event peer privacy probe failed; post-reset restoration also failed: ${errorSummary(restorationError)}`,
+        )
+      }
+      throw privacyProbeError
+    }
+    if (restorationError) {
+      throw new Error(`Native event peer privacy probe succeeded, but post-reset restoration failed: ${errorSummary(restorationError)}`)
+    }
+    if (!nativeEventPeerPrivacy || !restoredAfterPrivacyProbe) {
+      throw new Error('Native event peer privacy restoration did not produce a report.')
+    }
+    const nativeEventFreshRebindPrivacy = nativeEventPeerPrivacy.freshRebind
+    const nativeEventProfileResetPrivacy = await proveNativeEventProfileResetPrivacy({
+      androidHelpers,
+      client: android.webview.client,
+      peerId: browserPeerId,
+      retainedPeerId: pythonPeerId,
+    })
+
     console.log(JSON.stringify({
       ok: true,
       androidPeerId,
@@ -554,6 +709,10 @@ test('full Python, installed Android, and self-hosted UI share one live Rust Web
       restoredPythonRtts,
       restoredWithoutPairingPrompt: true,
       rostersMutuallyVisible: true,
+      nativeEventPeerPrivacy,
+      nativeEventFreshRebindPrivacy,
+      nativeEventProfileResetPrivacy,
+      restoredAfterPrivacyProbe,
     }))
   } finally {
     voiceFixtures?.close()
@@ -703,6 +862,23 @@ async function clickAndroidButton(client: AndroidCdpClient, label: string) {
   })()`) ?? false
 }
 
+async function reloadAndroidWebview(client: AndroidCdpClient, label: string) {
+  await client.send('Page.enable')
+  await client.send('Page.reload', { ignoreCache: true })
+  await waitFor(
+    async () => {
+      try {
+        return (await androidText(client)).includes('Connected devices') ? true : null
+      } catch {
+        return null
+      }
+    },
+    `Android WebView reload for ${label}`,
+    60_000,
+    500,
+  )
+}
+
 async function androidEvaluate<T>(client: AndroidCdpClient, expression: string): Promise<T | undefined> {
   const response = await client.send('Runtime.evaluate', {
     expression,
@@ -759,6 +935,332 @@ async function waitForNativePeer(
   )
 }
 
+async function proveNativeEventPeerPrivacy({
+  androidHelpers,
+  client,
+  peerId,
+  retainedPeerId,
+}: {
+  androidHelpers: AndroidHelpers
+  client: AndroidCdpClient
+  peerId: string
+  retainedPeerId: string
+}) {
+  const before = await waitFor(
+    async () => {
+      const snapshot = await nativeEventSnapshot(androidHelpers, client, { subjects: [peerId] })
+      return nativeSnapshotHasConnectedPeerState(snapshot, peerId) ? snapshot : null
+    },
+    `positive connected native event state for ${peerId}`,
+    60_000,
+    500,
+  )
+  const retainedBefore = await waitFor(
+    async () => {
+      const snapshot = await nativeEventSnapshot(androidHelpers, client, { subjects: [retainedPeerId] })
+      return nativeSnapshotHasConnectedPeerState(snapshot, retainedPeerId) ? snapshot : null
+    },
+    `positive connected native event state for retained peer ${retainedPeerId}`,
+    60_000,
+    500,
+  )
+  const prepare = await androidHelpers.invokeTauri(
+    client,
+    'aurora_mesh_session_live_privacy_prepare',
+    { request: { peerId, retainedPeerId } },
+  ) as NativeEventPeerPrivacyPrepare
+  expect(prepare.peerId).toBe(peerId)
+  expect(prepare.retainedPeerId).toBe(retainedPeerId)
+  expect(typeof prepare.probeId).toBe('string')
+  expect(typeof prepare.peerOwnedRequestSubject).toBe('string')
+  expect(typeof prepare.retainedPeerSubject).toBe('string')
+  expect(typeof prepare.peerlessVoiceSubject).toBe('string')
+  expect(prepare.pendingAssistantBeforeBoundary).toBeGreaterThan(0)
+
+  const unbindResult = await androidHelpers.invokeTauri(
+    client,
+    'aurora_mesh_session_unbind',
+    { request: { peerId } },
+  ) as { peerId?: string; removed?: boolean; sessions?: number }
+  expect(unbindResult.peerId).toBe(peerId)
+  expect(unbindResult.removed).toBe(true)
+
+  const boundary = await androidHelpers.invokeTauri(
+    client,
+    'aurora_mesh_session_live_privacy_verify_peer_boundary',
+    { request: { probeId: prepare.probeId } },
+  ) as NativeEventPeerBoundaryPrivacy
+  expect(boundary.probeId).toBe(prepare.probeId)
+  expect(boundary.peerId).toBe(peerId)
+  expect(boundary.retainedPeerId).toBe(retainedPeerId)
+  expect(boundary.oldPublicationRejectedAfterBoundary).toBe(true)
+  expect(boundary.peerSubjectPurgedAfterBoundary).toBe(true)
+  expect(boundary.peerOwnedRequestPurgedAfterBoundary).toBe(true)
+  expect(boundary.oldCursorGapAfterBoundary).toBe(true)
+  expect(boundary.retainedPeerSubjectRetainedAfterBoundary).toBe(true)
+  expect(boundary.retainedPeerOldPublicationAcceptedAfterBoundary).toBe(true)
+  expect(boundary.peerlessVoiceRetainedAfterBoundary).toBe(true)
+  expect(boundary.pendingAssistantClearedAfterBoundary).toBe(true)
+
+  await reloadAndroidWebview(client, 'same-process owner recreation after privacy unbind')
+  const freshPeer = await waitForNativePeer(
+    androidHelpers,
+    client,
+    peerId,
+    `same-process fresh native binding after privacy unbind for ${peerId}`,
+  )
+  expect(freshPeer.peerId).toBe(peerId)
+  const freshRttSamplesMs = await measureAndroidPeerRtt(androidHelpers, client, freshPeer, 1)
+  expect(freshRttSamplesMs.every(isPositiveFinite)).toBe(true)
+  const freshRebind = await androidHelpers.invokeTauri(
+    client,
+    'aurora_mesh_session_live_privacy_verify_fresh_rebind',
+    { request: { probeId: prepare.probeId } },
+  ) as NativeEventFreshRebindPrivacy
+  expect(freshRebind.probeId).toBe(prepare.probeId)
+  expect(freshRebind.peerId).toBe(peerId)
+  expect(freshRebind.oldPublicationAttemptedAfterFreshRebind).toBe(true)
+  expect(freshRebind.oldPublicationRejectedAfterFreshRebind).toBe(true)
+  expect(freshRebind.oldPeerOwnedRequestAbsentAfterFreshRebind).toBe(true)
+  expect(freshRebind.freshBindingPresentAfterRebind).toBe(true)
+  expect(freshRebind.freshPublicationAcceptedAfterRebind).toBe(true)
+
+  return {
+    peerId,
+    retainedPeerId,
+    positiveBefore: true,
+    retainedPositiveBefore: true,
+    beforeEventCount: before.events?.length ?? 0,
+    beforeSubjectCount: before.subjects?.length ?? 0,
+    retainedBeforeEventCount: retainedBefore.events?.length ?? 0,
+    retainedBeforeSubjectCount: retainedBefore.subjects?.length ?? 0,
+    boundary: 'aurora_mesh_session_unbind',
+    finalStateBeforeRestore: 'same_process_rebound_for_privacy_probe',
+    removedSession: unbindResult.removed === true,
+    remainingNativeSessions: unbindResult.sessions ?? null,
+    sameProcessRebindPeerId: freshPeer.peerId ?? null,
+    sameProcessRebindRttSamplesMs: freshRttSamplesMs,
+    oldPublicationAttempted: freshRebind.oldPublicationAttemptedAfterFreshRebind === true,
+    oldPublicationRejected: freshRebind.oldPublicationRejectedAfterFreshRebind === true,
+    oldPeerSnapshotPurged: boundary.peerSubjectPurgedAfterBoundary === true
+      && boundary.peerOwnedRequestPurgedAfterBoundary === true,
+    oldCursorGapObserved: boundary.oldCursorGapAfterBoundary === true,
+    unrelatedPeerRetained: boundary.retainedPeerSubjectRetainedAfterBoundary === true
+      && boundary.retainedPeerOldPublicationAcceptedAfterBoundary === true,
+    peerlessVoiceRetained: boundary.peerlessVoiceRetainedAfterBoundary === true,
+    oldPeerOwnedRequestAbsentAfterFreshRebind:
+      freshRebind.oldPeerOwnedRequestAbsentAfterFreshRebind === true,
+    publicationLeaseRevocationExercised: true,
+    privacyFenceExercised: true,
+    retainedPeerRetentionExercised: true,
+    stalePublicationRejected: boundary.oldPublicationRejectedAfterBoundary === true,
+    oldCursorGapAfterBoundary: boundary.oldCursorGapAfterBoundary === true,
+    retainedPeerRetainedAfterBoundary: boundary.retainedPeerSubjectRetainedAfterBoundary === true,
+    retainedPeerPublisherStillAcceptedAfterBoundary:
+      boundary.retainedPeerOldPublicationAcceptedAfterBoundary === true,
+    peerlessVoiceRetainedAfterBoundary: boundary.peerlessVoiceRetainedAfterBoundary === true,
+    pendingAssistantClearedAfterBoundary: boundary.pendingAssistantClearedAfterBoundary === true,
+    freshRebind,
+    prepare,
+    boundaryReport: boundary,
+  }
+}
+
+async function proveNativeEventProfileResetPrivacy({
+  androidHelpers,
+  client,
+  peerId,
+  retainedPeerId,
+}: {
+  androidHelpers: AndroidHelpers
+  client: AndroidCdpClient
+  peerId: string
+  retainedPeerId: string
+}) {
+  const before = await waitFor(
+    async () => {
+      const snapshot = await nativeEventSnapshot(androidHelpers, client, { subjects: [peerId] })
+      return nativeSnapshotHasConnectedPeerState(snapshot, peerId) ? snapshot : null
+    },
+    `positive connected native event state before profile reset for ${peerId}`,
+    60_000,
+    500,
+  )
+  const retainedBefore = await waitFor(
+    async () => {
+      const snapshot = await nativeEventSnapshot(androidHelpers, client, { subjects: [retainedPeerId] })
+      return nativeSnapshotHasConnectedPeerState(snapshot, retainedPeerId) ? snapshot : null
+    },
+    `positive connected native event state before profile reset for retained peer ${retainedPeerId}`,
+    60_000,
+    500,
+  )
+  const prepare = await androidHelpers.invokeTauri(
+    client,
+    'aurora_mesh_session_live_privacy_prepare',
+    { request: { peerId, retainedPeerId } },
+  ) as NativeEventPeerPrivacyPrepare
+  expect(prepare.peerId).toBe(peerId)
+  expect(prepare.retainedPeerId).toBe(retainedPeerId)
+  expect(typeof prepare.probeId).toBe('string')
+  expect(typeof prepare.peerOwnedRequestSubject).toBe('string')
+  expect(typeof prepare.retainedPeerSubject).toBe('string')
+  expect(typeof prepare.peerlessVoiceSubject).toBe('string')
+  expect(prepare.pendingAssistantBeforeBoundary).toBeGreaterThan(0)
+
+  const storedProfile = await androidHelpers.invokeTauri(
+    client,
+    'aurora_thin_profile_get',
+  ) as { value?: string }
+  const originalProfile = storedProfile.value
+  expect(typeof originalProfile).toBe('string')
+  const replacementProfile = profileDocumentWithProfileScopeNonce(
+    originalProfile ?? '',
+    `per281-${Date.now().toString(36)}`,
+  )
+
+  let profileReset: NativeEventProfileResetPrivacy | null = null
+  let restored = false
+  try {
+    await androidHelpers.invokeTauri(
+      client,
+      'aurora_thin_profile_set',
+      { value: replacementProfile },
+    )
+    profileReset = await androidHelpers.invokeTauri(
+      client,
+      'aurora_mesh_session_live_privacy_verify_profile_reset',
+      { request: { probeId: prepare.probeId } },
+    ) as NativeEventProfileResetPrivacy
+    expect(profileReset.probeId).toBe(prepare.probeId)
+    expect(profileReset.peerId).toBe(peerId)
+    expect(profileReset.retainedPeerId).toBe(retainedPeerId)
+    expect(profileReset.oldPublicationAttemptedAfterProfileReset).toBe(true)
+    expect(profileReset.oldPublicationRejectedAfterProfileReset).toBe(true)
+    expect(profileReset.oldProfileSubjectsCleared).toBe(true)
+    expect(profileReset.replayCleared).toBe(true)
+    expect(profileReset.pendingAssistantClearedAfterProfileReset).toBe(true)
+  } finally {
+    if (typeof originalProfile === 'string') {
+      await androidHelpers.invokeTauri(
+        client,
+        'aurora_thin_profile_set',
+        { value: originalProfile },
+      )
+      restored = true
+    }
+  }
+  expect(restored).toBe(true)
+  if (!profileReset) {
+    throw new Error('Native event profile reset verification did not produce a report.')
+  }
+
+  const restoredProfile = await androidHelpers.invokeTauri(
+    client,
+    'aurora_thin_profile_get',
+  ) as { value?: string }
+  const profileRestoredExactly = restoredProfile.value === originalProfile
+  expect(profileRestoredExactly).toBe(true)
+  const restoredCredential = await androidHelpers.invokeTauri(
+    client,
+    'aurora_thin_peer_credential_status',
+    { request: { peerId } },
+  ) as { found?: boolean; hasBearerToken?: boolean }
+  expect(restoredCredential.found).toBe(true)
+  expect(restoredCredential.hasBearerToken).toBe(true)
+  await reloadAndroidWebview(client, 'owner recreation after profile privacy restore')
+  const restoredPeer = await waitForNativePeer(
+    androidHelpers,
+    client,
+    peerId,
+    `native binding after profile privacy restore for ${peerId}`,
+  )
+  const restoredRttSamplesMs = await measureAndroidPeerRtt(androidHelpers, client, restoredPeer, 1)
+  expect(restoredRttSamplesMs.every(isPositiveFinite)).toBe(true)
+
+  return {
+    peerId,
+    retainedPeerId,
+    positiveBefore: true,
+    retainedPositiveBefore: true,
+    beforeEventCount: before.events?.length ?? 0,
+    beforeSubjectCount: before.subjects?.length ?? 0,
+    retainedBeforeEventCount: retainedBefore.events?.length ?? 0,
+    retainedBeforeSubjectCount: retainedBefore.subjects?.length ?? 0,
+    boundary: 'aurora_thin_profile_set',
+    profileScopeReplacementExercised: true,
+    profileChangePurgedOldSubjects: profileReset.oldProfileSubjectsCleared === true,
+    oldPublicationAttempted: profileReset.oldPublicationAttemptedAfterProfileReset === true,
+    oldPublicationRejected: profileReset.oldPublicationRejectedAfterProfileReset === true,
+    oldPublicationRejectedAfterProfileReset: profileReset.oldPublicationRejectedAfterProfileReset === true,
+    oldProfileSubjectsCleared: profileReset.oldProfileSubjectsCleared === true,
+    replayCleared: profileReset.replayCleared === true,
+    pendingAssistantClearedAfterProfileReset: profileReset.pendingAssistantClearedAfterProfileReset === true,
+    profileRestoredExactly,
+    restoredCredentialFound: restoredCredential.found === true,
+    restoredCredentialHasBearerToken: restoredCredential.hasBearerToken === true,
+    restoredNativePeerId: restoredPeer.peerId ?? null,
+    restoredRttSamplesMs,
+    prepare,
+    profileResetReport: profileReset,
+  }
+}
+
+function profileDocumentWithProfileScopeNonce(value: string, nonce: string) {
+  const document = JSON.parse(value) as {
+    activeProfileId?: string
+    profiles?: Array<{ id?: string; localNode?: Record<string, unknown> }>
+  }
+  const activeProfile = document.profiles?.find((profile) => profile.id === document.activeProfileId)
+  if (!activeProfile) {
+    throw new Error('Active profile is required for native event profile reset proof.')
+  }
+  activeProfile.localNode = {
+    ...(activeProfile.localNode ?? {}),
+    privacyLiveProfileScopeNonce: nonce,
+  }
+  return JSON.stringify(document)
+}
+
+async function nativeEventSnapshot(
+  androidHelpers: AndroidHelpers,
+  client: AndroidCdpClient,
+  request: { subjects: string[]; afterSequence?: number | string },
+) {
+  return await androidHelpers.invokeTauri(client, 'aurora_native_event_snapshot', {
+    request,
+  }) as NativeEventSnapshot
+}
+
+function nativeSnapshotHasConnectedPeerState(snapshot: NativeEventSnapshot, peerId: string) {
+  return nativeSnapshotHasPeerState(snapshot, peerId, true)
+}
+
+function nativeSnapshotHasPeerState(snapshot: NativeEventSnapshot, peerId: string, connected: boolean) {
+  if (nativeSnapshotHasGap(snapshot)) return false
+  return (snapshot.subjects ?? []).some((subject) => (
+    (subject.subject === peerId || subject.peerId === peerId)
+      && subject.kind === 'mesh.peer.state_changed'
+      && subject.status === (connected ? 'connected' : 'disconnected')
+  )) || (snapshot.events ?? []).some(
+    (event) => nativeEventReferencesPeer(event, peerId)
+      && event.kind === 'mesh.peer.state_changed'
+      && event.payload?.connected === connected,
+  )
+}
+
+function nativeSnapshotHasGap(snapshot: NativeEventSnapshot) {
+  return (snapshot.events ?? []).some((event) => event.kind === 'native.events.gap')
+}
+
+function nativeEventReferencesPeer(event: NativeEvent, peerId: string) {
+  return event.audit?.peerId === peerId
+    || event.audit?.targetPeerId === peerId
+    || event.payload?.peerId === peerId
+    || event.payload?.peer_id === peerId
+    || (event.subjects ?? []).includes(peerId)
+}
+
 async function measureAndroidPeerRtt(
   androidHelpers: AndroidHelpers,
   client: AndroidCdpClient,
@@ -788,6 +1290,10 @@ async function measureAndroidPeerRtt(
     ))
   }
   return samples
+}
+
+function errorSummary(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
 }
 
 function diagnosticRtt(peer: WebRtcPeerDiagnostic | null) {

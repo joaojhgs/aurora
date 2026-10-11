@@ -147,6 +147,23 @@
       "schema_hash": "a0652d4931ca2407295424b063318201ed27f7edf417dbc03f272441b8231542",
       "schema_id": "TTS.AudioChunk.event.TTSAudioChunkEvent",
       "topic": "TTS.AudioChunk"
+    },
+    {
+      "authorized": true,
+      "bounded": true,
+      "event_topic": "Gateway.StatusChanged",
+      "model": "GatewayStatusChangedEvent",
+      "module": "Gateway",
+      "name": "StatusChanged",
+      "ordered_event_group": "gateway_status",
+      "remote_raw_audio_route": false,
+      "required_permission": "Gateway.use",
+      "required_perms": [
+        "Gateway.use"
+      ],
+      "schema_hash": "95f28400de7c9de9c3cf1ed83a068e7c65901534d64e286d17a1758322306a04",
+      "schema_id": "Gateway.StatusChanged.event.GatewayStatusChangedEvent",
+      "topic": "Gateway.StatusChanged"
     }
   ],
   "generator_format_version": "aurora-sdk-zod-codegen-v1",
@@ -1772,7 +1789,7 @@
       ],
       "exposure": "both",
       "input_model": "TTSSynthesizeRequest",
-      "input_schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
+      "input_schema_hash": "4e5ea8200171c60a7dddcf6e3303cc1620120b1d8a234e568cafc63d3564445d",
       "input_schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest",
       "method_id": "TTS.Synthesize",
       "method_type": "use",
@@ -4541,6 +4558,91 @@
       },
       "schema_hash": "b874d83f14fde33979ffa4db819341c4d4a91f81a4ea8e6fcd465cf2555f4a8e",
       "schema_id": "Gateway.ExplainRoute.output.RouteExplainResponse",
+      "vectors": {}
+    },
+    {
+      "direction": "event",
+      "method_id": "Gateway.StatusChanged",
+      "model_name": "GatewayStatusChangedEvent",
+      "pydantic_mode": "serialization",
+      "schema": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "description": "Whitelisted live status/config projection for authorized peers.",
+        "properties": {
+          "event_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Event Id",
+            "type": "string"
+          },
+          "freshness": {
+            "default": "current",
+            "enum": [
+              "current",
+              "stale"
+            ],
+            "title": "Freshness",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "config.updated",
+              "config.validation_failed",
+              "health.stale",
+              "health.updated",
+              "service.announced",
+              "service.stale"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "service_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_.:-]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Service Id"
+          },
+          "status": {
+            "enum": [
+              "connected",
+              "degraded",
+              "disconnected",
+              "failed",
+              "healthy",
+              "unhealthy",
+              "updated"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timestamp": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "event_id",
+          "kind",
+          "status",
+          "timestamp"
+        ],
+        "title": "GatewayStatusChangedEvent",
+        "type": "object",
+        "x-aurora-extra-behavior": "strip"
+      },
+      "schema_hash": "95f28400de7c9de9c3cf1ed83a068e7c65901534d64e286d17a1758322306a04",
+      "schema_id": "Gateway.StatusChanged.event.GatewayStatusChangedEvent",
       "vectors": {}
     },
     {
@@ -13351,6 +13453,21 @@
             ],
             "default": null
           },
+          "model_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
           "sample_rate": {
             "anyOf": [
               {
@@ -13395,7 +13512,7 @@
         "type": "object",
         "x-aurora-extra-behavior": "strip"
       },
-      "schema_hash": "64b7c626f0fb673eb8ed097d9098c0ed3a9c44937f7c87f0f461b6261500dc25",
+      "schema_hash": "4e5ea8200171c60a7dddcf6e3303cc1620120b1d8a234e568cafc63d3564445d",
       "schema_id": "TTS.Synthesize.input.TTSSynthesizeRequest",
       "vectors": {}
     },

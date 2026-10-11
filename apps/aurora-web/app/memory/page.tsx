@@ -1,19 +1,11 @@
-import { StateSurface, type RouteAvailability } from '@aurora/ui'
+import type { RouteAvailability } from '@aurora/ui'
+import { AuroraRoutePage } from '../page-content'
 import { getShellSnapshot } from '../shell-state'
 import { MemoryClientPage } from './memory-client'
 
 export default async function Page() {
   const snapshot = await getShellSnapshot()
   const route = snapshot.routes.find((candidate) => candidate.item.id === 'memory')
-  if (!route) {
-    return (
-      <StateSurface
-        title="Memory"
-        state="unsupported"
-        description="Memory is not available from this connection yet. Check the affected device, then try again."
-        evidence={snapshot.evidenceSource}
-      />
-    )
-  }
+  if (!route) return <AuroraRoutePage routeId="memory" />
   return <MemoryClientPage route={route as RouteAvailability} />
 }

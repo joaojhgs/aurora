@@ -16,10 +16,9 @@ import type {
   NativeReleaseGate
 } from '@aurora/client'
 import {
+  allAuroraRouteNavItems,
   auroraAssistantCancellationItem,
   auroraAssistantVoiceItems,
-  auroraEmbeddedNavItems,
-  auroraNavSections,
   navItemSnapshot,
   type AuroraNavItem,
   type AuroraNavItemSnapshot
@@ -114,6 +113,8 @@ export interface AssistantVoiceRoutes {
   wakeProcess: RouteAvailability
   wakeControl: RouteAvailability
   ttsSynthesize: RouteAvailability
+  /** Optional TTS streaming route used only when the selected execution peer provides it. */
+  ttsStream?: RouteAvailability
   ttsStop: RouteAvailability
 }
 
@@ -183,7 +184,7 @@ export function snapshotFromGraph(
   return {
     loadState: 'ready',
     connectionState: 'connected',
-    capabilityFreshness: 'fresh',
+    capabilityFreshness: capabilityFreshnessFromGraph(graph),
     nodeName: graph.localNodeName || 'This device',
     localPeerId: graph.localPeerId,
     serverVersion: graph.serverVersion ?? null,
@@ -215,9 +216,21 @@ export function snapshotFromGraph(
   }
 }
 
+function capabilityFreshnessFromGraph(graph: CapabilityGraph): ShellCapabilityFreshness {
+  if (graph.nodes.some((node) => capabilityNodeIsStale(node))) return 'stale'
+  return graph.generatedAt.trim() ? 'fresh' : 'pending'
+}
+
+function capabilityNodeIsStale(node: CapabilityGraph['nodes'][number]): boolean {
+  return node.availability === 'stale' || Boolean(node.freshness?.stale)
+}
+
+export function projectShellRouteItems(items: readonly AuroraNavItem[] = allAuroraRouteNavItems): AuroraNavItem[] {
+  return [...items]
+}
 
 function allShellRouteItems(): AuroraNavItem[] {
-  return [...auroraNavSections.flatMap((section) => section.items), ...auroraEmbeddedNavItems]
+  return projectShellRouteItems()
 }
 
 export function errorShellSnapshot(transportKind: string, error: unknown): AuroraShellSnapshot {
@@ -327,6 +340,9 @@ export function retainThinShellSnapshot(
     wakeProcess: retainRoute(base.assistantVoiceRoutes.wakeProcess),
     wakeControl: retainRoute(base.assistantVoiceRoutes.wakeControl),
     ttsSynthesize: retainRoute(base.assistantVoiceRoutes.ttsSynthesize),
+    ...(base.assistantVoiceRoutes.ttsStream
+      ? { ttsStream: retainRoute(base.assistantVoiceRoutes.ttsStream) }
+      : {}),
     ttsStop: retainRoute(base.assistantVoiceRoutes.ttsStop),
   }
 
@@ -380,6 +396,11 @@ function assistantVoiceRoutesFromGraph(
       graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsSynthesize)),
       native
     ),
+    ttsStream: routeAvailability(
+      auroraAssistantVoiceItems.ttsStream,
+      graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsStream)),
+      native
+    ),
     ttsStop: routeAvailability(
       auroraAssistantVoiceItems.ttsStop,
       graph.explain(featureIdForNavItem(auroraAssistantVoiceItems.ttsStop)),
@@ -402,6 +423,7 @@ function unsupportedAssistantVoiceRoutes(evidence: string): AssistantVoiceRoutes
     wakeProcess: unsupportedVoiceRoute(auroraAssistantVoiceItems.wakeProcess, evidence),
     wakeControl: unsupportedVoiceRoute(auroraAssistantVoiceItems.wakeControl, evidence),
     ttsSynthesize: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsSynthesize, evidence),
+    ttsStream: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsStream, evidence),
     ttsStop: unsupportedVoiceRoute(auroraAssistantVoiceItems.ttsStop, evidence)
   }
 }
@@ -520,8 +542,8 @@ function isAvailableRouteState(state: AvailabilityState): boolean {
   return ['available-local', 'available-remote', 'degraded'].includes(state)
 }
 
-function featureIdForNavItem(item: AuroraNavItem): string {
-  return `method:${item.capabilityModule}.${item.capabilityMethod}`
+function featureIdForNavItem(item: AuroraNavItemSnapshot): string {
+  return item.capabilityFeatureId ?? `method:${item.capabilityModule}.${item.capabilityMethod ?? 'Unknown'}`
 }
 
 function nativeRouteAvailability(
@@ -695,7 +717,15 @@ function pendingFeatureLabel(item: AuroraNavItem): string {
 }
 
 function providerSourceLabel(provider: Pick<CapabilityProviderCandidate, 'providerIdentity' | 'module' | 'method'>): string {
+  const productLabel = productProviderActionLabel(provider.module, provider.method)
+  if (productLabel) return productLabel
   return `${provider.providerIdentity} / ${provider.module}.${provider.method}`
+}
+
+function productProviderActionLabel(module: string, method: string): string | null {
+  if (module === 'Gateway' && method === 'GetWebRTCDiagnostics') return 'Device checks'
+  if (module === 'Gateway' && method === 'GetSupportBundle') return 'Support export'
+  return null
 }
 
 function providerFallbackLabel(provider: Pick<CapabilityProviderCandidate, 'providerKind' | 'nodeName' | 'peerId' | 'providerIdentity'>): string {

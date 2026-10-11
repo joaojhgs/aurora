@@ -481,7 +481,7 @@ def is_suspicious_render_expression(expression: str) -> bool:
     if not expression:
         return False
     if re.search(
-        r"\b(?:safeErrorCopy|productStatusCopy|uiErrorMessage|productDiagnosticMessage|onboardingErrorMessage|meshPeerErrorMessage|meshSafeErrorTitle|serviceRoutingSafeError|presentableSignal|permissionLabel|permissionSummary|product[A-Za-z]+Copy)\b",
+        r"\b(?:safeErrorCopy|productStatusCopy|uiErrorMessage|productDiagnosticMessage|onboardingErrorMessage|meshPeerErrorMessage|meshSafeErrorTitle|serviceRoutingSafeError|presentableSignal|permissionLabel|permissionSummary|product[A-Za-z]+Copy(?:Ref\.current)?)\b",
         expression,
     ):
         return False

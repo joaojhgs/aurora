@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import axe from 'axe-core'
 import { JSDOM } from 'jsdom'
@@ -59,24 +59,27 @@ const viewports: Viewport[] = [
 ]
 
 const expectedFingerprints: Record<SurfaceId, Record<ViewportId, string>> = {
-  // These baselines include the shared Spoken replies navigation entry. Admin
-  // renders also use product labels for voice and local-data actions. They are
-  // generated from the current shell markup after removing the hidden global
-  // readiness announcement and inline activity-rail width transition.
+  // Updated after review of the structural DOM deltas: semantic theme/navigation
+  // tokens, mobile drawer sizing and active navigation, settings disclosure/rows,
+  // shared admin links/card layout, the Needs attention badge, and assistant
+  // history/scroll controls. This static guard is not pixel parity or aesthetic
+  // approval; browser visual acceptance remains a separate gate.
   assistant: {
-    desktop: 'ec5766aacdcb',
-    tablet: '8af8f8a41bdd',
-    mobile: '344cf65083a9'
+    desktop: '0c8f9ea4e2f1',
+    tablet: '75c4e8fe9926',
+    mobile: 'd8cdf5cf4b7a'
   },
   admin: {
-    desktop: '90938336e0f8',
-    tablet: 'f289b2075c39',
-    mobile: '1419d8a4a756'
+    // The restored text-sm line-height token is serialized in each Admin link's
+    // inline style; this is a DOM fingerprint update, not pixel/Astra approval.
+    desktop: '39144d30bdbc',
+    tablet: '5325dc27d9ea',
+    mobile: '48ac03bb57fa'
   },
   'native-settings': {
-    desktop: 'ef9c447525ab',
-    tablet: '76c7a77a4473',
-    mobile: '0735f0c09b99'
+    desktop: 'e4b877728b99',
+    tablet: '6015376e6660',
+    mobile: 'ead4c7fe1062'
   }
 }
 
@@ -125,7 +128,8 @@ describe('Accessibility, responsive, and visual regression suite', () => {
 
   it('keeps responsive landmarks, focus controls, and state language present at desktop, tablet, and mobile widths', async () => {
     const renders = qaRenders
-    const css = readFileSync(join(process.cwd(), 'src', 'styles.css'), 'utf8')
+    const css = readAuroraStylesForSourceAssertions()
+    const assistantComposerSource = readFileSync(join(process.cwd(), 'src', 'assistant-composer.tsx'), 'utf8')
     const responsiveReport = renders.map((surface) => {
       const text = textContent(surface.html)
       const shellChecks = {
@@ -158,16 +162,20 @@ describe('Accessibility, responsive, and visual regression suite', () => {
       return { surface: surface.id, viewport: surface.viewport, checks: shellChecks }
     })
 
-    expect(css).toContain('@media (max-width: 1100px)')
-    expect(css).toContain('@media (max-width: 860px)')
-    expect(css).toContain('@media (max-width: 680px)')
-    expect(css).toContain('.aui-mobile-tabs')
-    expect(css).toContain('.aui-mobile-sheet')
-    expect(css).toContain('.aui-shell-status')
-    expect(css).toContain('.aui-chat-workspace')
-    expect(css).toContain(':focus-visible')
-    expect(css).toContain('grid-template-columns:2.65rem 2.65rem minmax(0,1fr) 2.65rem 2.65rem')
-    expect(css).toContain('>.aui-composer-icon[data-voice-access] { grid-column:2;grid-row:1 }')
+    expectCssContains(css, '@media (max-width: 1100px)')
+    expectCssContains(css, '@media (max-width: 860px)')
+    expectCssContains(css, '@media (max-width: 680px)')
+    expectCssContains(css, '.aui-mobile-tabs')
+    expectCssContains(css, '.aui-mobile-sheet')
+    expectCssContains(css, '.aui-shell-status')
+    expect(renders.find((surface) => surface.id === 'assistant')?.html).toContain('aria-label="Primary chat workspace"')
+    expectCssContains(css, ':focus-visible')
+    expect(assistantComposerSource).toContain("data-voice-access={connectedVoiceAccessGranted ? \'granted\' : \'required\'}")
+    expect(assistantComposerSource).toContain('grid-cols-[2.65rem_2.65rem_minmax(0,1fr)_2.65rem_2.65rem]')
+    expect(assistantComposerSource).toContain('grid-cols-[2.65rem_2.65rem_minmax(0,1fr)_2.65rem_2.65rem_2.65rem]')
+    expect(assistantComposerSource).toContain("data-aurora-hands-free={showHandsFreeControl ? \'available\' : undefined}")
+    expect(assistantComposerSource).toContain("showHandsFreeControl ? \'col-start-6\' : \'col-start-5\'")
+    expect(assistantComposerSource).toContain('col-start-2 row-start-1')
 
     writeJsonReport('responsive.json', {
       command: 'pnpm --filter @aurora/ui test:accessibility',
@@ -195,15 +203,14 @@ describe('Accessibility, responsive, and visual regression suite', () => {
     expect(stateCoverage).toContain('Needs attention')
     expect(stateCoverage).toContain('Degraded')
     expect(stateCoverage).toContain('This device is offline')
-    expect(stateCoverage).toContain('Protected changes')
+    expect(stateCoverage).toContain('Protected actions')
     expect(stateCoverage).toContain('Device features')
     expect(stateCoverage).toContain('Sensitive details stay hidden')
     expect(stateCoverage).toContain('aurora-prod-01')
     expect(stateCoverage).toContain('AD admin Administrator')
-    expect(stateCoverage).toContain('Runs with Aurora')
-    expect(stateCoverage).toContain('Healthy')
+    expect(stateCoverage).toContain('Services run together')
     expect(stateCoverage).toContain(`v${AURORA_FALLBACK_VERSION}`)
-    expect(stateCoverage).toContain('· connected')
+    expect(stateCoverage).toContain('· attention')
     expect(stateCoverage).not.toContain('4h 12m')
     expect(stateCoverage).not.toContain('v0.9.4')
     expect(stateCoverage).not.toContain('18d 4h')
@@ -396,6 +403,23 @@ function textContent(html: string): string {
 
 function coverageText(renders: SurfaceRender[]): string {
   return renders.map((render) => textContent(render.html)).join(' ')
+}
+
+function readAuroraStylesForSourceAssertions(): string {
+  const srcRoot = join(process.cwd(), 'src')
+  return ['styles.input.css', 'styles.css']
+    .map((file) => join(srcRoot, file))
+    .filter((file) => existsSync(file))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n')
+}
+
+function expectCssContains(css: string, snippet: string): void {
+  expect(compactCss(css)).toContain(compactCss(snippet))
+}
+
+function compactCss(css: string): string {
+  return css.replace(/\s+/g, '')
 }
 
 function writeJsonReport(filename: string, data: unknown): void {

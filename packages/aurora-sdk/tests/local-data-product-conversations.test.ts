@@ -7,6 +7,61 @@ import { conversationFixture, messageFixture } from './fixtures/local-data-fixtu
 const scope = { profileId: 'profile-1', localNodeId: 'node-1' }
 
 describe('local-data product conversation facade', () => {
+  it('returns bounded pages with exact continuation cursors and chronological message items', async () => {
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const conversations = createLocalConversations(session)
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-a', updatedAtMs: 1000 }) })
+    for (const sequence of [0, 1, 2]) {
+      await conversations.appendMessage({ scope, record: messageFixture({ id: `message-${sequence}`, conversationId: 'conversation-a', sequence }) })
+    }
+
+    const first = await conversations.listMessagesPage({ scope, conversationId: 'conversation-a', limit: 2 })
+    expect(first.items.map((message) => message.sequence)).toEqual([1, 2])
+    expect(first.nextCursor).toEqual({ direction: 'desc', beforeSequence: 1 })
+    if (first.nextCursor === null || first.nextCursor.direction !== 'desc') throw new Error('expected a descending continuation')
+    const older = await conversations.listMessagesPage({ scope, conversationId: 'conversation-a', limit: 2, beforeSequence: first.nextCursor.beforeSequence })
+    expect(older.items.map((message) => message.sequence)).toEqual([0])
+    expect(older.nextCursor).toBeNull()
+  })
+
+  it('continues ascending message pages exclusively after the returned sequence', async () => {
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const conversations = createLocalConversations(session)
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-a' }) })
+    for (const sequence of [0, 1, 2]) await conversations.appendMessage({ scope, record: messageFixture({ id: `asc-${sequence}`, conversationId: 'conversation-a', sequence }) })
+
+    const first = await conversations.listMessagesPage({ scope, conversationId: 'conversation-a', direction: 'asc', limit: 2 })
+    expect(first.items.map((message) => message.sequence)).toEqual([0, 1])
+    expect(first.nextCursor).toEqual({ direction: 'asc', afterSequence: 1 })
+    if (first.nextCursor === null || first.nextCursor.direction !== 'asc') throw new Error('expected ascending continuation')
+    const second = await conversations.listMessagesPage({ scope, conversationId: 'conversation-a', direction: 'asc', limit: 2, afterSequence: first.nextCursor.afterSequence })
+    expect(second.items.map((message) => message.sequence)).toEqual([2])
+    expect(second.nextCursor).toBeNull()
+  })
+
+  it('passes the internal 501 conversation and 2001 message probes and returns continuation cursors at public maxima', async () => {
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const conversations = createLocalConversations(session)
+    for (let index = 0; index < 501; index += 1) {
+      await conversations.upsertConversation({ scope, record: conversationFixture({ id: `conversation-${index}`, createdAtMs: index + 1, updatedAtMs: index + 1 }) })
+    }
+    const conversationPage = await conversations.listConversationsPage({ scope, limit: 500 })
+    expect(conversationPage.items).toHaveLength(500)
+    expect(conversationPage.nextCursor).not.toBeNull()
+    if (conversationPage.nextCursor === null) throw new Error('expected conversation continuation')
+    const remainingConversationPage = await conversations.listConversationsPage({ scope, limit: 500, cursor: conversationPage.nextCursor })
+    expect(remainingConversationPage.items.map(({ record }) => record.id)).toEqual(['conversation-0'])
+    const firstPageIds = new Set(conversationPage.items.map(({ record }) => record.id))
+    expect(remainingConversationPage.items.some(({ record }) => firstPageIds.has(record.id))).toBe(false)
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'message-conversation' }) })
+    for (let sequence = 0; sequence < 2001; sequence += 1) {
+      await conversations.appendMessage({ scope, record: messageFixture({ id: `probe-${sequence}`, conversationId: 'message-conversation', sequence }) })
+    }
+    const messagePage = await conversations.listMessagesPage({ scope, conversationId: 'message-conversation', limit: 2000 })
+    expect(messagePage.items).toHaveLength(2000)
+    expect(messagePage.nextCursor).not.toBeNull()
+  })
+
   it('returns scoped conversations and stable message ordering', async () => {
     const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
     const conversations = createLocalConversations(session)
@@ -50,6 +105,19 @@ describe('local-data product conversation facade', () => {
       { record: { id: 'conversation-b' }, messageCount: 0 }
     ])
     expect(listMessageCounts).toHaveBeenCalledTimes(1)
+    expect(listMessages).not.toHaveBeenCalled()
+  })
+
+  it('appends through the atomic repository without scanning messages first', async () => {
+    const session = await new MemoryLocalDataBackend().open(scope.profileId, scope.localNodeId)
+    const conversations = createLocalConversations(session)
+    await conversations.upsertConversation({ scope, record: conversationFixture({ id: 'conversation-a' }) })
+    const listMessages = vi.spyOn(session.conversations, 'listMessages')
+
+    await conversations.appendMessage({ scope, record: messageFixture({ id: 'append-a', conversationId: 'conversation-a', sequence: 0 }) })
+    await expect(conversations.appendMessage({ scope, record: messageFixture({ id: 'append-b', conversationId: 'conversation-a', sequence: 0 }) })).rejects.toMatchObject({
+      metadata: { reason: 'duplicate_message_sequence' }
+    })
     expect(listMessages).not.toHaveBeenCalled()
   })
 

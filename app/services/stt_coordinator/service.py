@@ -1125,7 +1125,7 @@ class STTCoordinatorService(BaseService):
                 # Single turn - end session
                 await self._end_session("complete")
 
-    async def _end_session(self, reason: str) -> None:
+    async def _end_session(self, reason: str, *, pause_transcription: bool = True) -> None:
         """End the current STT session.
 
         Args:
@@ -1160,7 +1160,7 @@ class STTCoordinatorService(BaseService):
         )
 
         # Pause transcription to save resources (ONLY if ambient transcription is disabled)
-        if not self._ambient_transcription_enabled:
+        if pause_transcription and not self._ambient_transcription_enabled:
             try:
                 await self.bus.publish(
                     TranscriptionMethods.CONTROL, TranscriptionControl(action="pause"), event=False
@@ -1332,7 +1332,7 @@ class STTCoordinatorService(BaseService):
     async def _quiesce_python_voice_for_native_prepare_locked(self) -> None:
         """End active Python listening work before granting native microphone ownership."""
         if self._current_session_id:
-            await self._end_session("manual")
+            await self._end_session("manual", pause_transcription=False)
         else:
             if self._timeout_task and not self._timeout_task.done():
                 self._timeout_task.cancel()
@@ -1345,14 +1345,14 @@ class STTCoordinatorService(BaseService):
             if needs_idle:
                 await self._transition_to(STTState.IDLE)
 
-        try:
-            await self.bus.publish(
-                TranscriptionMethods.CONTROL,
-                TranscriptionControl(action="pause"),
-                event=False,
-            )
-        except Exception as e:
-            log_warning(f"Failed to pause transcription for native capture: {e}")
+        drain_result = await self.bus.request(
+            TranscriptionMethods.CONTROL,
+            TranscriptionControl(action="pause"),
+            timeout=7.0,
+            priority=get_interactive_priority(),
+        )
+        if not drain_result.ok:
+            raise RuntimeError("transcription_release_failed")
 
     def _clear_native_capture_owner_locked(self) -> asyncio.Task | None:
         """Clear native capture lease state while the owner lock is held."""
@@ -1506,7 +1506,26 @@ class STTCoordinatorService(BaseService):
                         message="python_capture_active",
                     )
 
-                await self._quiesce_python_voice_for_native_prepare_locked()
+                try:
+                    await self._quiesce_python_voice_for_native_prepare_locked()
+                except Exception:
+                    log_error(
+                        "Failed to drain transcription before native capture handoff",
+                        exc_info=True,
+                    )
+                    # Python capture has stopped, but its transcription worker
+                    # may still own prior speech. Keep Python as the owner until
+                    # a retry confirms that consumer cleanup has settled.
+                    self._capture_owner = "python"
+                    return STTCapturePrepareResponse(
+                        granted=False,
+                        status="unavailable",
+                        generation=self._capture_generation,
+                        owner="python",
+                        python_capture_active=False,
+                        stopped_python_capture=stopped_python_capture,
+                        message="transcription_release_failed",
+                    )
 
                 self._capture_generation += 1
                 self._capture_owner = "native"

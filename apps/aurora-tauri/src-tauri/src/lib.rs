@@ -46,6 +46,8 @@ mod android_audio;
 mod desktop_native_voice_e2e_keyring;
 #[cfg(any(target_os = "ios", test))]
 mod ios_voice;
+#[cfg(any(target_os = "android", test))]
+mod native_transcription_archive;
 #[cfg(target_os = "ios")]
 use aurora_voice_ios_bridge::*;
 #[cfg(target_os = "ios")]
@@ -64,9 +66,18 @@ static AURORA_IOS_VOICE_SESSION_LINK_ANCHOR:
 mod local_data_native;
 mod mesh_authority;
 mod mesh_session;
+mod native_event_hub;
+#[cfg(any(target_os = "android", target_os = "ios"))]
+mod native_local_inference;
 mod native_mesh_assistant;
+mod native_node_config;
+#[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+mod native_speech_host;
 mod native_voice;
+mod native_voice_events;
 mod native_webrtc;
+mod tauri_request_json;
+mod tauri_response_json;
 mod generated {
     pub mod local_data_migrations;
 }
@@ -77,10 +88,30 @@ use local_data_native::{
     aurora_local_data_transaction_begin, aurora_local_data_transaction_commit,
     aurora_local_data_transaction_rollback, LocalDataCommandState,
 };
+#[cfg(any(target_os = "android", target_os = "ios"))]
+use native_local_inference::{
+    aurora_local_inference_cancel, aurora_local_inference_catalog, aurora_local_inference_complete,
+    aurora_local_inference_delete_model, aurora_local_inference_download_model,
+    aurora_local_inference_engines, aurora_local_inference_model_status,
+    aurora_local_inference_session_create, aurora_local_inference_session_destroy,
+    aurora_local_inference_session_reset, NativeLocalInferenceState,
+};
+use native_node_config::{
+    aurora_node_config_policy_compare_and_swap, aurora_node_config_policy_read,
+    NativeNodeConfigRuntime,
+};
+#[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+use native_speech_host::{
+    aurora_native_speech_host_snapshot, aurora_peer_host_local_speech_cancel,
+    aurora_peer_host_local_speech_stage, aurora_peer_host_local_speech_synthesize,
+    aurora_peer_host_local_speech_transcribe, NativeSpeechHostState,
+};
 use native_voice::{
     aurora_native_voice_cancel, aurora_native_voice_finish, aurora_native_voice_start,
     aurora_native_voice_status, aurora_native_voice_tray_toggle_e2e, NativeVoiceState,
+    NativeVoiceStopError,
 };
+use tauri_request_json::{parse_aurora_request, AuroraRequest};
 
 const DEFAULT_GATEWAY_URL: &str = "http://127.0.0.1:8000";
 const NATIVE_MANIFEST_METHOD: &str = "Native.GetCapabilityManifest";
@@ -101,8 +132,6 @@ const LOCAL_DATA_ENVELOPE_ALGORITHM: &str = "AES-GCM-256";
 const LOCAL_DATA_ENVELOPE_KEY_PURPOSE: &str = "local-structured-data";
 const LOCAL_DATA_ENVELOPE_CURRENT_VERSION: u32 = 1;
 const DESKTOP_THIN_PROFILES_KEY: &str = "aurora.session.desktop-thin-connection-profiles.v1";
-const NODE_CONFIG_V1_STORAGE_KEY: &str = "aurora.nodeConfig.v1";
-const NODE_CONFIG_V2_STORAGE_KEY: &str = "aurora.nodeConfig.v2";
 const BUNDLED_SIDECAR_NAME: &str = "aurora-sidecar";
 #[cfg(test)]
 const UPDATER_ENDPOINT: &str =
@@ -121,16 +150,6 @@ const GATEWAY_EVENT_STREAM_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 const GATEWAY_HEALTH_CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const GATEWAY_HEALTH_TIMEOUT: Duration = Duration::from_secs(2);
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AuroraRequest {
-    method: String,
-    path: Option<String>,
-    http_method: Option<String>,
-    payload: Option<Value>,
-    headers: Option<BTreeMap<String, String>>,
-}
-
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AuroraEnvelope {
@@ -141,9 +160,13 @@ struct AuroraEnvelope {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct AuroraSubscribeRequest {
+    source: Option<String>,
+    #[serde(default)]
     topics: Vec<String>,
     stream: Option<String>,
     kinds: Option<Vec<String>>,
+    subjects: Option<Vec<String>>,
+    last_sequence_id: Option<Value>,
     headers: Option<BTreeMap<String, String>>,
     last_event_id: Option<String>,
     replay_from: Option<String>,
@@ -161,6 +184,13 @@ struct AuroraUnsubscribeRequest {
 #[serde(rename_all = "camelCase")]
 struct AuroraActivateSubscriptionRequest {
     subscription_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuroraNativeEventAckRequest {
+    subscription_id: String,
+    event_id: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -263,8 +293,9 @@ struct AndroidWebviewMicrophonePermissionDecisionRequest {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct AndroidVoiceForegroundServiceStartRequest {
+    #[serde(default)]
     remote_audio_consent: bool,
     #[serde(default)]
     background_session: bool,
@@ -299,6 +330,14 @@ struct AndroidVoiceLiveTestPcmRequest {
 #[serde(rename_all = "camelCase")]
 struct AndroidVoicePackCatalogSetRequest {
     catalog_json: String,
+}
+
+#[cfg(all(target_os = "ios", debug_assertions, feature = "ios-voice-live-test"))]
+#[derive(Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct IosVoiceLiveTestPcmRequest {
+    generation: u64,
+    samples: Vec<f32>,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -1269,7 +1308,11 @@ struct SubscriptionState {
 struct SubscriptionTask {
     handle: tauri::async_runtime::JoinHandle<()>,
     ready: watch::Sender<bool>,
+    ack: watch::Sender<Option<String>>,
+    close: watch::Sender<bool>,
+    native_receiver: Option<native_event_hub::NativeEventSubscription>,
     owner_label: String,
+    cooperative_close: bool,
 }
 
 impl SubscriptionState {
@@ -1285,7 +1328,7 @@ impl SubscriptionState {
 
     fn insert(&mut self, id: String, task: SubscriptionTask) {
         if let Some(existing) = self.tasks.insert(id, task) {
-            existing.handle.abort();
+            close_subscription_task(existing);
         }
     }
 
@@ -1295,6 +1338,18 @@ impl SubscriptionState {
                 return false;
             }
             task.ready.send_replace(true);
+            true
+        } else {
+            false
+        }
+    }
+
+    fn ack(&self, id: &str, owner_label: &str, event_id: String) -> bool {
+        if let Some(task) = self.tasks.get(id) {
+            if task.owner_label != owner_label {
+                return false;
+            }
+            task.ack.send_replace(Some(event_id));
             true
         } else {
             false
@@ -1311,19 +1366,46 @@ impl SubscriptionState {
             return;
         }
         if let Some(task) = self.tasks.remove(id) {
-            task.handle.abort();
+            close_subscription_task(task);
+        }
+    }
+
+    fn remove_owner(&mut self, owner_label: &str) {
+        let owned_ids = self
+            .tasks
+            .iter()
+            .filter_map(|(id, task)| (task.owner_label == owner_label).then(|| id.clone()))
+            .collect::<Vec<_>>();
+        for id in owned_ids {
+            if let Some(task) = self.tasks.remove(&id) {
+                close_subscription_task(task);
+            }
         }
     }
 
     fn abort_all(&mut self) {
         for (_, task) in self.tasks.drain() {
-            task.handle.abort();
+            close_subscription_task(task);
         }
+    }
+}
+
+fn close_subscription_task(task: SubscriptionTask) {
+    task.close.send_replace(true);
+    task.ready.send_replace(true);
+    task.ack.send_replace(Some(String::new()));
+    if let Some(receiver) = task.native_receiver {
+        receiver.close();
+    }
+    if !task.cooperative_close {
+        task.handle.abort();
     }
 }
 
 #[derive(Debug, Error)]
 enum AuroraCommandError {
+    #[error("Invalid request")]
+    InvalidRequest,
     #[error("Gateway URL is not a valid HTTP loopback origin: {0}")]
     InvalidGatewayOrigin(String),
     #[error("Gateway request failed: {0}")]
@@ -1355,8 +1437,12 @@ enum AuroraCommandError {
     SidecarProcess(String),
     #[error("Sidecar state lock failed")]
     SidecarState,
+    #[error("Native voice shutdown did not complete")]
+    NativeVoiceShutdown,
     #[error("Connection profile state lock failed")]
     ProfileState,
+    #[error("Device settings are unavailable")]
+    NodeConfigUnavailable,
     #[error("Secure storage key is invalid or outside the Aurora credential namespace: {0}")]
     SecureStorageKeyInvalid(String),
     #[error("Peer reconnect credential is expired")]
@@ -1365,6 +1451,18 @@ enum AuroraCommandError {
     SecureStorage(String),
     #[error("Local data operation failed: {0}")]
     LocalData(String),
+    #[error("Local data operation failed: {message}")]
+    LocalDataReason {
+        message: String,
+        reason: LocalDataReasonCode,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum LocalDataReasonCode {
+    DuplicateMessageId,
+    DuplicateMessageSequence,
 }
 
 impl Serialize for AuroraCommandError {
@@ -1376,35 +1474,38 @@ impl Serialize for AuroraCommandError {
         state.serialize_field("code", self.code())?;
         let message = redact_sensitive_text(&self.to_string());
         state.serialize_field("message", &message)?;
-        state.serialize_field(
-            "detail",
-            &json!({
-                "code": self.code(),
-                "message": message,
-                "secrets_redacted": true,
-            }),
-        )?;
+        let mut detail = json!({
+            "code": self.code(),
+            "message": message,
+            "secrets_redacted": true,
+        });
+        if let Self::LocalDataReason { reason, .. } = self {
+            detail["reason"] = serde_json::to_value(reason).map_err(serde::ser::Error::custom)?;
+        }
+        state.serialize_field("detail", &detail)?;
         state.end()
     }
 }
 
 #[tauri::command]
 async fn aurora_request(
-    request: AuroraRequest,
+    request_json: String,
     state: State<'_, SharedSidecarState>,
     profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraEnvelope, AuroraCommandError> {
-    aurora_command(request, state, profile_state, gateway_clients).await
+    aurora_command(request_json, state, profile_state, gateway_clients).await
 }
 
 #[tauri::command]
 async fn aurora_command(
-    request: AuroraRequest,
+    request_json: String,
     state: State<'_, SharedSidecarState>,
     profile_state: State<'_, SharedThinProfileState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraEnvelope, AuroraCommandError> {
+    let request =
+        parse_aurora_request(&request_json).map_err(|_| AuroraCommandError::InvalidRequest)?;
     if !request_has_valid_sidecar_token(&request, &state, profile_state.inner())? {
         return Err(AuroraCommandError::SidecarTokenInvalid);
     }
@@ -1441,9 +1542,11 @@ async fn aurora_command(
         .await
         .map_err(|error| AuroraCommandError::Gateway(error.to_string()))?;
     let status = response.status();
-    let data = response
-        .json::<Value>()
+    let body = response
+        .bytes()
         .await
+        .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+    let data = tauri_response_json::parse_aurora_response(&body)
         .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
 
     if status.is_success() {
@@ -1466,6 +1569,17 @@ async fn aurora_subscribe(
     subscription_state: State<'_, SharedSubscriptionState>,
     gateway_clients: State<'_, SharedGatewayClients>,
 ) -> Result<AuroraSubscribeResponse, AuroraCommandError> {
+    match request.source.as_deref() {
+        Some("native") => {
+            return subscribe_native_events(request, app, window, subscription_state).await;
+        }
+        None | Some("gateway") => {}
+        Some(_) => {
+            return Err(AuroraCommandError::Gateway(
+                "unsupported event source".to_string(),
+            ));
+        }
+    }
     if !subscribe_has_valid_sidecar_token(&request, &sidecar_state, profile_state.inner())? {
         return Err(AuroraCommandError::SidecarTokenInvalid);
     }
@@ -1491,6 +1605,8 @@ async fn aurora_subscribe(
     let task_owner_label = owner_label.clone();
     let task_subscriptions = subscription_state.inner().clone();
     let (ready_tx, mut ready_rx) = watch::channel(false);
+    let (ack_tx, _ack_rx) = watch::channel(None::<String>);
+    let (close_tx, _close_rx) = watch::channel(false);
 
     let task = tauri::async_runtime::spawn(async move {
         while !*ready_rx.borrow_and_update() {
@@ -1523,7 +1639,11 @@ async fn aurora_subscribe(
             SubscriptionTask {
                 handle: task,
                 ready: ready_tx,
+                ack: ack_tx,
+                close: close_tx,
+                native_receiver: None,
                 owner_label,
+                cooperative_close: false,
             },
         );
     }
@@ -1551,6 +1671,230 @@ async fn aurora_subscribe(
     })
 }
 
+fn native_event_filter(
+    request: &AuroraSubscribeRequest,
+) -> Result<native_event_hub::NativeEventFilter, AuroraCommandError> {
+    let cursor = request
+        .last_sequence_id
+        .as_ref()
+        .map(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(parse_native_event_sequence))
+        })
+        .or_else(|| {
+            request
+                .last_event_id
+                .as_deref()
+                .or(request.replay_from.as_deref())
+                .map(parse_native_event_sequence)
+        });
+    let after_sequence = match cursor {
+        Some(Some(sequence)) => Some(sequence),
+        Some(None) => {
+            return Err(AuroraCommandError::Gateway(
+                "invalid native event cursor".to_string(),
+            ))
+        }
+        None if request.backfill == Some(false) => Some(
+            native_event_hub::global_native_event_hub()
+                .next_sequence()
+                .saturating_sub(1),
+        ),
+        None => None,
+    };
+    Ok(native_event_hub::NativeEventFilter {
+        kinds: request.kinds.clone().unwrap_or_default(),
+        topics: request.topics.clone(),
+        subjects: request.subjects.clone().unwrap_or_default(),
+        after_sequence,
+    })
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct NativeEventSnapshotRequest {
+    #[serde(default)]
+    kinds: Vec<String>,
+    #[serde(default)]
+    topics: Vec<String>,
+    #[serde(default)]
+    subjects: Vec<String>,
+    after_sequence: Option<Value>,
+}
+
+fn native_snapshot_filter(
+    request: NativeEventSnapshotRequest,
+) -> Result<native_event_hub::NativeEventFilter, AuroraCommandError> {
+    let after_sequence = request
+        .after_sequence
+        .map(|value| {
+            value
+                .as_u64()
+                .or_else(|| value.as_str().and_then(parse_native_event_sequence))
+                .ok_or_else(|| {
+                    AuroraCommandError::Gateway("invalid native event cursor".to_string())
+                })
+        })
+        .transpose()?;
+    Ok(native_event_hub::NativeEventFilter {
+        kinds: request.kinds,
+        topics: request.topics,
+        subjects: request.subjects,
+        after_sequence,
+    })
+}
+
+#[tauri::command]
+fn aurora_native_event_snapshot(
+    request: NativeEventSnapshotRequest,
+) -> Result<native_event_hub::NativeEventStateSnapshot, AuroraCommandError> {
+    let filter = native_snapshot_filter(request)?;
+    Ok(native_event_hub::global_native_event_hub().state_snapshot(filter))
+}
+
+fn parse_native_event_sequence(value: &str) -> Option<u64> {
+    value.strip_prefix("native:").unwrap_or(value).parse().ok()
+}
+
+async fn subscribe_native_events(
+    request: AuroraSubscribeRequest,
+    app: AppHandle,
+    window: WebviewWindow,
+    subscription_state: State<'_, SharedSubscriptionState>,
+) -> Result<AuroraSubscribeResponse, AuroraCommandError> {
+    // The existing Tauri command capability controls access. Native observation
+    // does not require a Gateway credential or grant authority to run work.
+    let filter = native_event_filter(&request)?;
+    let subscription_id = subscription_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?
+        .next_subscription_id()?;
+    let owner_label = window.label().to_string();
+    let event_name = format!("aurora://events/{subscription_id}");
+    let task_id = subscription_id.clone();
+    let task_event_name = event_name.clone();
+    let task_owner = owner_label.clone();
+    let subscriptions = subscription_state.inner().clone();
+    let (ready_tx, mut ready_rx) = watch::channel(false);
+    let (ack_tx, mut ack_rx) = watch::channel(None::<String>);
+    let (close_tx, mut close_rx) = watch::channel(false);
+    // Subscribe before acknowledging the descriptor so activation cannot lose
+    // events. The bounded native receiver owns replay and overflow signaling.
+    let receiver = native_event_hub::global_native_event_hub().subscribe(filter);
+    let task_receiver = receiver.clone();
+    let task = tauri::async_runtime::spawn(async move {
+        while !*ready_rx.borrow_and_update() {
+            if *close_rx.borrow_and_update() || ready_rx.changed().await.is_err() {
+                task_receiver.close();
+                return;
+            }
+        }
+        while let Some(event) = task_receiver.recv().await {
+            if *close_rx.borrow_and_update() {
+                break;
+            }
+            let event_value = serde_json::to_value(event).expect("native event serializes");
+            let event_id = native_subscription_event_id(&event_value);
+            let payload = AuroraSubscriptionEvent {
+                subscription_id: task_id.clone(),
+                event: event_value,
+            };
+            if app.emit_to(&task_owner, &task_event_name, payload).is_err() {
+                break;
+            }
+            let Some(event_id) = event_id else {
+                break;
+            };
+            if !wait_for_native_event_ack(&mut ack_rx, &mut close_rx, &event_id).await {
+                break;
+            }
+        }
+        task_receiver.close();
+        let _ = app.emit_to(
+            &task_owner,
+            &format!("{task_event_name}/closed"),
+            AuroraSubscriptionClosed {
+                subscription_id: task_id.clone(),
+                reason: "native event subscription closed".to_string(),
+                code: "transport_loss".to_string(),
+                secrets_redacted: true,
+            },
+        );
+        if let Ok(mut subscriptions) = subscriptions.lock() {
+            subscriptions.tasks.remove(&task_id);
+        }
+    });
+    subscription_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?
+        .insert(
+            subscription_id.clone(),
+            SubscriptionTask {
+                handle: task,
+                ready: ready_tx,
+                ack: ack_tx,
+                close: close_tx,
+                native_receiver: Some(receiver),
+                owner_label,
+                cooperative_close: true,
+            },
+        );
+    Ok(AuroraSubscribeResponse {
+        subscription_id,
+        event_name,
+        stream_url: "native".to_string(),
+        transport: "native".to_string(),
+        mode: "native".to_string(),
+        redaction: RedactionMetadata {
+            secrets_redacted: true,
+            source: "transport".to_string(),
+            redacted_fields: Vec::new(),
+            warnings: Vec::new(),
+        },
+    })
+}
+
+fn native_subscription_event_id(event: &Value) -> Option<String> {
+    event
+        .get("id")
+        .and_then(Value::as_str)
+        .or_else(|| event.get("event_id").and_then(Value::as_str))
+        .or_else(|| event.get("eventId").and_then(Value::as_str))
+        .map(ToString::to_string)
+        .or_else(|| {
+            event
+                .get("sequence")
+                .and_then(Value::as_u64)
+                .map(|sequence| format!("native:{sequence}"))
+        })
+}
+
+async fn wait_for_native_event_ack(
+    ack_rx: &mut watch::Receiver<Option<String>>,
+    close_rx: &mut watch::Receiver<bool>,
+    event_id: &str,
+) -> bool {
+    loop {
+        if *close_rx.borrow_and_update() {
+            return false;
+        }
+        if ack_rx.borrow().as_deref() == Some(event_id) {
+            ack_rx.borrow_and_update();
+            return true;
+        }
+        if ack_rx.changed().await.is_err() {
+            return false;
+        }
+    }
+}
+
+fn close_subscriptions_for_window(subscription_state: &SharedSubscriptionState, owner_label: &str) {
+    if let Ok(mut subscriptions) = subscription_state.lock() {
+        subscriptions.remove_owner(owner_label);
+    }
+}
+
 #[tauri::command]
 async fn aurora_activate_subscription(
     request: AuroraActivateSubscriptionRequest,
@@ -1565,6 +1909,34 @@ async fn aurora_activate_subscription(
         Ok(json!({
             "subscriptionId": request.subscription_id,
             "activated": true,
+            "secretsRedacted": true
+        }))
+    } else {
+        Err(AuroraCommandError::Gateway(
+            "subscription is no longer active".to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_native_event_ack(
+    request: AuroraNativeEventAckRequest,
+    window: WebviewWindow,
+    subscription_state: State<'_, SharedSubscriptionState>,
+) -> Result<Value, AuroraCommandError> {
+    let owner_label = window.label().to_string();
+    let subscriptions = subscription_state
+        .lock()
+        .map_err(|_| AuroraCommandError::SidecarState)?;
+    if subscriptions.ack(
+        &request.subscription_id,
+        &owner_label,
+        request.event_id.clone(),
+    ) {
+        Ok(json!({
+            "subscriptionId": request.subscription_id,
+            "eventId": request.event_id,
+            "acknowledged": true,
             "secretsRedacted": true
         }))
     } else {
@@ -1943,6 +2315,33 @@ async fn aurora_audio_bridge_status() -> Result<NativeFeatureStatus, AuroraComma
     Ok(status)
 }
 
+#[cfg(all(target_os = "ios", debug_assertions, feature = "ios-voice-live-test"))]
+#[tauri::command]
+async fn aurora_ios_voice_live_test_start(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    run_ios_plugin_command(native, "iosVoiceLiveTestStart", json!({}))
+}
+
+#[cfg(all(target_os = "ios", debug_assertions, feature = "ios-voice-live-test"))]
+#[tauri::command]
+async fn aurora_ios_voice_live_test_push_pcm(
+    request: IosVoiceLiveTestPcmRequest,
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    if request.samples.is_empty()
+        || request.samples.len() > 4096
+        || request.samples.iter().any(|sample| !sample.is_finite())
+    {
+        return Err(AuroraCommandError::InvalidRequest);
+    }
+    run_ios_plugin_command(
+        native,
+        "iosVoiceLiveTestPushPcm",
+        serde_json::to_value(&request).map_err(|_| AuroraCommandError::InvalidRequest)?,
+    )
+}
+
 #[tauri::command]
 async fn aurora_ios_voice_status(
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
@@ -2238,25 +2637,123 @@ async fn aurora_android_voice_foreground_service_status(
 async fn aurora_android_voice_foreground_service_start(
     request: AndroidVoiceForegroundServiceStartRequest,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+    policy_runtime: State<'_, NativeNodeConfigRuntime>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
-        run_android_plugin_command(
-            native,
-            "startVoiceForegroundService",
-            serde_json::to_value(&request)
-                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?,
-        )
+        let (_admission_guard, _generation, speech_stages, _policy_revision, profile_document) =
+            policy_runtime.voice_admission_snapshot().await?;
+        let profile_document = profile_document.ok_or(AuroraCommandError::NodeConfigUnavailable)?;
+        if let Some(stages) = speech_stages.as_ref() {
+            validate_android_speech_stages(stages)?;
+        }
+        let mut payload = serde_json::to_value(&request)
+            .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+        if let Some(stages) = speech_stages {
+            let speech_stages_json = serde_json::to_string(&stages)
+                .map_err(|_| AuroraCommandError::InvalidGatewayResponse)?;
+            payload
+                .as_object_mut()
+                .ok_or(AuroraCommandError::InvalidGatewayResponse)?
+                .insert(
+                    "speechStagesJson".to_string(),
+                    Value::String(speech_stages_json),
+                );
+        }
+        payload
+            .as_object_mut()
+            .ok_or(AuroraCommandError::InvalidGatewayResponse)?
+            .insert(
+                "confirmedProfileDocumentJson".to_string(),
+                Value::String(profile_document),
+            );
+        run_android_plugin_command(native, "startVoiceForegroundService", payload)
     }
 
     #[cfg(not(target_os = "android"))]
     {
-        let _ = (request, native);
+        let _ = (request, native, policy_runtime);
         Err(AuroraCommandError::UnsupportedFeature(
             "Android voice foreground service start is only available in the Android Tauri shell"
                 .to_string(),
         ))
     }
+}
+
+#[tauri::command]
+async fn aurora_android_background_transcription_sync(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+    policy_runtime: State<'_, NativeNodeConfigRuntime>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(target_os = "android")]
+    {
+        let (_guard, generation, document, profile_document) =
+            policy_runtime.transcription_admission_snapshot().await?;
+        let payload = json!({
+            "policyJson": serde_json::to_string(&document)
+                .map_err(|_| AuroraCommandError::NodeConfigUnavailable)?,
+            "confirmedProfileDocumentJson": profile_document,
+            "profileGeneration": generation,
+        });
+        run_android_plugin_command(native, "syncBackgroundTranscription", payload)
+    }
+    #[cfg(not(target_os = "android"))]
+    {
+        let _ = (native, policy_runtime);
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Recording from notifications is unavailable on this device".to_owned(),
+        ))
+    }
+}
+
+#[cfg(target_os = "android")]
+fn validate_android_speech_stages(
+    stages: &aurora_voice_core::node_policy::SpeechStages,
+) -> Result<(), AuroraCommandError> {
+    use aurora_voice_core::node_policy::{
+        NullableField, Omitted, RoutingFallback, RoutingPreference, SpeechNetworkKind,
+    };
+
+    for stage in [&stages.stt, &stages.tts] {
+        let valid_route = match (&stage.network_kind, &stage.target) {
+            (Omitted::Value(SpeechNetworkKind::Mesh), NullableField::Value(target)) => {
+                let network_configured = matches!(
+                    stage.routing.prefer,
+                    RoutingPreference::Network | RoutingPreference::NetworkOnly
+                ) || (stage.routing.prefer == RoutingPreference::Local
+                    && stage.routing.fallback == RoutingFallback::Network);
+                network_configured
+                    && !target.peer_id.trim().is_empty()
+                    && matches!(&target.resource_id, NullableField::Value(resource) if !resource.trim().is_empty())
+            }
+            (
+                Omitted::Missing | Omitted::Value(SpeechNetworkKind::Gateway),
+                NullableField::Missing | NullableField::Null,
+            ) => true,
+            _ => false,
+        };
+        if !valid_route {
+            return Err(AuroraCommandError::UnsupportedFeature(
+                "This speech route is unavailable on this device".to_string(),
+            ));
+        }
+    }
+    for stage in [&stages.kws, &stages.vad] {
+        if !matches!(&stage.network_kind, Omitted::Missing)
+            || matches!(&stage.target, NullableField::Value(_))
+            || matches!(
+                stage.routing.prefer,
+                RoutingPreference::Network | RoutingPreference::NetworkOnly
+            )
+            || (stage.routing.prefer == RoutingPreference::Local
+                && stage.routing.fallback == RoutingFallback::Network)
+        {
+            return Err(AuroraCommandError::UnsupportedFeature(
+                "This speech route is unavailable on this device".to_string(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -2280,6 +2777,32 @@ async fn aurora_android_voice_live_test_inject_pcm(
         Err(AuroraCommandError::UnsupportedFeature(
             "Android live voice PCM injection is only available to debuggable Android packages"
                 .to_string(),
+        ))
+    }
+}
+
+#[tauri::command]
+async fn aurora_android_voice_live_test_playback_counters(
+    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
+) -> Result<Value, AuroraCommandError> {
+    #[cfg(all(
+        target_os = "android",
+        debug_assertions,
+        feature = "android-voice-live-test"
+    ))]
+    {
+        run_android_plugin_command(native, "nativeVoicePlaybackCountersForLiveTest", json!({}))
+    }
+
+    #[cfg(not(all(
+        target_os = "android",
+        debug_assertions,
+        feature = "android-voice-live-test"
+    )))]
+    {
+        let _ = native;
+        Err(AuroraCommandError::UnsupportedFeature(
+            "Native playback counters require the Android voice live-test debug build".to_string(),
         ))
     }
 }
@@ -3278,6 +3801,7 @@ fn is_sensitive_log_key(key: &str) -> bool {
         "signingkey",
         "credential",
         "refresh",
+        "transcript",
         "rawaudio",
         "audiobytes",
         "audiodata",
@@ -3798,24 +4322,46 @@ async fn aurora_log_tail(
 
 #[tauri::command]
 async fn aurora_thin_profile_get(
+    app: AppHandle,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
     profile_state: State<'_, SharedThinProfileState>,
+    policy_runtime: State<'_, NativeNodeConfigRuntime>,
 ) -> Result<Value, AuroraCommandError> {
     #[cfg(target_os = "android")]
     {
         let response = run_android_plugin_command(native, "thinProfileGet", json!({}))?;
-        refresh_thin_profile_state_from_payload(profile_state.inner(), &response)?;
+        let observed = thin_profile_document_from_payload(&response)?;
+        let needs_refresh = {
+            let current = profile_state
+                .lock()
+                .map_err(|_| AuroraCommandError::ProfileState)?;
+            !current.initialized || current.document != observed
+        };
+        if needs_refresh {
+            policy_runtime.refresh_profile().await?;
+        }
+        let _ = app;
         return Ok(response);
     }
     #[cfg(target_os = "ios")]
     {
         let response = run_ios_plugin_command(native, "thinProfileGet", json!({}))?;
-        refresh_thin_profile_state_from_payload(profile_state.inner(), &response)?;
+        let observed = thin_profile_document_from_payload(&response)?;
+        let needs_refresh = {
+            let current = profile_state
+                .lock()
+                .map_err(|_| AuroraCommandError::ProfileState)?;
+            !current.initialized || current.document != observed
+        };
+        if needs_refresh {
+            policy_runtime.refresh_profile().await?;
+        }
+        let _ = app;
         return Ok(response);
     }
     #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
     {
-        let _ = (native, profile_state);
+        let _ = (app, native, profile_state, policy_runtime);
         return Err(AuroraCommandError::UnsupportedFeature(
             "thin profile storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
                 .to_string(),
@@ -3824,7 +4370,7 @@ async fn aurora_thin_profile_get(
 
     #[cfg(desktop)]
     {
-        let _ = native;
+        let _ = (app, native, policy_runtime);
         let value = profile_state
             .lock()
             .map_err(|_| AuroraCommandError::ProfileState)?
@@ -3842,229 +4388,34 @@ async fn aurora_thin_profile_get(
 
 #[tauri::command]
 async fn aurora_thin_profile_set(
+    app: AppHandle,
     value: String,
     native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
     profile_state: State<'_, SharedThinProfileState>,
+    policy_runtime: State<'_, NativeNodeConfigRuntime>,
 ) -> Result<Value, AuroraCommandError> {
     let next_state = ThinProfileState::from_stored_document(Some(value.clone()))?;
-    #[cfg(target_os = "android")]
-    {
-        let response =
-            run_android_plugin_command(native, "thinProfileSet", json!({ "value": value }))?;
-        store_thin_profile_state(profile_state.inner(), next_state)?;
-        return Ok(response);
-    }
-    #[cfg(target_os = "ios")]
-    {
-        let response = run_ios_plugin_command(native, "thinProfileSet", json!({ "value": value }))?;
-        store_thin_profile_state(profile_state.inner(), next_state)?;
-        return Ok(response);
-    }
-    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
-    {
-        let _ = (value, native, profile_state, next_state);
-        return Err(AuroraCommandError::UnsupportedFeature(
-            "thin profile storage is only available on desktop keychain, Android private storage, and iOS UserDefaults targets"
-                .to_string(),
-        ));
-    }
-
-    #[cfg(desktop)]
-    {
-        let _ = native;
-        run_secure_storage_blocking(move || {
-            let entry = thin_profile_storage_entry()?;
-            entry
-                .set_password(&value)
-                .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
-        })
-        .await?;
-        store_thin_profile_state(profile_state.inner(), next_state)?;
-        Ok(json!({
-            "key": DESKTOP_THIN_PROFILES_KEY,
-            "ok": true,
-            "backend": "platform-keychain",
-            "persisted": true,
-            "secretsRedacted": true
-        }))
-    }
-}
-
-#[tauri::command]
-async fn aurora_node_config_get(
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-) -> Result<Value, AuroraCommandError> {
-    node_config_get(native, NODE_CONFIG_V1_STORAGE_KEY, "nodeConfigGet").await
-}
-
-#[tauri::command]
-async fn aurora_node_config_v2_get(
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-) -> Result<Value, AuroraCommandError> {
-    node_config_get(native, NODE_CONFIG_V2_STORAGE_KEY, "nodeConfigV2Get").await
-}
-
-async fn node_config_get(
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-    storage_key: &'static str,
-    mobile_command: &'static str,
-) -> Result<Value, AuroraCommandError> {
-    #[cfg(target_os = "android")]
-    {
-        return run_android_plugin_command(native, mobile_command, json!({}));
-    }
-    #[cfg(target_os = "ios")]
-    {
-        return run_ios_plugin_command(native, mobile_command, json!({}));
-    }
-    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
-    {
-        let _ = (native, storage_key, mobile_command);
-        return Err(AuroraCommandError::UnsupportedFeature(
-            "node config storage is unavailable on this platform".to_string(),
-        ));
-    }
-    #[cfg(desktop)]
-    {
-        let _ = (native, mobile_command);
-        let value = run_secure_storage_blocking(move || {
-            match node_config_storage_entry(storage_key)?.get_password() {
-                Ok(value) => Ok(Some(value)),
-                Err(keyring::Error::NoEntry) => Ok(None),
-                Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
-            }
-        })
-        .await?;
-        Ok(json!({
-            "key": storage_key,
-            "value": value,
-            "backend": "platform-keychain",
-            "persisted": true,
-            "privacyClass": "nonsecret-node-config",
-            "secretsRedacted": true
-        }))
-    }
-}
-
-#[tauri::command]
-async fn aurora_node_config_set(
-    value: String,
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-) -> Result<Value, AuroraCommandError> {
-    node_config_set(value, native, NODE_CONFIG_V1_STORAGE_KEY, "nodeConfigSet").await
-}
-
-#[tauri::command]
-async fn aurora_node_config_v2_set(
-    value: String,
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-) -> Result<Value, AuroraCommandError> {
-    node_config_set(value, native, NODE_CONFIG_V2_STORAGE_KEY, "nodeConfigV2Set").await
-}
-
-async fn node_config_set(
-    value: String,
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-    storage_key: &'static str,
-    mobile_command: &'static str,
-) -> Result<Value, AuroraCommandError> {
-    validate_non_empty_field("nodeConfig", &value, 65_536)?;
-    #[cfg(target_os = "android")]
-    {
-        return run_android_plugin_command(native, mobile_command, json!({ "value": value }));
-    }
-    #[cfg(target_os = "ios")]
-    {
-        return run_ios_plugin_command(native, mobile_command, json!({ "value": value }));
-    }
-    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
-    {
-        let _ = (value, native, storage_key, mobile_command);
-        return Err(AuroraCommandError::UnsupportedFeature(
-            "node config storage is unavailable on this platform".to_string(),
-        ));
-    }
-    #[cfg(desktop)]
-    {
-        let _ = (native, mobile_command);
-        run_secure_storage_blocking(move || {
-            node_config_storage_entry(storage_key)?
-                .set_password(&value)
-                .map_err(|error| AuroraCommandError::SecureStorage(error.to_string()))
-        })
-        .await?;
-        Ok(json!({
-            "key": storage_key,
-            "ok": true,
-            "backend": "platform-keychain",
-            "persisted": true,
-            "privacyClass": "nonsecret-node-config",
-            "secretsRedacted": true
-        }))
-    }
-}
-
-#[tauri::command]
-async fn aurora_node_config_delete(
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-) -> Result<Value, AuroraCommandError> {
-    node_config_delete(native, NODE_CONFIG_V1_STORAGE_KEY, "nodeConfigDelete").await
-}
-
-#[tauri::command]
-async fn aurora_node_config_v2_delete(
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-) -> Result<Value, AuroraCommandError> {
-    node_config_delete(native, NODE_CONFIG_V2_STORAGE_KEY, "nodeConfigV2Delete").await
-}
-
-async fn node_config_delete(
-    native: State<'_, AuroraMobileNativePlugin<tauri::Wry>>,
-    storage_key: &'static str,
-    mobile_command: &'static str,
-) -> Result<Value, AuroraCommandError> {
-    #[cfg(target_os = "android")]
-    {
-        return run_android_plugin_command(native, mobile_command, json!({}));
-    }
-    #[cfg(target_os = "ios")]
-    {
-        return run_ios_plugin_command(native, mobile_command, json!({}));
-    }
-    #[cfg(not(any(desktop, target_os = "android", target_os = "ios")))]
-    {
-        let _ = (native, storage_key, mobile_command);
-        return Err(AuroraCommandError::UnsupportedFeature(
-            "node config storage is unavailable on this platform".to_string(),
-        ));
-    }
-    #[cfg(desktop)]
-    {
-        let _ = (native, mobile_command);
-        run_secure_storage_blocking(move || {
-            match node_config_storage_entry(storage_key)?.delete_credential() {
-                Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
-                Err(error) => Err(AuroraCommandError::SecureStorage(error.to_string())),
-            }
-        })
-        .await?;
-        Ok(json!({
-            "key": storage_key,
-            "ok": true,
-            "backend": "platform-keychain",
-            "persisted": false,
-            "privacyClass": "nonsecret-node-config",
-            "secretsRedacted": true
-        }))
-    }
-}
-
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn refresh_thin_profile_state_from_payload(
-    profile_state: &SharedThinProfileState,
-    response: &Value,
-) -> Result<(), AuroraCommandError> {
-    replace_thin_profile_state(profile_state, thin_profile_document_from_payload(response)?)
+    policy_runtime.replace_profile(value).await?;
+    let _ = (app, native, profile_state, next_state);
+    Ok(json!({
+        "key": if cfg!(target_os = "android") {
+            "aurora.session.android-thin-connection-profile.v1"
+        } else if cfg!(target_os = "ios") {
+            "aurora.session.ios-thin-connection-profile.v1"
+        } else {
+            DESKTOP_THIN_PROFILES_KEY
+        },
+        "ok": true,
+        "backend": if cfg!(target_os = "android") {
+            "android-private-storage"
+        } else if cfg!(target_os = "ios") {
+            "ios-user-defaults"
+        } else {
+            "platform-keychain"
+        },
+        "persisted": true,
+        "secretsRedacted": true
+    }))
 }
 
 #[cfg(any(test, target_os = "android", target_os = "ios"))]
@@ -4078,24 +4429,41 @@ fn thin_profile_document_from_payload(
     })
 }
 
-#[cfg(any(target_os = "android", target_os = "ios"))]
-fn replace_thin_profile_state(
-    profile_state: &SharedThinProfileState,
-    document: Option<String>,
-) -> Result<(), AuroraCommandError> {
-    let next_state = ThinProfileState::from_stored_document(document)?;
-    store_thin_profile_state(profile_state, next_state)
-}
-
 fn store_thin_profile_state(
     profile_state: &SharedThinProfileState,
     next_state: ThinProfileState,
-) -> Result<(), AuroraCommandError> {
+) -> Result<bool, AuroraCommandError> {
     let mut state = profile_state
         .lock()
         .map_err(|_| AuroraCommandError::ProfileState)?;
+    let profile_scope_changed = state.route != next_state.route
+        || native_event_profile_scope(state.document.as_deref())
+            != native_event_profile_scope(next_state.document.as_deref());
+    if profile_scope_changed {
+        aurora_voice_native::clear_native_voice_observation_sink();
+        native_event_hub::reset_global_native_event_hub_for_profile_change();
+        native_voice_events::install();
+    }
     *state = next_state;
-    Ok(())
+    Ok(profile_scope_changed)
+}
+
+fn native_event_profile_scope(document: Option<&str>) -> Option<Value> {
+    let document: Value = serde_json::from_str(document?).ok()?;
+    let id = document.get("activeProfileId")?.as_str()?;
+    let profile = document
+        .get("profiles")?
+        .as_array()?
+        .iter()
+        .find(|profile| profile.get("id").and_then(Value::as_str) == Some(id))?;
+    // A connection may be replaced in place without changing its profile ID.
+    // Cosmetic profile edits do not invalidate an in-flight observation scope.
+    let mut scope = profile.clone();
+    if let Some(fields) = scope.as_object_mut() {
+        fields.remove("label");
+        fields.remove("nodeName");
+    }
+    Some(scope)
 }
 
 #[cfg(desktop)]
@@ -5187,11 +5555,13 @@ async fn aurora_shutdown(
         subscription_state.inner(),
         native_voice_state.inner(),
     )
+    .await
 }
 
 impl AuroraCommandError {
     fn code(&self) -> &'static str {
         match self {
+            Self::InvalidRequest => "validation",
             Self::InvalidGatewayOrigin(_) => "validation_error",
             Self::Gateway(_) => "transport_loss",
             Self::InvalidGatewayResponse => "validation_error",
@@ -5208,11 +5578,14 @@ impl AuroraCommandError {
             Self::SidecarTokenInvalid => "permission",
             Self::SidecarProcess(_) => "unavailable_service",
             Self::SidecarState => "transport_loss",
+            Self::NativeVoiceShutdown => "native_voice_shutdown_failed",
             Self::ProfileState => "transport_loss",
+            Self::NodeConfigUnavailable => "unavailable_service",
             Self::SecureStorageKeyInvalid(_) => "validation_error",
             Self::PeerCredentialExpired => "credential_expired",
             Self::SecureStorage(_) => "secure_storage_error",
             Self::LocalData(_) => "local_data_error",
+            Self::LocalDataReason { .. } => "invalid_record",
         }
     }
 }
@@ -6407,14 +6780,6 @@ fn thin_profile_storage_entry() -> Result<keyring::Entry, AuroraCommandError> {
 }
 
 #[cfg(desktop)]
-fn node_config_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
-    if key != NODE_CONFIG_V1_STORAGE_KEY && key != NODE_CONFIG_V2_STORAGE_KEY {
-        return Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()));
-    }
-    raw_secure_storage_entry(key)
-}
-
-#[cfg(desktop)]
 fn peer_credential_storage_entry(key: &str) -> Result<keyring::Entry, AuroraCommandError> {
     if !is_peer_proof_storage_key(key) && !is_room_secret_storage_key(key) {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(key.to_string()));
@@ -7329,6 +7694,11 @@ fn store_local_data_envelope_current_version(
 }
 
 fn validate_secure_storage_key(key: &str) -> Result<(), AuroraCommandError> {
+    if key == DESKTOP_THIN_PROFILES_KEY {
+        return Err(AuroraCommandError::SecureStorageKeyInvalid(
+            "profile settings are managed by Aurora".to_string(),
+        ));
+    }
     if is_peer_proof_storage_key(key) {
         return Err(AuroraCommandError::SecureStorageKeyInvalid(
             "peer reconnect credential namespace is opaque-only".to_string(),
@@ -8900,25 +9270,33 @@ fn is_loopback_http_origin(url: &Url) -> bool {
         )
 }
 
-fn shutdown_aurora(
+async fn shutdown_aurora(
     app: &AppHandle,
     sidecar_state: &SharedSidecarState,
     subscription_state: &SharedSubscriptionState,
     native_voice_state: &NativeVoiceState,
 ) -> Result<(), AuroraCommandError> {
-    native_voice_state.stop();
+    native_voice_state
+        .stop()
+        .await
+        .map_err(|_error: NativeVoiceStopError| AuroraCommandError::NativeVoiceShutdown)?;
+    aurora_voice_native::clear_native_voice_observation_sink();
+    native_event_hub::reset_global_native_event_hub_for_profile_change();
     {
         let mut subscriptions = subscription_state
             .lock()
             .map_err(|_| AuroraCommandError::SidecarState)?;
         subscriptions.abort_all();
     }
-    {
+    let sidecar_state = Arc::clone(sidecar_state);
+    tokio::task::spawn_blocking(move || {
         let mut sidecar = sidecar_state
             .lock()
             .map_err(|_| AuroraCommandError::SidecarState)?;
-        stop_sidecar(&mut sidecar)?;
-    }
+        stop_sidecar(&mut sidecar)
+    })
+    .await
+    .map_err(|_| AuroraCommandError::SidecarProcess("sidecar stop task failed".to_owned()))??;
     app.exit(0);
     Ok(())
 }
@@ -9288,6 +9666,7 @@ pub fn run() {
     };
     #[cfg(not(desktop))]
     let profile_state: SharedThinProfileState = Arc::new(Mutex::new(ThinProfileState::default()));
+    let native_config_profile_state = Arc::clone(&profile_state);
     let builder = tauri::Builder::default();
     // Single-instance must be the first registered plugin so a second launch (e.g. an
     // aurora:// deep link on Windows/Linux) forwards its URL here instead of opening a
@@ -9323,6 +9702,103 @@ pub fn run() {
         .manage(mesh_authority::MeshAuthorityState::default())
         .manage(mesh_session::MeshSessionState::default())
         .setup(move |app| {
+            let node_config_root = app
+                .path()
+                .app_data_dir()
+                .map_err(|_| std::io::Error::other("Device settings are unavailable"))?;
+            let profile_validation_options =
+                aurora_voice_native::runtime_profile::RuntimeProfileValidationOptions {
+                    allow_python_full: cfg!(desktop) && bundled_sidecar_path(app.handle()).is_some(),
+                };
+            let node_config_runtime = NativeNodeConfigRuntime::new(
+                app.handle().clone(),
+                Arc::clone(&native_config_profile_state),
+                node_config_root.clone(),
+                profile_validation_options,
+            )
+            .map_err(|_| std::io::Error::other("Device settings are unavailable"))?;
+            app.manage(node_config_runtime.clone());
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            let mut local_inference_models = vec![aurora_local_inference::TrustedModelDescriptor {
+                model_id: "chat-qwen3-0b8".into(),
+                display_label: "Offline answers".into(),
+                file_name: "Qwen3.5-0.8B-Q4_0.gguf".into(),
+                byte_size: 563_036_064,
+                sha256: "57d1997790d1744fba5b40a7317df71ea5e2acee28c47e78f0cce39c0703f8cf".into(),
+                source_url: "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/9447f74101aeb4e93621884dfa36ee8effb8831b/Qwen3.5-0.8B-Q4_0.gguf".into(),
+                context_tokens: 4096,
+                max_output_tokens: 512,
+                capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: true },
+            }];
+            #[cfg(target_os = "android")]
+            local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
+                model_id: "chat-qwen3-06b-litert".into(),
+                display_label: "Offline answers (LiteRT)".into(),
+                file_name: "Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm".into(),
+                byte_size: 344_671_744,
+                sha256: "03e7da1eb1108b50dffaa9bb52cc7bcbad2eb0c66ca990267f480c1e545d2856".into(),
+                source_url: "https://huggingface.co/litert-community/Qwen3-0.6B/resolve/f2619f9c7418f43402fbd74a018c507caa33f1c7/Qwen3-0.6B_dynamic_wi4b32_afp32.litertlm".into(),
+                context_tokens: 4096,
+                max_output_tokens: 512,
+                capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: false },
+            });
+            #[cfg(target_os = "ios")]
+            local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
+                model_id: "chat-qwen3-06b-cactus".into(),
+                display_label: "Offline answers".into(),
+                file_name: "qwen3-0.6b-int4.zip".into(),
+                byte_size: 376_414_357,
+                sha256: "2f4f5e3b91fc62168e66a592d09cfd1792a0b96e1994d46b5de77ddebbf94427".into(),
+                source_url: "https://huggingface.co/Cactus-Compute/Qwen3-0.6B/resolve/595bcb02f28687ef00c9b5c1e04c5399e5af6bef/weights/qwen3-0.6b-int4.zip".into(),
+                context_tokens: 4096,
+                max_output_tokens: 512,
+                capabilities: aurora_local_inference::ModelCapabilities { chat: true, tools: true },
+            });
+            #[cfg(all(target_os = "android", target_arch = "aarch64"))]
+            local_inference_models.push(aurora_local_inference::TrustedModelDescriptor {
+                model_id: "actions-needle2".into(),
+                display_label: "Device actions (Needle2)".into(),
+                file_name: "needle2.cact".into(),
+                byte_size: 13_737_807,
+                sha256: "b43aabfcaf1a6db6acf488076eab71d823c08697c7af4521fc1d174b60ede5ba".into(),
+                source_url: "https://huggingface.co/Cactus-Compute/needle2/resolve/32e9e3a93b205f786929697446ae669cf0a84579/needle2.cact".into(),
+                context_tokens: 256,
+                max_output_tokens: 512,
+                capabilities: aurora_local_inference::ModelCapabilities { chat: false, tools: true },
+            });
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            app.manage(
+                NativeLocalInferenceState::new(
+                    aurora_local_inference::LocalInferenceConfig {
+                        app_private_root: node_config_root.join("local-inference"),
+                        models: local_inference_models,
+                    },
+                    node_config_runtime.clone(),
+                    app.handle().clone(),
+                ).map_err(|_| std::io::Error::other("Offline answers are unavailable"))?,
+            );
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            app.manage(NativeSpeechHostState::default());
+            #[cfg(desktop)]
+            if tauri::async_runtime::block_on(node_config_runtime.refresh_profile()).is_err() {
+                eprintln!("aurora_node_config_policy_unavailable=true");
+            }
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            {
+                let runtime = node_config_runtime.clone();
+                tauri::async_runtime::spawn(async move {
+                    if runtime.refresh_profile().await.is_err() {
+                        eprintln!("aurora_node_config_policy_unavailable=true");
+                    }
+                });
+            }
+            #[cfg(target_os = "android")]
+            native_transcription_archive::install(
+                app.handle().clone(),
+                node_config_runtime.clone(),
+                app.state::<LocalDataCommandState>().inner().clone(),
+            );
+            native_voice_events::install();
             native_mesh_assistant::install_for_app(app);
             #[cfg(desktop)]
             {
@@ -9388,10 +9864,32 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_engines,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_catalog,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_model_status,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_download_model,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_delete_model,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_session_create,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_complete,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_cancel,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_session_reset,
+            #[cfg(any(target_os = "android", target_os = "ios"))]
+            aurora_local_inference_session_destroy,
             aurora_request,
             aurora_command,
             aurora_subscribe,
+            aurora_native_event_snapshot,
             aurora_activate_subscription,
+            aurora_native_event_ack,
             aurora_unsubscribe,
             aurora_sidecar_session,
             aurora_sidecar_start,
@@ -9406,6 +9904,10 @@ pub fn run() {
             aurora_native_share_text,
             aurora_native_open_deep_link,
             aurora_native_show_notification,
+            #[cfg(all(target_os = "ios", debug_assertions, feature = "ios-voice-live-test"))]
+            aurora_ios_voice_live_test_start,
+            #[cfg(all(target_os = "ios", debug_assertions, feature = "ios-voice-live-test"))]
+            aurora_ios_voice_live_test_push_pcm,
             aurora_ios_voice_status,
             aurora_ios_voice_foreground_capture_start,
             aurora_ios_voice_background_capture_start,
@@ -9420,13 +9922,25 @@ pub fn run() {
             aurora_native_voice_finish,
             aurora_native_voice_cancel,
             aurora_native_voice_tray_toggle_e2e,
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            aurora_native_speech_host_snapshot,
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            aurora_peer_host_local_speech_transcribe,
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            aurora_peer_host_local_speech_synthesize,
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            aurora_peer_host_local_speech_cancel,
+            #[cfg(any(desktop, target_os = "android", target_os = "ios"))]
+            aurora_peer_host_local_speech_stage,
             aurora_android_baseline_status,
             aurora_android_native_plugin_payload,
             aurora_android_lifecycle_status,
             aurora_android_webview_microphone_permission_decision,
             aurora_android_voice_foreground_service_status,
             aurora_android_voice_foreground_service_start,
+            aurora_android_background_transcription_sync,
             aurora_android_voice_live_test_inject_pcm,
+            aurora_android_voice_live_test_playback_counters,
             aurora_android_voice_foreground_service_finish,
             aurora_android_voice_foreground_service_cancel,
             aurora_android_voice_pack_catalog_status,
@@ -9459,12 +9973,8 @@ pub fn run() {
             aurora_remote_origin_policy,
             aurora_thin_profile_get,
             aurora_thin_profile_set,
-            aurora_node_config_get,
-            aurora_node_config_set,
-            aurora_node_config_delete,
-            aurora_node_config_v2_get,
-            aurora_node_config_v2_set,
-            aurora_node_config_v2_delete,
+            aurora_node_config_policy_read,
+            aurora_node_config_policy_compare_and_swap,
             aurora_thin_room_secret_set,
             aurora_thin_room_secret_get,
             aurora_thin_room_secret_delete,
@@ -9479,6 +9989,14 @@ pub fn run() {
             aurora_assistant_provider_complete,
             mesh_session::aurora_mesh_session_bind,
             mesh_session::aurora_mesh_session_unbind,
+            #[cfg(all(target_os = "android", debug_assertions, feature = "android-voice-live-test"))]
+            mesh_session::aurora_mesh_session_live_privacy_prepare,
+            #[cfg(all(target_os = "android", debug_assertions, feature = "android-voice-live-test"))]
+            mesh_session::aurora_mesh_session_live_privacy_verify_peer_boundary,
+            #[cfg(all(target_os = "android", debug_assertions, feature = "android-voice-live-test"))]
+            mesh_session::aurora_mesh_session_live_privacy_verify_fresh_rebind,
+            #[cfg(all(target_os = "android", debug_assertions, feature = "android-voice-live-test"))]
+            mesh_session::aurora_mesh_session_live_privacy_verify_profile_reset,
             mesh_session::aurora_mesh_session_set_lifecycle,
             mesh_session::aurora_mesh_session_finish_resume,
             mesh_session::aurora_mesh_session_snapshot,
@@ -9544,9 +10062,33 @@ pub fn run() {
             native_webrtc::aurora_native_webrtc_close,
             aurora_shutdown
         ])
+        .on_page_load(|webview, payload| {
+            if let Some(runtime) = webview
+                .app_handle()
+                .try_state::<NativeNodeConfigRuntime>()
+            {
+                match payload.event() {
+                    tauri::webview::PageLoadEvent::Started => {
+                        runtime.begin_document_load(webview.label());
+                    }
+                    tauri::webview::PageLoadEvent::Finished => {
+                        runtime.finish_document_load(webview.label());
+                    }
+                }
+            }
+        })
         .on_window_event(move |window, event| {
+            if matches!(event, tauri::WindowEvent::Destroyed) {
+                if let Some(runtime) = window
+                    .app_handle()
+                    .try_state::<NativeNodeConfigRuntime>()
+                {
+                    runtime.invalidate_window(window.label());
+                }
+            }
             #[cfg(mobile)]
             if window.label() == "main" && matches!(event, tauri::WindowEvent::Suspended) {
+                close_subscriptions_for_window(&subscription_state, "main");
                 let app = window.app_handle().clone();
                 tauri::async_runtime::spawn(async move {
                     #[cfg(target_os = "android")]
@@ -9620,6 +10162,7 @@ pub fn run() {
                 }
             }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                close_subscriptions_for_window(&subscription_state, window.label());
                 match close_policy_for_label(window.label()) {
                     ClosePolicy::HideToTray | ClosePolicy::HideOverlay => {
                         api.prevent_close();
@@ -9668,14 +10211,14 @@ fn install_tray(app: &AppHandle) -> tauri::Result<()> {
                     app.try_state::<SharedSubscriptionState>(),
                     app.try_state::<NativeVoiceState>(),
                 ) {
-                    let _ = shutdown_aurora(
-                        app,
-                        sidecar.inner(),
-                        subscriptions.inner(),
-                        native_voice.inner(),
-                    );
-                } else {
-                    app.exit(0);
+                    let app = app.clone();
+                    let sidecar = Arc::clone(sidecar.inner());
+                    let subscriptions = Arc::clone(subscriptions.inner());
+                    let native_voice = native_voice.inner().clone();
+                    tauri::async_runtime::spawn(async move {
+                        let _ =
+                            shutdown_aurora(&app, &sidecar, &subscriptions, &native_voice).await;
+                    });
                 }
             }
             "voice" => native_voice::tray_toggle(app),
@@ -9702,6 +10245,66 @@ mod tests {
         request_rx: mpsc::Receiver<String>,
         release_tx: Option<mpsc::Sender<()>>,
         handle: thread::JoinHandle<()>,
+    }
+
+    #[test]
+    fn generic_request_validation_error_has_fixed_content_free_wire_fields() {
+        let error = serde_json::to_value(AuroraCommandError::InvalidRequest)
+            .expect("command errors serialize");
+
+        assert_eq!(error["code"], "validation");
+        assert_eq!(error["message"], "Invalid request");
+        assert_eq!(error["detail"]["code"], "validation");
+        assert_eq!(error["detail"]["message"], "Invalid request");
+        assert_eq!(error["detail"]["secrets_redacted"], true);
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_speech_stage_admission_leaves_model_and_language_checks_to_provider() {
+        let stages: aurora_voice_core::node_policy::SpeechStages =
+            serde_json::from_value(json!({
+                "stt": {
+                    "routing": { "prefer": "local", "fallback": "network" },
+                    "modelId": "stt:whisper:base",
+                    "language": "en",
+                    "experimentalRemote": false
+                },
+                "tts": {
+                    "routing": { "prefer": "local", "fallback": "network" },
+                    "modelId": "standard:piper:en_us-lessac-high",
+                    "language": "en-US",
+                    "experimentalRemote": false
+                },
+                "kws": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+                "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+            }))
+            .expect("valid stage selectors");
+
+        assert!(validate_android_speech_stages(&stages).is_ok());
+    }
+
+    #[cfg(target_os = "android")]
+    #[test]
+    fn android_speech_stage_admission_accepts_mesh_with_local_companion() {
+        let mut stages: aurora_voice_core::node_policy::SpeechStages =
+            serde_json::from_value(json!({
+                "stt": {
+                    "routing": { "prefer": "network_only", "fallback": "error" },
+                    "networkKind": "mesh",
+                    "target": { "peerId": "peer-a", "resourceId": "remote:peer-a:STT", "modelId": "stt:model-a" },
+                    "language": "en",
+                    "experimentalRemote": false
+                },
+                "tts": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+                "kws": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false },
+                "vad": { "routing": { "prefer": "local_only", "fallback": "error" }, "experimentalRemote": false }
+            }))
+            .expect("valid mixed speech route");
+
+        assert!(validate_android_speech_stages(&stages).is_ok());
+        stages.stt.target = aurora_voice_core::node_policy::NullableField::Missing;
+        assert!(validate_android_speech_stages(&stages).is_err());
     }
 
     impl LoopbackFixture {
@@ -9869,8 +10472,154 @@ mod tests {
     }
 
     #[test]
+    fn native_event_scope_detects_connection_replacement_with_same_profile_id() {
+        let document = |peer: &str, label: &str| {
+            json!({
+                "version": 2,
+                "activeProfileId": "home",
+                "profiles": [{
+                    "id": "home",
+                    "version": 2,
+                    "label": label,
+                    "nodeMode": "mesh-node",
+                    "webrtcProfile": {"peerId": peer}
+                }]
+            })
+            .to_string()
+        };
+        let first = document("peer-a", "Home");
+        let renamed = document("peer-a", "My home");
+        let changed = document("peer-b", "Home");
+        assert_eq!(
+            native_event_profile_scope(Some(&first)),
+            native_event_profile_scope(Some(&renamed))
+        );
+        assert_ne!(
+            native_event_profile_scope(Some(&first)),
+            native_event_profile_scope(Some(&changed))
+        );
+    }
+
+    #[test]
+    fn profile_state_storage_reports_identity_scope_changes_only() {
+        let document = |peer: &str, label: &str| {
+            json!({
+                "version": 2,
+                "activeProfileId": "home",
+                "profiles": [{
+                    "id": "home",
+                    "version": 2,
+                    "label": label,
+                    "nodeMode": "mesh-node",
+                    "webrtcProfile": {"peerId": peer}
+                }]
+            })
+            .to_string()
+        };
+        let state = Arc::new(Mutex::new(
+            ThinProfileState::from_stored_document(Some(document("peer-a", "Home"))).unwrap(),
+        ));
+
+        assert!(!store_thin_profile_state(
+            &state,
+            ThinProfileState::from_stored_document(Some(document("peer-a", "Renamed home")))
+                .unwrap(),
+        )
+        .unwrap());
+        assert!(store_thin_profile_state(
+            &state,
+            ThinProfileState::from_stored_document(Some(document("peer-b", "Renamed home")))
+                .unwrap(),
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn native_snapshot_preserves_filters_and_validates_cursor() {
+        let request = serde_json::from_value(json!({
+            "kinds": ["assistant.delta"],
+            "subjects": ["conversation-42"],
+            "afterSequence": "native:12"
+        }))
+        .unwrap();
+        let filter = native_snapshot_filter(request).unwrap();
+        assert_eq!(filter.after_sequence, Some(12));
+        assert_eq!(filter.subjects, vec!["conversation-42"]);
+        assert_eq!(filter.kinds, vec!["assistant.delta"]);
+        for cursor in [json!(-1), json!("native:gap:7"), json!(1.5)] {
+            let request = serde_json::from_value(json!({ "afterSequence": cursor })).unwrap();
+            assert!(native_snapshot_filter(request).is_err());
+        }
+    }
+
+    #[test]
+    fn native_event_subscription_preserves_scope_and_replay_cursor() {
+        let request: AuroraSubscribeRequest = serde_json::from_value(json!({
+            "source": "native",
+            "kinds": ["assistant.delta"],
+            "subjects": ["request-42"],
+            "lastEventId": "native:12",
+            "backfill": true
+        }))
+        .unwrap();
+        let filter = native_event_filter(&request).unwrap();
+        assert_eq!(filter.kinds, vec!["assistant.delta"]);
+        assert_eq!(filter.subjects, vec!["request-42"]);
+        assert_eq!(filter.after_sequence, Some(12));
+        assert!(filter.topics.is_empty());
+    }
+
+    #[test]
+    fn native_event_subscription_rejects_malformed_and_gap_cursors() {
+        for cursor in [
+            json!(-1),
+            json!("native:gap:7"),
+            json!("native:bad"),
+            json!(1.5),
+        ] {
+            let request: AuroraSubscribeRequest = serde_json::from_value(json!({
+                "source": "native", "lastSequenceId": cursor
+            }))
+            .unwrap();
+            assert!(native_event_filter(&request).is_err());
+        }
+    }
+
+    #[test]
+    fn native_event_subscription_can_start_live_without_replaying_history() {
+        let request: AuroraSubscribeRequest = serde_json::from_value(json!({
+            "source": "native", "backfill": false
+        }))
+        .unwrap();
+        assert!(native_event_filter(&request)
+            .unwrap()
+            .after_sequence
+            .is_some());
+    }
+
+    #[test]
+    fn mobile_suspended_window_closes_main_native_subscriptions_before_background_mark() {
+        let source = include_str!("lib.rs");
+        let suspended = source
+            .find("matches!(event, tauri::WindowEvent::Suspended)")
+            .expect("main window suspended branch exists");
+        let branch = &source[suspended..];
+        let close = branch
+            .find("close_subscriptions_for_window(&subscription_state, \"main\")")
+            .expect("suspended branch closes main subscriptions");
+        let background = branch
+            .find("mark_surface_backgrounded")
+            .expect("suspended branch marks mesh backgrounded");
+
+        assert!(close < background);
+    }
+
+    #[test]
     fn event_stream_url_percent_encodes_subscription_query_values() {
         let request = AuroraSubscribeRequest {
+            source: None,
+            subjects: None,
+            last_sequence_id: None,
             topics: vec!["voice local/partial".to_string()],
             stream: Some("main stream".to_string()),
             kinds: Some(vec![
@@ -9913,6 +10662,9 @@ mod tests {
             false,
         );
         let request = AuroraSubscribeRequest {
+            source: None,
+            subjects: None,
+            last_sequence_id: None,
             topics: vec!["voice local/partial".to_string()],
             stream: Some("main stream".to_string()),
             kinds: Some(vec!["transcript.delta".to_string()]),
@@ -10152,7 +10904,11 @@ mod tests {
             SubscriptionTask {
                 handle,
                 ready: watch::channel(false).0,
+                ack: watch::channel(None::<String>).0,
+                close: watch::channel(false).0,
+                native_receiver: None,
                 owner_label: "main".to_string(),
+                cooperative_close: false,
             },
         );
         assert!(!subscriptions.activate("aurora-sub-test", OVERLAY_WINDOW_LABEL));
@@ -10164,6 +10920,73 @@ mod tests {
 
         assert!(!subscriptions.activate("aurora-sub-test", "main"));
         assert!(subscriptions.tasks.is_empty());
+    }
+
+    #[test]
+    fn subscription_ack_is_owner_scoped() {
+        let mut subscriptions = SubscriptionState::new();
+        let handle = tauri::async_runtime::spawn(async {
+            std::future::pending::<()>().await;
+        });
+        let (ack_tx, ack_rx) = watch::channel(None::<String>);
+
+        subscriptions.insert(
+            "aurora-sub-ack".to_string(),
+            SubscriptionTask {
+                handle,
+                ready: watch::channel(false).0,
+                ack: ack_tx,
+                close: watch::channel(false).0,
+                native_receiver: None,
+                owner_label: "main".to_string(),
+                cooperative_close: false,
+            },
+        );
+
+        assert!(!subscriptions.ack(
+            "aurora-sub-ack",
+            OVERLAY_WINDOW_LABEL,
+            "native:1".to_string()
+        ));
+        assert_eq!(ack_rx.borrow().as_deref(), None);
+        assert!(subscriptions.ack("aurora-sub-ack", "main", "native:1".to_string()));
+        assert_eq!(ack_rx.borrow().as_deref(), Some("native:1"));
+        subscriptions.remove("aurora-sub-ack", "main");
+    }
+
+    #[test]
+    fn subscription_remove_owner_closes_window_owned_subscriptions() {
+        let mut subscriptions = SubscriptionState::new();
+        let mut close_receivers = HashMap::new();
+        for (id, owner_label) in [("main-sub", "main"), ("overlay-sub", OVERLAY_WINDOW_LABEL)] {
+            let handle = tauri::async_runtime::spawn(async {
+                std::future::pending::<()>().await;
+            });
+            let (close_tx, close_rx) = watch::channel(false);
+            close_receivers.insert(id.to_string(), close_rx);
+            subscriptions.insert(
+                id.to_string(),
+                SubscriptionTask {
+                    handle,
+                    ready: watch::channel(false).0,
+                    ack: watch::channel(None::<String>).0,
+                    close: close_tx,
+                    native_receiver: None,
+                    owner_label: owner_label.to_string(),
+                    cooperative_close: true,
+                },
+            );
+        }
+
+        subscriptions.remove_owner("main");
+
+        assert!(!subscriptions.tasks.contains_key("main-sub"));
+        assert!(subscriptions.tasks.contains_key("overlay-sub"));
+        assert!(*close_receivers["main-sub"].borrow());
+        assert!(!*close_receivers["overlay-sub"].borrow());
+        subscriptions.remove_owner(OVERLAY_WINDOW_LABEL);
+        assert!(subscriptions.tasks.is_empty());
+        assert!(*close_receivers["overlay-sub"].borrow());
     }
 
     #[test]
@@ -10588,6 +11411,33 @@ mod tests {
         assert!(!serialized.contains("pcm-secret"));
         assert!(serialized.contains("[redacted]"));
         assert!(serialized.contains("secrets_redacted"));
+    }
+
+    #[test]
+    fn local_data_error_serialization_only_exposes_structured_repository_reason() {
+        let generic =
+            serde_json::to_value(AuroraCommandError::LocalData("generic failure".to_string()))
+                .unwrap();
+        assert!(generic["detail"]["reason"].is_null());
+
+        let duplicate = serde_json::to_value(AuroraCommandError::LocalDataReason {
+            message: "message ID belongs to another conversation".to_string(),
+            reason: LocalDataReasonCode::DuplicateMessageId,
+        })
+        .unwrap();
+        assert_eq!(duplicate["code"], json!("invalid_record"));
+        assert_eq!(duplicate["detail"]["reason"], json!("duplicate_message_id"));
+
+        let sequence = serde_json::to_value(AuroraCommandError::LocalDataReason {
+            message: "message sequence already exists".to_string(),
+            reason: LocalDataReasonCode::DuplicateMessageSequence,
+        })
+        .unwrap();
+        assert_eq!(
+            sequence["detail"]["reason"],
+            json!("duplicate_message_sequence")
+        );
+        assert_eq!(generic["code"], json!("local_data_error"));
     }
 
     #[test]
@@ -11774,6 +12624,7 @@ mod tests {
             "",
             "session",
             "aurora.config.secret",
+            "aurora.session.desktop-thin-connection-profiles.v1",
             "aurora.session/../../token",
             "aurora.session.token value",
             "aurora.mesh.peer-proof.0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
@@ -12543,6 +13394,7 @@ mod tests {
         for command in [
             "startVoiceForegroundService",
             "injectVoicePcmForLiveTest",
+            "nativeVoicePlaybackCountersForLiveTest",
             "finishVoiceForegroundService",
             "stopVoiceForegroundService",
         ] {
@@ -12564,6 +13416,7 @@ mod tests {
         for command in [
             "aurora_android_voice_foreground_service_start",
             "aurora_android_voice_live_test_inject_pcm",
+            "aurora_android_voice_live_test_playback_counters",
             "aurora_android_voice_foreground_service_finish",
             "aurora_android_voice_foreground_service_cancel",
             "aurora_android_voice_pack_catalog_status",
@@ -12577,6 +13430,7 @@ mod tests {
         }
         let build_manifest = include_str!("../build.rs");
         assert!(build_manifest.contains("aurora_android_voice_live_test_inject_pcm"));
+        assert!(build_manifest.contains("aurora_android_voice_live_test_playback_counters"));
         assert!(plugin.contains("backendAudioEvidenceRequired"));
         let finish_start = service
             .find("private fun finishNativeSession()")

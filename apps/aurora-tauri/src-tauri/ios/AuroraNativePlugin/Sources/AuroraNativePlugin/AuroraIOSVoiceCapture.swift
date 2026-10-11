@@ -29,6 +29,9 @@ public final class AuroraIOSVoiceCapture {
   private let sequenceLock = NSLock()
   private var sequence: UInt64 = 0
   private var running = false
+  #if DEBUG
+  private var fixtureIngressEnabled = false
+  #endif
 
   public init(
     session: AVAudioSession = .sharedInstance(),
@@ -64,6 +67,9 @@ public final class AuroraIOSVoiceCapture {
   public func start() throws {
     guard let state else { throw AuroraIOSVoiceCaptureError.nativeStateUnavailable }
     if running { return }
+    #if DEBUG
+    fixtureIngressEnabled = false
+    #endif
     _ = aurora_ios_audio_state_reset(state)
     try session.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers])
     try session.setPreferredSampleRate(16_000)
@@ -106,6 +112,46 @@ public final class AuroraIOSVoiceCapture {
       throw AuroraIOSVoiceCaptureError.captureStartFailed
     }
   }
+
+  #if DEBUG
+  public func beginFixtureIngress() throws {
+    guard let state else { throw AuroraIOSVoiceCaptureError.nativeStateUnavailable }
+    guard !running else { throw AuroraIOSVoiceCaptureError.captureStartFailed }
+    guard aurora_ios_audio_state_reset(state) == AURORA_IOS_AUDIO_OK else {
+      throw AuroraIOSVoiceCaptureError.nativeStateUnavailable
+    }
+    sequenceLock.lock()
+    sequence = 0
+    fixtureIngressEnabled = true
+    sequenceLock.unlock()
+  }
+
+  public func endFixtureIngress() {
+    sequenceLock.lock()
+    fixtureIngressEnabled = false
+    sequenceLock.unlock()
+  }
+
+  public func pushFixturePCM(_ samples: [Float]) throws -> UInt64 {
+    guard let state else { throw AuroraIOSVoiceCaptureError.nativeStateUnavailable }
+    guard fixtureIngressEnabled, !running, !samples.isEmpty,
+      samples.count <= Int(maxChunkSamples), samples.allSatisfy({ $0.isFinite })
+    else { throw AuroraIOSVoiceCaptureError.captureStartFailed }
+    sequenceLock.lock()
+    defer { sequenceLock.unlock() }
+    let current = sequence
+    let result = samples.withUnsafeBufferPointer { buffer in
+      aurora_ios_audio_state_push_pcm_f32(
+        state, buffer.baseAddress, UInt(buffer.count), current, 16_000
+      )
+    }
+    guard result == AURORA_IOS_AUDIO_OK else {
+      throw AuroraIOSVoiceCaptureError.captureStartFailed
+    }
+    sequence &+= 1
+    return current
+  }
+  #endif
 
   public func stop() {
     guard running else { return }

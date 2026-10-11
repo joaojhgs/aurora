@@ -13,7 +13,9 @@ import {
   localAuditRecordSchema,
   localDataRecordCollectionsSchema,
   localToolStateRecordSchema,
-  peerGrantMetadataRecordSchema
+  peerGrantMetadataRecordSchema,
+  transcriptSessionRecordSchema,
+  transcriptSegmentRecordSchema
 } from './records.zod.js'
 
 export function buildLocalDataJsonSchemaArtifact(): Record<string, unknown> {
@@ -30,6 +32,8 @@ export function buildLocalDataJsonSchemaArtifact(): Record<string, unknown> {
       LocalToolStateRecord: { $ref: '#/$defs/LocalToolStateRecord' },
       PeerGrantMetadataRecord: { $ref: '#/$defs/PeerGrantMetadataRecord' },
       LocalAuditRecord: { $ref: '#/$defs/LocalAuditRecord' },
+      TranscriptSessionRecord: { $ref: '#/$defs/TranscriptSessionRecord' },
+      TranscriptSegmentRecord: { $ref: '#/$defs/TranscriptSegmentRecord' },
       LocalDataRecordCollections: { $ref: '#/$defs/LocalDataRecordCollections' },
       LocalDataRecordCounts: { $ref: '#/$defs/LocalDataRecordCounts' },
       LocalDataCollectionHashes: { $ref: '#/$defs/LocalDataCollectionHashes' },
@@ -43,6 +47,8 @@ export function buildLocalDataJsonSchemaArtifact(): Record<string, unknown> {
       LocalToolStateRecord: z.toJSONSchema(localToolStateRecordSchema),
       PeerGrantMetadataRecord: z.toJSONSchema(peerGrantMetadataRecordSchema),
       LocalAuditRecord: z.toJSONSchema(localAuditRecordSchema),
+      TranscriptSessionRecord: z.toJSONSchema(transcriptSessionRecordSchema),
+      TranscriptSegmentRecord: z.toJSONSchema(transcriptSegmentRecordSchema),
       LocalDataRecordCollections: z.toJSONSchema(localDataRecordCollectionsSchema),
       LocalDataRecordCounts: z.toJSONSchema(localDataRecordCountsSchema),
       LocalDataCollectionHashes: z.toJSONSchema(localDataCollectionHashesSchema),

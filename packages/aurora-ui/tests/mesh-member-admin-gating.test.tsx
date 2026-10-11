@@ -234,7 +234,7 @@ describe('mesh member vs admin interactivity', () => {
         sessionIsAdmin={false}
       />,
     )
-    await flush()
+    await flushUntil(member.container, PRODUCT_COPY.mesh.adminSharingLocked)
     expect(member.container.textContent).toContain('Service sharing')
     expect(member.container.textContent).toContain(PRODUCT_COPY.mesh.adminSharingLocked)
     expect(isControlDisabled(member.container.querySelector('[aria-label="Share Text to speech from this device"]'))).toBe(true)
@@ -248,7 +248,7 @@ describe('mesh member vs admin interactivity', () => {
         sessionIsAdmin
       />,
     )
-    await flush()
+    await flushUntil(admin.container, 'Text to speech')
     expect(admin.container.textContent).not.toContain(PRODUCT_COPY.mesh.adminSharingLocked)
     expect(isControlDisabled(admin.container.querySelector('[aria-label="Share Text to speech from this device"]'))).toBe(false)
     admin.unmount()
@@ -322,7 +322,15 @@ async function flush() {
     await Promise.resolve()
     await Promise.resolve()
     await Promise.resolve()
+    await new Promise((resolve) => setTimeout(resolve, 0))
   })
+}
+
+async function flushUntil(container: HTMLElement, text: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await flush()
+    if (container.textContent?.includes(text)) return
+  }
 }
 
 function isControlDisabled(element: Element | null | undefined): boolean {
@@ -462,6 +470,22 @@ function sharingClient() {
     { key_path: `${base}.mesh_routing.require_explicit_selector`, default: false },
   ])
   return {
+    transport: { kind: 'http' },
+    auth: {
+      subscribe: () => () => undefined,
+      snapshot: () => ({
+        state: 'user',
+        principalId: 'principal-member',
+        deviceId: 'device-member',
+        peerId: 'peer-member',
+        credentialKind: 'bearer_token',
+        isAdmin: false,
+        effectivePermissions: [],
+      }),
+    },
+    permissions: {
+      has: () => false,
+    },
     registry: {
       getRegistry: async () => ({ modules: [{ module: 'TTS', version: '1', summary: 'TTS', capabilities: [], callable_features: [{ feature_id: 'speech', module: 'TTS', label: 'Speech synthesis', summary: 'Speech', method_ids: ['TTS.Synthesize'] }], methods: [{ name: 'Synthesize', summary: 'Speak', bus_topic: 'TTS.Synthesize', exposure: 'external', input_model: null, output_model: null, required_perms: ['TTS.use'], method_type: 'use' }] }], digest: 'r', service_count: 1, method_count: 1 }),
       listServices: async () => ({ services: [{ module: 'TTS', version: '1', summary: 'TTS', capabilities: [], callable_features: [], method_count: 1, last_seen: '', status: 'healthy', instance_id: 'tts-local' }], mode: 'thread', app_id: '', room: '', room_password: '' }),

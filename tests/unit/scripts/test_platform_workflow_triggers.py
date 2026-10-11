@@ -97,7 +97,15 @@ def test_android_workflow_runs_packaged_local_voice_without_a_gateway_fixture() 
     assert "android:voice:live" in workflow
     assert "createGatewayFixture" not in harness
     assert "/api/Orchestrator/ExternalUserInput" not in harness
-    assert "assistantRoute: 'local-only'" in harness
+    assert (
+        "assistantRoute: successfulNativeTurnAcceptance ? "
+        "background.acceptanceEvidence?.route ?? null : 'local-only'" in harness
+    )
+    assert "environment[ANDROID_NATIVE_TURN_ACCEPTANCE_ENV] === '1'" in harness
+    assert (
+        "acceptanceMode: successfulNativeTurnAcceptance ? "
+        "'successful-authorized-remote' : 'failure-recovery-local'" in harness
+    )
 
 
 def test_native_webrtc_workflow_uses_uv_managed_python() -> None:

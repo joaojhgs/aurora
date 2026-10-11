@@ -78,6 +78,7 @@ describe("mesh session link", () => {
             providerServiceInstanceId: null,
             nativeDataChannelCodec: null,
             advertisedMethodIds: [],
+            speechStageCapabilities: [],
             manifestMethodsReady: true,
             primary: false,
           },

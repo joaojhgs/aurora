@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from app.messaging import Envelope
+from app.services.tts.providers.base import TTSStreamChunk
 from app.services.tts.service import TTSService
 from app.shared.contracts.models.common import EmptyInput
 from app.shared.contracts.models.tts import (
@@ -24,6 +25,7 @@ from app.shared.contracts.models.tts import (
     TTSSynthesizeRequest,
 )
 from app.shared.messaging import bus_init
+from app.shared.speech_lifecycle_observer import BoundedSpeechLifecycleTestSink
 
 
 @pytest.fixture
@@ -175,6 +177,51 @@ async def _external_end(
         ),
         envelope,
     )
+
+
+@pytest.mark.asyncio
+async def test_admitted_tts_observer_tracks_first_input_output_and_terminal_without_text() -> None:
+    service = TTSService(lifecycle_observer=BoundedSpeechLifecycleTestSink())
+    service.stream = Mock()
+    service.stream.stop = Mock()
+    sink = service._speech_lifecycle_observer
+
+    class Provider:
+        async def stream(self, _request):
+            yield TTSStreamChunk(
+                sequence=0,
+                audio=b"\x00\x00" * 32,
+                sample_rate=22_050,
+                channels=1,
+                duration_ms=32 / 22_050 * 1000,
+            )
+
+    service._provider = Provider()
+    admission, envelope = await _start_external_stream(service, stream_id="observed")
+    await _external_chunk(
+        service,
+        admission,
+        envelope,
+        sequence=0,
+        text="private utterance",
+        is_final=True,
+    )
+
+    events = sink.snapshot()
+    names = [event.event for event in events]
+    assert names == [
+        "action_admitted",
+        "stream_first_input",
+        "model_invoke_start",
+        "stream_first_output",
+        "model_invoke_end",
+        "terminal",
+    ]
+    assert all(event.operation_id == "operation-observed" for event in events)
+    assert all(event.attempt_id == "attempt-observed" for event in events)
+    assert all(event.config_revision == 0 for event in events)
+    assert all(event.route_revision == "route-1" for event in events)
+    assert "private utterance" not in str([event.model_dump() for event in events])
 
 
 def test_tts_stream_contracts_require_use_permissions():
@@ -829,6 +876,36 @@ async def test_stop_emits_targeted_terminal_marker_once_and_clears_stream(
     assert call.kwargs["caller_peer_id"] == "peer-a"
     assert call.kwargs["principal_id"] == "principal-a"
     assert call.kwargs["correlation_id"] == "corr-a"
+
+
+@pytest.mark.asyncio
+async def test_cancelled_stream_clear_emits_all_terminals_and_propagates(mock_bus, monkeypatch):
+    sink = BoundedSpeechLifecycleTestSink()
+    service = TTSService(lifecycle_observer=sink)
+    service.stream = Mock()
+    service.stream.stop = Mock()
+    first, _ = await _start_external_stream(service, stream_id="cancel-clear-one")
+    second, _ = await _start_external_stream(service, stream_id="cancel-clear-two")
+    publish_started = asyncio.Event()
+
+    async def blocked_terminal_publish(*_args, **_kwargs):
+        publish_started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(service, "_publish_audio_chunk", blocked_terminal_publish)
+    clear_task = asyncio.create_task(service._clear_tts_streams("service_stopped"))
+    await asyncio.wait_for(publish_started.wait(), timeout=1.0)
+    clear_task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await clear_task
+
+    terminals = [event for event in sink.snapshot() if event.event == "terminal"]
+    assert {event.operation_id for event in terminals} == {
+        first.operation_id,
+        second.operation_id,
+    }
+    assert len(terminals) == 2
+    assert all(event.outcome == "canceled" for event in terminals)
 
 
 @pytest.mark.asyncio

@@ -23,6 +23,16 @@ import {
 import { getAuroraNavItem, visibleAuroraMobileTabs, visibleAuroraNavSections } from "./nav";
 import type { AuroraNavItem } from "./nav";
 import { getAuroraSurfaceProfile, type AuroraSurfaceProfile } from "./platform-surface";
+import { useAuroraStateScopeId } from "./query";
+import {
+  selectConnectionScopeId,
+  selectConnectionState,
+  selectPeerConnectionScopeId,
+  selectPeerConnectionState,
+  useConnectionStore,
+  type AuroraConnectionState,
+  type AuroraPeerConnectionState,
+} from "./state/connection-store";
 import { auroraRuntimeVersionLabel } from "./version";
 import { PRODUCT_COPY, productStatusCopy } from "./product-copy";
 import type { AuroraShellSnapshot, RouteAvailability } from "./shell-data";
@@ -80,6 +90,17 @@ export function AppShell({
   const [activityRailCollapsed, setActivityRailCollapsed] = useState(true);
   const contentRef = useRef<HTMLElement>(null);
   const mobileMenuButtonRef = useRef<HTMLButtonElement>(null);
+  const activeStateScopeId = useAuroraStateScopeId();
+  const peerConnectionState = useConnectionStore((state) => (
+    selectPeerConnectionScopeId(state) === activeStateScopeId
+      ? selectPeerConnectionState(state)
+      : null
+  ));
+  const connectionState = useConnectionStore((state) => (
+    selectConnectionScopeId(state) === activeStateScopeId
+      ? selectConnectionState(state)
+      : null
+  ));
   const closeMobileNavigation = useCallback(() => {
     mobileMenuButtonRef.current?.focus();
     setNavigationOpen(false);
@@ -122,7 +143,7 @@ export function AppShell({
   }, [activePath]);
   return (
     <div
-      className="aui-shell flex h-dvh w-full overflow-hidden bg-background text-foreground"
+      className="aui-shell flex h-dvh min-h-0 w-full overflow-hidden bg-[var(--aui-bg)] text-[var(--aui-ink)]"
       data-activity-collapsed={activityRailCollapsed ? "true" : "false"}
       data-mobile-viewport={surfaceProfile.isMobile && mobileViewport.height !== null ? "true" : undefined}
       data-navigation-open={navigationOpen ? "true" : "false"}
@@ -134,7 +155,7 @@ export function AppShell({
       <aside
         id="primary-navigation"
         className={cn(
-          "aui-sidebar relative hidden min-w-0 shrink-0 flex-col overflow-hidden border-r bg-sidebar md:flex",
+          "aui-sidebar relative flex min-w-0 basis-64 shrink-0 flex-col overflow-hidden border-r bg-sidebar [@media(max-width:1040px)]:hidden",
           navigationOpen ? "border-border" : "border-transparent",
         )}
         style={{
@@ -149,7 +170,7 @@ export function AppShell({
           size="icon-sm"
           aria-label="Close navigation menu"
           onClick={() => setNavigationOpen(false)}
-          className="absolute top-2.5 right-2.5 z-10 md:hidden"
+          className="absolute top-2.5 right-2.5 z-10 hidden [@media(max-width:1040px)]:inline-flex"
         >
           <X size={18} aria-hidden />
         </Button>
@@ -175,9 +196,9 @@ export function AppShell({
           </div>
         </div>
       </aside>
-      <div className="aui-main-column flex min-w-0 flex-1 flex-col">
-      <header className="aui-topbar flex h-[54px] shrink-0 items-center gap-2.5 border-b border-border px-4 py-1 md:pt-0 md:py-0">
-            <div className="aui-mobile-menu md:hidden" data-open={navigationOpen ? "true" : "false"}>
+      <div className="aui-main-column flex min-h-0 min-w-0 flex-1 flex-col">
+      <header className="aui-topbar relative z-20 flex h-14 min-h-14 shrink-0 items-center gap-[0.65rem] border-b border-border bg-[var(--aui-bg)] !px-4 py-0 [@media(max-width:720px)]:!pl-3 [@media(max-width:720px)]:!pr-[0.45rem]">
+            <div className="aui-mobile-menu hidden [@media(max-width:1040px)]:block" data-open={navigationOpen ? "true" : "false"}>
             <Button
               ref={mobileMenuButtonRef}
               type="button"
@@ -187,12 +208,12 @@ export function AppShell({
               aria-expanded={navigationOpen}
               aria-controls="primary-navigation"
               onClick={handleMobileMenuToggle}
-              className="shrink-0"
+              className="relative z-50 shrink-0"
             >
               <Menu size={20} aria-hidden />
             </Button>
             <div
-              className="aui-mobile-sheet"
+              className="aui-mobile-sheet fixed bottom-0 left-0 z-40 flex w-[min(19rem,90vw)] flex-col overflow-hidden border-r border-border bg-sidebar shadow-[0_1rem_3rem_rgb(0_0_0_/_0.16)]"
               aria-hidden={!navigationOpen}
               hidden={!navigationOpen}
               inert={!navigationOpen}
@@ -216,18 +237,18 @@ export function AppShell({
               />
             ) : null}
           </div>
-          <div className="aui-status-row flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto" aria-label="Aurora shell status">
+          <div className="aui-status-row flex min-w-0 flex-1 items-center gap-[0.35rem] overflow-x-auto" aria-label="Aurora shell status">
             <ModeBadge mode={shellSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)} className="aui-shell-status" />
-            <HealthBadge health={shellHealthLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)} className="aui-shell-status" />
+            <HealthBadge health={shellHealthLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable, peerConnectionState, connectionState)} className="aui-shell-status" />
             <IdentityBadge identity={shellIdentityBadgeLabel(sessionIsAdmin)} className="aui-shell-status" />
           </div>
           <span
-            className="aui-runtime-chip shrink-0 rounded-md border border-border bg-muted/40 px-2.5 py-1 font-mono text-[11.5px] text-muted-foreground"
+            className="aui-runtime-chip inline-flex min-h-7 shrink-0 items-center gap-[0.28rem] rounded-[0.45rem] border border-border bg-[color-mix(in_srgb,var(--aui-surface-3)_40%,transparent)] px-[0.56rem] py-1 font-mono text-[0.72rem] text-[var(--aui-muted)]"
             aria-label="Aurora version and connection state"
           >
             <span className="aui-runtime-version">v{auroraRuntimeVersionLabel(snapshot.serverVersion)}</span>{" "}
-            <strong className={shellRuntimeStateToneClass(snapshot, runtimeMode, nodeMode, localNodeAvailable)}>
-              <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable)}
+            <strong className={shellRuntimeStateToneClass(snapshot, runtimeMode, nodeMode, localNodeAvailable, peerConnectionState, connectionState)}>
+              <span className="aui-runtime-separator">· </span>{shellRuntimeStateLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable, peerConnectionState, connectionState)}
             </strong>
           </span>
           <Button
@@ -238,7 +259,7 @@ export function AppShell({
             aria-pressed={activityRailCollapsed}
             title="Toggle activity rail"
             onClick={handleActivityRailToggle}
-            className="aui-activity-toggle shrink-0"
+            className="aui-activity-toggle size-8 shrink-0 border-0 rounded-[0.45rem] bg-transparent text-[var(--aui-muted)] hover:bg-transparent aria-pressed:bg-[color-mix(in_srgb,var(--aui-primary)_10%,transparent)] aria-pressed:text-[var(--aui-primary)] aria-pressed:hover:bg-[color-mix(in_srgb,var(--aui-primary)_10%,transparent)]"
           >
             <PanelRight size={18} aria-hidden />
           </Button>
@@ -246,14 +267,14 @@ export function AppShell({
         <div className="flex min-h-0 flex-1">
           <main
             ref={contentRef}
-            className="aui-content relative min-w-0 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pb-[calc(4.8rem+env(safe-area-inset-bottom))] md:pb-0"
+            className="aui-content relative min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain pb-[calc(4.8rem+env(safe-area-inset-bottom))] [scrollbar-gutter:stable] [touch-action:pan-y] md:pb-0"
             id="content"
           >
             {children}
           </main>
           <aside
             className={cn(
-              "aui-activity min-w-0 shrink-0 overflow-hidden border-l bg-background",
+              "aui-activity min-w-0 basis-72 shrink-0 overflow-hidden border-l bg-[var(--aui-bg)]",
               activityRailCollapsed ? "border-transparent" : "border-border",
             )}
             aria-label="Aurora activity"
@@ -396,15 +417,15 @@ function MobileNavigationSheet({
   onClose: () => void;
 }) {
   return (
-    <div className="aui-mobile-sheet-layout flex h-full flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
-      <div className="aui-mobile-sheet-header flex items-center border-b border-border">
+    <div className="flex min-h-0 flex-1 flex-col" role="dialog" aria-labelledby="aui-mobile-sheet-title">
+      <div className="aui-mobile-sheet-header flex shrink-0 items-center justify-between border-b border-border">
         <BrandHeader snapshot={snapshot} />
         <Button type="button" variant="ghost" size="icon" aria-label="Close navigation menu" onClick={onClose}>
           <X size={18} aria-hidden />
         </Button>
       </div>
-      <div className="aui-mobile-sheet-body flex flex-1 flex-col gap-3 overflow-y-auto p-3">
-        <p className="aui-mobile-sheet-title text-sm font-semibold" id="aui-mobile-sheet-title">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto p-3">
+        <p className="mx-3 mt-3 mb-[0.45rem] text-[0.72rem] leading-[calc(1.25/0.875)] font-extrabold tracking-[0.04em] text-[var(--aui-muted)] uppercase" id="aui-mobile-sheet-title">
           Navigation
         </p>
         <ShellNavigation
@@ -416,7 +437,7 @@ function MobileNavigationSheet({
           {...(onNavigate ? { onNavigate } : {})}
         />
       </div>
-      <div className="aui-mobile-sheet-footer flex items-center gap-2 border-t border-border p-3" aria-label="Mobile identity">
+      <div className="aui-mobile-sheet-footer flex shrink-0 items-center gap-[0.65rem] border-t border-border p-[0.7rem] pb-[max(0.7rem,env(safe-area-inset-bottom))] text-[0.82rem] text-[var(--aui-muted)]" aria-label="Mobile identity">
         <Avatar className="aui-avatar size-[26px]">
           <AvatarFallback className="bg-primary/15 text-[11px] font-semibold text-primary">
             {shellAvatarLabel(sessionIsAdmin)}
@@ -448,7 +469,7 @@ function MobileBottomTabs({
   const tabs = visibleAuroraMobileTabs(surfaceProfile, sessionIsAdmin);
   return (
     <nav
-      className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-50 flex min-h-[calc(4.1rem+env(safe-area-inset-bottom))] items-center justify-around border-t border-border bg-background pb-[env(safe-area-inset-bottom)] pt-1.5 md:hidden"
+      className="aui-mobile-tabs fixed inset-x-0 bottom-0 z-30 hidden min-h-[calc(4.1rem+env(safe-area-inset-bottom))] grid-cols-3 items-center justify-around border-t border-border bg-sidebar/95 px-0 pt-1.5 pb-[env(safe-area-inset-bottom)] backdrop-blur-[18px] [@media(max-width:1040px)]:grid [@media(max-width:1040px)]:px-1 [@media(max-width:1040px)]:pt-[0.35rem]"
       aria-label="Mobile navigation"
     >
       {tabs.map((tab) => (
@@ -484,10 +505,13 @@ function MobileBottomTab({
       aria-label={`${tab.mobileLabel ?? tab.label} tab, ${routeStateLabel}`}
       data-mobile-tab={tab.id}
       onClick={(event) => handleShellNavigation(event, tab.href, onNavigate)}
-      className={cn("flex flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10.5px]", active ? "text-primary" : "text-muted-foreground")}
+      className={cn(
+        "relative flex min-w-0 flex-col items-center gap-0.5 rounded-lg px-3 py-1 text-[10.5px] [@media(max-width:1040px)]:grid [@media(max-width:1040px)]:min-h-[3.3rem] [@media(max-width:1040px)]:place-items-center [@media(max-width:1040px)]:gap-[0.22rem] [@media(max-width:1040px)]:px-[0.12rem] [@media(max-width:1040px)]:pt-[0.42rem] [@media(max-width:1040px)]:pb-[0.3rem] [@media(max-width:1040px)]:text-[0.7rem]",
+        active ? "!text-primary before:absolute before:top-[0.22rem] before:h-[0.16rem] before:w-6 before:rounded-full before:bg-primary [@media(max-width:860px)]:before:content-[''] [@media(min-width:861px)]:before:hidden" : "!text-[var(--aui-ink)]",
+      )}
     >
       <tab.icon size={18} aria-hidden />
-      <span>{tab.mobileLabel ?? tab.label}</span>
+      <span className="block w-full max-w-full overflow-visible text-center text-clip whitespace-nowrap">{tab.mobileLabel ?? tab.label}</span>
       <span className="sr-only" aria-hidden="true" />
     </a>
   );
@@ -533,12 +557,12 @@ export function ShellNavigation({
   const navigationSections = visibleAuroraNavSections(surfaceProfile, sessionIsAdmin);
   return (
     <nav
-      className={cn("aui-nav flex flex-1 flex-col gap-4", compact ? "p-0" : "p-2.5")}
+      className="aui-nav flex flex-1 flex-col gap-[1.05rem] overflow-auto px-3 py-[0.95rem]"
       aria-label={compact ? "Mobile sheet route navigation" : "Primary route navigation"}
     >
       {navigationSections.map((section) => (
         <section key={section.label} className="flex flex-col gap-0.5">
-          <h2 className="mb-1 px-2 text-[10.5px] font-semibold tracking-wide text-muted-foreground uppercase">{section.label}</h2>
+          <h2 className="mb-[0.35rem] px-2 text-[0.7rem] font-[650] tracking-[0.055em] text-[var(--aui-muted)] uppercase">{section.label}</h2>
           {section.items.map((item) => {
             const route = routeById.get(item.id);
             const active = activePath === item.href;
@@ -547,14 +571,16 @@ export function ShellNavigation({
                 key={item.id}
                 href={item.href}
                 className={cn(
-                  "flex items-center gap-2 rounded-md px-2 py-1.5 text-[13px] font-medium",
-                  active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "text-muted-foreground hover:bg-sidebar-accent/50 hover:text-foreground"
+                  "grid min-h-8 grid-cols-[1rem_minmax(0,1fr)_auto_auto] items-center gap-[0.55rem] rounded-[0.45rem] border-0 bg-transparent px-2 py-[0.36rem] text-[0.875rem] font-semibold",
+                  active
+                    ? "bg-sidebar-accent !text-sidebar-accent-foreground"
+                    : "!text-[var(--aui-muted)] hover:bg-sidebar-accent hover:!text-[var(--aui-ink)]"
                 )}
                 aria-current={active ? "page" : undefined}
                 onClick={(event) => handleShellNavigation(event, item.href, onNavigate)}
               >
                 <item.icon size={15} className="shrink-0" aria-hidden />
-                <span className="flex-1 truncate">{item.label}</span>
+                <span className="min-w-0 truncate">{item.label}</span>
                 {item.adminGated ? <Lock size={11} className="shrink-0 opacity-55" aria-label="Admin gated" /> : null}
                 {route?.selectorRequired ? (
                   <span aria-label={`${item.label} selection required`}>
@@ -781,15 +807,23 @@ function shellSurfaceLabel(
   return productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable);
 }
 
-function shellHealthLabel(
+export function shellHealthLabel(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
   localNodeAvailable?: boolean,
+  peerConnectionState?: AuroraPeerConnectionState | null,
+  connectionState?: AuroraConnectionState | null,
 ): string {
+  const peerHealth = peerConnectionHealthLabel(peerConnectionState);
+  if (peerHealth && peerHealth !== "Healthy") return peerHealth;
+  const aggregateHealth = aggregateConnectionHealthLabel(connectionState);
+  if (aggregateHealth && aggregateHealth !== "Healthy") return aggregateHealth;
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "Degraded";
   if (shellCapabilitiesNeedAttention(snapshot)) return "Degraded";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "Offline";
+  if (peerHealth) return peerHealth;
+  if (aggregateHealth) return aggregateHealth;
   if (snapshot.loadState === "loading") return "Connecting";
   return "Healthy";
 }
@@ -816,15 +850,23 @@ function shellAccessLabel(sessionIsAdmin: boolean, snapshot: AuroraShellSnapshot
   return sessionIsAdmin ? `${PRODUCT_COPY.permissions.administrator} on ${shellNodeLabel(snapshot)}` : PRODUCT_COPY.permissions.limited;
 }
 
-function shellRuntimeStateLabel(
+export function shellRuntimeStateLabel(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
   localNodeAvailable?: boolean,
+  peerConnectionState?: AuroraPeerConnectionState | null,
+  connectionState?: AuroraConnectionState | null,
 ): string {
+  const peerLabel = peerConnectionRuntimeLabel(peerConnectionState);
+  if (peerLabel && peerLabel !== "connected") return peerLabel;
+  const aggregateLabel = aggregateConnectionRuntimeLabel(connectionState);
+  if (aggregateLabel && aggregateLabel !== "connected") return aggregateLabel;
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "attention";
   if (shellCapabilitiesNeedAttention(snapshot)) return "attention";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "offline";
+  if (peerLabel) return peerLabel;
+  if (aggregateLabel) return aggregateLabel;
   if (isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode)) return "available";
   if (snapshot.loadState === "loading") return "syncing";
   return "connected";
@@ -839,16 +881,65 @@ function shellModeLabel(
   return productSurfaceLabel(snapshot, runtimeMode, nodeMode, localNodeAvailable);
 }
 
-function shellRuntimeStateToneClass(
+export function shellRuntimeStateToneClass(
   snapshot: AuroraShellSnapshot,
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
   localNodeAvailable?: boolean,
+  peerConnectionState?: AuroraPeerConnectionState | null,
+  connectionState?: AuroraConnectionState | null,
 ): string {
+  const peerTone = peerConnectionRuntimeToneClass(peerConnectionState);
+  if (peerTone && peerTone !== "text-success") return peerTone;
+  const aggregateTone = aggregateConnectionRuntimeToneClass(connectionState);
+  if (aggregateTone && aggregateTone !== "text-success") return aggregateTone;
   if (localNodeNeedsAttention(snapshot, runtimeMode, nodeMode, localNodeAvailable)) return "text-warning";
   if (shellCapabilitiesNeedAttention(snapshot)) return "text-warning";
   if (shellRuntimeStateIsOffline(snapshot, runtimeMode, nodeMode)) return "text-destructive";
+  if (peerTone) return peerTone;
+  if (aggregateTone) return aggregateTone;
   return "text-success";
+}
+
+function aggregateConnectionHealthLabel(connectionState?: AuroraConnectionState | null): string | null {
+  if (!connectionState) return null;
+  if (connectionState === "connected") return "Healthy";
+  // Stream loss means updates are delayed; queries and local services may work.
+  return "Degraded";
+}
+
+function aggregateConnectionRuntimeLabel(connectionState?: AuroraConnectionState | null): string | null {
+  if (!connectionState) return null;
+  if (connectionState === "connected") return "connected";
+  if (connectionState === "connecting" || connectionState === "reconnecting") return "syncing";
+  return "attention";
+}
+
+function aggregateConnectionRuntimeToneClass(connectionState?: AuroraConnectionState | null): string | null {
+  if (!connectionState) return null;
+  if (connectionState === "connected") return "text-success";
+  return "text-warning";
+}
+
+function peerConnectionHealthLabel(peerConnectionState?: AuroraPeerConnectionState | null): string | null {
+  if (!peerConnectionState) return null;
+  if (peerConnectionState === "connected") return "Healthy";
+  if (peerConnectionState === "connecting" || peerConnectionState === "reconnecting") return "Connecting";
+  return "Offline";
+}
+
+function peerConnectionRuntimeLabel(peerConnectionState?: AuroraPeerConnectionState | null): string | null {
+  if (!peerConnectionState) return null;
+  if (peerConnectionState === "connected") return "connected";
+  if (peerConnectionState === "connecting" || peerConnectionState === "reconnecting") return "syncing";
+  return "offline";
+}
+
+function peerConnectionRuntimeToneClass(peerConnectionState?: AuroraPeerConnectionState | null): string | null {
+  if (!peerConnectionState) return null;
+  if (peerConnectionState === "connected") return "text-success";
+  if (peerConnectionState === "connecting" || peerConnectionState === "reconnecting") return "text-warning";
+  return "text-destructive";
 }
 
 function shellSurfaceProfile(
@@ -880,7 +971,7 @@ function shellRuntimeStateIsOffline(
   runtimeMode?: string,
   nodeMode?: AuroraNodeMode,
 ): boolean {
-  return snapshot.loadState === "error"
+  return (snapshot.loadState === "error" || snapshot.connectionState === "offline")
     && snapshot.connectionState !== "connected"
     && !isRetainedPeerOutageOnLocalNode(snapshot, runtimeMode, nodeMode);
 }

@@ -3,7 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
-import { AuroraClient as Aurora, AuroraError, MockAuroraTransport, backupListFixture } from '@aurora/client'
+import { AuroraClient as Aurora, AuroraError, MockAuroraTransport, backupListFixture, createAuditReceipt } from '@aurora/client'
 import { BackupRestoreView, backupErrorMessage } from '../src/backup-restore-view'
 import { auroraNavSections, navItemSnapshot } from '../src/nav'
 import type { RouteAvailability } from '../src/shell-data'
@@ -44,6 +44,76 @@ describe('BackupRestoreView', () => {
     expect(markup).toContain('Preview restore')
     expect(markup).not.toContain('AdminAction draft/confirm/audit')
     expect(markup).not.toContain('Manifest integrity')
+  })
+
+  it('passes the query abort signal to the backup list request', async () => {
+    const seenSignals: Array<AbortSignal | undefined> = []
+    const transport = MockAuroraTransport.empty().register('Backup.List', (request) => {
+      seenSignals.push(request.signal)
+      return backupListFixture
+    })
+    const container = mount(<BackupRestoreView client={new Aurora({ transport })} route={backupRoute()} />)
+
+    await act(async () => {
+      await flushPromises()
+    })
+
+    expect(seenSignals).toHaveLength(1)
+    expect(seenSignals[0]).toBeInstanceOf(AbortSignal)
+    container.remove()
+  })
+
+  it('updates the scoped backups query data after creating a backup', async () => {
+    const backupClient = client()
+    const createdBackup = {
+      ...backupListFixture.backups[0]!,
+      backup_id: 'backup-created-from-query-cache',
+      created_at: '2026-07-01T00:00:00.000Z',
+    }
+    const backendList: typeof backupListFixture = { ...backupListFixture, backups: [], total: 0 }
+    const list = vi.spyOn(backupClient.backups, 'list').mockImplementation(async () => ({
+      ok: true,
+      data: backendList,
+      audit: createAuditReceipt({}, { method: 'Backup.List', correlationId: 'corr-list' }),
+    }))
+    const create = vi.spyOn(backupClient.backups, 'create').mockImplementation(async () => {
+      backendList.backups = [createdBackup, ...backendList.backups]
+      backendList.total = backendList.backups.length
+      return {
+        ok: true,
+        data: {
+          status: 'ok',
+          backup: createdBackup,
+          audit_receipt: 'audit-created',
+          message: 'Backup created.',
+        },
+        audit: createAuditReceipt({}, { method: 'Backup.Create', correlationId: 'corr-created' }),
+      }
+    })
+
+    const container = mount(
+      <BackupRestoreView client={backupClient} route={backupRoute()} initialList={{ ...backupListFixture, backups: [], total: 0 }} />
+    )
+    const createButton = Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Create backup now')
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+    })
+
+    const confirmButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((button) =>
+      button.textContent === 'Create backup'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      await flushPromises()
+    })
+
+    expect(create).toHaveBeenCalledOnce()
+    await vi.waitFor(async () => {
+      await act(async () => { await flushPromises() })
+      expect(list).toHaveBeenCalled()
+      expect(container.textContent).toContain('backup-created-from-query-cache')
+    })
   })
 
   it('keeps create and row actions disabled with honest repair state when backend contract status is missing', () => {
@@ -96,7 +166,10 @@ describe('BackupRestoreView', () => {
 
   it('handles a rejected restore preview without leaving the dialog busy', async () => {
     const rejectingClient = client()
-    const restore = vi.spyOn(rejectingClient.backups, 'restore').mockRejectedValue(new Error('connection reset'))
+    let rejectRestore: ((error: Error) => void) | null = null
+    const restore = vi.spyOn(rejectingClient.backups, 'restore').mockImplementation(() => new Promise<never>((_, reject) => {
+      rejectRestore = reject
+    }))
     const container = mount(
       <BackupRestoreView client={rejectingClient} route={backupRoute()} initialList={backupListFixture} />
     )
@@ -107,7 +180,7 @@ describe('BackupRestoreView', () => {
       restoreTrigger?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
       await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
     })
-    const confirmButton = Array.from(document.body.querySelectorAll('[role="alertdialog"] button')).find((button) =>
+    const confirmButton = Array.from(document.body.querySelectorAll<HTMLButtonElement>('[role="alertdialog"] button')).find((button) =>
       button.textContent === 'Preview restore'
     )
     await act(async () => {
@@ -116,7 +189,20 @@ describe('BackupRestoreView', () => {
     })
 
     expect(restore).toHaveBeenCalledOnce()
+    expect(confirmButton?.disabled).toBe(true)
+    expect(confirmButton?.textContent).toContain('Working')
+    expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Create backup now')?.disabled).toBe(true)
+    expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Verify')?.disabled).toBe(true)
+    expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Preview restore')?.disabled).toBe(true)
+
+    await act(async () => {
+      rejectRestore?.(new Error('connection reset'))
+      await flushPromises()
+      await new Promise((resolve) => requestAnimationFrame(resolve))
+    })
+
     expect(document.body.querySelector('[role="alertdialog"]')).toBeNull()
+    expect(Array.from(container.querySelectorAll('button')).find((button) => button.textContent === 'Create backup now')?.disabled).toBe(false)
   })
 
   it('maps backup SDK errors to operator-safe recovery copy', () => {
@@ -149,4 +235,9 @@ function backupRoute(overrides: Partial<RouteAvailability> = {}): RouteAvailabil
     requiresAdminAction: false,
     ...overrides
   }
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve()
+  await Promise.resolve()
 }

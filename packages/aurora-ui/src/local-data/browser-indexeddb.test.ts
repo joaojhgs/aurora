@@ -8,7 +8,9 @@ import {
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalToolStateRecord,
-  type PeerGrantMetadataRecord
+  type PeerGrantMetadataRecord,
+  type TranscriptSessionRecord,
+  type TranscriptSegmentRecord
 } from '@aurora/client/local-data'
 
 import {
@@ -53,12 +55,37 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
       profileId: 'profile-1',
       localNodeId: 'node-1',
       schemaVersion: 1,
-      migrationLedger: [],
+      migrationLedger: localDataMigrationManifest.migrations.slice(0, 1).map(({ version, checksum }) => ({ version, checksum })),
       records: emptyRecords()
     })
     const upgraded = await openSession(oldEmpty, leases, 'owner-upgrade')
     expect((await upgraded.exportV1()).schemaVersion).toBe(localDataMigrationManifest.latestVersion)
     await upgraded.close()
+
+    const priorV3Store = new MapBrowserLocalDataDocumentStore({
+      formatVersion: 1,
+      profileId: 'profile-1',
+      localNodeId: 'node-1',
+      schemaVersion: localDataMigrationManifest.latestVersion - 1,
+      migrationLedger: localDataMigrationManifest.migrations.slice(0, -1).map(({ version, checksum }) => ({ version, checksum })),
+      records: {
+        conversations: [],
+        messages: [],
+        memoryItems: [memoryFixture()],
+        localToolStates: [],
+        peerGrantMetadata: [],
+        localAudit: []
+      } as unknown as StoredBrowserLocalDataDocument['records']
+    })
+    const upgradedPriorV3 = await openSession(priorV3Store, leases, 'owner-upgrade-v3')
+    await expect(upgradedPriorV3.memory.listMemoryItems()).resolves.toEqual([memoryFixture()])
+    const migratedDocument = await priorV3Store.load()
+    expect(migratedDocument).toMatchObject({
+      schemaVersion: localDataMigrationManifest.latestVersion,
+      migrationLedger: localDataMigrationManifest.migrations.map(({ version, checksum }) => ({ version, checksum })),
+      records: { memoryItems: [memoryFixture()], transcriptSessions: [], transcriptSegments: [] }
+    })
+    await upgradedPriorV3.close()
   })
 
   it('stores all repository fixtures, sorts reads, and exposes no arbitrary SQL API', async () => {
@@ -86,6 +113,63 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     await expect(session.localTools.listLocalToolStates()).resolves.toEqual([localToolStateFixture()])
     await expect(session.peerGrants.listPeerGrants()).resolves.toEqual([peerGrantFixture()])
     await expect(session.localAudit.listAudit()).resolves.toEqual([auditFixture()])
+  })
+
+  it('bounds keyset, exact-id, and message reads before returning snapshot rows', async () => {
+    const session = await openSession()
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-a', updatedAtMs: 1100 }))
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-b', updatedAtMs: 1100 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm0', conversationId: 'conversation-a', sequence: 0 }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm1', conversationId: 'conversation-a', sequence: 1 }))
+    await expect(session.conversations.listConversations({ limit: 1 })).resolves.toHaveLength(1)
+    await expect(session.conversations.listConversations({ limit: 1, cursor: { updatedAtMs: 1100, id: 'conversation-a' } })).resolves.toEqual([conversationFixture({ id: 'conversation-b', updatedAtMs: 1100 })])
+    await expect(session.conversations.listMessageCounts([])).resolves.toEqual({})
+    await expect(session.conversations.getMessage('conversation-a', 'm1')).resolves.toMatchObject({ sequence: 1 })
+    await expect(session.conversations.listMessages('conversation-a', { beforeSequence: 1, direction: 'desc' })).resolves.toMatchObject([{ id: 'm0' }])
+    await expect(session.conversations.listMessages('conversation-a', { beforeSequence: 1, afterSequence: 0 })).rejects.toMatchObject({ metadata: { reason: 'ambiguous_message_cursor' } })
+    await session.close()
+  })
+
+  it('preserves same-ID updates and reports stable message collision reasons', async () => {
+    const session = await openSession()
+    await session.conversations.upsertConversation(conversationFixture())
+    await session.conversations.upsertConversation(conversationFixture({ id: 'conversation-2' }))
+    await session.conversations.appendMessage(messageFixture({ id: 'm1', sequence: 1 }))
+    await expect(session.conversations.appendMessage(messageFixture({ id: 'm2', sequence: 1 }))).rejects.toMatchObject({ metadata: { reason: 'duplicate_message_sequence' } })
+    await expect(session.conversations.appendMessage(messageFixture({ id: 'm1', sequence: 2, conversationId: 'conversation-2' }))).rejects.toMatchObject({ metadata: { reason: 'duplicate_message_id' } })
+    await session.conversations.appendMessage(messageFixture({ id: 'm1', sequence: 2 }))
+    await expect(session.conversations.getMessage('conversation-1', 'm1')).resolves.toMatchObject({ sequence: 2 })
+    await session.close()
+  })
+
+  it('persists scoped transcript sessions and encrypted segments with retry and terminal guards', async () => {
+    const session = await openSession()
+    const archive = transcriptSessionFixture()
+    const segment = transcriptSegmentFixture()
+    await expect(session.transcripts.createSession(archive)).resolves.toEqual(archive)
+    await expect(session.transcripts.appendSegment(segment)).resolves.toEqual({ appended: true, record: segment })
+    await expect(session.transcripts.appendSegment(segment)).resolves.toEqual({ appended: false, record: segment })
+    await expect(session.transcripts.listSessions({ limit: 1 })).resolves.toEqual([archive])
+    await expect(session.transcripts.listSegments(archive.id, { afterSequence: 0 })).resolves.toEqual([])
+    await expect(session.transcripts.finalizeSession({ sessionId: archive.id, lifecycle: 'completed', endedAtMs: 1200, terminalReason: 'finished' })).resolves.toMatchObject({ lifecycle: 'completed' })
+    await expect(session.transcripts.appendSegment(segment)).resolves.toEqual({ appended: false, record: segment })
+    await expect(session.transcripts.appendSegment(transcriptSegmentFixture({ id: 'segment-2', sequence: 1 }))).rejects.toMatchObject({ code: 'session_closed' })
+    const exported = await session.exportV1()
+    expect(exported.records.transcriptSessions).toHaveLength(1)
+    expect(exported.records.transcriptSegments).toEqual([segment])
+    await session.clear()
+    await session.importV1(exported)
+    await expect(session.transcripts.getSession(archive.id)).resolves.toMatchObject({ lifecycle: 'completed' })
+    await expect(session.transcripts.listSegments(archive.id)).resolves.toEqual([segment])
+    await session.close()
+  })
+
+  it('does not recover active archive sessions without strong browser ownership', async () => {
+    const session = await openSession()
+    await session.transcripts.createSession(transcriptSessionFixture())
+    await expect(session.transcripts.recoverActiveSessions(2000)).rejects.toMatchObject({ code: 'unsupported_backend', metadata: { reason: 'owner_exists' } })
+    await expect(session.transcripts.getSession('transcript-1')).resolves.toMatchObject({ lifecycle: 'active' })
+    await session.close()
   })
 
   it('rolls back failed transactions and rejects leaked transaction repositories', async () => {
@@ -188,7 +272,7 @@ describe('BrowserIndexedDbLocalDataBackend', () => {
     })
     await expect(openSession(new MapBrowserLocalDataDocumentStore({
       ...nonempty,
-      schemaVersion: 1,
+      schemaVersion: localDataMigrationManifest.latestVersion,
       migrationLedger: [storedDocument('profile-1', 'node-1').migrationLedger[0] ?? { version: 1, checksum: 'a'.repeat(64) }]
     }), undefined, 'owner-3')).rejects.toMatchObject({
       code: 'migration_integrity',
@@ -450,7 +534,25 @@ function emptyRecords(): StoredBrowserLocalDataDocument['records'] {
     memoryItems: [],
     localToolStates: [],
     peerGrantMetadata: [],
-    localAudit: []
+    localAudit: [],
+    transcriptSessions: [],
+    transcriptSegments: []
+  }
+}
+
+function transcriptSessionFixture(overrides: Partial<TranscriptSessionRecord> = {}): TranscriptSessionRecord {
+  return {
+    id: 'transcript-1', profileId: 'profile-1', localNodeId: 'node-1', captureMode: 'ambient',
+    createdAtMs: 1000, startedAtMs: 1000, endedAtMs: null, lifecycle: 'active', terminalReason: null,
+    expiresAtMs: 86_401_000, language: 'en', modelProvenance: { provider: 'local', modelId: 'stt-small', version: null },
+    diarizationState: 'not_requested', ...overrides
+  }
+}
+
+function transcriptSegmentFixture(overrides: Partial<TranscriptSegmentRecord> = {}): TranscriptSegmentRecord {
+  return {
+    id: 'segment-1', sessionId: 'transcript-1', sequence: 0, startAtMs: 1001, endAtMs: 1100,
+    textEnvelope: envelopeFixture, confidence: 0.9, speakerId: null, speakerLabel: null, createdAtMs: 1100, ...overrides
   }
 }
 

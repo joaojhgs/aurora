@@ -266,13 +266,20 @@ describe('foundation primitives', () => {
         detail="Backend microphone"
         onToggle={() => undefined}
         onReset={() => undefined}
+        onSend={() => undefined}
       />
     )
-    expect(markup).toContain('aui-audio-recorder')
-    expect(markup).toContain('aui-audio-recorder-active')
+    expect(markup).toContain('aria-label="Audio recorder and live microphone visualizer"')
+    expect(markup).toContain('data-voice-state="listening"')
     expect(markup).toContain('Recording timer 00:01:05')
+    expect(markup).toContain('Listening')
+    expect(markup).toContain('Backend microphone')
+    expect(markup).toContain('<canvas')
+    expect(markup).toContain('aria-hidden="true"')
+    expect(markup).toContain('aria-label="Reset voice recording"')
     expect(markup).toContain('aria-label="Stop listening"')
-    expect(markup).toContain('aui-audio-recorder-canvas')
+    expect(markup).toContain('aria-label="Send voice recording"')
+    expect(markup).not.toContain('aria-label="Push to talk"')
   })
 
 

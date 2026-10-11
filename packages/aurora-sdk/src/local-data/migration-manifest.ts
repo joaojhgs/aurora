@@ -5,7 +5,7 @@ export * from './migration-manifest-runtime.js'
 export const LOCAL_DATA_MIGRATION_MANIFEST = {
   "databaseName": "aurora-lightweight.db",
   "formatVersion": 1,
-  "latestVersion": 3,
+  "latestVersion": 4,
   "migrations": [
     {
       "checksum": "de9b1e7272b96401782962188605626abb84e4a722fc801ad585a5db2ca8c43f",
@@ -33,6 +33,15 @@ export const LOCAL_DATA_MIGRATION_MANIFEST = {
       "name": "peer_grants_audit",
       "requires_pre_migration_export": false,
       "version": 3
+    },
+    {
+      "checksum": "5171dbaca12ca27e6dfea043f5a4ac0afdab66c18e528da3fd590c5cb7dae8ad",
+      "file": "0004_transcript_archive.sql",
+      "ledger_sql": "INSERT INTO aurora_schema_migrations (version, name, checksum, applied_at_ms) VALUES (4, 'transcript_archive', '5171dbaca12ca27e6dfea043f5a4ac0afdab66c18e528da3fd590c5cb7dae8ad', CAST(strftime('%s','now') AS INTEGER) * 1000);\nPRAGMA user_version = 4;",
+      "min_app_version": "0.1.0",
+      "name": "transcript_archive",
+      "requires_pre_migration_export": false,
+      "version": 4
     }
   ]
 } as const

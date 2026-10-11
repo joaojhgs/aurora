@@ -125,10 +125,13 @@ def mock_vad():
 
 
 @pytest.fixture
-def service(mock_bus, mock_config, mock_whisper_model, mock_vad):
+def service(mock_bus, mock_config, mock_whisper_model, mock_vad, monkeypatch):
     """Create a TranscriptionService instance with mocked dependencies."""
     with patch("app.shared.services.base_service.get_bus_singleton", return_value=mock_bus):
-        yield TranscriptionService()
+        svc = TranscriptionService()
+        # ConfigService availability is independent of these service tests.
+        monkeypatch.setattr(svc, "_is_runtime_enabled", AsyncMock(return_value=True))
+        yield svc
 
 
 def test_active_speech_segments_are_not_rolling_window_limited(service):
@@ -861,9 +864,35 @@ class TestControlCommands:
     async def test_pause_command(self, service):
         """Test pause control command."""
         control = TranscriptionControl(action="pause")
+        service._audio_buffer.append((b"old audio", "old-stream", "microphone"))
+        service._speech_segments.append(b"old segment")
+        service._speech_segment_bytes = len(b"old segment")
+        service._in_speech = True
 
         await service._on_control(control)
 
+        assert service._paused is True
+        assert not service._audio_buffer
+        assert not service._speech_segments
+        assert service._speech_segment_bytes == 0
+        assert service._in_speech is False
+
+    @pytest.mark.asyncio
+    async def test_pause_ack_waits_for_inflight_transcription_cleanup(self, service):
+        """Pause acknowledges only after the processing owner releases old audio."""
+        service._audio_buffer.append((b"old audio", "old-stream", "microphone"))
+        service._processing_lock.acquire()
+        pause_task = asyncio.create_task(service._on_control(TranscriptionControl(action="pause")))
+
+        try:
+            await asyncio.sleep(0.05)
+            assert service._paused is True
+            assert not pause_task.done()
+        finally:
+            service._processing_lock.release()
+
+        await pause_task
+        assert not service._audio_buffer
         assert service._paused is True
 
     @pytest.mark.asyncio

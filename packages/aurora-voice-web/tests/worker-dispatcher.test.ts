@@ -195,6 +195,25 @@ describe('AuroraVoiceWorkerDispatcher', () => {
     expect(bridge.ttsCalls).toEqual([{ type: 'synthesize_tts', generation: 3, text: 'hello', voiceId: 'voice.en', speakerId: 1, speed: 1.1 }])
   })
 
+  it('routes finite STT to the local bridge and refuses it while capture owns the engine', async () => {
+    const bridge = new FakeBridge({ capabilities: { vad: false, kws: false, stt: true, tts: false } })
+    const port = new RecordingPort()
+    const dispatcher = new AuroraVoiceWorkerDispatcher(bridge, port)
+    const session = voiceSession()
+
+    await dispatcher.handleMessage(request(1, { type: 'init', protocolVersion: AURORA_VOICE_WORKER_PROTOCOL_VERSION, maxFrameSamples: 4_800, maxQueuedBytes: 320_000 }))
+    await dispatcher.handleMessage(request(2, { type: 'start', session, capabilities: { vad: false, kws: false, stt: true, tts: false } }))
+    await dispatcher.handleMessage(request(3, { type: 'transcribe_stt', generation: 4, pcm: new Int16Array([8, -9]) }))
+    expect(port.messages[2]?.response).toMatchObject({ type: 'reject', reason: 'session_active' })
+
+    await dispatcher.handleMessage(request(4, { type: 'stop', sessionId: session.sessionId, generation: session.generation }))
+    await dispatcher.handleMessage(request(5, { type: 'finish_turn', sessionId: session.sessionId, generation: session.generation, outcome: 'completed' }))
+    await dispatcher.handleMessage(request(6, { type: 'transcribe_stt', generation: 5, pcm: new Int16Array([8, -9]) }))
+
+    expect(port.messages[5]?.response).toEqual({ type: 'stt_result', generation: 5, text: 'hello' })
+    expect(bridge.sttCalls).toEqual([{ generation: 5, pcm: new Int16Array([8, -9]) }])
+  })
+
   it('rejects malformed TTS commands without echoing text payloads', async () => {
     const bridge = new FakeBridge({ capabilities: { vad: false, kws: false, stt: false, tts: true }, tts: true })
     const port = new RecordingPort()
@@ -437,6 +456,7 @@ class FakeBridge implements AuroraVoiceWasmBridge {
   readonly cancelCalls: { readonly sessionId: string | null; readonly generation: number; readonly reason: string }[] = []
   readonly finishCalls: { readonly sessionId: string; readonly generation: number; readonly outcome: 'completed' | 'abandoned' }[] = []
   readonly ttsCalls: { readonly type: 'synthesize_tts'; readonly generation: number; readonly text: string; readonly voiceId?: string; readonly speakerId?: number; readonly speed?: number }[] = []
+  readonly sttCalls: { readonly generation: number; readonly pcm: Int16Array }[] = []
   private readonly rejectNullShutdown: boolean
   private readonly capabilities
   private readonly inference: boolean
@@ -500,6 +520,11 @@ class FakeBridge implements AuroraVoiceWasmBridge {
       pcm: new Int16Array([0, 1024, -1024]),
       redacted: true as const
     }
+  }
+
+  async transcribeSpeech(request: { readonly generation: number; readonly pcm: Int16Array }): Promise<string> {
+    this.sttCalls.push({ generation: request.generation, pcm: new Int16Array(request.pcm) })
+    return 'hello'
   }
 
   async cancelGeneration(sessionId: string | null, generation: number, reason: string): Promise<void> {

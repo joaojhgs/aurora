@@ -14,6 +14,111 @@ use tokio::time::{sleep, Duration};
 const DEFAULT_CAPACITY_CHUNKS: usize = 16;
 const MAX_CAPACITY_CHUNKS: usize = 64;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+struct AndroidPlaybackCounterSnapshot {
+    global_play_call_count: u64,
+    global_chunk_enqueue_count: u64,
+    global_final_chunk_queued_count: u64,
+    global_drain_non_empty_count: u64,
+    global_ack_count: u64,
+    global_complete_count: u64,
+    global_failure_count: u64,
+    global_audio_track_play_call_count: u64,
+    global_audio_track_written_samples: u64,
+}
+
+#[cfg(feature = "android-voice-live-test")]
+mod playback_counters {
+    use super::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    static GLOBAL_PLAY_CALL_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_CHUNK_ENQUEUE_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_FINAL_CHUNK_QUEUED_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_DRAIN_NON_EMPTY_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_ACK_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_COMPLETE_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_FAILURE_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_AUDIO_TRACK_PLAY_CALL_COUNT: AtomicU64 = AtomicU64::new(0);
+    static GLOBAL_AUDIO_TRACK_WRITTEN_SAMPLES: AtomicU64 = AtomicU64::new(0);
+
+    pub fn record_play_call(_generation: Generation) {
+        GLOBAL_PLAY_CALL_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_chunk_enqueue(_generation: Generation, final_chunk: bool) {
+        GLOBAL_CHUNK_ENQUEUE_COUNT.fetch_add(1, Ordering::Relaxed);
+        if final_chunk {
+            GLOBAL_FINAL_CHUNK_QUEUED_COUNT.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn record_drain_non_empty(_generation: Option<Generation>) {
+        GLOBAL_DRAIN_NON_EMPTY_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_ack(_generation: Option<Generation>) {
+        GLOBAL_ACK_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_complete(_generation: Generation) {
+        GLOBAL_COMPLETE_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_failure(_generation: Option<Generation>) {
+        GLOBAL_FAILURE_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_audio_track_play_call() {
+        GLOBAL_AUDIO_TRACK_PLAY_CALL_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+
+    pub fn record_audio_track_written_samples(sample_count: u64) {
+        GLOBAL_AUDIO_TRACK_WRITTEN_SAMPLES.fetch_add(sample_count, Ordering::Relaxed);
+    }
+
+    pub fn enabled() -> bool {
+        true
+    }
+
+    pub fn snapshot() -> AndroidPlaybackCounterSnapshot {
+        AndroidPlaybackCounterSnapshot {
+            global_play_call_count: GLOBAL_PLAY_CALL_COUNT.load(Ordering::Relaxed),
+            global_chunk_enqueue_count: GLOBAL_CHUNK_ENQUEUE_COUNT.load(Ordering::Relaxed),
+            global_final_chunk_queued_count: GLOBAL_FINAL_CHUNK_QUEUED_COUNT
+                .load(Ordering::Relaxed),
+            global_drain_non_empty_count: GLOBAL_DRAIN_NON_EMPTY_COUNT.load(Ordering::Relaxed),
+            global_ack_count: GLOBAL_ACK_COUNT.load(Ordering::Relaxed),
+            global_complete_count: GLOBAL_COMPLETE_COUNT.load(Ordering::Relaxed),
+            global_failure_count: GLOBAL_FAILURE_COUNT.load(Ordering::Relaxed),
+            global_audio_track_play_call_count: GLOBAL_AUDIO_TRACK_PLAY_CALL_COUNT
+                .load(Ordering::Relaxed),
+            global_audio_track_written_samples: GLOBAL_AUDIO_TRACK_WRITTEN_SAMPLES
+                .load(Ordering::Relaxed),
+        }
+    }
+}
+
+#[cfg(not(feature = "android-voice-live-test"))]
+mod playback_counters {
+    use super::*;
+
+    pub fn record_play_call(_generation: Generation) {}
+    pub fn record_chunk_enqueue(_generation: Generation, _final_chunk: bool) {}
+    pub fn record_drain_non_empty(_generation: Option<Generation>) {}
+    pub fn record_ack(_generation: Option<Generation>) {}
+    pub fn record_complete(_generation: Generation) {}
+    pub fn record_failure(_generation: Option<Generation>) {}
+    pub fn record_audio_track_play_call() {}
+    pub fn record_audio_track_written_samples(_sample_count: u64) {}
+    pub fn enabled() -> bool {
+        false
+    }
+    pub fn snapshot() -> AndroidPlaybackCounterSnapshot {
+        AndroidPlaybackCounterSnapshot::default()
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AndroidPcmPlaybackChunk {
     pub samples: Vec<i16>,
@@ -58,6 +163,7 @@ impl AndroidAudioOutput {
         let chunk = inner.queue.pop_front();
         if let Some(chunk) = &chunk {
             inner.last_drained = Some((chunk.sequence, chunk.final_chunk));
+            playback_counters::record_drain_non_empty(inner.active_generation);
         }
         chunk
     }
@@ -68,7 +174,11 @@ impl AndroidAudioOutput {
             let Some((sequence, final_chunk)) = inner.last_drained.take() else {
                 return;
             };
+            playback_counters::record_ack(inner.active_generation);
             if final_chunk && inner.final_sequence == Some(sequence) {
+                if let Some(generation) = inner.active_generation {
+                    playback_counters::record_complete(generation);
+                }
                 inner.completed_generation = inner.active_generation;
                 inner.active_generation = None;
                 inner.final_sequence = None;
@@ -86,12 +196,14 @@ impl AndroidAudioOutput {
             if inner.closed {
                 return;
             }
+            let failed_generation = inner.active_generation;
             inner.queue.clear();
             inner.active_generation = None;
             inner.final_sequence = None;
             inner.last_drained = None;
             inner.completed_generation = None;
             inner.failure_code = Some(code.into());
+            playback_counters::record_failure(failed_generation);
         }
     }
 
@@ -109,6 +221,33 @@ impl AndroidAudioOutput {
             inner.failure_code = None;
             inner.closed = true;
         }
+    }
+
+    pub fn playback_counters_enabled() -> bool {
+        playback_counters::enabled()
+    }
+
+    pub fn record_audio_track_play_call() {
+        playback_counters::record_audio_track_play_call();
+    }
+
+    pub fn record_audio_track_written_samples(sample_count: u64) {
+        playback_counters::record_audio_track_written_samples(sample_count);
+    }
+
+    pub fn playback_counter_snapshot_values() -> [u64; 9] {
+        let snapshot = playback_counters::snapshot();
+        [
+            snapshot.global_play_call_count,
+            snapshot.global_chunk_enqueue_count,
+            snapshot.global_final_chunk_queued_count,
+            snapshot.global_drain_non_empty_count,
+            snapshot.global_ack_count,
+            snapshot.global_complete_count,
+            snapshot.global_failure_count,
+            snapshot.global_audio_track_play_call_count,
+            snapshot.global_audio_track_written_samples,
+        ]
     }
 }
 
@@ -158,6 +297,7 @@ impl AudioOutput for AndroidAudioOutput {
             inner.completed_generation = None;
             inner.last_drained = None;
             inner.final_sequence = None;
+            playback_counters::record_play_call(context.generation);
         }
         for chunk in audio.chunks() {
             let playback_chunk = AndroidPcmPlaybackChunk {
@@ -194,6 +334,10 @@ impl AudioOutput for AndroidAudioOutput {
                             inner.final_sequence = Some(playback_chunk.sequence);
                         }
                         inner.queue.push_back(playback_chunk.clone());
+                        playback_counters::record_chunk_enqueue(
+                            context.generation,
+                            playback_chunk.final_chunk,
+                        );
                         true
                     }
                 };

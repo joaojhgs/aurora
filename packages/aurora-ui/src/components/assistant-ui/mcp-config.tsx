@@ -61,14 +61,14 @@ export const McpConfigDialog: FC<McpConfigDialog.Props> = ({ children }) => {
           <Button
             variant="outline"
             size="sm"
-            className="aui-mcp-config-trigger gap-2"
+            className="gap-2"
           >
             <PlugIcon className="size-4" />
             MCP servers
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="aui-mcp-config-content sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>MCP servers</DialogTitle>
           <DialogDescription>
@@ -90,7 +90,7 @@ McpConfigDialog.displayName = "McpConfigDialog";
 
 const ConnectorsSection: FC = () => {
   return (
-    <section className="aui-mcp-connectors flex flex-col gap-2">
+    <section className="flex flex-col gap-2">
       <SectionTitle>Connectors</SectionTitle>
       <div className="flex flex-col gap-2">
         <McpManagerPrimitive.Connectors>
@@ -104,7 +104,7 @@ const ConnectorsSection: FC = () => {
 const CustomServersSection: FC = () => {
   const [showForm, setShowForm] = useState(false);
   return (
-    <section className="aui-mcp-custom-servers flex flex-col gap-2">
+    <section className="flex flex-col gap-2">
       <SectionTitle>Custom servers</SectionTitle>
       <div className="flex flex-col gap-2">
         <McpManagerPrimitive.CustomServers>
@@ -112,7 +112,7 @@ const CustomServersSection: FC = () => {
         </McpManagerPrimitive.CustomServers>
       </div>
       {!showForm && (
-        <McpManagerPrimitive.AddCustomTrigger render={<Button variant="outline" className="aui-mcp-add-trigger h-9 justify-start gap-2 rounded-lg px-3 text-sm" onClick={() => setShowForm(true)} />}><PlusIcon className="size-4" />Add server
+        <McpManagerPrimitive.AddCustomTrigger render={<Button variant="outline" className="h-9 justify-start gap-2 rounded-lg px-3 text-sm" onClick={() => setShowForm(true)} />}><PlusIcon className="size-4" />Add server
                         </McpManagerPrimitive.AddCustomTrigger>
       )}
       {showForm && <AddServerForm onClose={() => setShowForm(false)} />}
@@ -130,7 +130,7 @@ const ServerCard: FC = () => {
   return (
     <McpServerPrimitive.Root
       className={cn(
-        "aui-mcp-server-card flex flex-col gap-2 rounded-lg border p-3",
+        "flex flex-col gap-2 rounded-lg border p-3",
         "data-[connection-state=error]:border-destructive/40",
       )}
     >
@@ -144,7 +144,7 @@ const ServerCard: FC = () => {
         </div>
         <div className="flex items-center gap-1">
           <ServerActions />
-          <McpServerPrimitive.RemoveButton render={<Button variant="ghost" size="icon" className="aui-mcp-server-remove text-muted-foreground hover:text-destructive size-7" />}><Trash2Icon className="size-4" /><span className="sr-only">Remove</span></McpServerPrimitive.RemoveButton>
+          <McpServerPrimitive.RemoveButton render={<Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive size-7" />}><Trash2Icon className="size-4" /><span className="sr-only">Remove</span></McpServerPrimitive.RemoveButton>
         </div>
       </div>
       <ServerError />
@@ -216,17 +216,17 @@ const ServerError: FC = () => {
 
 const ServerActions: FC = () => (
   <div className="flex flex-wrap gap-2">
-    <McpServerPrimitive.ConnectButton render={<Button size="sm" variant="default" className="aui-mcp-server-connect h-8 gap-2 text-xs" />}><PlugZapIcon className="size-3.5" />Connect
+    <McpServerPrimitive.ConnectButton render={<Button size="sm" variant="default" className="h-8 gap-2 text-xs" />}><PlugZapIcon className="size-3.5" />Connect
               </McpServerPrimitive.ConnectButton>
     <McpServerPrimitive.OAuthLink
       className={cn(
         buttonVariants({ variant: "default", size: "sm" }),
-        "aui-mcp-server-authorize h-8 gap-2 text-xs",
+        "h-8 gap-2 text-xs",
       )}
     >
       Authorize
     </McpServerPrimitive.OAuthLink>
-    <McpServerPrimitive.DisconnectButton render={<Button size="sm" variant="outline" className="aui-mcp-server-disconnect h-8 text-xs" />}>Disconnect
+    <McpServerPrimitive.DisconnectButton render={<Button size="sm" variant="outline" className="h-8 text-xs" />}>Disconnect
               </McpServerPrimitive.DisconnectButton>
   </div>
 );
@@ -234,7 +234,7 @@ const ServerActions: FC = () => (
 const AddServerForm: FC<{ onClose: () => void }> = ({ onClose }) => {
   return (
     <McpAddFormPrimitive.Root onSubmitted={onClose} onCancel={onClose}>
-      <div className="aui-mcp-add-form flex flex-col gap-3 rounded-lg border p-3">
+      <div className="flex flex-col gap-3 rounded-lg border p-3">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-medium">New server</h4>
           <McpAddFormPrimitive.Cancel render={<Button type="button" variant="ghost" size="icon" className="text-muted-foreground size-7" />}><XIcon className="size-4" /><span className="sr-only">Close</span></McpAddFormPrimitive.Cancel>
@@ -246,7 +246,7 @@ const AddServerForm: FC<{ onClose: () => void }> = ({ onClose }) => {
           <McpAddFormPrimitive.UrlField render={<Input placeholder="https://example.com/mcp" />}></McpAddFormPrimitive.UrlField>
         </FormRow>
         <FormRow label="Auth">
-          <McpAddFormPrimitive.AuthSelect className="aui-mcp-auth-select bg-background h-9 w-full rounded-md border px-2 text-sm" />
+          <McpAddFormPrimitive.AuthSelect className="bg-background h-9 w-full rounded-md border px-2 text-sm" />
           <div
             className={cn(
               // Style the default `<input>` inside AuthFields without

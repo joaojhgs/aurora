@@ -232,3 +232,16 @@ make audit-dependencies
 ```
 
 Keep the generated outputs under local `.artifacts/` or local agent state unless a small, curated summary belongs in this file.
+
+## Frontend dependency maintenance
+
+The shared UI package owns its component dependencies and Tailwind v4 CLI.
+Both web and Tauri consume the same generated stylesheet. See the
+[UI package styling contract](../packages/aurora-ui/README.md#styling-contract).
+
+When removing a vendored component, check remaining source imports before
+pruning its direct dependencies. Update Tauri's `auroraManualChunk` rules when
+a dependency family is no longer used. Keep markdown, diagram, and QR packages
+that still serve retained components or pairing flows. Package exports are a
+separate compatibility boundary and should not be removed merely because a
+particular application has no current import.

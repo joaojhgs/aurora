@@ -224,6 +224,7 @@ SDK_EVENT_ALLOWLIST: tuple[str, ...] = (
     "Orchestrator.Response",
     "Orchestrator.Interrupted",
     "TTS.AudioChunk",
+    "Gateway.StatusChanged",
 )
 SDK_ENVELOPE_ALLOWLIST: tuple[str, ...] = ("Aurora.EventStream",)
 
@@ -2608,6 +2609,7 @@ def build_sdk_contract_schema() -> dict[str, Any]:
     method_descriptors: list[dict[str, Any]] = []
     event_descriptors: list[dict[str, Any]] = []
     from app.shared.contracts.models.aurora import AuroraEventStreamEvent
+    from app.shared.contracts.models.gateway import GatewayStatusChangedEvent
     from app.shared.contracts.models.orchestrator import (
         AssistantStreamEvent,
         OrchestratorInterruptedEvent,
@@ -2668,6 +2670,17 @@ def build_sdk_contract_schema() -> dict[str, Any]:
             "bounded": True,
             "authorized": True,
             "ordered_event_group": "tts_text_stream",
+            "remote_raw_audio_route": False,
+        },
+        "Gateway.StatusChanged": {
+            "module": "Gateway",
+            "name": "StatusChanged",
+            "topic": "Gateway.StatusChanged",
+            "model": GatewayStatusChangedEvent,
+            "required_permission": "Gateway.use",
+            "bounded": True,
+            "authorized": True,
+            "ordered_event_group": "gateway_status",
             "remote_raw_audio_route": False,
         },
     }

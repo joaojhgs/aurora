@@ -5,12 +5,17 @@ import {
   MockAuroraTransport,
   androidNativeCapabilityManifestFixture,
   cloneFixture,
+  defaultMockAuroraFixtures,
   iosNativeCapabilityManifestFixture,
   nativeCapabilityManifestFixture,
+  createAuroraEvent,
   routePath,
+  type AuroraEvent,
+  type AuroraStreamRequest,
   type AuroraTransport,
   type AuroraTransportRequest,
   type AuroraTransportResponse,
+  type CapabilityCatalogResponse,
   type NativeCapabilityManifest,
   type ToolingProjectionToolInfo,
 } from '@aurora/client'
@@ -1155,6 +1160,8 @@ function createDebugUiDemoClient(launch: AuroraDebugUiLaunch | null): AuroraClie
     is_admin: sessionIsAdmin,
   }
   transport.register('Auth.WhoAmI', () => whoAmI)
+  transport.register('Gateway.GetCapabilityCatalog', () => debugUiDemoCapabilityCatalog())
+  registerDebugUiDemoStreams(transport)
   const nativeManifest = nativeManifestForDebugLaunch(launch)
   if (nativeManifest === 'unavailable') {
     transport.register('Native.GetCapabilityManifest', () => {
@@ -1169,6 +1176,94 @@ function createDebugUiDemoClient(launch: AuroraDebugUiLaunch | null): AuroraClie
   const client = new AuroraClient({ transport })
   client.auth.updateFromWhoAmI(whoAmI)
   return client
+}
+
+
+function debugUiDemoCapabilityCatalog(): CapabilityCatalogResponse {
+  const catalog = cloneFixture(defaultMockAuroraFixtures.capabilityCatalog)
+  return {
+    ...catalog,
+    providers: catalog.providers.map((provider) => {
+      const providerWasStale = provider.freshness.stale || provider.status === 'stale' || provider.reason_code.includes('stale')
+      return {
+        ...provider,
+        status: provider.status === 'stale' ? 'active' : provider.status,
+        eligible: providerWasStale ? true : provider.eligible,
+        reason_code: provider.reason_code.includes('stale') ? 'eligible' : provider.reason_code,
+        reason: providerWasStale ? 'Available now.' : provider.reason,
+        freshness: freshDebugUiDemoCapabilityFreshness(provider.freshness),
+      }
+    }),
+    actions: catalog.actions.map((action) => ({
+      ...action,
+      freshness: freshDebugUiDemoCapabilityFreshness(action.freshness),
+    })),
+    resources: catalog.resources.map((resource) => ({
+      ...resource,
+      freshness: freshDebugUiDemoCapabilityFreshness(resource.freshness),
+    })),
+  }
+}
+
+function freshDebugUiDemoCapabilityFreshness(
+  freshness: CapabilityCatalogResponse['actions'][number]['freshness'],
+): CapabilityCatalogResponse['actions'][number]['freshness'] {
+  return {
+    ...freshness,
+    last_probe_age_s: freshness.last_probe_age_s === null ? null : 0,
+    stale: false,
+  }
+}
+
+function registerDebugUiDemoStreams(transport: MockAuroraTransport): void {
+  transport.stream('health', (request) => openDebugUiDemoStream(request, [
+    createAuroraEvent('service.announced', {
+      event_id: 'debug-health-1',
+      timestamp: '2026-01-01T00:00:00Z',
+      status: 'connected',
+      freshness: 'current',
+      service_id: 'gateway',
+      demo_mode: true,
+    }, {
+      transport: 'mock',
+    }),
+  ]))
+  transport.stream('config', (request) => openDebugUiDemoStream(request, []))
+}
+
+function openDebugUiDemoStream<TPayload>(
+  request: AuroraStreamRequest,
+  events: Array<AuroraEvent<TPayload>>,
+): AsyncIterable<AuroraEvent<TPayload>> {
+  return {
+    [Symbol.asyncIterator]() {
+      let index = 0
+      let closed = false
+      let releaseIdleWait: (() => void) | null = null
+      const close = () => {
+        if (closed) return
+        closed = true
+        releaseIdleWait?.()
+        releaseIdleWait = null
+      }
+      request.signal?.addEventListener('abort', close, { once: true })
+      return {
+        async next(): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          if (closed || request.signal?.aborted) return { done: true, value: undefined }
+          if (index < events.length) return { done: false, value: events[index++]! }
+          await new Promise<void>((resolve) => {
+            releaseIdleWait = resolve
+          })
+          return { done: true, value: undefined }
+        },
+        async return(): Promise<IteratorResult<AuroraEvent<TPayload>>> {
+          request.signal?.removeEventListener('abort', close)
+          close()
+          return { done: true, value: undefined }
+        },
+      }
+    },
+  }
 }
 
 function nativeManifestForDebugLaunch(

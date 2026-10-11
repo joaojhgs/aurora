@@ -2,8 +2,8 @@ import './legacy-webview-polyfills'
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import { getAuroraSurfaceProfile } from '@aurora/ui'
+import { installAuroraReactProfilerBridge } from '@aurora/ui/react-profiler'
 import '@aurora/ui/styles.css'
-import './styles.css'
 import { AuroraOverlayApp } from './overlay-app'
 import { AuroraTauriApp } from './tauri-app'
 
@@ -16,6 +16,10 @@ const surfaceProfile = getAuroraSurfaceProfile({
 document.documentElement.dataset.auroraPlatform = surfaceProfile.kind
 document.body.dataset.auroraPlatform = surfaceProfile.kind
 
+if (import.meta.env.VITE_AURORA_REACT_PROFILING === '1') {
+  installAuroraReactProfilerBridge({ enabled: true })
+}
+
 if (import.meta.env.VITE_AURORA_DESKTOP_LIVE_E2E === '1') {
   void import('./desktop-live-e2e').then(({ installDesktopLiveE2eHook }) => {
     installDesktopLiveE2eHook()
@@ -25,6 +29,12 @@ if (import.meta.env.VITE_AURORA_DESKTOP_LIVE_E2E === '1') {
 if (import.meta.env.VITE_AURORA_DESKTOP_NATIVE_VOICE_E2E === '1') {
   void import('./desktop-native-voice-e2e').then(({ installDesktopNativeVoiceE2eHook }) => {
     installDesktopNativeVoiceE2eHook()
+  })
+}
+
+if (import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST === '1') {
+  void import('./ios-voice-main-flow').then(({ installIosVoiceMainFlow }) => {
+    installIosVoiceMainFlow(import.meta.env.VITE_AURORA_IOS_VOICE_LIVE_TEST_CONTROL_ORIGIN)
   })
 }
 

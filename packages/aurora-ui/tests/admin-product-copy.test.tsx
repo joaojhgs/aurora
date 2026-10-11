@@ -1,5 +1,5 @@
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import {
   buildAdminOverviewManifest,
   buildCapabilityGraph,
@@ -23,6 +23,10 @@ import { ModelsView } from '../src/models-view'
 import { adminActionLabel, adminModuleLabel, adminReasonText, productAdminReasonCopy, sanitizeAdminText } from '../src/admin-product-copy'
 import { findForbiddenProductionCopyTerms } from '../src/product-copy-forbidden-terms'
 import type { RouteAvailability } from '../src/shell-data'
+
+beforeAll(() => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+})
 
 describe('admin product copy', () => {
   it('keeps admin overview and action browser copy product-facing', () => {
@@ -525,6 +529,10 @@ function auditSnapshot(): AdminAuditSnapshot {
 function client() {
   return {
     transport: { kind: 'http' },
+    auth: {
+      snapshot: () => ({ principalId: 'admin-product-copy' }),
+      subscribe: () => () => undefined,
+    },
     config: {},
     backups: {},
     tools: {},

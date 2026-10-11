@@ -10,6 +10,7 @@ import {
   type LightweightMemoryRecord,
   type LocalAuditRecord,
   type LocalDataBackend,
+  type LocalDataRepositories,
   type LocalDataSession,
   type LocalToolStateRecord,
   type PeerGrantMetadataRecord
@@ -22,6 +23,116 @@ import type { BrowserSqliteOwnership, BrowserSqliteOwnershipLock } from './brows
 import type { BrowserSqliteRepositoryOperation, BrowserSqliteWorkerRequest, BrowserSqliteWorkerResponse } from './browser-sqlite-worker.js'
 
 describe('browser sqlite worker client backend', () => {
+  it('keeps close behind a held transaction and allows its scoped operation to finish', async () => {
+    installBrowserStorageProbe()
+    const worker = new MemoryProtocolWorker()
+    const backend = new BrowserSqliteLocalDataBackend({ createWorker: () => worker, lock: new GrantedLock(), timeoutMs: 1000, wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm' })
+    const session = await backend.open('profile-1', 'node-1')
+    let enteredResolve!: () => void; let release!: () => void
+    const entered = new Promise<void>((resolve) => { enteredResolve = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const tx = session.transaction(async (repositories) => { enteredResolve(); await held; await repositories.memory.listMemoryItems() })
+    await entered
+    const closing = backend.close()
+    await Promise.resolve()
+    release()
+    await tx
+    await closing
+    const commands = worker.messages.map((message) => message.command)
+    expect(commands.indexOf('commitTransaction')).toBeLessThan(commands.indexOf('close'))
+  })
+
+  it('rolls back after commit failure and admits the next root operation', async () => {
+    installBrowserStorageProbe()
+    const worker = new MemoryProtocolWorker(); worker.failCommit = true
+    const backend = new BrowserSqliteLocalDataBackend({ createWorker: () => worker, lock: new GrantedLock(), timeoutMs: 1000, wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm' })
+    const session = await backend.open('profile-1', 'node-1')
+    await expect(session.transaction(async (repositories) => { await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'commit-failure' })) })).rejects.toMatchObject({ code: 'unsupported_backend' })
+    worker.failCommit = false
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([])
+    const commands = worker.messages.map((message) => message.command)
+    expect(commands.indexOf('commitTransaction')).toBeLessThan(commands.indexOf('rollbackTransaction'))
+    await backend.close()
+  })
+
+  it('keeps outsider writes behind a held transaction and isolates rollback', async () => {
+    installBrowserStorageProbe()
+    const worker = new MemoryProtocolWorker()
+    const backend = new BrowserSqliteLocalDataBackend({ createWorker: () => worker, lock: new GrantedLock(), timeoutMs: 1000, wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm' })
+    const session = await backend.open('profile-1', 'node-1')
+    let enteredResolve!: () => void
+    let release!: () => void
+    const entered = new Promise<void>((resolve) => { enteredResolve = resolve })
+    const held = new Promise<void>((resolve) => { release = resolve })
+    const transaction = session.transaction(async (repositories) => {
+      enteredResolve()
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'transaction-item' }))
+      await held
+      throw new Error('rollback')
+    })
+    await entered
+    let outsideSettled = false
+    const outside = session.memory.upsertMemoryItem(memoryFixture({ id: 'outside-item' })).finally(() => { outsideSettled = true })
+    await Promise.resolve()
+    expect(outsideSettled).toBe(false)
+    release()
+    await expect(transaction).rejects.toThrow('rollback')
+    await outside
+    await expect(session.memory.listMemoryItems()).resolves.toEqual([memoryFixture({ id: 'outside-item' })])
+    await backend.close()
+  })
+
+  it('commits scoped work before queued outsiders and rejects leaked repositories', async () => {
+    installBrowserStorageProbe()
+    const worker = new MemoryProtocolWorker()
+    const backend = new BrowserSqliteLocalDataBackend({ createWorker: () => worker, lock: new GrantedLock(), timeoutMs: 1000, wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm' })
+    const session = await backend.open('profile-1', 'node-1')
+    let leaked: LocalDataRepositories | null = null
+    const transaction = session.transaction(async (repositories) => {
+      leaked = repositories
+      await repositories.memory.upsertMemoryItem(memoryFixture({ id: 'committed-item' }))
+    })
+    const outside = session.memory.listMemoryItems()
+    await transaction
+    await outside
+    const commands = worker.messages.map((message) => message.command)
+    expect(commands.indexOf('beginTransaction')).toBeLessThan(commands.indexOf('commitTransaction'))
+    expect(commands.lastIndexOf('repo')).toBeGreaterThan(commands.indexOf('commitTransaction'))
+    await expect(leaked!.memory.listMemoryItems()).rejects.toMatchObject({
+      code: 'invalid_record',
+      metadata: { boundaryId: 'transaction.scope', validation: 'redacted', issues: [{ code: 'expired_transaction_repository', path: '' }] }
+    })
+    await backend.close()
+  })
+
+  it('rejects a captured root session nested transaction with the redacted boundary', async () => {
+    installBrowserStorageProbe()
+    const backend = new BrowserSqliteLocalDataBackend({ createWorker: () => new MemoryProtocolWorker(), lock: new GrantedLock(), timeoutMs: 1000, wasmAssetUrl: 'http://127.0.0.1/sqlite3.wasm' })
+    const session = await backend.open('profile-1', 'node-1')
+    let scoped!: LocalDataRepositories & Pick<LocalDataSession, 'transaction'>
+    await session.transaction(async (repositories) => {
+      assertTransactionRepository(repositories)
+      scoped = repositories
+      await expect(session.transaction(async () => undefined)).rejects.toMatchObject({
+        code: 'invalid_record',
+        message: 'Invalid local data boundary: transaction.scope',
+        metadata: { boundaryId: 'transaction.scope', validation: 'redacted', issues: [{ code: 'nested_transaction', path: '' }] },
+      })
+      await expect(scoped.transaction(async () => undefined)).rejects.toMatchObject({
+        code: 'invalid_record',
+        message: 'Invalid local data boundary: transaction.scope',
+        metadata: { boundaryId: 'transaction.scope', validation: 'redacted', issues: [{ code: 'nested_transaction', path: '' }] },
+      })
+    })
+    await backend.close()
+  })
+
+  it('validates bounded repository options before posting a worker request', async () => {
+    const worker = new MemoryProtocolWorker()
+    const client = new BrowserSqliteWorkerClient(worker, { timeoutMs: 1000, ownership: { key: 'owned', ownerId: 'owner-1', release: async () => undefined } })
+    await expect(client.repositoryOperation({ kind: 'conversations.listMessages', conversationId: 'conversation-1', options: { beforeSequence: 1, afterSequence: 0 } })).rejects.toMatchObject({ code: 'invalid_record' })
+    expect(worker.messages).toHaveLength(0)
+  })
   it('ships migration SQL bytes that match the immutable SDK manifest', () => {
     for (const migration of localDataMigrationManifest.migrations) {
       const sql = browserSqliteMigrationSql.find((entry) => entry.version === migration.version)?.sql
@@ -49,9 +160,18 @@ describe('browser sqlite worker client backend', () => {
     await session.peerGrants.upsertPeerGrant(peerGrantFixture())
     await session.localAudit.appendAudit(auditFixture())
 
-    await expect(session.conversations.listConversations()).resolves.toEqual([conversationFixture()])
-    await expect(session.conversations.listFirstUserMessages()).resolves.toEqual({ 'conversation-1': messageFixture() })
-    await expect(session.conversations.listMessages('conversation-1')).resolves.toEqual([messageFixture()])
+    await expect(session.conversations.getConversation('conversation-1')).resolves.toEqual(conversationFixture())
+    await expect(session.conversations.getMessage('conversation-1', 'message-1')).resolves.toEqual(messageFixture())
+    await expect(session.conversations.getLatestMessageSequence('conversation-1')).resolves.toBe(0)
+    await expect(session.conversations.listConversations({ limit: 1, includeArchived: false, cursor: { updatedAtMs: 2000, id: 'conversation-0' } })).resolves.toEqual([conversationFixture()])
+    await expect(session.conversations.listFirstUserMessages(['conversation-1'])).resolves.toEqual({ 'conversation-1': messageFixture() })
+    await expect(session.conversations.listMessageCounts(['conversation-1'])).resolves.toEqual({ 'conversation-1': 1 })
+    await expect(session.conversations.listMessages('conversation-1', { limit: 1, direction: 'desc', beforeSequence: 1 })).resolves.toEqual([messageFixture()])
+    expect(fakeWorker.messages.filter((message) => message.command === 'repo').map((message) => message.operation)).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'conversations.listFirstUserMessages', conversationIds: ['conversation-1'] }),
+      expect.objectContaining({ kind: 'conversations.listMessageCounts', conversationIds: ['conversation-1'] }),
+      expect.objectContaining({ kind: 'conversations.listMessages', options: { limit: 1, direction: 'desc', beforeSequence: 1 } })
+    ]))
     await expect(session.memory.listMemoryItems('notes')).resolves.toEqual([memoryFixture()])
     await expect(session.localTools.listLocalToolStates()).resolves.toEqual([localToolStateFixture()])
     await expect(session.peerGrants.listPeerGrants()).resolves.toEqual([peerGrantFixture()])
@@ -188,6 +308,14 @@ function installBrowserStorageProbe(): void {
   })
 }
 
+function assertTransactionRepository(
+  repositories: LocalDataRepositories
+): asserts repositories is LocalDataRepositories & Pick<LocalDataSession, 'transaction'> {
+  if (!('transaction' in repositories) || typeof repositories.transaction !== 'function') {
+    throw new Error('Expected a captured scoped transaction repository.')
+  }
+}
+
 class GrantedLock implements BrowserSqliteOwnershipLock {
   async acquire(key: string): Promise<BrowserSqliteOwnership> {
     return { key, ownerId: 'owner-1', release: async () => undefined }
@@ -204,6 +332,7 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
   onmessage: ((event: MessageEvent<BrowserSqliteWorkerResponse>) => void) | null = null
   onerror: ((event: ErrorEvent) => void) | null = null
   readonly messages: BrowserSqliteWorkerRequest[] = []
+  failCommit = false
   private backend: LocalDataBackend = new MemoryLocalDataBackend()
   private session: LocalDataSession | null = null
   private snapshot: Awaited<ReturnType<LocalDataSession['exportV1']>> | null = null
@@ -222,9 +351,9 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
     switch (message.command) {
       case 'open':
         this.session = await this.backend.open(message.profileId, message.localNodeId)
-        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: message.profileId, schemaVersion: 3, migrationState: 'idle' }
+        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: message.profileId, schemaVersion: localDataMigrationManifest.latestVersion, migrationState: 'idle' }
       case 'status':
-        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: this.session?.profileId ?? null, schemaVersion: 3, migrationState: 'idle' }
+        return { kind: 'sqlite-wasm-opfs', persistent: true, sqlite: true, profileId: this.session?.profileId ?? null, schemaVersion: localDataMigrationManifest.latestVersion, migrationState: 'idle' }
       case 'close':
         await this.session?.close()
         return { closed: true }
@@ -232,6 +361,7 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
         this.snapshot = await this.requireSession().exportV1()
         return { txId: message.txId }
       case 'commitTransaction':
+        if (this.failCommit) throw new Error('commit failed')
         this.snapshot = null
         return { committed: true }
       case 'rollbackTransaction':
@@ -260,12 +390,20 @@ class MemoryProtocolWorker implements BrowserSqliteProtocolWorker {
         return await session.conversations.appendMessage(operation.record)
       case 'conversations.deleteConversation':
         return await session.conversations.deleteConversation(operation.conversationId)
+      case 'conversations.getConversation':
+        return await session.conversations.getConversation(operation.conversationId)
+      case 'conversations.getMessage':
+        return await session.conversations.getMessage(operation.conversationId, operation.messageId)
+      case 'conversations.getLatestMessageSequence':
+        return await session.conversations.getLatestMessageSequence(operation.conversationId)
       case 'conversations.listConversations':
-        return await session.conversations.listConversations()
+        return await session.conversations.listConversations(operation.options)
+      case 'conversations.listMessageCounts':
+        return await session.conversations.listMessageCounts(operation.conversationIds)
       case 'conversations.listFirstUserMessages':
-        return await session.conversations.listFirstUserMessages()
+        return await session.conversations.listFirstUserMessages(operation.conversationIds)
       case 'conversations.listMessages':
-        return await session.conversations.listMessages(operation.conversationId)
+        return await session.conversations.listMessages(operation.conversationId, operation.options)
       case 'memory.upsertMemoryItem':
         return await session.memory.upsertMemoryItem(operation.record)
       case 'memory.deleteMemoryItem':
@@ -303,7 +441,7 @@ function redact(error: unknown): { code: string; message: string; metadata?: { r
       ...(error.metadata?.reason === undefined ? {} : { metadata: { reason: error.metadata.reason } })
     }
   }
-  return { code: 'unsupported_backend', message: 'failed' }
+  return { code: 'unsupported_backend', message: error instanceof Error ? error.message : 'failed' }
 }
 
 const envelopeFixture = Object.freeze({
@@ -421,6 +559,8 @@ function largeTransferDocument() {
       memoryItems: [],
       localToolStates: [],
       peerGrantMetadata: [],
+      transcriptSessions: [],
+      transcriptSegments: [],
       localAudit: Array.from({ length: 40 }, (_, index) => auditFixture({
         id: `audit-large-${index}`,
         redactedDetailJson: { note: 'A'.repeat(60 * 1024) },

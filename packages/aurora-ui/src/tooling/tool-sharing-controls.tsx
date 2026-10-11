@@ -33,6 +33,7 @@ import { Spinner } from '#components/ui/spinner'
 import { cn } from '#lib/utils'
 import { ToneBadge } from '../status-badges'
 import { safeErrorCopy } from '../product-copy'
+import { RouteStateNotice } from '../state-surface'
 
 const SELECTED_SEGMENT_STYLE: CSSProperties = {
   backgroundColor: 'color-mix(in oklab, var(--primary) 22%, var(--muted))',
@@ -259,8 +260,24 @@ function ToolSharingPolicyControl({
       </AnimatePresence>
 
       {decision && compact ? <EffectiveDecision decision={decision} /> : null}
-      {loading ? <p className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground" role="status"><Spinner /> Loading sharing state…</p> : null}
-      {error ? <p className="mt-2 text-xs text-destructive" role="alert">{safeErrorCopy(error).title}</p> : null}
+      {loading ? (
+        <div className="mt-2">
+          <RouteStateNotice
+            state="loading"
+            title="Sharing choices loading"
+            message="Aurora is checking saved sharing choices."
+          />
+        </div>
+      ) : null}
+      {error ? (
+        <div className="mt-2">
+          <RouteStateNotice
+            state="error"
+            title="Sharing choices need attention"
+            message={safeErrorCopy(error).title}
+          />
+        </div>
+      ) : null}
       {message ? <p className="mt-2 text-xs text-muted-foreground" aria-live="polite">{message}</p> : null}
       {!policy ? <p className="mt-2 text-xs text-muted-foreground">Sharing policy unavailable.</p> : null}
     </div>
@@ -331,7 +348,7 @@ export function PolicySegmentedControl({
           Not shared
         </ToggleGroupItem>
       </ToggleGroup>
-      {pending ? <Spinner aria-label="Saving" /> : null}
+      {pending ? <><Spinner aria-label="Saving" /><span className="sr-only">Saving</span></> : null}
     </div>
   )
 }

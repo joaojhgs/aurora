@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import FrozenInstanceError
 from datetime import datetime, timedelta
 from types import SimpleNamespace
@@ -24,18 +25,64 @@ from app.shared.contracts.mesh_surface import (
     feature_contracts_for_topic,
 )
 from app.shared.contracts.models.gateway import (
+    GatewayMethods,
     MethodInfo,
     ServiceAnnouncement,
     ServiceDeparture,
     ServiceHeartbeat,
 )
 from app.shared.contracts.models.speech import SpeechMethodConstraints
+from app.shared.contracts.models.speech_runtime import (
+    SpeechStageCapabilityExportV1,
+    SpeechStageCapabilityV1,
+)
 from app.shared.contracts.registry import (
     CallableFeatureContract,
     MethodContract,
     ModuleContract,
 )
 from tests.unit.gateway.mesh_policy_helpers import mesh_policy
+
+
+async def _wait_for_generation(service, generation: int) -> None:
+    async def wait_until_reserved() -> None:
+        while service._runtime_generation < generation:
+            await asyncio.sleep(0)
+
+    await asyncio.wait_for(wait_until_reserved(), timeout=1)
+
+
+async def _wait_for_event_or_task(
+    event: asyncio.Event, task: asyncio.Task, description: str
+) -> None:
+    event_waiter = asyncio.create_task(event.wait())
+    try:
+        done, _ = await asyncio.wait(
+            {event_waiter, task}, timeout=1, return_when=asyncio.FIRST_COMPLETED
+        )
+        if not done:
+            raise asyncio.TimeoutError(f"timed out waiting for {description}")
+        if event_waiter not in done:
+            await task
+            raise AssertionError(f"operation completed before {description}")
+        await event_waiter
+    finally:
+        if not event_waiter.done():
+            event_waiter.cancel()
+        await asyncio.gather(event_waiter, return_exceptions=True)
+
+
+async def _finish_tasks(*tasks: asyncio.Task) -> None:
+    live_tasks = [task for task in tasks if task is not None]
+    if not live_tasks:
+        return
+    try:
+        await asyncio.wait_for(asyncio.gather(*live_tasks, return_exceptions=True), timeout=1)
+    except asyncio.TimeoutError:
+        for task in live_tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*live_tasks, return_exceptions=True)
 
 
 class _ParityInput(BaseModel):
@@ -66,6 +113,417 @@ def _announcement(*, schema_title: str = "Input", tag: str = "alpha") -> Service
                 output_schema={"type": "object", "title": "Output"},
             )
         ],
+    )
+
+
+def _ready_speech_export(*, revision: int = 1) -> SpeechStageCapabilityExportV1:
+    capability = SpeechStageCapabilityV1(
+        stage="tts",
+        method_ids=["TTS.Synthesize"],
+        modes=["finite"],
+        implementation="python",
+        peer_id="speech-fixture-peer",
+        capability_revision=revision,
+        lifecycle=["foreground"],
+        readiness="ready",
+        exported=True,
+    )
+    return SpeechStageCapabilityExportV1(
+        capability=capability,
+        voice_ids=["standard:test:voice-a"],
+    )
+
+
+def _speech_fixture_module() -> ModuleContract:
+    return ModuleContract(
+        module="SpeechRuntimeFixture",
+        version="1.0.0",
+        summary="Speech runtime fixture",
+        methods=[],
+    )
+
+
+def test_legacy_service_announcement_defaults_to_no_runtime_speech_projection() -> None:
+    announcement = ServiceAnnouncement.model_validate(
+        {"module": "LegacyFixture", "version": "1.0.0"}
+    )
+
+    assert announcement.speech_stage_capabilities == []
+
+
+@pytest.mark.asyncio
+async def test_base_service_runtime_speech_hook_defaults_to_empty() -> None:
+    from app.shared.services.base_service import BaseService
+
+    class DefaultHookService(BaseService):
+        async def on_start(self) -> None:
+            return None
+
+        async def on_stop(self) -> None:
+            return None
+
+        async def reload(self, config_section: str | None = None) -> None:
+            return None
+
+    service = DefaultHookService("DefaultSpeechHookFixture")
+
+    assert await service._speech_stage_capabilities_for_announcement() == []
+
+
+@pytest.mark.asyncio
+async def test_base_service_announcement_includes_runtime_hook_after_start() -> None:
+    from app.shared.services.base_service import BaseService
+
+    order: list[str] = []
+
+    class CaptureBus:
+        def __init__(self) -> None:
+            self.announcements: list[ServiceAnnouncement] = []
+
+        async def publish(self, topic, payload, **_kwargs) -> None:
+            if topic == GatewayMethods.SERVICE_ANNOUNCE:
+                self.announcements.append(payload)
+
+    class SpeechAnnouncementService(BaseService):
+        def __init__(self) -> None:
+            self.capture_bus = CaptureBus()
+            super().__init__("SpeechRuntimeFixture", summary="Speech fixture")
+
+        @property
+        def bus(self):
+            return self.capture_bus
+
+        async def _is_runtime_enabled(self) -> bool:
+            return True
+
+        async def _subscribe_registered_contracts(self, only_always_available=False) -> None:
+            return None
+
+        def _start_gateway_announcement_loop(self, runtime_generation=None) -> None:
+            return None
+
+        async def on_start(self) -> None:
+            order.append("started")
+
+        async def on_stop(self) -> None:
+            return None
+
+        async def reload(self, config_section: str | None = None) -> None:
+            return None
+
+        async def _speech_stage_capabilities_for_announcement(self):
+            assert order == ["started"]
+            order.append("projected")
+            return [_ready_speech_export()]
+
+    service = SpeechAnnouncementService()
+    await service.activate()
+
+    assert order == ["started", "projected"]
+    assert len(service.capture_bus.announcements) == 1
+    assert service.capture_bus.announcements[0].speech_stage_capabilities == [
+        _ready_speech_export()
+    ]
+
+
+@pytest.mark.asyncio
+async def test_thread_static_refresh_preserves_latest_runtime_projection_and_detaches_input(
+    monkeypatch,
+) -> None:
+    import app.shared.contracts.registry as contract_registry
+
+    module = _speech_fixture_module()
+    monkeypatch.setattr(contract_registry, "list_modules", lambda: {module.module: module})
+    thread_registry = RegistryAggregator(bus=SimpleNamespace(), mode="threads")
+    process_registry = RegistryAggregator(bus=SimpleNamespace(), mode="processes")
+    await thread_registry._load_from_local_registry()
+
+    for revision in (1, 2):
+        announcement = ServiceAnnouncement(
+            module=module.module,
+            version=module.version,
+            summary=module.summary,
+            speech_stage_capabilities=[_ready_speech_export(revision=revision)],
+        )
+        payload = announcement.model_dump(mode="json")
+        await process_registry._on_service_announce(SimpleNamespace(payload=payload))
+        await thread_registry._on_service_announce(SimpleNamespace(payload=payload))
+        payload["speech_stage_capabilities"][0]["voice_ids"].append(
+            "standard:test:mutated-after-publication"
+        )
+
+    process_services = process_registry.snapshot_services()
+    await thread_registry._load_from_local_registry()
+    thread_services = thread_registry.snapshot_services()
+
+    process_projection = process_services[module.module].speech_stage_capabilities
+    thread_projection = thread_services[module.module].speech_stage_capabilities
+    assert thread_projection[0].capability.capability_revision == 2
+    assert thread_projection[0].voice_ids == ("standard:test:voice-a",)
+    assert thread_projection == process_projection
+
+    expected_projection = tuple(process_projection)
+    process_services[module.module].speech_stage_capabilities.clear()
+    thread_services[module.module].speech_stage_capabilities.clear()
+    assert process_registry.snapshot_services()[module.module].speech_stage_capabilities == list(
+        expected_projection
+    )
+    assert thread_registry.snapshot_services()[module.module].speech_stage_capabilities == list(
+        expected_projection
+    )
+
+
+@pytest.mark.asyncio
+async def test_runtime_hook_failure_publishes_empty_projection_and_clears_ready_snapshot() -> None:
+    from app.shared.services.base_service import BaseService
+
+    registry = RegistryAggregator(bus=SimpleNamespace(), mode="processes")
+
+    class RegistryBus:
+        async def publish(self, topic, payload, **_kwargs) -> None:
+            if topic == GatewayMethods.SERVICE_ANNOUNCE:
+                await registry._on_service_announce(SimpleNamespace(payload=payload))
+
+    class SometimesUnavailableService(BaseService):
+        def __init__(self) -> None:
+            self.registry_bus = RegistryBus()
+            self.fail_hook = False
+            super().__init__("SpeechRuntimeFixture", summary="Speech fixture")
+
+        @property
+        def bus(self):
+            return self.registry_bus
+
+        async def _is_runtime_enabled(self) -> bool:
+            return True
+
+        async def _subscribe_registered_contracts(self, only_always_available=False) -> None:
+            return None
+
+        def _start_gateway_announcement_loop(self, runtime_generation=None) -> None:
+            return None
+
+        async def on_start(self) -> None:
+            return None
+
+        async def on_stop(self) -> None:
+            return None
+
+        async def reload(self, config_section: str | None = None) -> None:
+            return None
+
+        async def _speech_stage_capabilities_for_announcement(self):
+            if self.fail_hook:
+                raise RuntimeError("runtime readiness unavailable")
+            return [_ready_speech_export()]
+
+    service = SometimesUnavailableService()
+    await service.activate()
+    assert registry.snapshot_services()["SpeechRuntimeFixture"].speech_stage_capabilities
+
+    service.fail_hook = True
+    await service._publish_service_announcement()
+
+    assert registry.snapshot_services()["SpeechRuntimeFixture"].speech_stage_capabilities == []
+
+
+@pytest.mark.asyncio
+async def test_stale_runtime_hook_cannot_publish_after_deactivate_and_reactivate() -> None:
+    from app.shared.services.base_service import BaseService
+
+    first_hook_started = asyncio.Event()
+    release_first_hook = asyncio.Event()
+
+    class CaptureBus:
+        def __init__(self) -> None:
+            self.announcements: list[ServiceAnnouncement] = []
+
+        async def publish(self, topic, payload, **_kwargs) -> None:
+            if topic == GatewayMethods.SERVICE_ANNOUNCE:
+                self.announcements.append(payload)
+
+    class ReentrantProjectionService(BaseService):
+        def __init__(self) -> None:
+            self.capture_bus = CaptureBus()
+            self.hook_calls = 0
+            super().__init__("SpeechRuntimeFixture", summary="Speech fixture")
+
+        @property
+        def bus(self):
+            return self.capture_bus
+
+        async def _is_runtime_enabled(self) -> bool:
+            return True
+
+        async def _subscribe_registered_contracts(self, only_always_available=False) -> None:
+            return None
+
+        def _start_gateway_announcement_loop(self, runtime_generation=None) -> None:
+            return None
+
+        async def on_start(self) -> None:
+            return None
+
+        async def on_stop(self) -> None:
+            return None
+
+        async def reload(self, config_section: str | None = None) -> None:
+            return None
+
+        async def _speech_stage_capabilities_for_announcement(self):
+            self.hook_calls += 1
+            if self.hook_calls == 1:
+                first_hook_started.set()
+                await release_first_hook.wait()
+                return [_ready_speech_export(revision=1)]
+            return [_ready_speech_export(revision=2)]
+
+    service = ReentrantProjectionService()
+    stale_activation = asyncio.create_task(service.activate())
+    deactivation: asyncio.Task[None] | None = None
+    replacement_activation: asyncio.Task[None] | None = None
+    try:
+        await _wait_for_event_or_task(first_hook_started, stale_activation, "first projection hook")
+        generation = service._runtime_generation
+        deactivation = asyncio.create_task(service.deactivate())
+        await _wait_for_generation(service, generation + 1)
+        replacement_activation = asyncio.create_task(service.activate())
+        await _wait_for_generation(service, generation + 2)
+
+        release_first_hook.set()
+        await asyncio.wait_for(stale_activation, timeout=1)
+        assert deactivation is not None
+        assert replacement_activation is not None
+        await asyncio.wait_for(deactivation, timeout=1)
+        await asyncio.wait_for(replacement_activation, timeout=1)
+    finally:
+        release_first_hook.set()
+        tasks = [stale_activation]
+        if deactivation is not None:
+            tasks.append(deactivation)
+        if replacement_activation is not None:
+            tasks.append(replacement_activation)
+        await _finish_tasks(*tasks)
+
+    assert service.hook_calls == 2
+    assert len(service.capture_bus.announcements) == 1
+    assert (
+        service.capture_bus.announcements[0]
+        .speech_stage_capabilities[0]
+        .capability.capability_revision
+        == 2
+    )
+
+
+@pytest.mark.asyncio
+async def test_retired_activation_cannot_start_announcement_loop_before_replacement_hook_completes() -> (
+    None
+):
+    from app.shared.services.base_service import BaseService
+
+    first_hook_started = asyncio.Event()
+    second_hook_started = asyncio.Event()
+    release_first_hook = asyncio.Event()
+    release_second_hook = asyncio.Event()
+
+    class CaptureBus:
+        def __init__(self) -> None:
+            self.announcements: list[ServiceAnnouncement] = []
+
+        async def publish(self, topic, payload, **_kwargs) -> None:
+            if topic == GatewayMethods.SERVICE_ANNOUNCE:
+                self.announcements.append(payload)
+
+    class DelayedReplacementService(BaseService):
+        def __init__(self) -> None:
+            self.capture_bus = CaptureBus()
+            self.hook_calls = 0
+            self.announcement_loop_starts = 0
+            super().__init__("SpeechRuntimeFixture", summary="Speech fixture")
+
+        @property
+        def bus(self):
+            return self.capture_bus
+
+        async def _is_runtime_enabled(self) -> bool:
+            return True
+
+        async def _subscribe_registered_contracts(self, only_always_available=False) -> None:
+            return None
+
+        def _start_gateway_announcement_loop(self, runtime_generation=None) -> None:
+            self.announcement_loop_starts += 1
+
+        async def on_start(self) -> None:
+            return None
+
+        async def on_stop(self) -> None:
+            return None
+
+        async def reload(self, config_section: str | None = None) -> None:
+            return None
+
+        async def _speech_stage_capabilities_for_announcement(self):
+            self.hook_calls += 1
+            if self.hook_calls == 1:
+                first_hook_started.set()
+                await release_first_hook.wait()
+                return [_ready_speech_export(revision=1)]
+            second_hook_started.set()
+            await release_second_hook.wait()
+            return [_ready_speech_export(revision=2)]
+
+    service = DelayedReplacementService()
+    retired_activation = asyncio.create_task(service.activate())
+    deactivation: asyncio.Task[None] | None = None
+    replacement_activation: asyncio.Task[None] | None = None
+    try:
+        await _wait_for_event_or_task(
+            first_hook_started, retired_activation, "first projection hook"
+        )
+        generation = service._runtime_generation
+        deactivation = asyncio.create_task(service.deactivate())
+        await _wait_for_generation(service, generation + 1)
+        replacement_activation = asyncio.create_task(service.activate())
+        await _wait_for_generation(service, generation + 2)
+
+        assert service.hook_calls == 1
+        assert service.announcement_loop_starts == 0
+        assert service.capture_bus.announcements == []
+
+        release_first_hook.set()
+        await asyncio.wait_for(retired_activation, timeout=1)
+        assert service.announcement_loop_starts == 0
+        assert service.capture_bus.announcements == []
+        assert replacement_activation is not None
+        await _wait_for_event_or_task(
+            second_hook_started, replacement_activation, "replacement projection hook"
+        )
+        assert service.announcement_loop_starts == 0
+        assert service.capture_bus.announcements == []
+        release_second_hook.set()
+        assert deactivation is not None
+        assert replacement_activation is not None
+        await asyncio.wait_for(deactivation, timeout=1)
+        await asyncio.wait_for(replacement_activation, timeout=1)
+    finally:
+        release_first_hook.set()
+        release_second_hook.set()
+        tasks = [retired_activation]
+        if deactivation is not None:
+            tasks.append(deactivation)
+        if replacement_activation is not None:
+            tasks.append(replacement_activation)
+        await _finish_tasks(*tasks)
+
+    assert replacement_activation is not None
+    assert service.announcement_loop_starts == 1
+    assert len(service.capture_bus.announcements) == 1
+    assert (
+        service.capture_bus.announcements[0]
+        .speech_stage_capabilities[0]
+        .capability.capability_revision
+        == 2
     )
 
 

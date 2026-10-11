@@ -128,9 +128,9 @@ describe('source-first Tooling console', () => {
     const host = document.createElement('div')
     host.innerHTML = markup
 
-    expect(markup).toContain('Policy loading')
-    expect(markup).toContain('Sources loading')
     expect(markup).toContain('Loading tool sources')
+    expect(host.textContent).toContain('Loading tool sources')
+    expect(markup).not.toContain('Core tools')
     expect(host.querySelectorAll('[aria-label="Tool sources"] button')).toHaveLength(0)
     expect(host.textContent).not.toContain('No sources match this search.')
   })

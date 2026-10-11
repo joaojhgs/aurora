@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "aurora-ios-voice-live-test"
+description = "DEBUG-only iOS fixture PCM ingress for the protected foreground voice session."
+commands.allow = [
+  "aurora_ios_voice_live_test_start",
+  "aurora_ios_voice_live_test_push_pcm",
+]

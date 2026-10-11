@@ -3539,6 +3539,51 @@ async def test_pockettts_request_playback_uses_single_synthesis_and_stops_playba
 
 
 @pytest.mark.asyncio
+async def test_explicit_playback_stop_restores_volume_only_after_clean_close(
+    mock_bus, monkeypatch
+) -> None:
+    service = TTSService()
+    calls: list[str] = []
+
+    class PlaybackStream:
+        def stop(self) -> None:
+            calls.append("stop")
+
+        def close(self) -> None:
+            calls.append("close")
+
+    monkeypatch.setattr(
+        "app.services.tts.service.restore_volume_except_current",
+        lambda: calls.append("restore"),
+    )
+
+    await service._stop_playback_stream(PlaybackStream())
+    assert calls == ["stop", "close", "restore"]
+
+    calls.clear()
+
+    class StopFailureStream(PlaybackStream):
+        def stop(self) -> None:
+            calls.append("stop")
+            raise RuntimeError("stop failed")
+
+    with pytest.raises(RuntimeError, match="stop failed"):
+        await service._stop_playback_stream(StopFailureStream())
+    assert calls == ["stop"]
+
+    calls.clear()
+
+    class CloseFailureStream(PlaybackStream):
+        def close(self) -> None:
+            calls.append("close")
+            raise RuntimeError("close failed")
+
+    with pytest.raises(RuntimeError, match="close failed"):
+        await service._stop_playback_stream(CloseFailureStream())
+    assert calls == ["stop", "close"]
+
+
+@pytest.mark.asyncio
 async def test_pockettts_stop_during_synthesis_cancels_and_suppresses_late_events(
     mock_bus,
 ) -> None:

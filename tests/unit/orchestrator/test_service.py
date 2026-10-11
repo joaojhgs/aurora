@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import pytest
 
-from app.messaging import Envelope, Event, MessageBus
+from app.messaging import Envelope, Event, MessageBus, QueryResult
 from app.services.orchestrator.service import OrchestratorService
 from app.shared.messaging.models.orchestrator_models import (
     LLMResponseReady,
@@ -23,6 +23,34 @@ def mock_bus():
     bus.subscribe_event = AsyncMock()
     bus.publish = AsyncMock()
     return bus
+
+
+def _ready_streaming_tts_capability_result() -> QueryResult:
+    """Build the successful runtime capability response needed by stream tests."""
+    from app.shared.contracts.models.tts import (
+        TTSCapabilities,
+        TTSGetCapabilitiesResponse,
+        TTSResidentLanguagePack,
+    )
+
+    capabilities = TTSCapabilities(
+        ready=True,
+        model_status="ready",
+        supported_language_pack_ids=["en-US-local"],
+        installed_language_pack_ids=["en-US-local"],
+        resident_language_pack_ids=["en-US-local"],
+        resident_language_packs=[
+            TTSResidentLanguagePack(pack_id="en-US-local", ready_languages=["en-US"])
+        ],
+        ready_languages=["en-US"],
+        sample_rates=[24_000],
+        streaming=True,
+        resident_base_model_count=1,
+    )
+    return QueryResult(
+        ok=True,
+        data=TTSGetCapabilitiesResponse(capabilities=capabilities).model_dump(),
+    )
 
 
 @pytest.fixture
@@ -109,6 +137,7 @@ class TestOrchestratorServiceTranscriptionHandling:
                 request_id="test-session",
                 correlation_id="test-session",
                 stream=True,
+                trusted_local_origin=True,
             )
 
         rendered_logs = "\n".join(str(call) for call in mock_log_info.call_args_list)
@@ -607,6 +636,7 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_selector=None,
                 inference_provider_id=None,
                 inference_model_id=None,
+                trusted_local_origin=True,
             )
 
     @pytest.mark.asyncio
@@ -657,6 +687,7 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_provider_id=None,
                 inference_model_id=None,
                 response_metadata={"client_tts_playback": True},
+                trusted_local_origin=True,
             )
 
     @pytest.mark.asyncio
@@ -713,6 +744,7 @@ class TestOrchestratorServiceUserInputHandling:
                 inference_selector=None,
                 inference_provider_id=None,
                 inference_model_id=None,
+                trusted_local_origin=False,
             )
 
     @pytest.mark.asyncio
@@ -772,6 +804,7 @@ class TestOrchestratorServiceUserInputHandling:
             inference_selector=None,
             inference_provider_id=None,
             inference_model_id=None,
+            trusted_local_origin=False,
         )
 
     @pytest.mark.asyncio
@@ -794,7 +827,8 @@ class TestOrchestratorServiceUserInputHandling:
 
             # Returns OrchestratorResponse with error info
             assert isinstance(response, OrchestratorResponse)
-            assert "Processing error" in response.text
+            assert response.text == "Error: Aurora could not complete this request."
+            assert "Processing error" not in response.text
             assert response.metadata.get("error") is True
 
 
@@ -1400,6 +1434,7 @@ class TestOrchestratorServiceInputProcessing:
         orchestrator_service.orchestrator = MagicMock()
         orchestrator_service.orchestrator.stream_graph_events = stream_events
         orchestrator_service._ui_automatic_tts_readback = False
+        mock_bus.request = AsyncMock(return_value=_ready_streaming_tts_capability_result())
 
         with patch("app.services.orchestrator.service.get_contract", return_value=object()):
             await orchestrator_service._process_input(
@@ -1465,7 +1500,13 @@ class TestOrchestratorServiceInputProcessing:
     ):
         """A completed-only model stream still sends its response text to client TTS."""
         from app.shared.contracts.models.orchestrator import AssistantStreamEvent
-        from app.shared.contracts.models.tts import TTSMethods, TTSStreamChunkRequest
+        from app.shared.contracts.models.tts import (
+            TTSCapabilities,
+            TTSGetCapabilitiesResponse,
+            TTSMethods,
+            TTSResidentLanguagePack,
+            TTSStreamChunkRequest,
+        )
 
         async def stream_events(*args, **kwargs):
             yield AssistantStreamEvent(
@@ -1475,6 +1516,30 @@ class TestOrchestratorServiceInputProcessing:
         orchestrator_service.orchestrator = MagicMock()
         orchestrator_service.orchestrator.stream_graph_events = stream_events
         orchestrator_service._ui_automatic_tts_readback = False
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(
+                ok=True,
+                data=TTSGetCapabilitiesResponse(
+                    capabilities=TTSCapabilities(
+                        ready=True,
+                        model_status="ready",
+                        supported_language_pack_ids=["en-US-local"],
+                        installed_language_pack_ids=["en-US-local"],
+                        resident_language_pack_ids=["en-US-local"],
+                        resident_language_packs=[
+                            TTSResidentLanguagePack(
+                                pack_id="en-US-local", ready_languages=["en-US"]
+                            )
+                        ],
+                        ready_languages=["en-US"],
+                        output_formats=["wav"],
+                        sample_rates=[24_000],
+                        streaming=True,
+                        resident_base_model_count=1,
+                    )
+                ).model_dump(),
+            )
+        )
 
         with patch("app.services.orchestrator.service.get_contract", return_value=object()):
             await orchestrator_service._process_input(
@@ -1503,6 +1568,67 @@ class TestOrchestratorServiceInputProcessing:
         assert tts_chunks[0].kwargs["correlation_id"] == "corr-completed-only"
 
     @pytest.mark.asyncio
+    @pytest.mark.parametrize("source", ["stt", "external"])
+    async def test_remote_thin_skips_stream_commands_when_tts_capability_is_not_ready(
+        self, orchestrator_service, mock_bus, source
+    ):
+        """A completed response remains deliverable when the TTS runtime is unavailable."""
+        from app.shared.contracts.models.orchestrator import (
+            AssistantStreamEvent,
+            OrchestratorMethods,
+        )
+        from app.shared.contracts.models.tts import (
+            TTSCapabilities,
+            TTSGetCapabilitiesResponse,
+            TTSMethods,
+        )
+
+        async def stream_events(*args, **kwargs):
+            yield AssistantStreamEvent(kind="assistant.completed", text="Text without speech.")
+
+        orchestrator_service.orchestrator = MagicMock()
+        orchestrator_service.orchestrator.stream_graph_events = stream_events
+        mock_bus.request = AsyncMock(
+            return_value=QueryResult(
+                ok=True,
+                data=TTSGetCapabilitiesResponse(
+                    capabilities=TTSCapabilities(ready=False, streaming=False)
+                ).model_dump(),
+            )
+        )
+
+        with patch("app.services.orchestrator.service.get_contract", return_value=object()):
+            await orchestrator_service._process_input(
+                "Input",
+                source=source,
+                session_id="session-unavailable-tts",
+                request_id="request-unavailable-tts",
+                correlation_id="corr-unavailable-tts",
+                stream=True,
+                caller_principal_id="principal-a",
+                caller_peer_id="peer-a",
+                caller_identity_source="webrtc_rpc",
+                response_metadata={"client_tts_playback": True},
+            )
+
+        assert mock_bus.request.await_args.args[0] == TTSMethods.GET_CAPABILITIES
+        response_calls = [
+            call
+            for call in mock_bus.publish.call_args_list
+            if call.args[0] == OrchestratorMethods.RESPONSE
+        ]
+        assert response_calls[-1].args[1].metadata["tts_status"] == "unavailable"
+        assert all(
+            call.args[0]
+            not in {
+                TTSMethods.STREAM_START,
+                TTSMethods.STREAM_CHUNK,
+                TTSMethods.STREAM_END,
+            }
+            for call in mock_bus.publish.call_args_list
+        )
+
+    @pytest.mark.asyncio
     async def test_stt_stream_keeps_server_tts_and_untargeted_response(
         self, orchestrator_service, mock_bus
     ):
@@ -1515,6 +1641,7 @@ class TestOrchestratorServiceInputProcessing:
 
         orchestrator_service.orchestrator = MagicMock()
         orchestrator_service.orchestrator.stream_graph_events = stream_events
+        mock_bus.request = AsyncMock(return_value=_ready_streaming_tts_capability_result())
 
         with patch("app.services.orchestrator.service.get_contract", return_value=object()):
             await orchestrator_service._process_input(

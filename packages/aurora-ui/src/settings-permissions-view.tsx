@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState, type ReactNode } from 'react'
-import { AlertTriangle, CheckCircle2, HardDrive, Keyboard, Mic, Palette, RefreshCw, ShieldCheck, Smartphone, ToggleLeft, Volume2 } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { AlertTriangle, CheckCircle2, HardDrive, Mic, Palette, RefreshCw, ShieldCheck, Smartphone, ToggleLeft, Volume2 } from 'lucide-react'
 import type {
   AndroidAssistantRoleStatus,
   AndroidFallbackEntrypoint,
@@ -16,16 +16,12 @@ import type {
 import type { AuroraShellSnapshot, RouteAvailability } from './shell-data'
 import { getAuroraSurfaceProfile, shouldShowForSurface, type AuroraSurfaceProfile } from './platform-surface'
 import type { AuroraDesktopOverlaySave, AuroraRuntimeProfileV2 } from './runtime-profile'
-import {
-  normalizeDesktopOverlayHotkey,
-  resolveDesktopOverlayPreferences,
-} from './runtime-profile'
 import { safeErrorCopy } from './product-copy'
 import { PrivacyBadge, StatusBadge } from './status-badges'
-import { PageHeader } from './state-surface'
-import { Button, Card, DataTable, MetaGrid, StatStrip, Switch, type DataColumn } from './primitives'
-import { Field, FieldDescription, FieldGroup, FieldLabel } from '#components/ui/field'
-import { Input } from '#components/ui/input'
+import { EmptyState, PageHeader, RouteStateNotice, SurfaceSkeleton } from './state-surface'
+import { Button, Card, DataTable, MetaGrid, StatStrip, type DataColumn } from './primitives'
+import { OverlayShortcutsCard } from './settings-overlay-shortcuts-card'
+import { PanelTitle } from './settings-panel-title'
 
 export type SettingsMutationState = 'idle' | 'optimistic' | 'rollback-error' | 'disabled'
 
@@ -279,55 +275,76 @@ function ThisDeviceSettingsSurface({
   const storageRows = model.userExperienceDefaults.filter((item) => item.id === 'local-storage')
   const localVoiceRows = model.voiceBehavior.filter((item) => item.id !== 'spoken-replies')
   const osTitle = profile.isIos ? 'iOS' : 'Android'
+  const header = (
+    <PageHeader
+      eyebrow="Settings"
+      id="settings-this-device-title"
+      title="This device"
+      description="Privacy defaults, voice behavior, and assistant preferences."
+    />
+  )
+
+  if (model.loadState === 'loading') {
+    return (
+      <section className="flex flex-col gap-4" aria-labelledby="settings-this-device-title">
+        {header}
+        <SurfaceSkeleton title="Loading device settings" lines={5} />
+      </section>
+    )
+  }
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="settings-this-device-title">
-      <PageHeader
-        eyebrow="Settings"
-        id="settings-this-device-title"
-        title="This device"
-        description="Privacy defaults, voice behavior, and assistant preferences."
-      />
+      {header}
 
       {model.error ? (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive" role="alert">
-          <AlertTriangle size={17} aria-hidden />
-          <span>{model.error}</span>
-        </div>
+        <RouteStateNotice
+          state="error"
+          title="Settings need attention"
+          message={model.error}
+        />
       ) : null}
 
       <Card>
         <PanelTitle
           icon={<RefreshCw size={18} aria-hidden />}
-          title="Connection & role"
-          description="How this device works with Aurora, and when another device can help."
-          id="connection-role-title"
-        />
-        <p className="mb-3 text-sm text-muted-foreground">
-          {profile.nodeMode === 'mesh-node'
+          title="Device connection"
+          description={profile.nodeMode === 'mesh-node'
             ? 'This device can share features with approved Aurora devices.'
             : 'This device uses Aurora on another device.'}
-        </p>
+          id="connection-role-title"
+        />
         {model.loadState !== 'ready' ? (
           <p className="mb-3 text-sm text-muted-foreground">Connect this device to Aurora to manage shared features.</p>
         ) : null}
         {connectionRoleContent ? (
           <div className="mb-3">{connectionRoleContent}</div>
         ) : null}
-        <div className="flex flex-col gap-2.5">
+        <dl className="mb-4 divide-y divide-border/60">
           {model.routeDefaults.map((item) => (
-            <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
+            <div key={item.id} className="py-3 first:pt-0 last:pb-0">
+              <dt className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm font-medium">
+                <span>{item.label}</span>
+                {item.state !== 'available-local' && item.state !== 'unsupported' ? <StatusBadge state={item.state} /> : null}
+              </dt>
+              <dd className="mt-1 text-xs leading-relaxed text-muted-foreground">{item.detail}</dd>
+            </div>
           ))}
-        </div>
-        <MetaGrid
-          items={[
-            { label: 'Connection', value: surfaceConnectionLabel(profile) },
-            { label: 'Device', value: surfaceDeviceLabel(profile) },
-            { label: 'Admin confirmation', value: model.adminActionLabel },
-            { label: 'Backup choice', value: model.fallbackLabel },
-          ]}
-          columns={1}
-        />
+        </dl>
+        <details className="border-t border-border/60 pt-3">
+          <summary className="cursor-pointer rounded-sm text-sm text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-ring">Connection details</summary>
+          <div className="pt-3">
+            <MetaGrid
+              items={[
+                { label: 'Connection', value: surfaceConnectionLabel(profile) },
+                { label: 'Device', value: surfaceDeviceLabel(profile) },
+                { label: 'Admin confirmation', value: model.adminActionLabel },
+                { label: 'Backup choice', value: model.fallbackLabel },
+              ]}
+              columns={1}
+            />
+          </div>
+        </details>
       </Card>
 
       <Card>
@@ -337,7 +354,7 @@ function ThisDeviceSettingsSurface({
           description="Display and comfort preferences stay on this device unless you choose otherwise."
           id="appearance-title"
         />
-        <div className="flex flex-col gap-2.5">
+        <div className="flex flex-col">
           {appearanceRows.map((item) => (
             <RouteDefaultRow key={item.id} label={item.label} detail={item.detail} state={item.state} value={item.value} />
           ))}
@@ -398,6 +415,21 @@ function ThisDeviceSettingsSurface({
             rows={accessRows}
             getRowKey={(permission) => permission.id}
             empty="No device access choices are available here."
+          />
+        </Card>
+      ) : null}
+
+      {includeOsAccess && !showOsAccess ? (
+        <Card>
+          <PanelTitle
+            icon={<Smartphone size={18} aria-hidden />}
+            title="Device access"
+            description="Device access choices appear here when this device supports them."
+            id="device-access-empty-title"
+          />
+          <EmptyState
+            title="No device access choices"
+            message="There are no device access choices for this device."
           />
         </Card>
       ) : null}
@@ -471,166 +503,16 @@ function ThisDeviceSettingsSurface({
   )
 }
 
-function OverlayShortcutsCard({
-  runtimeProfile,
-  onDesktopOverlayConfirmed,
-}: {
-  runtimeProfile: AuroraRuntimeProfileV2 | null | undefined
-  onDesktopOverlayConfirmed?: AuroraDesktopOverlaySave | undefined
-}) {
-  const stored = resolveDesktopOverlayPreferences(runtimeProfile?.localNode.desktopOverlay)
-  const [enabled, setEnabled] = useState(stored.enabled)
-  const [voiceEnabled, setVoiceEnabled] = useState(stored.voiceEnabled)
-  const [hotkeyDraft, setHotkeyDraft] = useState(stored.textHotkey)
-  const [hideAfterSeconds, setHideAfterSeconds] = useState(String(stored.autoCloseDelayMs / 1000))
-  const [message, setMessage] = useState<string | null>(null)
-
-  useEffect(() => {
-    const next = resolveDesktopOverlayPreferences(runtimeProfile?.localNode.desktopOverlay)
-    setEnabled(next.enabled)
-    setVoiceEnabled(next.voiceEnabled)
-    setHotkeyDraft(next.textHotkey)
-    setHideAfterSeconds(String(next.autoCloseDelayMs / 1000))
-  }, [runtimeProfile?.localNode.desktopOverlay])
-
-  async function persist(next: Partial<{
-    enabled: boolean
-    voiceEnabled: boolean
-    textHotkey: string
-    autoCloseDelayMs: number
-  }>): Promise<void> {
-    if (!onDesktopOverlayConfirmed) return
-    const parsedDelaySeconds = Number(hideAfterSeconds)
-    const overlay = resolveDesktopOverlayPreferences({
-      enabled,
-      voiceEnabled,
-      textHotkey: normalizeDesktopOverlayHotkey(hotkeyDraft) ?? stored.textHotkey,
-      autoCloseDelayMs: Number.isFinite(parsedDelaySeconds)
-        ? Math.round(parsedDelaySeconds * 1000)
-        : stored.autoCloseDelayMs,
-      ...next,
-    })
-    try {
-      await onDesktopOverlayConfirmed(overlay)
-      setEnabled(overlay.enabled)
-      setVoiceEnabled(overlay.voiceEnabled)
-      setHotkeyDraft(overlay.textHotkey)
-      setHideAfterSeconds(String(overlay.autoCloseDelayMs / 1000))
-      setMessage(null)
-    } catch {
-      const restored = resolveDesktopOverlayPreferences(runtimeProfile?.localNode.desktopOverlay)
-      setEnabled(restored.enabled)
-      setVoiceEnabled(restored.voiceEnabled)
-      setHotkeyDraft(restored.textHotkey)
-      setHideAfterSeconds(String(restored.autoCloseDelayMs / 1000))
-      setMessage('Those overlay settings were not saved. Finish setting up this device, then try again.')
-    }
-  }
-
-  return (
-    <Card>
-      <PanelTitle
-        icon={<Keyboard size={18} aria-hidden />}
-        title="Overlay & shortcuts"
-        description="Show Aurora over other windows and use a keyboard shortcut."
-        id="overlay-shortcuts-title"
-      />
-      <FieldGroup>
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Show overlay</p>
-            <p className="text-xs text-muted-foreground">Lets Aurora appear over other windows.</p>
-          </div>
-          <Switch
-            id="desktop-overlay-enabled"
-            label="Show overlay"
-            checked={enabled}
-            disabled={!onDesktopOverlayConfirmed}
-            onChange={(checked) => {
-              setEnabled(checked)
-              void persist({ enabled: checked })
-            }}
-          />
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-medium">Show while listening</p>
-            <p className="text-xs text-muted-foreground">Shows the overlay when Aurora is listening.</p>
-          </div>
-          <Switch
-            id="desktop-overlay-voice"
-            label="Show while listening"
-            checked={voiceEnabled}
-            disabled={!enabled || !onDesktopOverlayConfirmed}
-            onChange={(checked) => {
-              setVoiceEnabled(checked)
-              void persist({ voiceEnabled: checked })
-            }}
-          />
-        </div>
-        <Field>
-          <FieldLabel htmlFor="desktop-overlay-hotkey">Keyboard shortcut</FieldLabel>
-          <Input
-            id="desktop-overlay-hotkey"
-            value={hotkeyDraft}
-            aria-label="Keyboard shortcut"
-            disabled={!enabled || !onDesktopOverlayConfirmed}
-            onChange={(event) => setHotkeyDraft(event.target.value)}
-            onBlur={() => {
-              const textHotkey = normalizeDesktopOverlayHotkey(hotkeyDraft)
-              if (!textHotkey) {
-                setHotkeyDraft(stored.textHotkey)
-                setMessage('Use Ctrl, Command, Alt, or Shift plus a letter. Example: Ctrl+K.')
-                return
-              }
-              setHotkeyDraft(textHotkey)
-              void persist({ textHotkey })
-            }}
-          />
-          <FieldDescription>Use Ctrl, Command, Alt, or Shift plus a letter.</FieldDescription>
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="desktop-overlay-hide-after">Hide after (seconds)</FieldLabel>
-          <Input
-            id="desktop-overlay-hide-after"
-            type="number"
-            min={0}
-            max={60}
-            step={0.1}
-            value={hideAfterSeconds}
-            aria-label="Hide overlay after seconds"
-            disabled={!enabled || !onDesktopOverlayConfirmed}
-            onChange={(event) => setHideAfterSeconds(event.target.value)}
-            onBlur={() => {
-              const seconds = Number(hideAfterSeconds)
-              if (!Number.isFinite(seconds) || seconds < 0 || seconds > 60) {
-                setHideAfterSeconds(String(stored.autoCloseDelayMs / 1000))
-                setMessage('Hide after must be between 0 and 60 seconds.')
-                return
-              }
-              void persist({ autoCloseDelayMs: Math.round(seconds * 1000) })
-            }}
-          />
-          <FieldDescription>How long the overlay stays after a short reply.</FieldDescription>
-        </Field>
-        {message ? (
-          <p role="status" className="text-sm text-muted-foreground">{message}</p>
-        ) : null}
-      </FieldGroup>
-    </Card>
-  )
-}
-
 function RouteDefaultRow({ label, detail, state, value }: { label: string; detail: string; state: AvailabilityState; value: string }) {
   return (
-    <article className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 px-3 py-2">
-      <div className="flex flex-col gap-0.5">
-        <strong className="text-sm">{label}</strong>
-        <span className="text-xs text-muted-foreground">{detail}</span>
+    <article className="flex flex-col gap-2 border-b border-border/60 py-3 first:pt-0 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-5">
+      <div className="min-w-0 flex flex-col gap-1">
+        <strong className="text-sm font-medium">{label}</strong>
+        <span className="text-xs leading-relaxed text-muted-foreground">{detail}</span>
       </div>
-      <div className="flex items-center gap-2">
-        <StatusBadge state={state} />
-        <code className="font-mono text-xs text-muted-foreground">{value}</code>
+      <div className="flex shrink-0 flex-wrap items-center gap-2 sm:max-w-[45%] sm:justify-end">
+        {state !== 'available-local' ? <StatusBadge state={state} /> : null}
+        <span className="break-words text-xs text-muted-foreground">{value}</span>
       </div>
     </article>
   )
@@ -648,6 +530,7 @@ function nativeAccessRows(model: SettingsPermissionsModel, snapshot: AuroraShell
       ? [
         'aurora.iosKeychain',
         'aurora.iosBiometricUnlock',
+        'aurora.iosLocalLightInference',
         'ios.backgroundVoice'
       ]
       : []
@@ -671,6 +554,10 @@ function nativeAccessLabel(permissionId: string): string {
   if (permissionId === 'aurora.android.microphone') return 'Microphone'
   if (permissionId === 'aurora.android.notifications') return 'Notifications'
   if (permissionId === 'aurora.android.voiceForegroundService') return 'Hands-free listening'
+  if (permissionId === 'aurora.iosKeychain') return 'iOS Keychain'
+  if (permissionId === 'aurora.iosBiometricUnlock' || permissionId === 'ios.biometric.adminUnlock') return 'Face ID or Touch ID'
+  if (permissionId === 'aurora.iosLocalLightInference' || permissionId.startsWith('ios.localLightInference')) return 'On-device replies'
+  if (permissionId === 'ios.backgroundVoice') return 'Ask before listening'
   return 'Device feature'
 }
 
@@ -688,6 +575,18 @@ function nativeAccessDetail(permission: SettingsNativePermissionCard): string {
   }
   if (permission.id === 'aurora.android.voiceForegroundService') {
     return 'Keeps a user-started listening session visible and easy to stop.'
+  }
+  if (permission.id === 'aurora.iosKeychain') {
+    return 'Sensitive sign-in details can be kept in the iOS keychain.'
+  }
+  if (permission.id === 'aurora.iosBiometricUnlock' || permission.id === 'ios.biometric.adminUnlock') {
+    return 'Face ID or Touch ID is available on supported Apple devices.'
+  }
+  if (permission.id === 'aurora.iosLocalLightInference' || permission.id.startsWith('ios.localLightInference')) {
+    return 'On-device replies need a supported Apple device and an available model.'
+  }
+  if (permission.id === 'ios.backgroundVoice') {
+    return 'Aurora listens only after you start voice and allow microphone access.'
   }
   return 'Review whether Aurora may use this feature on your device.'
 }
@@ -821,7 +720,7 @@ function assistantBehaviorDefaults(snapshot: AuroraShellSnapshot): SettingsPermi
     {
       id: 'voice-consent',
       label: 'Voice consent default',
-      value: 'foreground explicit consent',
+      value: 'Ask before listening',
       state: worstVoiceState([
         snapshot.assistantVoiceRoutes.transcription.state,
         snapshot.assistantVoiceRoutes.wakeProcess.state,
@@ -912,28 +811,6 @@ function PrivacyControlRow({ control }: { control: SettingsPrivacyControl }) {
   )
 }
 
-function PanelTitle({
-  icon,
-  title,
-  description,
-  id
-}: {
-  icon: ReactNode
-  title: string
-  description: string
-  id: string
-}) {
-  return (
-    <header className="mb-3 flex items-start gap-2.5">
-      <span className="mt-0.5 text-muted-foreground" aria-hidden>{icon}</span>
-      <div className="flex flex-col gap-0.5">
-        <h2 id={id} className="text-sm font-semibold">{title}</h2>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-    </header>
-  )
-}
-
 function privacyControl(input: Omit<SettingsPrivacyControl, 'mutationState'>): SettingsPrivacyControl {
   return {
     ...input,
@@ -965,9 +842,9 @@ function voiceBehaviorCards(snapshot: AuroraShellSnapshot): SettingsVoiceBehavio
       route: voice.transcription,
       state: worstVoiceState([voice.transcription.state, microphoneState]),
       enabled: routeEnabled(voice.transcription) && microphoneState !== 'unsupported',
-      defaultLabel: 'foreground explicit consent',
+      defaultLabel: 'Ask before listening',
       privacyClass: 'raw-audio',
-      detail: 'Foreground capture requires user action, voice consent, and a ready speech setting.',
+      detail: 'Aurora listens only after you start voice and allow microphone access.',
       extraEvidence: microphoneEvidence,
       extraBlockers: microphoneState === 'privacy-blocked' ? ['microphone permission required'] : []
     }),
@@ -977,11 +854,11 @@ function voiceBehaviorCards(snapshot: AuroraShellSnapshot): SettingsVoiceBehavio
       route: voice.wakeProcess,
       state: wakeState,
       enabled: routeEnabled(voice.wakeProcess) && routeEnabled(voice.wakeControl) && microphoneState === 'available-local',
-      defaultLabel: snapshot.nativePlatform === 'ios' ? 'foreground/app-owned only' : 'desktop local only until policy passes',
+      defaultLabel: snapshot.nativePlatform === 'ios' ? 'When Aurora is open' : 'Available after setup',
       privacyClass: 'raw-audio',
       detail: snapshot.nativePlatform === 'ios'
-        ? 'iOS wake behavior stays inside foreground Aurora screens.'
-        : 'Wake behavior requires microphone access and a ready wake setting before it can be enabled.',
+        ? 'Aurora can listen only while the app is open.'
+        : 'Wake listening needs microphone access and your approval before it can be enabled.',
       extraEvidence: [...microphoneEvidence, ...voice.wakeControl.evidenceSources],
       extraBlockers: [...voice.wakeControl.blockers, microphoneState === 'available-local' ? '' : 'native microphone gate not satisfied'].filter(Boolean)
     }),
@@ -991,7 +868,7 @@ function voiceBehaviorCards(snapshot: AuroraShellSnapshot): SettingsVoiceBehavio
       route: voice.ttsSynthesize,
       state: ttsState,
       enabled: routeEnabled(voice.ttsSynthesize) && routeEnabled(voice.ttsStop),
-      defaultLabel: 'speaker output with stop control',
+      defaultLabel: 'Spoken replies with stop control',
       privacyClass: 'personal',
       detail: 'Spoken replies are available only when speech and stop controls are both ready.',
       extraEvidence: voice.ttsStop.evidenceSources,
@@ -1331,24 +1208,24 @@ function nativePermissionLabel(name: string): string {
     'aurora.iosDeepLinks': 'iOS deep links',
     'aurora.iosFileAssociations': 'iOS file associations',
     'aurora.iosEntrypointPayload': 'iOS entrypoint payload',
-    'aurora.iosLocalLightInference': 'iOS Local Light Inference',
+    'aurora.iosLocalLightInference': 'On-device replies',
     'aurora.nativeCapabilityManifest': 'Desktop app features',
     'aurora.nativePermissionStatus': 'Desktop app access',
-    'aurora.trayStatus': 'Tauri tray status',
-    'aurora.notificationsStatus': 'Tauri notifications status',
-    'aurora.notificationsSend': 'Tauri notifications send',
-    'aurora.dialogStatus': 'Tauri dialog status',
-    'aurora.dialogOpen': 'Tauri dialog open',
-    'aurora.localFileRead': 'Tauri local file read',
-    'aurora.localFileWrite': 'Tauri local file write',
-    'aurora.secureFileHandle': 'Tauri secure file handle',
-    'aurora.audioBridgeStatus': 'Tauri audio bridge status',
-    'aurora.audioCapture': 'Tauri audio capture',
-    'aurora.audioPlayback': 'Tauri audio playback',
-    'aurora.updater': 'Tauri updater',
-    'aurora.secureStorage': 'Tauri secure storage',
-    'desktop.signedUpdater': 'Tauri signed updater',
-    'desktop.tray': 'Tauri tray',
+    'aurora.trayStatus': 'Tray menu',
+    'aurora.notificationsStatus': 'Desktop notifications',
+    'aurora.notificationsSend': 'Send desktop notifications',
+    'aurora.dialogStatus': 'File and folder prompts',
+    'aurora.dialogOpen': 'Open file and folder prompts',
+    'aurora.localFileRead': 'Read selected files',
+    'aurora.localFileWrite': 'Save selected files',
+    'aurora.secureFileHandle': 'Remember selected files',
+    'aurora.audioBridgeStatus': 'Audio access',
+    'aurora.audioCapture': 'Microphone access',
+    'aurora.audioPlayback': 'Speaker access',
+    'aurora.updater': 'App updates',
+    'aurora.secureStorage': 'Secure storage',
+    'desktop.signedUpdater': 'Verified app updates',
+    'desktop.tray': 'Tray menu',
     'native.notifications': 'Native notifications',
     'native.dialogs': 'Native dialogs',
     'native.secureFileHandles': 'Native secure file handles',
@@ -1363,9 +1240,9 @@ function nativePermissionLabel(name: string): string {
     'aurora.android.microphoneRequest': 'Android microphone access request',
     'aurora.android.notifications': 'Android notifications',
     'aurora.android.notificationsRequest': 'Android notifications request',
-    'aurora.android.foregroundServiceMicrophone': 'Android foreground microphone service',
-    'aurora.android.voiceForegroundService': 'Android foreground voice service',
-    'aurora.android.voiceForegroundStart': 'Android foreground voice start',
+    'aurora.android.foregroundServiceMicrophone': 'Hands-free listening',
+    'aurora.android.voiceForegroundService': 'Hands-free listening',
+    'aurora.android.voiceForegroundStart': 'Start hands-free listening',
     'aurora.android.secureStorage': 'Android Keystore secure storage',
     'aurora.android.biometric': 'Android biometrics',
     'aurora.android.adminUnlock': 'Android biometric admin unlock',
@@ -1377,15 +1254,15 @@ function nativePermissionLabel(name: string): string {
     'android.microphonePermissionRequest': 'Android microphone access request',
     'android.notifications': 'Android notifications',
     'android.notificationPermissionRequest': 'Android notifications request',
-    'android.foregroundService': 'Android foreground service',
-    'android.voiceForegroundService': 'Android foreground voice service',
-    'android.voiceForegroundService.start': 'Android foreground voice start',
+    'android.foregroundService': 'Hands-free listening',
+    'android.voiceForegroundService': 'Hands-free listening',
+    'android.voiceForegroundService.start': 'Start hands-free listening',
     'android.secureCredentialStorage': 'Android Keystore secure storage',
     'android.biometric': 'Android biometrics',
     'android.adminUnlock': 'Android biometric admin unlock',
     'android.shareIntent': 'Android share sheet',
     'android.deepLink': 'Android deep link',
-    'ios.voiceForegroundCapture': 'Foreground voice capture',
+    'ios.voiceForegroundCapture': 'Ask before listening',
     'ios.notifications': 'iOS notifications',
     'ios.backgroundVoice': 'Background voice',
     'ios.appOwnedInvocation': 'App-owned invocation',
@@ -1395,9 +1272,9 @@ function nativePermissionLabel(name: string): string {
     'ios.widgets': 'Widgets',
     'ios.deepLinks': 'Deep links',
     'ios.siriReplacement': 'System assistant role',
-    'ios.localLightInference.provider': 'iOS local-light model source',
-    'ios.localLightInference.modelRuntime': 'iOS local-light model engine',
-    'ios.localLightInference.fallback': 'iOS local-light backup'
+    'ios.localLightInference.provider': 'On-device replies',
+    'ios.localLightInference.modelRuntime': 'On-device replies',
+    'ios.localLightInference.fallback': 'On-device replies'
   }
   if (labels[name]) return labels[name]
   return name
@@ -1427,13 +1304,13 @@ function nativePermissionDetail(
   if (name === 'aurora.iosBiometricUnlock' || name === 'ios.biometric.adminUnlock') {
     return capabilityEnabled || granted
       ? 'Face ID or Touch ID can help confirm sensitive changes.'
-      : 'Face ID/Touch ID admin unlock requires LocalAuthentication on an iOS device or simulator.'
+      : 'Face ID or Touch ID is available on supported Apple devices.'
   }
   if (name === 'ios.appIntents' || name === 'ios.shortcuts') {
     return 'Siri and Shortcuts can open specific Aurora actions.'
   }
   if (name === 'aurora.iosMicrophoneCapture' || name === 'ios.voiceForegroundCapture') {
-    return 'iOS voice capture works while Aurora is open and needs microphone access plus a visible stop control.'
+    return 'Aurora listens only while the app is open and after you allow microphone access.'
   }
   if (name === 'ios.notifications') {
     return 'iOS notifications need your approval and can bring you back to Aurora.'
@@ -1451,7 +1328,7 @@ function nativePermissionDetail(
     return 'iOS does not allow Aurora to become the default assistant.'
   }
   if (name === 'aurora.iosLocalLightInference' || name.startsWith('ios.localLightInference')) {
-    return 'Local iOS models need a supported device and an available model before selection.'
+    return 'On-device replies need a supported Apple device and an available model.'
   }
   if (nativeState === 'degraded') return 'This feature has limited access on this device.'
   if (nativeState === 'fallback') return 'This feature can use a backup path with limited access.'
@@ -1470,7 +1347,7 @@ function nativePermissionDetail(
 
 function nativeLimitationDetail(id: string, detail: string): string {
   if (id === 'noSiriReplacement') return 'iOS does not allow Aurora to become the default assistant.'
-  if (id === 'foregroundConsentRequired') return 'Voice capture needs foreground use, clear consent, and a visible stop control.'
+  if (id === 'foregroundConsentRequired') return 'Aurora listens only after you start voice and allow microphone access.'
   return safeCopy(detail, 'This device cannot use that feature right now.')
 }
 

@@ -1,4 +1,5 @@
 import type { AuroraError } from './errors.js'
+import type { BackgroundTranscriptionFacts } from './background-transcription.js'
 import type { LoginLikeResponse, PairingExchangeLikeResponse, ValidateTokenLikeResponse, WhoAmILikeResponse } from './session.js'
 
 export type JsonPrimitive = string | number | boolean | null
@@ -187,6 +188,8 @@ export interface TTSPlaybackRequest {
 export interface TTSSynthesisRequest {
   text: string
   voice?: string | null
+  model_id?: string | null
+  language?: string | null
   speed?: number
   format?: 'wav' | 'raw' | string
   sample_rate?: number | null
@@ -221,11 +224,13 @@ export interface AssistantSendMessageResult {
 }
 
 export type AssistantStreamUpdateKind =
+  | 'connecting'
   | 'delta'
   | 'completed'
   | 'failed'
   | 'tool'
   | 'tts_audio_chunk'
+  | 'tts_playback_error'
   | 'transport_lost'
   | 'fallback'
 
@@ -251,6 +256,7 @@ export interface AssistantToolStreamEvent {
 
 export interface AssistantTtsAudioChunkEvent {
   chunkId: string | null
+  streamId?: string | null
   sequence: number | null
   audioData: string | null
   encoding: string | null
@@ -2721,6 +2727,11 @@ export interface AndroidNativePermissionRequestResult {
   manifest?: JsonObject
 }
 
+export interface AndroidBackgroundTranscriptionStatus extends BackgroundTranscriptionFacts {
+  state: 'idle' | 'starting' | 'listening' | 'transcribing' | 'completed' | 'failed'
+  reason: string | null
+}
+
 export interface AndroidVoiceForegroundServiceStatus {
   platform: 'android' | string
   running: boolean
@@ -2744,6 +2755,8 @@ export interface AndroidVoiceForegroundServiceStatus {
   discontinuities?: number
   queuedChunks?: number
   captureError?: string | null
+  /** Facts from the separate native recording owner; never inferred from assistant capture. */
+  transcription?: AndroidBackgroundTranscriptionStatus
   evidenceSource: string
   secretsRedacted: boolean
 }

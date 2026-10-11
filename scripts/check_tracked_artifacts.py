@@ -101,6 +101,8 @@ FORBIDDEN_EXACT_PATHS = {
 
 ALLOWED_EXACT_PATHS = {
     "docker/services/Dockerfile.db",
+    # Preserved immutable handoff receipt from the 2026-10-06 import.
+    ".omx/handoff/20261006/referenced-reports/008-REPORT.md",
 }
 
 

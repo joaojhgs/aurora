@@ -204,6 +204,19 @@ export interface AuroraVoiceTtsAudio {
   readonly redacted: true
 }
 
+export interface AuroraVoiceSttRequest {
+  readonly pcm: Int16Array
+  readonly generation?: number
+  /** Must match the language on the selected local STT binding when supplied. */
+  readonly language?: string
+}
+
+export interface AuroraVoiceFiniteSttResult {
+  readonly generation: number
+  readonly text: string
+  readonly redacted: true
+}
+
 export type AuroraVoiceWebEventKind =
   | 'session_started'
   | 'session_stopped'
@@ -283,6 +296,12 @@ export type AuroraVoiceWorkerCommand =
       readonly speed?: number
     }
   | {
+      readonly type: 'transcribe_stt'
+      readonly generation: number
+      readonly pcm: Int16Array
+      readonly language?: string
+    }
+  | {
       readonly type: 'cancel'
       readonly sessionId: string | null
       readonly generation: number
@@ -326,6 +345,11 @@ export type AuroraVoiceWorkerResponse =
       readonly type: 'tts_result'
       readonly generation: number
       readonly audio: AuroraVoiceTtsAudio
+    }
+  | {
+      readonly type: 'stt_result'
+      readonly generation: number
+      readonly text: string
     }
 
 export interface AuroraVoiceWorkerRequestEnvelope {

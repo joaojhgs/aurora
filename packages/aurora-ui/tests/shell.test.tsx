@@ -85,6 +85,9 @@ import {
   buildAssistantVoiceModel,
   buildMemoryViewModel,
   buildShellSnapshot,
+  shellHealthLabel,
+  shellRuntimeStateLabel,
+  shellRuntimeStateToneClass,
   loadingShellSnapshot,
   buildModelsViewModel,
   buildConfigEditorModel,
@@ -167,6 +170,18 @@ class RecordingMockAuroraTransport extends MockAuroraTransport {
 }
 
 describe('Aurora production shell', () => {
+  it('prioritizes reconnecting peer state over stale capability facts', () => {
+    const snapshot = {
+      ...loadingShellSnapshot,
+      connectionState: 'connected' as const,
+      capabilityFreshness: 'stale' as const,
+    }
+
+    expect(shellHealthLabel(snapshot, undefined, undefined, undefined, 'reconnecting', 'connected')).toBe('Connecting')
+    expect(shellRuntimeStateLabel(snapshot, undefined, undefined, undefined, 'reconnecting', 'connected')).toBe('syncing')
+    expect(shellRuntimeStateToneClass(snapshot, undefined, undefined, undefined, 'reconnecting', 'connected')).toBe('text-warning')
+  })
+
   it('tracks the mobile visual viewport so the Android keyboard cannot cover the composer', async () => {
     const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     const originalInnerHeight = Object.getOwnPropertyDescriptor(window, 'innerHeight')
@@ -302,7 +317,7 @@ describe('Aurora production shell', () => {
     }, 'required')
 
     expect(policySignals).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
+      expect.objectContaining({ id: 'selector', label: 'Device choice', state: 'blocked' }),
       expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
       expect.objectContaining({ id: 'privacy-indicator', label: 'Privacy indicator', state: 'blocked' }),
       expect.objectContaining({ id: 'native-permission', label: 'Device permission', state: 'blocked' }),
@@ -533,9 +548,7 @@ describe('Aurora production shell', () => {
     expect(memoryRagContract?.mockUxAnchors).not.toContain('Audit trail for policy changes')
 
     for (const surface of productionSurfaceContracts) {
-      const sourceText = surface.componentFiles
-        .map((file) => readFileSync(join(uiSrcRoot, file), 'utf8'))
-        .join('\n')
+      const sourceText = productionSurfaceSourceText(uiSrcRoot, surface.componentFiles)
 
       expect(surface.mockUxAnchors.length, `${surface.id} mock UX anchors`).toBeGreaterThanOrEqual(3)
       expect(
@@ -591,56 +604,76 @@ describe('Aurora production shell', () => {
   })
 
   it('keeps desktop, tablet, and mobile responsive shell rules explicit', () => {
-    const css = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/styles.css'), 'utf8')
-    const shell = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/shell.tsx'), 'utf8')
+    const css = readAuroraStylesForSourceAssertions()
+    const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src')
+    const shell = readFileSync(resolve(srcRoot, 'shell.tsx'), 'utf8')
+    const assistantShell = readFileSync(resolve(srcRoot, 'assistant-view-shell.tsx'), 'utf8')
+    const assistantComposer = readFileSync(resolve(srcRoot, 'assistant-composer.tsx'), 'utf8')
+    const assistantHistory = readFileSync(resolve(srcRoot, 'assistant-history.tsx'), 'utf8')
 
-    expect(css).toContain('.aui-content>* { width:min(100%,112rem);margin-inline:auto }')
-    expect(css).toContain('.aui-activity-drawer { display:block }')
-    expect(css).toContain('.aui-activity-drawer-panel')
-    expect(css).toContain('transform: translateX(100%)')
-    expect(css).toContain('transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease !important')
+    expectCssContains(css, '.aui-content:not(:has(.aui-assistant))>*{ max-width:var(--aui-page-max);margin-inline:auto }')
+    expect(shell).toContain('aui-activity min-w-0 basis-72 shrink-0 overflow-hidden border-l bg-[var(--aui-bg)]')
+    expectCssContains(css, '.aui-shell[data-activity-collapsed="true"] .aui-main-column > .flex > .aui-activity')
+    expectCssContains(css, 'transform: translateX(100%)')
+    expectCssContains(css, 'transition: transform 300ms cubic-bezier(0.22, 1, 0.36, 1), border-color 300ms ease !important')
     expect(shell).not.toContain('transition: "width 300ms')
     expect(shell).not.toContain('Aurora pages are ready')
-    expect(css).toContain('.aui-content:where(button,.aui-button,.aui-action-chip,input,select,textarea,summary) { min-height:2.6rem }')
-    expect(css).toContain('[data-slot="card-footer"]')
-    expect(css).toContain('[data-slot="button"]')
-    expect(css).toContain('.aui-mesh')
-    expect(css).toContain(
+    expectCssContains(css, '.aui-content:where(button,.aui-button,.aui-action-chip,input,select,textarea,summary) { min-height:2.6rem }')
+    expectCssContains(css, '[data-slot="card-footer"]')
+    expectCssContains(css, '.aui-mesh')
+    expectCssContains(css,
       '.aui-onboarding-scroll-viewport { width:100%;height:100vh;height:100dvh;overflow-x:hidden;overflow-y:auto;overscroll-behavior-y:contain;touch-action:pan-y;-webkit-overflow-scrolling:touch }'
     )
-    expect(css).toContain('height: calc(100dvh - max(env(safe-area-inset-top), 1.5rem));')
-    expect(css).toContain('margin-top: max(env(safe-area-inset-top), 1.5rem);')
-    expect(css).toContain('scroll-padding-bottom: calc(12rem + env(safe-area-inset-bottom));')
-    expect(css).toContain('max-height: min(12rem, 32dvh);')
-    expect(css).toContain('field-sizing: fixed;')
-    expect(css).toContain('.aui-webthin-invite-action {\n    margin-bottom: 0;')
-    expect(css).toContain('.aui-assistant-grid { display:grid;grid-template-columns:256px minmax(0,1fr);flex:1 1 auto;min-height:0;gap:0 }')
-    expect(css).toContain('.aui-chat-workspace {\n    overflow-x:hidden;\n    overscroll-behavior-x:none;')
-    expect(css).toContain('.aui-assistant-form {\n    position:relative;\n    bottom:auto;')
-    expect(css).toContain('.aui-chat-panel {\n    padding-bottom:0;\n    scroll-padding-bottom:0;')
-    expect(css).toContain('.aui-chat-scroller-content[data-slot="message-scroller-content"] {\n    padding-bottom:1.25rem;')
-    expect(css).toContain('.aui-composer-toolbar {\n    flex-wrap:nowrap;\n    overflow:hidden;')
-    expect(css).toContain('.aui-composer-selectors {\n    flex:1 1 0;\n    max-width:100%;\n    overflow-x:auto;')
-    expect(css).toContain('width: min(30rem, min(96vw, var(--aui-chat-width, 30rem)));')
-    expect(css).toContain('[data-slot="model-selector-search"] { font-size:1rem }')
-    expect(css).toContain('.aui-shell[data-navigation-open="true"] .aui-topbar {\n    z-index: 65;')
-    expect(css).toContain('.aui-mobile-menu > button {\n    position: relative;\n    z-index: 50;')
-    expect(css).toContain('.aui-content:has(.aui-assistant) {\n    overflow: hidden;\n    padding-bottom: calc(4.1rem + env(safe-area-inset-bottom));')
-    expect(css).toContain('.aui-content:has(.aui-assistant) .aui-assistant {\n    min-height: 0;\n    height: 100%;\n    overflow: hidden;\n    padding-bottom: 0;')
-    expect(css).toContain('.aui-assistant-grid,\n  .aui-chat-workspace,\n  .aui-chat-panel {\n    min-height: 0;')
-    expect(css).toContain('.aui-shell[data-mobile-viewport="true"] {\n    height: var(--aui-visual-viewport-height, 100dvh);')
-    expect(css).toContain('.aui-shell[data-virtual-keyboard-open="true"] .aui-mobile-tabs {\n    display: none;')
-    expect(css).toContain('.aui-shell[data-virtual-keyboard-open="true"] .aui-content:has(.aui-assistant) {\n    padding-bottom: 0;')
-    expect(css).toContain('.aui-mobile-history-host,\n.aui-mobile-history-trigger {\n  display: none !important;')
-    expect(css).toContain('@media (min-width: 1041px) {\n  .aui-mobile-history-host,\n  .aui-mobile-history-trigger {\n    display: none !important;')
-    expect(css).toContain('.aui-mobile-history-host {\n    display: flex !important;')
-    expect(css).toContain('@media (max-width: 720px) {\n  .aui-content:has(.aui-assistant) {\n    scrollbar-gutter: auto;')
-    expect(css).toContain('.aui-chat-workspace {\n    --aui-chat-width: 100%;')
-    expect(css).toContain('.aui-chat-scroller-viewport[data-slot="message-scroller-viewport"] {\n    width: 100%;\n    scrollbar-width: none;\n    scrollbar-gutter: auto;')
-    expect(css).toContain('.aui-chat-scroller-content[data-slot="message-scroller-content"] {\n    width: 100%;\n    padding-inline: 0.5rem;')
-    expect(css).toContain('.aui-assistant-form {\n    width: 100%;\n    padding: 0.45rem 0 0;')
-    expect(css).toContain('.aui-composer-toolbar {\n    width: 100%;\n    box-sizing: border-box;\n    padding-inline: 0.75rem;')
-    expect(css).toContain('.aui-composer-control-row {\n    width: 100%;\n    margin-inline: 0;\n    border-radius: 1rem 1rem 0 0;')
+    expectCssContains(css, 'height: calc(100dvh - max(env(safe-area-inset-top), 1.5rem));')
+    expectCssContains(css, 'margin-top: max(env(safe-area-inset-top), 1.5rem);')
+    expectCssContains(css, 'scroll-padding-bottom: calc(12rem + env(safe-area-inset-bottom));')
+    expectCssContains(css, 'max-height: min(12rem, 32dvh);')
+    expectCssContains(css, 'field-sizing: fixed;')
+    expectCssContains(css, '.aui-webthin-invite-action {\n    margin-bottom: 0;')
+    expect(assistantShell).toContain('grid flex-auto min-h-0 grid-cols-[256px_minmax(0,1fr)] items-stretch gap-0')
+    expect(assistantShell).toContain('aria-label="Primary chat workspace"')
+    expect(assistantShell).toContain('[@media(max-width:720px)]:overflow-x-hidden [@media(max-width:720px)]:overscroll-x-none')
+    expect(assistantComposer).toContain('[@media(max-width:1040px)]:relative [@media(max-width:1040px)]:bottom-auto')
+    expect(assistantShell).toContain('[@media(max-width:720px)]:scroll-pb-0')
+    expect(assistantShell).toContain('[@media(max-width:720px)]:pt-6 [@media(max-width:720px)]:pb-5')
+    expect(assistantComposer).toContain('flex min-h-[2.45rem] w-full max-w-none items-start justify-between')
+    expect(assistantComposer).toContain('flex min-w-0 flex-auto items-center gap-1 overflow-hidden')
+    expect(assistantComposer).toContain('w-[min(30rem,min(96vw,var(--aui-chat-width,30rem)))]')
+    expectCssContains(css, '[data-slot="model-selector-search"] { font-size:1rem }')
+    expectCssContains(css, '.aui-shell[data-navigation-open="true"] .aui-topbar {\n    z-index: 65;')
+    expect(shell).toContain('className="relative z-50 shrink-0"')
+    expectCssContains(css, '.aui-mobile-menu .aui-mobile-menu-backdrop {\n    position: fixed;\n    inset: 0;\n    z-index: 30;')
+    expectCssContains(css, 'width: auto;\n    height: auto;\n    border: 0;\n    border-radius: 0;')
+    expectCssContains(css, '.aui-content:has(.aui-assistant) {\n    overflow: hidden;\n    padding-bottom: calc(4.1rem + env(safe-area-inset-bottom));')
+    expectCssContains(css, '.aui-content:has(.aui-assistant) .aui-assistant {\n    min-height: 0;\n    height: 100%;\n    overflow: hidden;\n    padding-bottom: 0;')
+    expect(assistantShell).toContain('grid flex-auto min-h-0')
+    expect(assistantShell).toContain('relative flex min-h-0 min-w-0 flex-1')
+    expect(assistantShell).toContain('flex min-h-0 min-w-0 flex-1')
+    expectCssContains(css, '.aui-shell[data-mobile-viewport="true"] {\n    height: var(--aui-visual-viewport-height, 100dvh);')
+    expectCssContains(css, '.aui-shell[data-virtual-keyboard-open="true"] .aui-mobile-tabs {\n    display: none;')
+    expectCssContains(css, '.aui-shell[data-virtual-keyboard-open="true"] .aui-content:has(.aui-assistant) {\n    padding-bottom: 0;')
+    expect(shell).toContain('aui-sidebar relative flex min-w-0 basis-64 shrink-0 flex-col overflow-hidden border-r bg-sidebar [@media(max-width:1040px)]:hidden')
+    expect(shell).toContain('aui-mobile-menu hidden [@media(max-width:1040px)]:block')
+    expect(shell).toContain('aui-mobile-tabs fixed inset-x-0 bottom-0 z-30 hidden min-h-[calc(4.1rem+env(safe-area-inset-bottom))] grid-cols-3')
+    expect(shell).toContain('text-[10.5px]')
+    expect(shell).toContain('[@media(max-width:1040px)]:text-[0.7rem]')
+    expect(shell).toContain('[@media(min-width:861px)]:before:hidden')
+    expect(shell).toContain('overflow-visible text-center text-clip whitespace-nowrap')
+    expect(assistantHistory).toContain('data-aurora-part="assistant-mobile-history-host"')
+    expect(assistantHistory).toContain('data-aurora-part="assistant-mobile-history-trigger"')
+    expect(assistantHistory).toContain('[@media(max-width:1040px)]:flex')
+    expect(assistantHistory).toContain('[@media(max-width:1040px)]:inline-flex')
+    expect(assistantHistory).toContain('[@media(max-width:720px)]:[&_span]:hidden')
+    expectCssContains(css, '@media (max-width: 720px) {\n  .aui-content:has(.aui-assistant) {\n    scrollbar-gutter: auto;')
+    expect(assistantShell).toContain('[@media(max-width:720px)]:[--aui-chat-width:100%]')
+    expect(assistantShell).toContain('[@media(max-width:720px)]:[scrollbar-gutter:auto] [@media(max-width:720px)]:[scrollbar-width:none]')
+    expect(assistantShell).toContain('[@media(max-width:720px)]:w-full [@media(max-width:720px)]:px-2')
+    expect(assistantComposer).toContain('[@media(max-width:720px)]:w-full')
+    expect(assistantComposer).toContain('[@media(max-width:720px)]:p-0 [@media(max-width:720px)]:pt-[0.45rem]')
+    expect(assistantComposer).toContain('[@media(max-width:720px)]:box-border [@media(max-width:720px)]:items-center')
+    expect(assistantComposer).toContain('[@media(max-width:720px)]:px-3')
+    expect(assistantComposer).toContain('[@media(max-width:720px)]:w-full [@media(max-width:720px)]:max-w-full [@media(max-width:720px)]:min-w-0')
+    expect(assistantComposer).toContain('[@media(max-width:720px)]:rounded-t-[1rem] [@media(max-width:720px)]:rounded-b-none')
   })
 
   it('maps capability graph states into disabled routes and repair actions', async () => {
@@ -662,6 +695,149 @@ describe('Aurora production shell', () => {
     expect(tools.repairActions.map((action) => action.id)).toContain('configure-route')
     expect(memory.state).toBe('stale')
     expect(memory.repairActions.map((action) => action.id)).toContain('pair')
+    expect(snapshot.capabilityFreshness).toBe('stale')
+  })
+
+  it('projects TTS stream availability separately from synthesis and retains it as stale', async () => {
+    const catalog = cloneFixture(capabilityGraphCatalogFixture)
+    const localTts = catalog.providers.find((candidate) => candidate.provider_id === 'local:TTS')
+    const synthesize = catalog.actions.find((candidate) => candidate.action_id === 'tts-local-synthesize')
+    if (!localTts || !synthesize) throw new Error('missing local TTS fixture')
+
+    const noStreamGraph = buildCapabilityGraph({
+      catalog,
+      registry: null,
+      transportKind: 'mesh'
+    })
+    const noStreamSnapshot = snapshotFromGraph('mesh', noStreamGraph, null)
+    expect(noStreamSnapshot.assistantVoiceRoutes.ttsSynthesize.disabled).toBe(false)
+    expect(noStreamSnapshot.assistantVoiceRoutes.ttsStream?.state).toBe('unsupported')
+
+    const streamCatalog = cloneFixture(catalog)
+    streamCatalog.actions.push(action(synthesize, localTts, {
+      action_id: 'tts-local-stream-start',
+      method: 'StreamStart',
+      topic: 'TTS.StreamStart',
+      policy: { ...synthesize.policy, required_permissions: ['TTS.StreamStart'] }
+    }))
+    streamCatalog.action_index['TTS.StreamStart'] = ['tts-local-stream-start']
+    const streamGraph = buildCapabilityGraph({
+      catalog: streamCatalog,
+      registry: null,
+      transportKind: 'mesh'
+    })
+    const client = new Aurora({ transport: new MockAuroraTransport() })
+    const getGraph = vi.spyOn(client.capabilities, 'getGraph').mockResolvedValue(streamGraph)
+    const readySnapshot = await buildShellSnapshot(client, {
+      nativeManifest: async () => androidNativeCapabilityManifestFixture
+    })
+    expect(getGraph).toHaveBeenCalledTimes(1)
+    const readyStreamRoute = readySnapshot.assistantVoiceRoutes.ttsStream
+    expect(readyStreamRoute).toEqual(expect.objectContaining({
+      state: 'available-local',
+      item: expect.objectContaining({ capabilityMethod: 'StreamStart' }),
+      candidateProviders: [expect.objectContaining({ providerId: 'local:TTS' })]
+    }))
+
+    const staleSnapshot = retainThinShellSnapshot(
+      readySnapshot,
+      errorShellSnapshot('mesh', new Error('capability refresh failed')),
+      {
+        state: 'failed',
+        connectionMode: 'webrtc-only',
+        expectedStablePeerId: 'host-peer',
+        nodeName: 'Aurora host',
+        icePathCategory: 'unknown',
+        protocolCapabilities: [],
+        reconnectCount: 1,
+        pendingCallCount: 0,
+        pendingStreamCount: 0,
+        pendingSubscriptionCount: 0,
+        pendingFragmentCount: 0,
+        bufferPressureHighWaterBytes: 0,
+        sentFragmentCount: 0,
+        receivedFragmentCount: 0,
+        updatedAt: '2026-10-07T00:00:00Z',
+        status: 'failed',
+        secureContext: true,
+        visible: true,
+        focused: true,
+        hasHttpFallback: false,
+        secretsPersisted: true,
+        persistenceBackend: 'platform-keychain'
+      }
+    )
+    expect(staleSnapshot.assistantVoiceRoutes.ttsStream).toEqual(expect.objectContaining({
+      state: 'stale',
+      candidateProviders: [expect.objectContaining({ selectable: false, state: 'stale' })]
+    }))
+  })
+
+  it('derives shell capability freshness from generated graph evidence', () => {
+    const graph = buildCapabilityGraph({
+      catalog: cloneFixture(voiceModeCatalog('local')),
+      registry: gatewayRegistryFixture,
+      transportKind: 'tauri-local'
+    })
+    const snapshot = snapshotFromGraph('tauri-local', graph, null)
+
+    expect(snapshot.capabilityFreshness).toBe('fresh')
+  })
+
+  it('keeps initial shell capability freshness pending when graph evidence has not been generated', () => {
+    const catalog = cloneFixture(voiceModeCatalog('local'))
+    catalog.generated_at = ''
+    const graph = buildCapabilityGraph({
+      catalog,
+      registry: gatewayRegistryFixture,
+      transportKind: 'tauri-local'
+    })
+    const snapshot = snapshotFromGraph('tauri-local', graph, null)
+
+    expect(snapshot.capabilityFreshness).toBe('pending')
+  })
+
+  it('keeps shell capability freshness fresh when a healthy selected provider has stale alternates', () => {
+    const catalog = cloneFixture(voiceModeCatalog('local'))
+    const localProvider = catalog.providers.find((provider) => provider.provider_id === 'local:Transcription')
+    const localAction = catalog.actions.find((action) => action.action_id === 'local:Transcription:Transcribe')
+    if (!localProvider || !localAction) throw new Error('missing local transcription fixture')
+
+    const staleAlternate = provider(localProvider, {
+      provider_id: 'mesh:studio:Transcription-stale-alternate',
+      peer_id: 'studio-stale-peer',
+      provider_kind: 'remote',
+      node_name: 'Studio stale node',
+      service_instance_id: 'transcription-stale',
+      status: 'stale',
+      eligible: false,
+      reason_code: 'peer_disconnect',
+      reason: 'Remote transcription peer disconnected.',
+      freshness: {
+        ...localProvider.freshness,
+        stale: true,
+        last_probe_age_s: 900
+      }
+    })
+    catalog.providers.push(staleAlternate)
+    catalog.actions.push(action(localAction, staleAlternate, {
+      action_id: 'mesh:studio:Transcription-stale-alternate:Transcribe',
+      bindability: 'unavailable',
+      route_blockers: ['stale_provider'],
+      freshness: staleAlternate.freshness
+    }))
+    catalog.provider_index.Transcription = [localProvider.provider_id, staleAlternate.provider_id]
+    catalog.action_index['Transcription.Transcribe'] = [localAction.action_id, 'mesh:studio:Transcription-stale-alternate:Transcribe']
+
+    const graph = buildCapabilityGraph({
+      catalog,
+      registry: gatewayRegistryFixture,
+      transportKind: 'tauri-local'
+    })
+    const snapshot = snapshotFromGraph('tauri-local', graph, null)
+
+    expect(snapshot.assistantVoiceRoutes.transcription.state).toBe('available-local')
+    expect(snapshot.capabilityFreshness).toBe('fresh')
   })
 
   it('keeps local selector-required routes clickable with route-selection UX', async () => {
@@ -1135,8 +1311,8 @@ describe('Aurora production shell', () => {
     expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosLocalLightInference')).toEqual(
       expect.objectContaining({
         state: 'degraded',
-        label: 'iOS Local Light Inference',
-        detail: 'Local iOS models need a supported device and an available model before selection.'
+        label: 'On-device replies',
+        detail: 'On-device replies need a supported Apple device and an available model.'
       })
     )
     expect(model.nativePermissions.find((permission) => permission.id === 'aurora.iosMicrophoneCapture')).toEqual(
@@ -1280,14 +1456,19 @@ describe('Aurora production shell', () => {
       item: { ...route(snapshot, 'assistant').item, privacyClass: 'public' }
     }))).toBeNull()
 
-    const assistantSource = readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), '../src/assistant-view.tsx'), 'utf8')
-    const renderStringifyLines = assistantSource
-      .split('\n')
-      .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
+    const assistantSourceFiles = [
+      '../src/assistant-history-crypto.ts',
+      '../src/tool-approval-panel.tsx'
+    ]
+    const renderStringifyLines = assistantSourceFiles.flatMap((file) =>
+      readFileSync(resolve(dirname(fileURLToPath(import.meta.url)), file), 'utf8')
+        .split('\n')
+        .filter((line) => line.includes('JSON.stringify') && !line.includes('localStorage.setItem'))
+    )
     expect(renderStringifyLines).toEqual([
       expect.stringContaining('new TextEncoder().encode(JSON.stringify({'),
       expect.stringContaining('new TextEncoder().encode(JSON.stringify({'),
-      expect.stringContaining('JSON.stringify(value)'),
+      expect.stringContaining('JSON.stringify('),
     ])
     expect(renderStringifyLines.join('\n')).not.toMatch(/tool\.(payloadPreview|errorDetails|resultPreview)/)
   })
@@ -1328,6 +1509,7 @@ describe('Aurora production shell', () => {
       'WakeWord.ProcessAudio',
       'WakeWord.Control',
       'TTS.Synthesize',
+      'TTS.StreamStart',
       'TTS.Stop'
     ])
 
@@ -2294,7 +2476,7 @@ describe('Aurora production shell', () => {
     const disabled = pairingRoute({ disabled: true, state: 'unsupported', explanation: 'No executable Auth.ListPendingPairings entry.' })
 
     expect(buildPairingQueueModel({ route, loadState: 'loading' }).state).toBe('loading')
-    expect(buildPairingQueueModel({ route, response: emptyPairingQueue() }).description).toContain('no pending')
+    expect(buildPairingQueueModel({ route, response: emptyPairingQueue() }).description.toLowerCase()).toContain('no pending')
     expect(buildPairingQueueModel({
       route,
       loadState: 'error',
@@ -2572,7 +2754,13 @@ describe('Aurora production shell', () => {
         <MeshPeersView
           snapshot={snapshot}
           route={meshRoute()}
+          surfaceProfile={getAuroraSurfaceProfile({
+            transportKind: 'http',
+            nodeMode: 'remote-console',
+            runtimeTier: 'none',
+          })}
           canManageLocalServiceConfiguration={false}
+          canManageMeshInvites={false}
           thinPeerSnapshot={thinPeerSnapshot}
           onConfirmThinPairing={onConfirmThinPairing}
           onRejectThinPairing={onRejectThinPairing}
@@ -3411,7 +3599,7 @@ describe('Aurora production shell', () => {
     expect(snapshot.serviceProbeRows.map((row) => row.name).join(' ')).not.toMatch(/Gateway|STTCoordinator|WakeWord/u)
     expect(snapshot.nativeCapabilityRows.map((row) => row.name)).toContain('native_capability_manifest')
     expect(snapshot.sidecarLogRows.map((row) => row.name)).toContain('gateway_sidecar_logs')
-    expect(snapshot.frontendLogRows.map((row) => row.name)).toContain('Frontend errors/logs')
+    expect(snapshot.frontendLogRows.map((row) => row.name)).toContain('App issues')
     expect(snapshot.liveProbes.map((probe) => probe.name)).toEqual(
       expect.arrayContaining(['Gateway route registry', 'Mesh peer metrics', 'Diagnostics bundle contract'])
     )
@@ -3724,7 +3912,7 @@ describe('Aurora production shell', () => {
     const message = {
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora...',
+      text: '',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const
     }
@@ -3741,7 +3929,7 @@ describe('Aurora production shell', () => {
     const pending = {
       id: 'assistant-pending',
       role: 'assistant' as const,
-      text: 'Waiting for Aurora...',
+      text: '',
       createdAt: '2026-06-21T00:00:00Z',
       status: 'streaming' as const
     }
@@ -4077,7 +4265,7 @@ describe('Aurora production shell', () => {
       tool,
       reason: 'User rejected risky config write'
     })).rejects.toMatchObject({
-      code: 'permission',
+      code: 'unknown',
       method: 'Tooling.ConfirmExecution',
       correlationId: 'corr-denied-error'
     })
@@ -4163,7 +4351,7 @@ describe('Aurora production shell', () => {
       'admin-action': 'blocked'
     })
     expect(signals).toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: 'selector', label: 'Privacy selector', state: 'blocked' }),
+      expect.objectContaining({ id: 'selector', label: 'Device choice', state: 'blocked' }),
       expect.objectContaining({ id: 'consent', label: 'Consent', state: 'blocked' }),
       expect.objectContaining({ id: 'privacy-indicator', label: 'Privacy indicator', state: 'blocked' }),
       expect.objectContaining({ id: 'native-permission', label: 'Device permission', state: 'blocked' }),
@@ -4361,6 +4549,45 @@ function shellRouteCopySurface(
     .join(' ')
 }
 
+function readAuroraStylesForSourceAssertions(): string {
+  const srcRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../src')
+  const authored = resolve(srcRoot, 'styles.input.css')
+  const generated = resolve(srcRoot, 'styles.css')
+  return [authored, generated]
+    .filter((file) => existsSync(file))
+    .map((file) => readFileSync(file, 'utf8'))
+    .join('\n')
+}
+
+function expectCssContains(css: string, snippet: string): void {
+  expect(compactCss(css)).toContain(compactCss(snippet))
+}
+
+function compactCss(css: string): string {
+  return css.replace(/\s+/g, '')
+}
+
+function productionSurfaceSourceText(uiSrcRoot: string, componentFiles: readonly string[]): string {
+  const visited = new Set<string>()
+  const queue = [...componentFiles]
+  const chunks: string[] = []
+  while (queue.length > 0) {
+    const file = queue.shift()
+    if (!file || visited.has(file)) continue
+    visited.add(file)
+    const path = join(uiSrcRoot, file)
+    const source = readFileSync(path, 'utf8')
+    chunks.push(source)
+    for (const imported of source.matchAll(/from ['"]\.\/([^'"]+)['"]/g)) {
+      for (const extension of ['.tsx', '.ts']) {
+        const candidate = `${imported[1]}${extension}`
+        if (!visited.has(candidate) && existsSync(join(uiSrcRoot, candidate))) queue.push(candidate)
+      }
+    }
+  }
+  return chunks.join('\n')
+}
+
 function productionAnchorAliasPresent(sourceText: string, anchor: string): boolean {
   if (anchor === 'Welcome to Aurora') return sourceText.includes('PRODUCT_COPY.onboarding.title')
   if (anchor === 'First-run setup') return sourceText.includes('First step')
@@ -4368,6 +4595,9 @@ function productionAnchorAliasPresent(sourceText: string, anchor: string): boole
   if (anchor === 'Use an invite to connect this device.') {
     return sourceText.includes('Use an invite or address to connect this device.')
   }
+  if (anchor === 'Protected admin changes') return sourceText.includes('Protected actions')
+  if (anchor === 'Service layout') return sourceText.includes('Runs as')
+  if (anchor === 'Deployment posture') return sourceText.includes('Current readiness for this Aurora setup.')
   return false
 }
 

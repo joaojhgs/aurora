@@ -26,6 +26,7 @@ describe('unified Aurora version label', () => {
   it('renders the chip with the build version and connected suffix', async () => {
     const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
     expect(snapshot.serverVersion).toBeNull()
+    const healthySnapshot = { ...snapshot, capabilityFreshness: 'fresh' as const }
 
     const host = document.createElement('div')
     document.body.append(host)
@@ -33,7 +34,7 @@ describe('unified Aurora version label', () => {
     try {
       await act(async () => {
         root.render(
-          <AppShell snapshot={snapshot}>
+          <AppShell snapshot={healthySnapshot}>
             <div>Current page</div>
           </AppShell>,
         )
@@ -50,13 +51,14 @@ describe('unified Aurora version label', () => {
 
   it('renders the connected server version on the chip when the catalog reports one', async () => {
     const snapshot = await buildShellSnapshot(new Aurora({ transport: new MockAuroraTransport() }))
+    const healthySnapshot = { ...snapshot, capabilityFreshness: 'fresh' as const }
     const host = document.createElement('div')
     document.body.append(host)
     const root = createRoot(host)
     try {
       await act(async () => {
         root.render(
-          <AppShell snapshot={{ ...snapshot, serverVersion: '9.8.7' }}>
+          <AppShell snapshot={{ ...healthySnapshot, serverVersion: '9.8.7' }}>
             <div>Current page</div>
           </AppShell>,
         )

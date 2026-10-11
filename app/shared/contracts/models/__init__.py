@@ -143,8 +143,10 @@ from .orchestrator import (
 )
 from .speech_runtime import (
     SpeechExecutionContextV1,
+    SpeechLifecycleObservationV1,
     SpeechObserverEventV1,
     SpeechStageAdmissionRequestV1,
+    SpeechStageCapabilityExportV1,
     SpeechStageCapabilityV1,
     SpeechStreamAdmissionV1,
     SpeechStreamCancelV1,
@@ -225,6 +227,7 @@ __all__ = [
     "TTSControl",
     "TTSStatus",
     "TTSError",
+    "SpeechStageCapabilityExportV1",
     # STT
     "STTTranscriptionRequest",
     "STTTranscriptionResult",

@@ -1,12 +1,14 @@
 //! Metadata-only speech catalog shared by native and browser runtimes.
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use std::collections::BTreeSet;
 use std::sync::OnceLock;
 use thiserror::Error;
 
-use crate::{canonical_json, sha256_hex, TTS_MAX_SAMPLE_RATE_HZ, TTS_MIN_SAMPLE_RATE_HZ};
+use crate::{
+    canonical_json, json_text::parse_json_value, sha256_hex, TTS_MAX_SAMPLE_RATE_HZ,
+    TTS_MIN_SAMPLE_RATE_HZ,
+};
 
 const EMBEDDED_SHERPA_TTS_CATALOG: &str = include_str!("../resources/sherpa_onnx_tts_catalog.json");
 const EMBEDDED_AURORA_POCKETTTS_OVERLAY: &str = include_str!(
@@ -100,7 +102,7 @@ impl TtsVoiceCatalog {
         if payload.len() > MAX_CATALOG_BYTES {
             return Err(TtsCatalogError::ResourceLimit);
         }
-        let value: Value = serde_json::from_str(payload).map_err(|_| TtsCatalogError::Invalid)?;
+        let value = parse_json_value(payload).map_err(|_| TtsCatalogError::Invalid)?;
         let entries = value.get("entries").ok_or(TtsCatalogError::Invalid)?;
         let entries_json = canonical_json(entries).map_err(|_| TtsCatalogError::Invalid)?;
         if sha256_hex(entries_json.as_bytes()) != ENTRIES_SHA256 {
@@ -901,6 +903,51 @@ mod tests {
         assert_ne!(piper.reference_audio_mode(), TtsReferenceAudioMode::Profile);
         assert!(english.archive.byte_size <= MAX_ARCHIVE_BYTES);
         assert!(french.archive.byte_size <= MAX_ARCHIVE_BYTES);
+    }
+
+    fn overlay_with_raw_schema_version(raw_value: &str) -> String {
+        const SCHEMA_VERSION: &str = "\"schema_version\": 1,";
+        assert_eq!(
+            EMBEDDED_AURORA_POCKETTTS_OVERLAY
+                .matches(SCHEMA_VERSION)
+                .count(),
+            1
+        );
+        let changed = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen(
+            SCHEMA_VERSION,
+            &format!("\"schema_version\": {raw_value},"),
+            1,
+        );
+        assert_ne!(changed, EMBEDDED_AURORA_POCKETTTS_OVERLAY);
+        changed
+    }
+
+    #[test]
+    fn overlay_typed_json_rejects_private_marker_object_versions() {
+        let compiled = parse_aurora_pockettts_overlay(EMBEDDED_AURORA_POCKETTTS_OVERLAY)
+            .expect("compiled overlay is valid");
+        assert_eq!(compiled.len(), 2);
+        assert!(parse_aurora_pockettts_overlay(&overlay_with_raw_schema_version("1 ")).is_ok());
+
+        for raw_value in [
+            r#"{"$serde_json::private::Number":"1"}"#,
+            r#"{"\u0024serde_json::private::Number":"1"}"#,
+            r#"{"$serde_json::private::RawValue":"1"}"#,
+            r#"{"\u0024serde_json::private::RawValue":"1"}"#,
+        ] {
+            assert_eq!(
+                parse_aurora_pockettts_overlay(&overlay_with_raw_schema_version(raw_value)),
+                Err(TtsCatalogError::Invalid),
+            );
+        }
+
+        let ordinary_text = EMBEDDED_AURORA_POCKETTTS_OVERLAY.replacen(
+            "bootstrap-en-fr-fixed-state-v1",
+            "$serde_json::private::RawValue",
+            1,
+        );
+        assert_ne!(ordinary_text, EMBEDDED_AURORA_POCKETTTS_OVERLAY);
+        assert!(parse_aurora_pockettts_overlay(&ordinary_text).is_ok());
     }
 
     #[test]

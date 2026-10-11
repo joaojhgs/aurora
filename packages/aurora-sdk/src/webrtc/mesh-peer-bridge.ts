@@ -1,5 +1,6 @@
 import { MeshP2PTransport, type AsyncMeshEventSource, type MeshP2PTransportOptions, type MeshPeerBridge, type MeshPeerManifest, type MeshRpcRequest, type MeshRpcResponse, type MeshStreamRpcRequest } from '../mesh.js'
 import type { AuroraEvent } from '../types.js'
+import { AuroraError } from '../errors.js'
 import { MeshEventSubscriptionRegistry, CORRELATION_REQUIRED_EVENT_TOPICS } from './event-subscriptions.js'
 import {
   CAP_BACKPRESSURE_V1,
@@ -7,6 +8,7 @@ import {
   CAP_FRAGMENTATION_V1,
   CAP_PROVIDER_LEASE_V1,
   CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
+  CAP_GATEWAY_STATUS_EVENTS_V1,
   FragmentReassembler,
   PeerProtocolLimits,
   buildProtocolHello,
@@ -69,6 +71,17 @@ type PendingSubscribe = {
   cleanup(options?: { keepAbortListener?: boolean }): void
 }
 
+type DeferredSubscribe = {
+  id: string
+  topics: string[]
+  correlationIds: string[]
+  timeoutMs: number
+  stream: StreamController
+  resolveReady: () => void
+  rejectReady: (error: unknown) => void
+  start: () => void
+}
+
 type PendingManifest = {
   resolve(value: MeshPeerManifest | null): void
   reject(error: unknown): void
@@ -78,11 +91,17 @@ type PendingManifest = {
 type StreamController = {
   id: string
   topics: string[]
+  kinds: string[]
   correlationIds: string[]
   queue: Array<AuroraEvent | Record<string, unknown>>
   waiters: Array<() => void>
   done: boolean
   error: unknown
+  opened: boolean
+  unsubscribeSent: boolean
+  signal?: AbortSignal
+  abortListener?: () => void
+  readyReject?: (error: unknown) => void
 }
 
 type RpcStreamController = {
@@ -146,6 +165,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private readonly onManifestChanged: WebRtcMeshPeerBridgeOptions['onManifestChanged']
   private readonly pending = new Map<string, PendingRpc>()
   private readonly pendingSubscribes = new Map<string, PendingSubscribe>()
+  private readonly deferredSubscribes = new Map<string, DeferredSubscribe>()
   private readonly pendingManifests = new Map<string, PendingManifest>()
   private readonly streams = new Map<string, StreamController>()
   private readonly rpcStreams = new Map<string, RpcStreamController>()
@@ -196,6 +216,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
           CAP_BACKPRESSURE_V1,
           CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1,
           CAP_PROVIDER_LEASE_V1,
+          CAP_GATEWAY_STATUS_EVENTS_V1,
           ...(this.localPeerRole === 'consumer' ? [CAP_CONSUMER_ONLY_V1] : []),
         ],
       })
@@ -290,36 +311,112 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.assertOpen()
     this.assertPeer(request.peerId)
     const topics = normalizeTopics(request.topics)
-    if (!this.remoteProtocol?.capabilities.has(CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1)) throw new Error('unsupported scoped_event_subscriptions_v1')
+    const kinds = normalizeEventKinds(request.kinds)
     const correlationIds = normalizeCorrelationIds(readCorrelationIds(request))
     const correlationRequired = topics.filter((topic) => CORRELATION_REQUIRED_EVENT_TOPICS.includes(topic))
     if (correlationRequired.length > 0 && correlationIds.length === 0) {
       throw new Error('correlation_id is required for scoped event topics')
     }
+    if (this.remoteProtocol) {
+      const capabilityError = this.subscriptionCapabilityError(topics)
+      if (capabilityError) throw capabilityError
+    }
     if (request.signal?.aborted) throw abortError()
     const id = this.allocateOutboundFrameId()
-    const stream: StreamController = { id, topics, correlationIds, queue: [], waiters: [], done: false, error: null }
-    const abort = () => {
-      this.cancelSubscription(id, abortError())
-      this.failStream(stream, abortError())
-      void this.sendLogicalFrame({ type: 'unsubscribe', id }).catch(() => undefined)
-    }
-    request.signal?.addEventListener('abort', abort, { once: true })
-    this.streams.set(id, stream)
-    const ready = this.openSubscription(
+    const stream: StreamController = {
       id,
       topics,
+      kinds,
       correlationIds,
-      request.timeoutMs ?? this.timeoutMs,
-      request.signal,
-      abort
-    )
-    void ready.catch((error) => this.failStream(stream, error))
-    const source = this.iterateStream<TEventPayload>(stream, request.signal, abort)
+      queue: [],
+      waiters: [],
+      done: false,
+      error: null,
+      opened: false,
+      unsubscribeSent: false,
+      ...(request.signal ? { signal: request.signal } : {})
+    }
+    let resolveReady!: () => void
+    let rejectReady!: (error: unknown) => void
+    const abort = () => {
+      this.deferredSubscribes.delete(id)
+      this.cancelSubscription(id, abortError())
+      rejectReady(abortError())
+      this.failStream(stream, abortError())
+      this.sendSubscriptionUnsubscribe(stream)
+    }
+    stream.abortListener = abort
+    request.signal?.addEventListener('abort', abort, { once: true })
+    this.streams.set(id, stream)
+    const ready = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve
+      rejectReady = reject
+    })
+    stream.readyReject = rejectReady
+    void ready.catch(() => undefined)
+    const timeoutMs = request.timeoutMs ?? this.timeoutMs
+    const start = () => {
+      const capabilityError = this.subscriptionCapabilityError(topics)
+      if (capabilityError) {
+        rejectReady(capabilityError)
+        this.failStream(stream, capabilityError)
+        return
+      }
+      void this.openSubscription(stream, topics, correlationIds, timeoutMs)
+        .then(resolveReady, (error) => {
+          rejectReady(error)
+          this.failStream(stream, error)
+        })
+    }
+    if (this.remoteProtocol) {
+      start()
+    } else {
+      this.deferredSubscribes.set(id, {
+        id, topics, correlationIds, timeoutMs, stream, resolveReady, rejectReady, start
+      })
+    }
+    const source = this.iterateStream<TEventPayload>(stream)
+    let iteratorStarted = false
+    const iterator = source[Symbol.asyncIterator]()
     return {
       ready,
-      [Symbol.asyncIterator]: () => source[Symbol.asyncIterator]()
+      [Symbol.asyncIterator]: () => ({
+        next: (value?: unknown) => {
+          iteratorStarted = true
+          return iterator.next(value)
+        },
+        return: async (value?: unknown) => {
+          if (!iteratorStarted) {
+            this.closeDeferredStream(stream)
+            return { value, done: true }
+          }
+          return iterator.return?.(value) ?? { value, done: true }
+        },
+        throw: (error?: unknown) => iterator.throw?.(error) ?? Promise.reject(error)
+      })
     }
+  }
+
+  private subscriptionCapabilityError(topics: string[]): AuroraError | Error | null {
+    const hasScopedSubscriptions = this.remoteProtocol?.capabilities.has(CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1) ?? false
+    const isGatewayStatusSubscription = topics.includes('Gateway.StatusChanged')
+    const hasGatewayStatusEvents = this.remoteProtocol?.capabilities.has(CAP_GATEWAY_STATUS_EVENTS_V1) ?? false
+    if (isGatewayStatusSubscription && (!hasScopedSubscriptions || !hasGatewayStatusEvents)) {
+      return new AuroraError({
+        code: 'unsupported_feature',
+        message: 'This peer does not support gateway status event subscriptions.',
+        busTopic: 'Gateway.StatusChanged',
+        detail: {
+          requiredCapabilities: [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1, CAP_GATEWAY_STATUS_EVENTS_V1],
+          missingCapabilities: [
+            ...(!hasScopedSubscriptions ? [CAP_SCOPED_EVENT_SUBSCRIPTIONS_V1] : []),
+            ...(!hasGatewayStatusEvents ? [CAP_GATEWAY_STATUS_EVENTS_V1] : [])
+          ]
+        }
+      })
+    }
+    if (!hasScopedSubscriptions) return new Error('unsupported scoped_event_subscriptions_v1')
+    return null
   }
 
   async getManifest(peerId: string): Promise<MeshPeerManifest | null> {
@@ -417,6 +514,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       pending.reject(new Error(reason))
     }
     this.pendingSubscribes.clear()
+    for (const deferred of this.deferredSubscribes.values()) deferred.rejectReady(new Error(reason))
+    this.deferredSubscribes.clear()
     for (const pending of this.pendingManifests.values()) {
       this.clearTimer(pending.timer)
       pending.reject(new Error(reason))
@@ -435,7 +534,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.clearAllTimers()
   }
 
-  private async openSubscription(id: string, topics: string[], correlationIds: string[], timeoutMs: number, signal?: AbortSignal, abortListener?: () => void): Promise<void> {
+  private async openSubscription(stream: StreamController, topics: string[], correlationIds: string[], timeoutMs: number): Promise<void> {
+    const { id, signal, abortListener } = stream
     const ack = await new Promise<SubscribeAck>((resolve, reject) => {
       let pending: PendingSubscribe
       const cleanup = (options: { keepAbortListener?: boolean } = {}) => {
@@ -457,7 +557,9 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       }
       this.pendingSubscribes.set(id, pending)
       const frame: Record<string, unknown> = { type: 'subscribe', id, topics, correlation_ids: correlationIds, ttl_seconds: SUBSCRIBE_TTL_SECONDS }
-      this.sendLogicalFrame(frame).catch((error) => {
+      stream.opened = true
+      this.sendLogicalFrame(frame, signal).catch((error) => {
+        stream.opened = false
         this.pendingSubscribes.delete(id)
         cleanup()
         reject(error)
@@ -466,7 +568,20 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.eventSubscriptions.subscribe({ peerId: this.remotePeerId, id: ack.subscriptionId, topics: ack.acceptedTopics, correlationIds: ack.correlationIds, ttlSeconds: ack.ttlSeconds })
   }
 
-  private async *iterateStream<TEventPayload>(stream: StreamController, signal?: AbortSignal, abortListener?: () => void): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> {
+  private closeDeferredStream(stream: StreamController): void {
+    this.deferredSubscribes.delete(stream.id)
+    this.cancelSubscription(stream.id, new Error('subscription closed'))
+    this.eventSubscriptions.unsubscribe(this.remotePeerId, stream.id)
+    stream.done = true
+    this.streams.delete(stream.id)
+    this.cleanupStream(stream)
+    // A pre-hello iterator can be returned before the generator starts, so
+    // its finally block cannot settle the caller's readiness promise.
+    stream.readyReject?.(new Error('subscription closed'))
+    this.sendSubscriptionUnsubscribe(stream)
+  }
+
+  private async *iterateStream<TEventPayload>(stream: StreamController): AsyncIterable<AuroraEvent<TEventPayload> | Record<string, unknown>> {
     try {
       while (true) {
         if (stream.error) throw stream.error
@@ -481,10 +596,11 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     } finally {
       stream.done = true
       this.streams.delete(stream.id)
+      this.deferredSubscribes.delete(stream.id)
       this.cancelSubscription(stream.id, new Error('subscription closed'))
       this.eventSubscriptions.unsubscribe(this.remotePeerId, stream.id)
-      if (abortListener) signal?.removeEventListener('abort', abortListener)
-      if (!this.closed) void this.sendLogicalFrame({ type: 'unsubscribe', id: stream.id }).catch(() => undefined)
+      this.cleanupStream(stream)
+      this.sendSubscriptionUnsubscribe(stream)
     }
   }
 
@@ -558,6 +674,8 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       pending.reject(error)
     }
     this.pendingSubscribes.clear()
+    for (const deferred of this.deferredSubscribes.values()) deferred.rejectReady(error)
+    this.deferredSubscribes.clear()
     for (const pending of [...this.pendingManifests.values()]) {
       try { this.clearTimer(pending.timer) } catch {}
       pending.reject(error)
@@ -726,6 +844,11 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     this.reassembler = new FragmentReassembler({ limits: this.remoteProtocol.limits, clock: this.clock })
     this.maybeStartPeerHostEpoch()
     this.scheduleRemoteManifestRecovery()
+    for (const deferred of [...this.deferredSubscribes.values()]) {
+      this.deferredSubscribes.delete(deferred.id)
+      if (deferred.stream.done) continue
+      deferred.start()
+    }
   }
 
   /**
@@ -855,7 +978,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private removeRpcStreamAbortListener(stream: RpcStreamController): void {
     if (!stream.abortListener) return
     stream.signal?.removeEventListener('abort', stream.abortListener)
-    stream.abortListener = undefined
+    delete stream.abortListener
   }
 
   private async sendRpcStreamCancel(stream: RpcStreamController): Promise<void> {
@@ -882,6 +1005,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
       if (!stream.topics.includes(frame.topic)) continue
       if (stream.correlationIds.length > 0 && (!frame.correlation_id || !stream.correlationIds.includes(frame.correlation_id))) continue
       const kind = readEventKind(frame.params) ?? eventKindFromTopic(frame.topic)
+      if (stream.kinds.length > 0 && !stream.kinds.includes(kind)) continue
       this.enqueueStream(stream.id, { kind, topic: frame.topic, payload: frame.params, correlation_id: frame.correlation_id, peer_id: this.remotePeerId, target_peer_id: this.remotePeerId })
     }
   }
@@ -890,6 +1014,7 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
     const stream = this.streams.get(id)
     if (!stream) return
     stream.done = true
+    this.cleanupStream(stream)
     this.wakeStream(stream)
   }
 
@@ -901,7 +1026,22 @@ export class WebRtcMeshPeerBridge implements MeshPeerBridge {
   private failStream(stream: StreamController, error: unknown): void {
     stream.error = error
     stream.done = true
+    this.cleanupStream(stream)
     this.wakeStream(stream)
+  }
+
+  private cleanupStream(stream: StreamController): void {
+    if (stream.abortListener) {
+      stream.signal?.removeEventListener('abort', stream.abortListener)
+      delete stream.abortListener
+    }
+    this.deferredSubscribes.delete(stream.id)
+  }
+
+  private sendSubscriptionUnsubscribe(stream: StreamController): void {
+    if (this.closed || !stream.opened || stream.unsubscribeSent) return
+    stream.unsubscribeSent = true
+    void this.sendLogicalFrame({ type: 'unsubscribe', id: stream.id }).catch(() => undefined)
   }
 
   private wakeStream(stream: StreamController): void {
@@ -1375,6 +1515,13 @@ function normalizeTopics(topics: unknown): string[] {
     }
   }
   return result
+}
+
+function normalizeEventKinds(kinds: unknown): string[] {
+  if (!Array.isArray(kinds)) return []
+  const normalized = kinds.filter((kind): kind is string => typeof kind === 'string' && kind.length > 0 && kind.length <= 128)
+  if (normalized.length !== kinds.length || normalized.length > 32) throw new Error('kinds must be a bounded string array')
+  return [...new Set(normalized)]
 }
 
 function normalizeCorrelationIds(value: unknown): string[] {
