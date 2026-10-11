@@ -1534,7 +1534,7 @@ fn build_runtime_for_remote_stages(
         Some(route) => build_android_mesh_tts(&route)?,
         None => gateway_tts.ok_or(AndroidVoiceSessionCommandError::Unavailable)?,
     };
-    let policy = if let Some(gateway) = config.gateway.as_ref() {
+    let policy = if config.gateway.is_some() {
         android_gateway_audio_policy(config)?
     } else if config.remote_audio_consent {
         MicrophoneAudioPolicy::ExplicitRemoteConsent
