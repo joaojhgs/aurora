@@ -13,7 +13,7 @@ const SAFE_PAIR_ERROR_CATEGORIES = new Set([
   'authentication_protocol_error', 'data_channel_frame_rejected', 'unclassified_peer_session_error',
 ])
 
-export async function runAndroidRemoteConsoleShellMain({ session, restart, originalProfileValue, pairing }) {
+export async function runAndroidRemoteConsoleShellMain({ session, restart, originalProfileValue, pairing, deferMainFailure = false }) {
   if (!session?.client || typeof session.invoke !== 'function' || typeof restart !== 'function') {
     throw new Error('Android remote-console main flow is missing its packaged app boundary.')
   }
@@ -59,10 +59,12 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
   let profileMutationAttempted = false
   let configBefore
   let configCommittedRevision
+  let configRestored = true
   let profileRestored = false
   let credentialRemoved = false
   let result
   let primaryError
+  const cleanupErrors = []
   const document = {
     ...originalDocument,
     activeProfileId: profileId,
@@ -225,7 +227,6 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
   } catch (error) {
     primaryError = error
   } finally {
-    const cleanupErrors = []
     const addCleanup = (label, error) => cleanupErrors.push(new Error(`${label}: ${String(error?.message ?? error)}`))
     try {
       if (configBefore !== undefined) {
@@ -244,7 +245,10 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
           }
         }
       }
-    } catch (error) { addCleanup('config_restore', error) }
+    } catch (error) {
+      configRestored = false
+      addCleanup('config_restore', error)
+    }
     try {
       if (session?.client) await androidEvaluate(session.client, `window.__auroraPer278RemoteConsoleMain?.observer?.disconnect()`)
     } catch (error) { addCleanup('observer_cleanup', error) }
@@ -259,6 +263,17 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
           && !(originalProfileValue == null && current?.value == null)) {
           throw new Error('The current profile document no longer matches the exact temporary remote-console document.')
         }
+      } catch (error) { addCleanup('profile_restore', error) }
+    } else {
+      try {
+        const current = await session.invoke('aurora_thin_profile_get')
+        const originalStoredValue = originalProfileValue == null ? EMPTY_PROFILE : originalProfileValue
+        const semanticEmpty = originalProfileValue == null
+          && (current?.value == null || current.value === EMPTY_PROFILE)
+        if (originalProfileValue == null ? !semanticEmpty : current?.value !== originalStoredValue) {
+          throw new Error('The original Android profile changed before the temporary profile was saved.')
+        }
+        profileRestored = true
       } catch (error) { addCleanup('profile_restore', error) }
     }
     try {
@@ -300,15 +315,38 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
         profileRestored = true
       } catch (error) { addCleanup('profile_restart', error) }
     }
-    if (cleanupErrors.length > 0) {
-      const errors = [...(primaryError ? [primaryError] : []), ...cleanupErrors]
-      primaryError = new AggregateError(errors, 'Android remote-console main and cleanup failed.')
-    }
   }
-  if (primaryError) throw primaryError
+  const cleanupVerified = cleanupErrors.length === 0
+    && configRestored && profileRestored && credentialRemoved && !secretOwned
+  if (primaryError) {
+    if (deferMainFailure && cleanupVerified) {
+      console.log('AURORA_ANDROID_REMOTE_CONSOLE_SHELL_MAIN ' + JSON.stringify({
+        ok: false,
+        mainFailure: true,
+        cleanupVerified: true,
+        profileRestored,
+        credentialRemoved,
+        roomSecretRemoved: !secretOwned,
+        configRestored,
+      }))
+      return { session, mainError: primaryError, cleanupVerified: true }
+    }
+    const failure = cleanupErrors.length > 0
+      ? new AggregateError([primaryError, ...cleanupErrors], 'Android remote-console main and cleanup failed.')
+      : primaryError
+    failure.androidConnectedCleanupVerified = cleanupVerified
+    throw failure
+  }
+  if (cleanupErrors.length > 0) {
+    const failure = new AggregateError(cleanupErrors, 'Android remote-console main cleanup failed.')
+    failure.androidConnectedCleanupVerified = false
+    throw failure
+  }
   if (!result) throw new Error('Android remote-console main did not produce a result.')
-  console.log('AURORA_ANDROID_REMOTE_CONSOLE_SHELL_MAIN ' + JSON.stringify({ ...result, profileRestored, credentialRemoved, roomSecretRemoved: !secretOwned }))
-  return session
+  console.log('AURORA_ANDROID_REMOTE_CONSOLE_SHELL_MAIN ' + JSON.stringify({
+    ...result, profileRestored, credentialRemoved, roomSecretRemoved: !secretOwned, configRestored,
+  }))
+  return { session, cleanupVerified, mainError: null }
 }
 
 async function openAssistant(client) {

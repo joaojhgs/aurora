@@ -674,7 +674,7 @@ export async function runAcceptance() {
   let primaryError
   let voiceMainAttempted = false
   let voiceMainReadyOnOwnedApk = false
-  let voiceCleanupFailed = false
+  let voiceCleanupVerified = false
   const fixture = spawn('node', [FIXTURE], { cwd: WORKSPACE_ROOT, env: fixtureEnvironment, stdio: ['ignore', 'pipe', 'inherit'], detached: true })
   try {
     fixtureUrl = await readFixtureReady(fixture)
@@ -754,7 +754,7 @@ export async function runAcceptance() {
     }
     voiceMainAttempted = mainFlowOnly
     try {
-      await runAndroidVoiceLiveSmoke({
+      const voiceResult = await runAndroidVoiceLiveSmoke({
         environment: runEnvironment,
         pairing: {
           request,
@@ -774,8 +774,11 @@ export async function runAcceptance() {
           voiceMainReadyOnOwnedApk = true
         },
       })
+      voiceCleanupVerified = voiceResult?.voiceCleanupVerified === true
+        && voiceResult?.androidConnectedCleanupVerified === true
     } catch (error) {
-      voiceCleanupFailed = error instanceof AggregateError
+      voiceCleanupVerified = error?.voiceCleanupVerified === true
+        && error?.androidConnectedCleanupVerified === true
       throw error
     }
     if (childExited(python)) throw new Error(`Aurora main.py exited with status ${python.exitCode ?? python.signalCode ?? 'unknown'}.`)
@@ -791,7 +794,7 @@ export async function runAcceptance() {
       }
     }
     let offlineMainError
-    if (mainFlowOnly && voiceMainAttempted && voiceMainReadyOnOwnedApk && !voiceCleanupFailed && cleanupErrors.length === 0) {
+    if (mainFlowOnly && voiceMainAttempted && voiceMainReadyOnOwnedApk && voiceCleanupVerified && cleanupErrors.length === 0) {
       try {
         await runAndroidLocalInferenceMainFlow({
           adb,

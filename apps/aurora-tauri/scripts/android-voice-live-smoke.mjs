@@ -422,6 +422,9 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
   let pairingCleanup
   let pairingEvidence
   let primaryError
+  let deferredConnectedMainError
+  let connectedMainCleanupVerified = false
+  let successfulMainResult
   try {
     if (environmentOverlay) Object.assign(inheritedEnvironment, environment)
     adb = resolveAdbCommand()
@@ -469,10 +472,11 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     originalProfileValue = storedProfile?.value
     if (remoteConsoleShellMain) {
       if (!pairing) throw new Error('Android remote-console shell continuity requires the owned Python pairing fixture.')
-      await runAndroidRemoteConsoleShellMain({
+      const connectedMain = await runAndroidRemoteConsoleShellMain({
         session: { client: webview.client, invoke },
         originalProfileValue,
         pairing,
+        deferMainFailure: true,
         restart: async () => {
           try { webview?.close() } catch { /* restart below establishes a new owner */ }
           adbRun(context, ['shell', 'am', 'force-stop', '--user', 'current', context.appId])
@@ -483,6 +487,11 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
           return { client: webview.client, invoke }
         },
       })
+      connectedMainCleanupVerified = connectedMain?.cleanupVerified === true
+      if (!connectedMainCleanupVerified) {
+        throw new Error('Android connected-device cleanup was not positively verified; native speech main was not started.')
+      }
+      deferredConnectedMainError = connectedMain.mainError ?? null
     }
     const existingProfile = parseStoredRuntimeProfile(originalProfileValue)
     const existingActiveProfile = existingProfile?.profiles?.find((candidate) => candidate?.id === existingProfile.activeProfileId)
@@ -644,7 +653,18 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
         acceptanceMode: 'connected-native-main-flow',
         finalStatus: summarizeVoiceStatus(await invoke('aurora_android_voice_foreground_service_status')),
       }
+      if (deferredConnectedMainError) {
+        console.log(JSON.stringify({
+          ok: false,
+          stage: 'main',
+          code: fixedFailureCode(deferredConnectedMainError),
+          connectedSettings: { ok: false, cleanupVerified: true },
+          nativeSpeech: result,
+        }, null, 2))
+        throw deferredConnectedMainError
+      }
       console.log(JSON.stringify(result, null, 2))
+      successfulMainResult = result
       return result
     }
     await stopVoiceAndRequireRelease(context, invoke)
@@ -787,7 +807,9 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     console.log(JSON.stringify(result, null, 2))
     return result
   } catch (error) {
-    primaryError = error
+    primaryError = deferredConnectedMainError && error !== deferredConnectedMainError
+      ? new AggregateError([deferredConnectedMainError, error], 'Android connected settings and native speech mains failed.')
+      : error
     const diagnostics = context ? collectDiagnostics(context) : { unavailable: true }
     console.error(JSON.stringify({
       ok: false,
@@ -883,6 +905,9 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     console.error(JSON.stringify({
       stage: 'cleanup',
       cleanupOk: cleanupFailures.length === 0,
+      cleanupVerified: cleanupFailures.length === 0
+        && ['semantic_empty_verified', 'exact_original_value_verified'].includes(profileRestoration)
+        && context != null && context.adb === adb && context.serial === serial,
       errorCount: cleanupFailures.length,
       failures: cleanupFailures,
       originalProfile: {
@@ -892,6 +917,18 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
       },
       profileRestoration,
     }))
+    const voiceCleanupVerified = cleanupFailures.length === 0
+        && ['semantic_empty_verified', 'exact_original_value_verified'].includes(profileRestoration)
+        && context != null && context.adb === adb && context.serial === serial
+    if (successfulMainResult) {
+      successfulMainResult.voiceCleanupVerified = voiceCleanupVerified
+      successfulMainResult.androidConnectedCleanupVerified = connectedMainCleanupVerified
+    }
+    if (primaryError && typeof primaryError === 'object') {
+      primaryError.voiceCleanupVerified = voiceCleanupVerified
+      primaryError.androidConnectedCleanupVerified = connectedMainCleanupVerified
+        && primaryError.androidConnectedCleanupVerified !== false
+    }
     if (primaryError && cleanupErrors.length > 0) throw new AggregateError([primaryError, ...cleanupErrors], 'Android voice smoke failed and cleanup also failed.')
     if (primaryError) throw primaryError
     if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, 'Android voice smoke cleanup failed.')
