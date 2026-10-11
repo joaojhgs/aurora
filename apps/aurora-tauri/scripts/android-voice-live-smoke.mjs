@@ -320,6 +320,7 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
   let fixtures
   let webview
   let originalProfileValue
+  let profileRestoration = 'not_attempted'
   let pairingCleanup
   let pairingEvidence
   let primaryError
@@ -524,11 +525,17 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     const diagnostics = context ? collectDiagnostics(context) : { unavailable: true }
     console.error(JSON.stringify({
       ok: false,
-      error: errorMessage(error),
+      stage: 'main',
+      code: fixedFailureCode(error),
       diagnostics,
     }, null, 2))
   } finally {
     const cleanupErrors = []
+    const cleanupFailures = []
+    const recordCleanupFailure = (stage, error) => {
+      cleanupErrors.push(error)
+      cleanupFailures.push({ stage, code: fixedFailureCode(error) })
+    }
     try {
       if (pairingCleanup) {
         if (!webview?.client) {
@@ -546,7 +553,7 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
         await pairingCleanup()
       }
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('pairing_cleanup', error)
     }
     try {
       if (originalProfileValue !== undefined) {
@@ -554,35 +561,43 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
           launchApp(context)
           webview = await connectInstalledWebview(context)
         }
-        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: originalProfileValue })
-        if (restored?.ok !== true) throw new Error(`Android profile restoration was rejected: ${JSON.stringify(restored)}`)
+        const restoreValue = originalProfileValue === null
+          ? JSON.stringify({ version: 2, activeProfileId: null, profiles: [] })
+          : originalProfileValue
+        const restored = await invokeTauri(webview.client, 'aurora_thin_profile_set', { value: restoreValue })
+        if (restored?.ok !== true) throw new Error('Android profile restoration was rejected.')
         const readback = await invokeTauri(webview.client, 'aurora_thin_profile_get')
-        if (readback?.value !== originalProfileValue) throw new Error('Android profile restoration readback did not match the original profile.')
+        if (readback?.value !== restoreValue) throw new Error('Android profile restoration readback did not match the expected original value.')
+        profileRestoration = originalProfileValue === null
+          ? 'semantic_empty_verified'
+          : 'exact_original_value_verified'
+      } else {
+        profileRestoration = 'not_required'
       }
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('profile_restore', error)
     }
     try {
       await bestEffortStopVoice(context, webview)
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('voice_stop', error)
     }
     try {
       webview?.close()
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('webview_close', error)
     }
-    try { if (context) adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce']) } catch (error) { cleanupErrors.push(error) }
-    try { if (context) adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']) } catch (error) { cleanupErrors.push(error) }
+    try { if (context) adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce']) } catch (error) { recordCleanupFailure('device_idle_unforce', error) }
+    try { if (context) adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']) } catch (error) { recordCleanupFailure('device_wakeup', error) }
     try {
       fixtures?.close()
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('fixtures_close', error)
     }
     try {
       releaseLock()
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('lock_release', error)
     }
     try {
       if (environmentOverlay) {
@@ -592,8 +607,20 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
         }
       }
     } catch (error) {
-      cleanupErrors.push(error)
+      recordCleanupFailure('environment_restore', error)
     }
+    console.error(JSON.stringify({
+      stage: 'cleanup',
+      cleanupOk: cleanupFailures.length === 0,
+      errorCount: cleanupFailures.length,
+      failures: cleanupFailures,
+      originalProfile: {
+        valuePresent: originalProfileValue !== undefined,
+        valueIsNull: originalProfileValue === null,
+        valueIsString: typeof originalProfileValue === 'string',
+      },
+      profileRestoration,
+    }))
     if (primaryError && cleanupErrors.length > 0) throw new AggregateError([primaryError, ...cleanupErrors], 'Android voice smoke failed and cleanup also failed.')
     if (primaryError) throw primaryError
     if (cleanupErrors.length > 0) throw new AggregateError(cleanupErrors, 'Android voice smoke cleanup failed.')
@@ -3335,6 +3362,13 @@ function bounded(value) {
   return text.length <= MAX_DIAGNOSTIC_BYTES ? text : text.slice(-MAX_DIAGNOSTIC_BYTES)
 }
 
+function fixedFailureCode(error) {
+  const code = typeof error?.code === 'string' ? error.code : ''
+  if (['EACCES', 'EEXIST', 'EISDIR', 'ENOENT', 'ENOTDIR', 'EPERM', 'ETIMEDOUT'].includes(code)) return code
+  if (error instanceof AggregateError) return 'aggregate_failure'
+  return 'operation_failed'
+}
+
 function errorMessage(error) {
   return error instanceof Error ? error.message : String(error ?? 'unknown_error')
 }
@@ -3349,7 +3383,12 @@ const invokedAsScript = process.argv[1]
 if (invokedAsScript) {
   try {
     await runAndroidVoiceLiveSmoke()
-  } catch {
+  } catch (error) {
+    console.error(JSON.stringify({
+      ok: false,
+      stage: 'cli',
+      code: fixedFailureCode(error),
+    }))
     process.exitCode = 1
   }
 }
