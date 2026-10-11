@@ -1,8 +1,17 @@
 import { randomUUID } from 'node:crypto'
-import { androidEvaluate, clickAndroidControl } from './android-native-turn-pairing.mjs'
+import { androidEvaluate, clickAndroidControl, readAndroidPairReadiness } from './android-native-turn-pairing.mjs'
 
 const TIMEOUT_MS = 30_000
 const EMPTY_PROFILE = JSON.stringify({ version: 2, activeProfileId: null, profiles: [] })
+const SAFE_PAIR_ERROR_CATEGORIES = new Set([
+  'broker_policy_wss_required', 'broker_policy_loopback_opt_in_required', 'broker_policy_loopback_host_required',
+  'broker_policy_unsupported_scheme', 'mqtt_connect_timeout', 'mqtt_signaling_all_brokers_failed',
+  'signaling_timeout', 'peer_discovery_timeout', 'pairing_timeout', 'authentication_timeout',
+  'negotiation_timeout', 'peer_identity_mismatch', 'negotiation_protocol_error', 'data_channel_protocol_error',
+  'protocol_hello_invalid', 'authentication_retry_required', 'authentication_denied',
+  'authentication_configuration_missing', 'signaling_peer_session_changed', 'peer_transport_disconnected',
+  'authentication_protocol_error', 'data_channel_frame_rejected', 'unclassified_peer_session_error',
+])
 
 export async function runAndroidRemoteConsoleShellMain({ session, restart, originalProfileValue, pairing }) {
   if (!session?.client || typeof session.invoke !== 'function' || typeof restart !== 'function') {
@@ -113,7 +122,18 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
       let readiness
       try { readiness = await readRemoteConsolePairReadiness(session.client) }
       catch { readiness = { available: false, reason: 'diagnostic-unavailable' } }
-      console.log('AURORA_ANDROID_REMOTE_CONSOLE_REVIEW_READINESS_FAILURE ' + JSON.stringify(readiness))
+      let lastRedactedErrorCategory = null
+      try {
+        const pairReadiness = await readAndroidPairReadiness(session.client)
+        const category = pairReadiness?.lastRedactedError?.category
+        if (SAFE_PAIR_ERROR_CATEGORIES.has(category)) lastRedactedErrorCategory = category
+      } catch {
+        // Keep the original approval-readiness failure if the one bounded snapshot is unavailable.
+      }
+      console.log('AURORA_ANDROID_REMOTE_CONSOLE_REVIEW_READINESS_FAILURE ' + JSON.stringify({
+        ...readiness,
+        lastRedactedErrorCategory,
+      }))
       throw error
     }
     if (!reviewVisible) throw new Error('The remote-console connection did not reach product approval.')
@@ -273,9 +293,9 @@ export async function runAndroidRemoteConsoleShellMain({ session, restart, origi
         profileRestored = true
       } catch (error) { addCleanup('profile_restart', error) }
     }
-    if (primaryError || cleanupErrors.length) {
+    if (cleanupErrors.length > 0) {
       const errors = [...(primaryError ? [primaryError] : []), ...cleanupErrors]
-      primaryError = errors.length === 1 ? errors[0] : new AggregateError(errors, 'Android remote-console main and cleanup failed.')
+      primaryError = new AggregateError(errors, 'Android remote-console main and cleanup failed.')
     }
   }
   if (primaryError) throw primaryError

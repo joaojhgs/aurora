@@ -7,6 +7,7 @@ import os from 'node:os'
 import { fileURLToPath } from 'node:url'
 import { chromium } from '@playwright/test'
 import { startHostedUi } from './run-android-three-node-live.mjs'
+import { runAndroidLocalInferenceMainFlow } from './android-local-inference-main-flow.mjs'
 import { activeAndroidProfileDocument, androidEvaluate, clickAndroidControl, createPairingCleanup } from './android-native-turn-pairing.mjs'
 import { navigateAndroidToMesh, resolveAndroidDeviceSerial, runAndroidVoiceLiveSmoke } from './android-voice-live-smoke.mjs'
 
@@ -647,6 +648,15 @@ export function installWorkspacePlaywrightChromium() {
 
 export async function runAcceptance() {
   const environment = acceptanceEnvironment()
+  const mainFlowOnly = environment.AURORA_ANDROID_MAIN_FLOW_ONLY === '1'
+  const adb = resolveAdbCommand(environment)
+  const explicitSerial = environment.AURORA_ANDROID_DEVICE_SERIAL ?? environment.ANDROID_SERIAL
+  const serial = resolveAndroidDeviceSerial(
+    execFileSync(adb, ['devices', '-l'], { encoding: 'utf8', timeout: 30_000 }),
+    explicitSerial,
+  )
+  const androidAppId = environment.AURORA_ANDROID_APP_ID ?? 'dev.aurora.desktop'
+  Object.assign(environment, { ADB: adb, AURORA_ANDROID_DEVICE_SERIAL: serial, AURORA_ANDROID_APP_ID: androidAppId })
   installWorkspacePlaywrightChromium()
   const turnId = `native-turn-${randomUUID()}`
   const fixturePartialText = `Fixture partial response ${turnId}`
@@ -662,6 +672,9 @@ export async function runAcceptance() {
   let brokerReverse
   let hostedSpeechConsumer
   let primaryError
+  let voiceMainAttempted = false
+  let voiceMainReadyOnOwnedApk = false
+  let voiceCleanupFailed = false
   const fixture = spawn('node', [FIXTURE], { cwd: WORKSPACE_ROOT, env: fixtureEnvironment, stdio: ['ignore', 'pipe', 'inherit'], detached: true })
   try {
     fixtureUrl = await readFixtureReady(fixture)
@@ -739,20 +752,32 @@ export async function runAcceptance() {
         }
       },
     }
-    await runAndroidVoiceLiveSmoke({
-      environment: runEnvironment,
-      pairing: {
-        request,
-        gatewayUrl: runEnvironment.AURORA_THREE_NODE_GATEWAY_URL,
-        gatewayApiKey: runEnvironment.AURORA_THREE_NODE_GATEWAY_API_KEY,
-        inviteText,
-        pythonPeerId: ownedStack.mesh.local?.peer_id,
-        permissions: HOSTED_PEER_PYTHON_PERMISSIONS,
-      },
-      modelFixture: fixtureTurn,
-      hostedSpeechConsumer,
-      remoteConsoleShellMain: environment.AURORA_ANDROID_MAIN_FLOW_ONLY === '1',
-    })
+    voiceMainAttempted = mainFlowOnly
+    try {
+      await runAndroidVoiceLiveSmoke({
+        environment: runEnvironment,
+        pairing: {
+          request,
+          gatewayUrl: runEnvironment.AURORA_THREE_NODE_GATEWAY_URL,
+          gatewayApiKey: runEnvironment.AURORA_THREE_NODE_GATEWAY_API_KEY,
+          inviteText,
+          pythonPeerId: ownedStack.mesh.local?.peer_id,
+          permissions: HOSTED_PEER_PYTHON_PERMISSIONS,
+        },
+        modelFixture: fixtureTurn,
+        hostedSpeechConsumer,
+        remoteConsoleShellMain: mainFlowOnly,
+        onInstalledAppReady: ({ adb: readyAdb, serial: readySerial, appId: readyAppId }) => {
+          if (readyAdb !== adb || readySerial !== serial || readyAppId !== androidAppId) {
+            throw new Error('The connected voice main changed its selected Android target.')
+          }
+          voiceMainReadyOnOwnedApk = true
+        },
+      })
+    } catch (error) {
+      voiceCleanupFailed = error instanceof AggregateError
+      throw error
+    }
     if (childExited(python)) throw new Error(`Aurora main.py exited with status ${python.exitCode ?? python.signalCode ?? 'unknown'}.`)
   } catch (error) {
     primaryError = error
@@ -765,7 +790,23 @@ export async function runAcceptance() {
         cleanupErrors.push(error)
       }
     }
-    throwAcceptanceErrors(primaryError, cleanupErrors)
+    let offlineMainError
+    if (mainFlowOnly && voiceMainAttempted && voiceMainReadyOnOwnedApk && !voiceCleanupFailed && cleanupErrors.length === 0) {
+      try {
+        await runAndroidLocalInferenceMainFlow({
+          adb,
+          serial,
+          appId: androidAppId,
+          environment: { ...environment, AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FLOW: '1' },
+        })
+      } catch (error) {
+        offlineMainError = error
+      }
+    }
+    const primary = primaryError && offlineMainError
+      ? new AggregateError([primaryError, offlineMainError], 'Connected and offline assistant main flows failed.')
+      : primaryError ?? offlineMainError
+    throwAcceptanceErrors(primary, cleanupErrors)
   }
 }
 

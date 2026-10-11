@@ -42,28 +42,33 @@ try {
   const all = Object.values(devices.devices ?? {}).flat()
   if (!all.some((device) => device.udid === udid && device.state === 'Booted')) throw new Error('the exact requested simulator must already be booted')
   simulatorSelected = true
+  report = { ...report, stage: 'architecture_validation' }
   const simulatorArchitecture = execFileSync('/usr/bin/uname', ['-m'], { encoding: 'utf8', timeout: 5_000 }).trim()
   if (!['arm64', 'x86_64'].includes(simulatorArchitecture)) throw new Error('simulator_architecture_unavailable')
   const executableName = execFileSync('/usr/libexec/PlistBuddy', ['-c', 'Print :CFBundleExecutable', appInfo], { encoding: 'utf8', timeout: 10_000 }).trim()
   const appArchitectures = execFileSync('/usr/bin/lipo', ['-archs', join(appPath, executableName)], { encoding: 'utf8', timeout: 10_000 }).trim().split(/\s+/u)
   if (!appArchitectures.includes(simulatorArchitecture)) throw new Error('simulator_architecture_unavailable')
+  report = { ...report, stage: 'fixture_generation' }
   const wavPath = await makeSyntheticWav(workDir)
   const wavBytes = readFileSync(wavPath)
   const fixtureSamples = validateWav(wavBytes)
   const wavBase64 = wavBytes.toString('base64')
   if (fixtureSamples > MAX_SECONDS * 16_000) throw new Error('fixture_generation')
 
+  report = { ...report, stage: 'control_listener' }
   server = createServer((request, response) => handleRequest(request, response, { nonce, wavBase64, simulatorArchitecture, resultPromise, webviewOrigin }))
   await listen(server, Number(origin.port))
+  report = { ...report, stage: 'app_install' }
   execFileSync('xcrun', ['simctl', 'install', udid, appPath], { stdio: 'pipe', timeout: 30_000 })
   installed = true
+  report = { ...report, stage: 'app_launch' }
   execFileSync('xcrun', ['simctl', 'launch', '--terminate-running-process', udid, bundleId], { stdio: 'pipe', timeout: 20_000 })
   launched = true
   report = { ...report, stage: 'assistant_voice_flow' }
   const result = await withTimeout(resultPromise.promise, RUN_TIMEOUT_MS)
   report = { ...report, ...result, status: result.status, stage: result.stage }
 } catch (error) {
-  report = { ...report, status: 'failed', stage: safeFailureStage(error) }
+  report = { ...report, status: 'failed', stage: safeFailureStage(error, report.stage) }
 } finally {
   if (launched) {
     if (bundleId) { try { execFileSync('xcrun', ['simctl', 'terminate', udid, bundleId], { stdio: 'ignore', timeout: 10_000 }) } catch {} }
@@ -160,4 +165,4 @@ function deferred() { let resolve; const promise = new Promise((done) => { resol
 function listen(server, port) { return new Promise((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve) }) }
 function close(server) { return new Promise((resolve) => server.close(resolve)) }
 function withTimeout(promise, ms) { let timer; return Promise.race([promise, new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('voice_timeout')), ms) })]).finally(() => clearTimeout(timer)) }
-function safeFailureStage(error) { const text = error instanceof Error ? error.message : ''; return text === 'fixture_generation' ? 'fixture_prerequisite' : text === 'voice_timeout' ? 'voice_timeout' : 'prerequisite_or_main_flow_failed' }
+function safeFailureStage(error, operation) { const text = error instanceof Error ? error.message : ''; if (text === 'fixture_generation') return 'fixture_prerequisite'; if (text === 'voice_timeout') return 'voice_timeout'; if (operation === 'architecture_validation' || operation === 'fixture_generation' || operation === 'control_listener' || operation === 'app_install' || operation === 'app_launch') return operation; return 'prerequisite_or_main_flow_failed' }

@@ -18,10 +18,11 @@ export async function runAndroidLocalInferenceMainFlow({
   adb = process.env.ADB ?? 'adb',
   serial = process.env.AURORA_ANDROID_DEVICE_SERIAL ?? process.env.ANDROID_SERIAL ?? null,
   appId = APP_ID,
+  environment = process.env,
   modelDownloadTimeoutMs = MODEL_DOWNLOAD_TIMEOUT_MS,
   assistantTurnTimeoutMs = ASSISTANT_TURN_TIMEOUT_MS,
 } = {}) {
-  if (process.env.AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FLOW !== '1') {
+  if (environment.AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FLOW !== '1') {
     throw new Error('Set AURORA_ANDROID_LOCAL_INFERENCE_MAIN_FLOW=1 after Root grants the Android validation reservation.')
   }
 

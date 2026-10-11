@@ -361,7 +361,7 @@ export function wakePhraseRevision({ phrase, language, packId, packRevision }) {
   return `wakephrase-v1-${hash.toString(36).padStart(7, '0')}`
 }
 
-export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null, hostedSpeechConsumer = null, remoteConsoleShellMain = false } = {}) {
+export async function runAndroidVoiceLiveSmoke({ environment = process.env, pairing = null, modelFixture = null, hostedSpeechConsumer = null, remoteConsoleShellMain = false, onInstalledAppReady = null } = {}) {
   const inheritedEnvironment = process.env
   const environmentOverlay = environment === inheritedEnvironment ? null : Object.fromEntries(
     Object.entries(environment).map(([key, value]) => [key, inheritedEnvironment[key]]),
@@ -405,12 +405,14 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     }
     assertApkFreshness(apk)
     adbRun(context, ['wait-for-device'], { timeoutMs: 60_000 })
-    if (process.env.AURORA_ANDROID_SKIP_INSTALL !== '1') installApk(context, apk)
+    const installedCurrentApk = process.env.AURORA_ANDROID_SKIP_INSTALL !== '1'
+    if (installedCurrentApk) installApk(context, apk)
     grantVoicePermissions(context)
     adbRun(context, ['logcat', '-c'])
 
     launchApp(context)
     webview = await connectInstalledWebview(context)
+    if (installedCurrentApk) onInstalledAppReady?.({ adb, serial, appId })
     let invoke = (command, args) => invokeTauri(webview.client, command, args)
 
     const initialCatalog = await invoke('aurora_android_voice_pack_catalog_status')
@@ -816,8 +818,8 @@ export async function runAndroidVoiceLiveSmoke({ environment = process.env, pair
     } catch (error) {
       recordCleanupFailure('webview_close', error)
     }
-    try { if (context) adbTry(context, ['shell', 'dumpsys', 'deviceidle', 'unforce']) } catch (error) { recordCleanupFailure('device_idle_unforce', error) }
-    try { if (context) adbTry(context, ['shell', 'input', 'keyevent', 'WAKEUP']) } catch (error) { recordCleanupFailure('device_wakeup', error) }
+    try { if (context) adbRun(context, ['shell', 'dumpsys', 'deviceidle', 'unforce'], { timeoutMs: 30_000 }) } catch (error) { recordCleanupFailure('device_idle_unforce', error) }
+    try { if (context) adbRun(context, ['shell', 'input', 'keyevent', 'WAKEUP'], { timeoutMs: 30_000 }) } catch (error) { recordCleanupFailure('device_wakeup', error) }
     try {
       fixtures?.close()
     } catch (error) {
@@ -3343,7 +3345,12 @@ async function bestEffortStopVoice(context, webview) {
   const deadline = Date.now() + 15_000
   while (Date.now() < deadline && (serviceIsVisible(context) || wakeLockIsHeld(context))) await sleep(250)
   if (serviceIsVisible(context) || wakeLockIsHeld(context)) {
-    adbTry(context, ['shell', 'am', 'force-stop', context.appId])
+    adbRun(context, ['shell', 'am', 'force-stop', context.appId], { timeoutMs: 30_000 })
+  }
+  const serviceRemains = serviceIsVisibleStrict(context, { timeoutMs: 15_000 })
+  const powerDump = adbOutput(context, ['shell', 'dumpsys', 'power'], { timeoutMs: 15_000 })
+  if (serviceRemains || wakeLockIsHeldFromDump(powerDump)) {
+    throw new Error('Android voice service or wake lock remained after the final stop.')
   }
 }
 
@@ -3456,8 +3463,8 @@ function serviceIsVisible(context) {
   return output.includes('AuroraRuntimeForegroundService')
 }
 
-function serviceIsVisibleStrict(context) {
-  return adbOutput(context, ['shell', 'dumpsys', 'activity', 'services', context.appId])
+function serviceIsVisibleStrict(context, { timeoutMs } = {}) {
+  return adbOutput(context, ['shell', 'dumpsys', 'activity', 'services', context.appId], { timeoutMs })
     .includes('AuroraRuntimeForegroundService')
 }
 
@@ -3651,8 +3658,11 @@ function adbRun(context, args, options = {}) {
   return commandRun(context.adb, ['-s', context.serial, ...args], options)
 }
 
-function adbOutput(context, args, { allowFailure = false } = {}) {
-  const result = spawnSync(context.adb, ['-s', context.serial, ...args], { encoding: 'utf8' })
+function adbOutput(context, args, { allowFailure = false, timeoutMs } = {}) {
+  const result = spawnSync(context.adb, ['-s', context.serial, ...args], {
+    encoding: 'utf8',
+    ...(timeoutMs ? { timeout: timeoutMs } : {}),
+  })
   if (result.error) throw result.error
   const output = `${result.stdout ?? ''}${result.stderr ?? ''}`
   if (result.status !== 0 && !allowFailure) {

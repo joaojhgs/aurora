@@ -122,9 +122,8 @@ export async function readAndroidPairReadiness(client) {
       }
     };
     const safeLabel = (value) => typeof value === 'string' && /^[a-z0-9_-]{1,64}$/iu.test(value) ? value : null;
-    const anchor = [...document.querySelectorAll('button')].slice(0, 2000)
-      .find((button) => button.textContent?.trim() === 'Connect device');
-    if (!anchor) return { available: false, reason: 'mesh-anchor-absent' };
+    const anchor = document.querySelector('[aria-labelledby="mesh-peers-title"]');
+    if (!anchor) return { available: false, reason: 'mesh-root-absent' };
     const fiberKey = Object.keys(anchor).find((key) => key.startsWith('__reactFiber$'));
     if (!fiberKey) return { available: false, reason: 'react-fiber-getter-absent' };
     let fiber = anchor[fiberKey];
